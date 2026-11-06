@@ -12,6 +12,7 @@ import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
+import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
@@ -3295,6 +3296,8 @@ useEffect(() => {
                             )}
                         </button>
                         </div>
+
+                        <WasteFormatPrintButton deliveryDate={selectedDate !== 'all' ? selectedDate : getTomorrowDateStr()} />
 
                         {/* COUNTDOWN WIDGET / TELEMETRÍA EN VIVO DE CORTE OPERATIVO */}
                         {(() => {

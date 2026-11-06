@@ -1,10 +1,11 @@
 /**
  * Motor Headless de Procesamiento y Homologación de Planillas Físicas de Bodega
- * Cumple con SPEC.md Escenario 391 y 392 (SDD v1.9.369) — Límite estricto <= 250 líneas.
+ * Cumple con SPEC.md Escenarios 391 y 392 (SDD v1.9.370) — Límite estricto <= 250 líneas.
+ * Regla de Oro en Entrada/: Unidad de Compra Directa (Kg o Unidad), CERO RECÁLCULOS mayoristas.
  */
 
-export type PhysicalSheetType = 'entrada' | 'inv_manual' | 'desperdicio';
-export type TargetBalanceColumn = 'G' | 'T' | 'Q' | 'R';
+export type PhysicalSheetType = 'entrada' | 'inv_manual' | 'desperdicio' | 'pedidos_desperdicio' | 'donaciones';
+export type TargetBalanceColumn = 'G' | 'T' | 'Q' | 'R' | 'X';
 export type ConciliationStatus = 'new_entry' | 'matched_ops' | 'discrepancy';
 export type ArbitrationResolution = 'use_sheet' | 'keep_ops';
 
@@ -23,6 +24,8 @@ export interface RawExtractedSheetRow {
   rawProductName: string;
   rawQuantityText?: string;
   quantityKg: number;
+  wasteQtyKg?: number | null;
+  garbageQtyKg?: number | null;
   rawPresentation?: string | null;
   unitCostPaid?: number | null;
   supplierName?: string | null;
@@ -71,19 +74,6 @@ const SYNONYM_MAP: Record<string, string> = {
   huevos: 'cubeta huevos'
 };
 
-/** Factores estándar de conversión mayorista de Corabastos a Kilogramos (Escenario 391 §2.4) */
-const WHOLESALE_UNIT_FACTORS_KG: Array<{ pattern: RegExp; factorKg: number }> = [
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:bultos?|btos?|bto)\b/i, factorKg: 50 },
-  { pattern: /\b1\/2\s*(?:bulto|bto)\b/i, factorKg: 25 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:canastillas?|cajas?|cjs?|cj)\b/i, factorKg: 20 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:arrobas?|arr)\b/i, factorKg: 12.5 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:docenas?|doc)\b/i, factorKg: 10 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:rollos?)\b/i, factorKg: 30 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:bolsas?)\b/i, factorKg: 20 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:atados?|at)\b/i, factorKg: 1 },
-  { pattern: /\b(\d+(?:[.,]\d+)?)\s*(?:libras?|lb)\b/i, factorKg: 0.5 }
-];
-
 export function normalizeProductToken(input: string): string {
   if (!input) return '';
   let clean = input
@@ -100,39 +90,34 @@ export function normalizeProductToken(input: string): string {
   return clean;
 }
 
+/**
+ * Evalúa la cantidad manuscrita directamente en su unidad de compra (Kg o Unidad).
+ * CERO RECÁLCULOS por bultos, canastillas, arrobas o docenas (SDD Escenario 391 §2.1).
+ * Únicamente evalúa fracciones explícitas (1/2 = 0.5) o sumas aritméticas en la misma celda (ej. 408 + 70 = 478).
+ */
 export function parseHandwrittenQuantity(
   rawText: string | number | null | undefined,
-  rawPresentation?: string | null
+  _rawPresentation?: string | null
 ): number {
-  if (typeof rawText === 'number' && Number.isFinite(rawText) && rawText > 0) {
-    return Math.round(rawText * 100) / 100;
-  }
-  const combined = `${rawText || ''} ${rawPresentation || ''}`.trim();
-  if (!combined) return 0;
+  if (rawText === null || rawText === undefined) return 0;
+  if (typeof rawText === 'number') return Number.isFinite(rawText) && rawText > 0 ? Math.round(rawText * 100) / 100 : 0;
 
-  let expr = String(rawText || '')
+  const str = String(rawText).trim();
+  if (!str) return 0;
+
+  const expr = str
     .replace(/,/g, '.')
     .replace(/(\d+)\s+1\/2\b/g, '$1.5')
     .replace(/\b1\/2\b/g, '0.5')
     .replace(/(\d+)\s+1\/4\b/g, '$1.25')
     .replace(/\b1\/4\b/g, '0.25')
+    .replace(/(\d+)\s+3\/4\b/g, '$1.75')
+    .replace(/\b3\/4\b/g, '0.75')
     .replace(/[^0-9.+]/g, '');
 
   const parts = expr.split('+').map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n) && n > 0);
-  if (parts.length > 0) {
-    return Math.round(parts.reduce((acc, v) => acc + v, 0) * 100) / 100;
-  }
-
-  for (const rule of WHOLESALE_UNIT_FACTORS_KG) {
-    const match = combined.match(rule.pattern);
-    if (match) {
-      const count = match[1] ? parseFloat(match[1].replace(',', '.')) : 1;
-      if (Number.isFinite(count) && count > 0) {
-        return Math.round(count * rule.factorKg * 100) / 100;
-      }
-    }
-  }
-  return 0;
+  const numericSum = parts.length > 0 ? parts.reduce((acc, v) => acc + v, 0) : 0;
+  return numericSum > 0 ? Math.round(numericSum * 100) / 100 : 0;
 }
 
 export function classifyWasteTargetColumn(
@@ -140,6 +125,7 @@ export function classifyWasteTargetColumn(
   wasteTypeHint?: 'damage' | 'cleaning' | null
 ): 'Q' | 'R' {
   if (wasteTypeHint === 'cleaning') return 'R';
+  if (wasteTypeHint === 'damage') return 'Q';
   const normalized = normalizeProductToken(rawProductName);
   const tokens = normalized.split(' ');
   return CLEANING_KEYWORDS.some(kw => tokens.includes(kw) || normalized.includes(kw)) ? 'R' : 'Q';
@@ -203,21 +189,20 @@ export function buildReconciledSheetRows(
   sheetType: PhysicalSheetType,
   sourceFileName: string,
   catalog: CatalogProductOption[],
-  opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number }>
+  opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>
 ): ReconciledSheetRow[] {
-  return extractedRows
-    .map((raw, idx) => {
-      const qty = raw.quantityKg > 0 ? raw.quantityKg : parseHandwrittenQuantity(raw.rawQuantityText, raw.rawPresentation);
-      const { product, confidence } = matchProductAgainstCatalog(raw.rawProductName, catalog);
-      const targetColumn: TargetBalanceColumn =
-        sheetType === 'entrada' ? 'G' : sheetType === 'inv_manual' ? 'T' : classifyWasteTargetColumn(raw.rawProductName, raw.wasteTypeHint);
-      const opsMetrics = product ? opsCurrentByProductAndCol.get(product.id) : undefined;
-      const opsVal = opsMetrics ? Number(opsMetrics[targetColumn] || 0) : 0;
+  const result: ReconciledSheetRow[] = [];
+
+  extractedRows.forEach((raw, idx) => {
+    const { product, confidence } = matchProductAgainstCatalog(raw.rawProductName, catalog);
+    const opsMetrics = product ? opsCurrentByProductAndCol.get(product.id) : undefined;
+
+    const pushRow = (qty: number, targetCol: TargetBalanceColumn, subIdx: string, noteOverride?: string) => {
+      const opsVal = opsMetrics ? Number(opsMetrics[targetCol] || 0) : 0;
       const conciliationStatus: ConciliationStatus =
         opsVal <= 0.001 ? 'new_entry' : Math.abs(opsVal - qty) <= 0.05 ? 'matched_ops' : 'discrepancy';
-
-      return {
-        rowId: `${sourceFileName}-${idx}-${Date.now()}`,
+      result.push({
+        rowId: `${sourceFileName}-${idx}-${subIdx}-${Date.now()}`,
         sourceFileName,
         rawProductName: raw.rawProductName || 'Producto sin nombre',
         rawQuantityText: raw.rawQuantityText || String(qty),
@@ -225,18 +210,31 @@ export function buildReconciledSheetRows(
         rawPresentation: raw.rawPresentation || '',
         unitCostPaid: raw.unitCostPaid && raw.unitCostPaid > 0 ? raw.unitCostPaid : null,
         supplierName: raw.supplierName || '',
-        sourceNote: raw.sourceNote || '',
+        sourceNote: noteOverride ?? (raw.sourceNote || ''),
         matchedProductId: product?.id || null,
         matchedProductName: product?.name || 'Sin homologar — Seleccionar SKU',
         matchedAccountingId: product?.accounting_id || product?.sku || 'S/N',
         matchedUnit: product?.unit_of_measure || 'Kg',
         confidence,
-        targetColumn,
+        targetColumn: targetCol,
         opsCurrentValue: Math.round(opsVal * 100) / 100,
         conciliationStatus,
-        resolution: 'use_sheet' as ArbitrationResolution,
+        resolution: 'use_sheet',
         selected: qty > 0 && Boolean(product?.id)
-      };
-    })
-    .filter(r => r.quantity > 0 || r.rawProductName.trim().length > 0);
+      });
+    };
+
+    if (sheetType === 'pedidos_desperdicio' && ((raw.wasteQtyKg && raw.wasteQtyKg > 0) || (raw.garbageQtyKg && raw.garbageQtyKg > 0))) {
+      if (raw.wasteQtyKg && raw.wasteQtyKg > 0) pushRow(raw.wasteQtyKg, 'Q', 'Q', 'Col 1: Desperdicio');
+      if (raw.garbageQtyKg && raw.garbageQtyKg > 0) pushRow(raw.garbageQtyKg, 'R', 'R', 'Col 2: Basura / Merma');
+      return;
+    }
+
+    const qty = raw.quantityKg > 0 ? raw.quantityKg : parseHandwrittenQuantity(raw.rawQuantityText, raw.rawPresentation);
+    const targetColumn: TargetBalanceColumn =
+      sheetType === 'entrada' ? 'G' : sheetType === 'inv_manual' ? 'T' : sheetType === 'donaciones' ? 'X' : classifyWasteTargetColumn(raw.rawProductName, raw.wasteTypeHint);
+    if (qty > 0 || raw.rawProductName.trim().length > 0) pushRow(qty, targetColumn, '0');
+  });
+
+  return result;
 }

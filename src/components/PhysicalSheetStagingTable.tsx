@@ -137,7 +137,7 @@ export default function PhysicalSheetStagingTable({
               </td>
 
               <td style={{ padding: '0.5rem' }}>
-                {sheetType === 'desperdicio' ? (
+                {sheetType === 'desperdicio' || sheetType === 'pedidos_desperdicio' ? (
                   <select
                     value={row.targetColumn}
                     onChange={e => onColChange(row.rowId, e.target.value as TargetBalanceColumn)}
@@ -151,7 +151,7 @@ export default function PhysicalSheetStagingTable({
                       color: row.targetColumn === 'Q' ? '#F87171' : '#FB923C'
                     }}
                   >
-                    <option value="Q">Col Q · Avería</option>
+                    <option value="Q">Col Q · Desperdicio</option>
                     <option value="R">Col R · Basura</option>
                   </select>
                 ) : (
@@ -162,7 +162,7 @@ export default function PhysicalSheetStagingTable({
                       padding: '0.2rem 0.5rem',
                       borderRadius: '6px',
                       backgroundColor: '#1E293B',
-                      color: row.targetColumn === 'G' ? '#34D399' : '#38BDF8'
+                      color: row.targetColumn === 'G' ? '#34D399' : row.targetColumn === 'X' ? '#C084FC' : '#38BDF8'
                     }}
                   >
                     Col {row.targetColumn} ({row.matchedUnit})

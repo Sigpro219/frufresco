@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { isAbortError } from '@/lib/errorUtils';
+import { useAuth } from '@/lib/authContext';
+import SupervisorDonationsSubmodule from '@/components/ops/SupervisorDonationsSubmodule';
 import { 
   ShieldAlert, 
   Scale, 
@@ -116,7 +118,8 @@ function formatNumber(num: number | string | null | undefined, maxDecimals = 2):
 
 export default function SupervisorDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'quarantine' | 'discrepancy' | 'staff'>('quarantine');
+  const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'quarantine' | 'discrepancy' | 'staff' | 'donations'>('quarantine');
   const [loading, setLoading] = useState(true);
   
   // Data lists
@@ -883,6 +886,24 @@ export default function SupervisorDashboard() {
         >
           Colaboradores ({collaborators.length})
         </button>
+        <button 
+          onClick={() => { setActiveTab('donations'); setSearchQuery(''); }}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            borderRadius: '14px',
+            border: 'none',
+            fontSize: '0.9rem',
+            fontWeight: '700',
+            fontFamily: 'Outfit, sans-serif',
+            cursor: 'pointer',
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            backgroundColor: activeTab === 'donations' ? '#EC4899' : 'transparent',
+            color: activeTab === 'donations' ? 'white' : 'var(--ops-text-muted)'
+          }}
+        >
+          Donaciones (Col X)
+        </button>
       </div>
 
       {/* Search Input Bar */}
@@ -1239,6 +1260,7 @@ export default function SupervisorDashboard() {
           </div>
         )
       ) : (
+        activeTab === 'donations' ? <SupervisorDonationsSubmodule supervisorName={profile?.contact_name || user?.email || 'Supervisor de Planta'} onSuccess={(msg) => showToastMsg(msg, 'success')} /> :
         // STAFF TAB VIEW
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {collaborators.filter(c => c.contact_name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (

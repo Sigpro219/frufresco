@@ -9,6 +9,7 @@ import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRi
 import { CATEGORY_MAP } from '@/lib/constants';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
+import WasteSusceptibleProductsManager from '@/components/WasteSusceptibleProductsManager';
 import { WorkCell, CellResponsible } from '@/types/workCells';
 
 interface InventoryItem {
@@ -6303,6 +6304,9 @@ export default function InventoryAdminPage() {
                                             )}
                                         </div>
                                     )}
+
+                                    {/* CATÁLOGO EDITABLE DE PRODUCTOS SUSCEPTIBLES A DESPERDICIO (SDD DT-18) */}
+                                    <WasteSusceptibleProductsManager products={activeProductsCatalog} />
 
                                     {/* MODAL: NUEVA CÉLULA DE TRABAJO */}
                                     {isNewCellModalOpen && (

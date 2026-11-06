@@ -21,12 +21,14 @@ import {
 export default function OpsLayout({ children }: { children: ReactNode }) {
     const { profile, loading } = useAuth();
     const router = useRouter();
+    const [isMounted, setIsMounted] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
     const [appShortName, setAppShortName] = useState('FRUFRESCO');
     const [roles, setRoles] = useState<any[]>([]);
 
     useEffect(() => {
+        setIsMounted(true);
         document.title = 'onFRU OPS | Torre de Control';
         try {
             const saved = localStorage.getItem('ops_theme');
@@ -64,7 +66,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     }, [isDarkMode]);
 
     useEffect(() => {
-        if (!loading) {
+        if (!loading && isMounted) {
             if (!profile) {
                 router.push('/');
             } else {
@@ -83,14 +85,14 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     }, [loading, profile, router]);
 
     useEffect(() => {
-        let isMounted = true;
+        let isSubscribed = true;
         const fetchLogosymbol = async () => {
             const { data, error } = await supabase
                 .from('app_settings')
                 .select('key, value')
                 .in('key', ['app_logosymbol_url', 'app_short_name', 'system_roles']);
             
-            if (isMounted && !error && data) {
+            if (isSubscribed && !error && data) {
                 const logo = data.find(s => s.key === 'app_logosymbol_url')?.value;
                 if (logo) setDynamicLogosymbol(logo);
 
@@ -108,10 +110,10 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             }
         };
         fetchLogosymbol();
-        return () => { isMounted = false; };
+        return () => { isSubscribed = false; };
     }, []);
 
-    if (loading || !profile) {
+    if (!isMounted || loading || !profile) {
         return (
             <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a111c', color: '#F9FAFB' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>

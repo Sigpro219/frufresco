@@ -8,18 +8,18 @@
 /**
  * Primary AI model for the FruFresco ecosystem (Gemini 3.0 / 2026, 1M context, integrated reasoning).
  */
-export const PRIMARY_AI_MODEL = 'gemini-3.8-flash';
+export const PRIMARY_AI_MODEL = 'gemini-2.5-flash';
 
 /**
  * Canonical contingency cascade hierarchy.
  * Traversed in order when an obsolescence or deprecation error (HTTP 404, 410, MODEL_DEPRECATED) is detected.
  */
 export const CANONICAL_MODEL_CASCADE = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
   'gemini-3.8-flash',
   'gemini-3.7-flash',
   'gemini-3.5-flash',
-  'gemini-flash-latest',
-  'gemini-2.5-flash',
 ] as const;
 
 export type AiModelName = typeof CANONICAL_MODEL_CASCADE[number] | string;

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
@@ -1160,7 +1160,6 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             if (error && (error.message?.includes('column "inherit_price" does not exist') || error.message?.includes('column "charge_overweight" does not exist'))) {
                 delete updatePayload.inherit_price;
                 delete updatePayload.charge_overweight;
-                delete updatePayload.inherit_price;
                 const retry = await supabase
                     .from('products')
                     .update(updatePayload)

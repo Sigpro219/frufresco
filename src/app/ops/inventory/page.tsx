@@ -6,6 +6,7 @@ import Toast from '@/components/Toast';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { parseBlindCountQuantity } from '@/lib/pricingUtils';
+import { parseSpecificCountAccountingIds, isProductWasteSusceptible } from '@/lib/inventory/wasteSusceptibleCatalog';
 import { 
     Truck, 
     Package, 
@@ -263,6 +264,8 @@ export default function OpsInventoryPage() {
     const [counts, setCounts] = useState<Record<string, string>>({});
     const [countedProductsToday, setCountedProductsToday] = useState<Set<string>>(new Set());
     const [lastCountedValues, setLastCountedValues] = useState<Record<string, number>>({});
+    const [specificCountAccIds, setSpecificCountAccIds] = useState<Set<number>>(() => parseSpecificCountAccountingIds(null));
+    const [productsWithMovementsToday, setProductsWithMovementsToday] = useState<Set<string>>(new Set());
     const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [filterOnlyWithCount, setFilterOnlyWithCount] = useState<boolean>(false);
@@ -361,15 +364,51 @@ export default function OpsInventoryPage() {
             } else if (data) {
                 setProducts(data as ProductWithStock[]);
 
-                // Cargar conteos a ciegas ya ejecutados hoy en bodega (Single-Write Poka-Yoke)
+                // Cargar conteos a ciegas ya ejecutados hoy en bodega (Single-Write Poka-Yoke) + todos los movimientos del día + lista específica (SDD DT-17)
                 const todayStr = new Date().toISOString().split('T')[0];
-                const { data: todayMovs } = await supabase
-                    .from('inventory_movements')
-                    .select('product_id, quantity, notes, created_at')
-                    .eq('reference_type', 'blind_count_shift_close')
-                    .gte('created_at', `${todayStr}T00:00:00.000Z`)
-                    .lte('created_at', `${todayStr}T23:59:59.999Z`);
+                const [todayMovsRes, allDayMovsRes, specSettingsRes, todayOrdersRes] = await Promise.all([
+                    supabase
+                        .from('inventory_movements')
+                        .select('product_id, quantity, notes, created_at')
+                        .in('reference_type', ['blind_count_shift_close', 'blind_count'])
+                        .gte('created_at', `${todayStr}T00:00:00.000Z`)
+                        .lte('created_at', `${todayStr}T23:59:59.999Z`),
+                    supabase
+                        .from('inventory_movements')
+                        .select('product_id')
+                        .gte('created_at', `${todayStr}T00:00:00.000Z`)
+                        .lte('created_at', `${todayStr}T23:59:59.999Z`),
+                    supabase
+                        .from('app_settings')
+                        .select('key, value')
+                        .in('key', ['specific_count_products', 'waste_susceptible_products']),
+                    supabase
+                        .from('orders')
+                        .select('id, order_items(product_id)')
+                        .eq('delivery_date', todayStr)
+                        .neq('status', 'cancelled')
+                ]);
 
+                if (specSettingsRes.data && specSettingsRes.data.length > 0) {
+                    const specRow = specSettingsRes.data.find(r => r.key === 'specific_count_products') ||
+                                    specSettingsRes.data.find(r => r.key === 'waste_susceptible_products');
+                    if (specRow) {
+                        setSpecificCountAccIds(parseSpecificCountAccountingIds(specRow.value));
+                    }
+                }
+
+                const movedIds = new Set<string>();
+                (allDayMovsRes.data || []).forEach((m: any) => {
+                    if (m.product_id) movedIds.add(m.product_id);
+                });
+                (todayOrdersRes.data || []).forEach((ord: any) => {
+                    (ord.order_items || []).forEach((oi: any) => {
+                        if (oi.product_id) movedIds.add(oi.product_id);
+                    });
+                });
+                setProductsWithMovementsToday(movedIds);
+
+                const todayMovs = todayMovsRes.data;
                 if (todayMovs && todayMovs.length > 0) {
                     const lockedIds = new Set<string>();
                     const values: Record<string, number> = {};
@@ -522,6 +561,20 @@ export default function OpsInventoryPage() {
         return Object.values(map);
     }, [products]);
 
+    const productsByIdMap = useMemo(() => {
+        const m = new Map<string, ProductWithStock>();
+        products.forEach(p => m.set(p.id, p));
+        return m;
+    }, [products]);
+
+    const qualifiesForOperationalCount = useCallback((p: ProductWithStock): boolean => {
+        const qty = Number(p.inventory_stocks?.find(s => s.warehouse_id === warehouseId)?.quantity || p.inventory_stocks?.[0]?.quantity || 0);
+        if (qty > 0.0001) return true;
+        if (productsWithMovementsToday.has(p.id)) return true;
+        if (isProductWasteSusceptible(p, specificCountAccIds, productsByIdMap)) return true;
+        return false;
+    }, [warehouseId, productsWithMovementsToday, specificCountAccIds, productsByIdMap]);
+
     // 5. Estadísticas de inventario por Célula
     const cellStats = useMemo(() => {
         const stats: Record<string, { totalItems: number; withStockItems: number }> = {};
@@ -533,14 +586,13 @@ export default function OpsInventoryPage() {
             const cell = getProductCell(p);
             if (cell && stats[cell.id]) {
                 stats[cell.id].totalItems++;
-                const qty = Number(p.inventory_stocks?.find(s => s.warehouse_id === warehouseId)?.quantity || p.inventory_stocks?.[0]?.quantity || 0);
-                if (qty > 0.0001) {
+                if (qualifiesForOperationalCount(p)) {
                     stats[cell.id].withStockItems++;
                 }
             }
         });
         return stats;
-    }, [workCells, products, getProductCell, warehouseId]);
+    }, [workCells, products, getProductCell, qualifiesForOperationalCount]);
 
     // 6. Filtrar familias por Célula / Grupo de Inventario, Búsqueda y Existencias Teóricas
     const filteredFamilies = useMemo(() => {
@@ -572,29 +624,21 @@ export default function OpsInventoryPage() {
                 if (!parentMatch && !childMatch) return false;
             }
 
-            // C. Filtro por Existencias Teóricas vs Todo el Catálogo
+            // C. Filtro de Conteo Operativo (SDD DT-17):
             // Si stockFilterMode === 'with_stock':
-            // Se mantiene si:
-            // - El usuario buscó algo explícitamente (hasSearch) -> permite encontrar ítems en cero fácilmente
-            // - O ya se le ingresó conteo físico en la sesión (hasParentCount || hasChildCount)
-            // - O tiene existencia teórica > 0 en bodega
+            // Se muestra la UNIÓN (U) de:
+            // (a) Productos de la lista específica (specific_count_products / susceptibles)
+            // (b) Productos que tuvieron movimientos durante la jornada (productsWithMovementsToday)
+            // (c) Productos con existencias teóricas > 0 en bodega
+            // (d) O ya se le ingresó conteo físico en la sesión
             if (stockFilterMode === 'with_stock' && !hasSearch) {
-                const parentStock = Number(
-                    fam.parent.inventory_stocks?.find(s => s.warehouse_id === warehouseId)?.quantity || 
-                    fam.parent.inventory_stocks?.[0]?.quantity || 0
-                );
-                const childrenStockSum = fam.children.reduce((acc, c) => {
-                    const st = c.inventory_stocks?.find(s => s.warehouse_id === warehouseId) || c.inventory_stocks?.[0];
-                    return acc + Number(st?.quantity || 0);
-                }, 0);
-
-                const totalSysStock = fam.isParent ? childrenStockSum : parentStock;
-                const hasSysStock = totalSysStock > 0.0001;
+                const parentQualifies = qualifiesForOperationalCount(fam.parent);
+                const childQualifies = fam.children.some(c => qualifiesForOperationalCount(c));
 
                 const hasParentCount = counts[fam.parent.id] !== undefined && counts[fam.parent.id] !== '';
                 const hasChildCount = fam.children.some(c => counts[c.id] !== undefined && counts[c.id] !== '');
 
-                if (!hasSysStock && !hasParentCount && !hasChildCount) return false;
+                if (!parentQualifies && !childQualifies && !hasParentCount && !hasChildCount) return false;
             }
 
             // D. Filtro por solo los que tienen conteo ingresado
@@ -606,7 +650,7 @@ export default function OpsInventoryPage() {
 
             return true;
         });
-    }, [families, selectedCellId, activeSelectedCell, searchTerm, stockFilterMode, filterOnlyWithCount, counts, warehouseId]);
+    }, [families, selectedCellId, activeSelectedCell, searchTerm, stockFilterMode, filterOnlyWithCount, counts, qualifiesForOperationalCount]);
 
     // Conteo total de ítems ingresados por el usuario
     const totalCountedItemsCount = useMemo(() => {

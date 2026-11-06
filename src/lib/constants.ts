@@ -38,6 +38,7 @@ export const INVENTORY_MOVEMENT_SUBTYPES = {
     ORDER_SHORTAGE: 'order_shortage',       // Producto escaso
     ORDER_UNSHIPPED: 'order_unshipped',     // Producto sin enviar
     ADDITIONAL_SALE: 'additional_sale',     // Venta adicional cliente
+    RETURN_SHORTAGE: 'return_shortage',     // Faltante de devoluciones (camión vs ruta)
     BLIND_COUNT: 'blind_count_shift_close', // Conteo físico bodega
     CORRECTION: 'correction'                // Corrección de inventario
 } as const;
@@ -51,6 +52,7 @@ export const INVENTORY_SUBTYPE_LABELS: Record<string, { label: string; icon: str
     order_shortage: { label: 'Producto Escaso en Plaza', icon: 'AlertTriangle', requiresPhoto: false, operation: 'subtract' },
     order_unshipped: { label: 'Producto Sin Enviar (Cancelación)', icon: 'Undo2', requiresPhoto: false, operation: 'add' },
     additional_sale: { label: 'Venta Adicional Cliente', icon: 'ShoppingCart', requiresPhoto: false, operation: 'subtract' },
+    return_shortage: { label: 'Faltante de Devoluciones (Ruta)', icon: 'AlertTriangle', requiresPhoto: false, operation: 'subtract' },
     correction: { label: 'Corrección de Inventario', icon: 'Edit3', requiresPhoto: false, operation: 'adjust' },
     blind_count_shift_close: { label: 'Conteo Físico Fin de Turno', icon: 'Lock', requiresPhoto: false, operation: 'adjust' }
 };

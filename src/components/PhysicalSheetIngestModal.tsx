@@ -36,7 +36,7 @@ interface PhysicalSheetIngestModalProps {
   onClose: () => void;
   balanceDate: string;
   catalog: CatalogProductOption[];
-  opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number }>;
+  opsCurrentByProductAndCol: Map<string, { G: number; T: number; Q: number; R: number; X?: number }>;
   supervisorName: string;
   onSuccess: () => void;
 }
@@ -245,6 +245,8 @@ export default function PhysicalSheetIngestModal({
             ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_DAMAGE
             : item.targetColumn === 'R'
             ? INVENTORY_MOVEMENT_SUBTYPES.WASTE_CLEANING
+            : item.targetColumn === 'X'
+            ? INVENTORY_MOVEMENT_SUBTYPES.FOOD_BANK
             : INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
         const signedQty =
           item.targetColumn === 'G' ? item.totalQuantity : item.targetColumn === 'T' ? 0 : -item.totalQuantity;
@@ -294,10 +296,34 @@ export default function PhysicalSheetIngestModal({
         }
 
         if (item.targetColumn === 'G' && pppCost && pppCost > 0) {
+          let sumTotalCost = item.weightedCostNumerator;
+          let sumQuantity = item.weightedCostDenominator;
+          const { data: dayTaskRows } = await supabase
+            .from('procurement_tasks')
+            .select('id')
+            .eq('product_id', item.productId)
+            .eq('delivery_date', balanceDate);
+          const dayTaskIds = (dayTaskRows || []).map(r => r.id);
+          if (dayTaskIds.length > 0 && !item.replacesOpsDiscrepancy) {
+            const { data: dayPurchases } = await supabase
+              .from('purchases')
+              .select('quantity, unit_price, total_cost')
+              .eq('product_id', item.productId)
+              .in('task_id', dayTaskIds);
+            (dayPurchases || []).forEach(pur => {
+              const q = Number(pur.quantity) || 0;
+              const tCost = Number(pur.total_cost) || q * (Number(pur.unit_price) || 0);
+              if (q > 0 && tCost > 0) {
+                sumQuantity += q;
+                sumTotalCost += tCost;
+              }
+            });
+          }
+          const finalPppCost = sumQuantity > 0 ? Math.round((sumTotalCost / sumQuantity) * 100) / 100 : pppCost;
           await supabase.from('commercial_cost_matrix').upsert(
             {
               product_id: item.productId,
-              manual_cost: pppCost,
+              manual_cost: finalPppCost,
               effective_date: balanceDate,
               is_active: true,
               notes: `[PPP PLANILLA MUELLE ${balanceDate}] Prov: ${item.suppliers.join(', ') || 'Corabastos'}`,
@@ -360,12 +386,14 @@ export default function PhysicalSheetIngestModal({
           </button>
         </div>
 
-        {/* PASO 1: SELECTOR DE LAS 3 SUBCARPETAS */}
-        <div style={{ padding: '0.65rem 1.25rem', backgroundColor: '#0B1120', borderBottom: '1px solid #1E293B', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.7rem' }}>
+        {/* PASO 1: SELECTOR DE LAS 5 ENTRADAS DE PLANILLAS FÍSICAS */}
+        <div style={{ padding: '0.6rem 1.25rem', backgroundColor: '#0B1120', borderBottom: '1px solid #1E293B', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.55rem' }}>
           {[
-            { id: 'entrada' as PhysicalSheetType, title: '1. Entradas / Recepción Muelle (Entrada/)', subtitle: 'Control de llegada en Kg, proveedores y precios PPP -> Columna G', colBadge: 'Columna G (+)', color: '#10B981', Icon: Truck },
-            { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Físico Fin de Turno (Inv manual/)', subtitle: 'Planillas de bodega por categorías -> Alimenta Columna T', colBadge: 'Columna T (Físico)', color: '#38BDF8', Icon: ClipboardCheck },
-            { id: 'desperdicio' as PhysicalSheetType, title: '3. Formato Desperdicio y Arreglo (Desperdicio/)', subtitle: 'Bifurca Avería a Columna Q (-) y Cáscaras/Descapote a Columna R (-)', colBadge: 'Cols Q y R (-)', color: '#F43F5E', Icon: Trash2 }
+            { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa (Kg/Und, cero recálculos)', colBadge: 'Col G (+)', color: '#10B981', Icon: Truck },
+            { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Planillas cierre de bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#38BDF8', Icon: ClipboardCheck },
+            { id: 'pedidos_desperdicio' as PhysicalSheetType, title: '3. Formato Pedidos (2 Cols)', subtitle: 'Susceptibles del pedido: Desperdicio y Basura', colBadge: 'Cols Q y R (-)', color: '#F59E0B', Icon: FileText },
+            { id: 'desperdicio' as PhysicalSheetType, title: '4. Desperdicio General', subtitle: 'Planilla libre de avería y descapote', colBadge: 'Cols Q y R (-)', color: '#F43F5E', Icon: Trash2 },
+            { id: 'donaciones' as PhysicalSheetType, title: '5. Plantilla Donaciones', subtitle: 'Autorizadas por Supervisor de Planta', colBadge: 'Col X (-)', color: '#C084FC', Icon: ShieldCheck }
           ].map(card => {
             const active = sheetType === card.id;
             const IconComp = card.Icon;

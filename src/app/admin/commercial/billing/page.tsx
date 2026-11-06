@@ -76,6 +76,7 @@ import {
 import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem, resolveWorldOfficeBranch, resolveWorldOfficeNote } from '@/lib/worldOfficeExport';
 import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 import CadenaRadianReconciliationSubmodule from '@/components/admin/billing/CadenaRadianReconciliationSubmodule';
+import OverweightBillingArbitrationModal from '@/components/admin/billing/OverweightBillingArbitrationModal';
 
 interface BillingCut {
     id: string;
@@ -1076,7 +1077,7 @@ export default function BillingDashboard() {
                 supabase
                     .from('order_items')
                     .select(`
-                        id, product_id, quantity, unit_price, unit, variant_label, nickname, selected_options,
+                        id, product_id, quantity, picked_quantity, unit_price, unit, variant_label, nickname, selected_options,
                         products (
                             id, name, sku, unit_of_measure, iva_rate
                         )
@@ -2788,7 +2789,7 @@ export default function BillingDashboard() {
                         id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
-                        id, quantity, unit_price, nickname, unit, product_id,
+                        id, quantity, picked_quantity, selected_options, unit_price, nickname, unit, product_id,
                         products (
                             id, accounting_id, sku, name, unit_of_measure, iva_rate
                         )
@@ -2854,7 +2855,9 @@ export default function BillingDashboard() {
                 const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
-                    const baseItemQty = Number(item.quantity) || 0;
+                    const baseItemQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+                        ? Number(item.picked_quantity)
+                        : (Number(item.quantity) || 0);
                     // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
                     const matchedReturn = (order.billing_returns || []).find((r: any) =>
                         (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
@@ -3023,7 +3026,9 @@ export default function BillingDashboard() {
                 const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
-                    const rawQty = Number(item.quantity) || 0;
+                    const rawQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+                        ? Number(item.picked_quantity)
+                        : (Number(item.quantity) || 0);
                     // Omitir productos con cantidad 0 (no despachados o descontados 100% en PQR)
                     if (rawQty <= 0) return;
                     const rawUnitPrice = Number(item.unit_price) || 0;
@@ -3170,7 +3175,9 @@ export default function BillingDashboard() {
                 const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
                 (order.order_items || []).forEach((item: any) => {
-                    const rawQty = Number(item.quantity) || 0;
+                    const rawQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+                        ? Number(item.picked_quantity)
+                        : (Number(item.quantity) || 0);
                     const rawUnitPrice = Number(item.unit_price) || 0;
                     const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
@@ -3700,6 +3707,7 @@ export default function BillingDashboard() {
     };
 
 
+    const [isOverweightModalOpen, setIsOverweightModalOpen] = useState(false);
     const inputStyle = {
         width: '100%',
         padding: '0.65rem 0.85rem',
@@ -3750,7 +3758,13 @@ export default function BillingDashboard() {
                         <ArrowLeft size={16} /> Volver a Pedidos
                     </Link>
                 </div>
-            </main>
+                <OverweightBillingArbitrationModal
+                isOpen={isOverweightModalOpen}
+                onClose={() => setIsOverweightModalOpen(false)}
+                selectedDate={selectedBillingDate === 'all' ? undefined : selectedBillingDate}
+                onUpdated={() => fetchData()}
+            />
+        </main>
         );
     }
 
@@ -3872,6 +3886,27 @@ export default function BillingDashboard() {
                                 }}
                             >
                                 <ShieldCheck size={12} /> Conciliación Cadena & RADIAN
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsOverweightModalOpen(true)}
+                                style={{
+                                    padding: '0.28rem 0.65rem',
+                                    borderRadius: '6px',
+                                    border: '1px solid #F59E0B',
+                                    background: '#FFFBEB',
+                                    fontWeight: '800',
+                                    fontSize: '0.73rem',
+                                    cursor: 'pointer',
+                                    color: '#B45309',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                                title="Arbitraje de Excedentes de Báscula por Pedido + Producto (SÍ Cobrar -> Col M / NO Cobrar -> Col P)"
+                            >
+                                <Scale size={12} /> Excedentes Báscula (Col P / M)
                             </button>
 
                             {hasPortfolioAccess && (
@@ -7233,8 +7268,13 @@ export default function BillingDashboard() {
                     const clientEmail = selectedOrderDetail.profiles?.email || selectedOrderDetail.profiles?.billing_email || '';
                     const clientPhone = selectedOrderDetail.profiles?.phone || selectedOrderDetail.shipping_phone || '';
 
-                    // Items metrics & Tripartite PQR Financial Reconciliation
-                    const totalCalculatedItemsPrice = orderDetailItems.reduce((acc, it) => acc + (Number(it.quantity || 0) * Number(it.unit_price || 0)), 0);
+                    // Items metrics & Tripartite PQR Financial Reconciliation (SDD DT-17: respeta _charge_overweight para Col M vs Col P)
+                    const totalCalculatedItemsPrice = orderDetailItems.reduce((acc, it) => {
+                        const billableQ = (it.selected_options?._charge_overweight === true && Number(it.picked_quantity) > Number(it.quantity))
+                            ? Number(it.picked_quantity)
+                            : Number(it.quantity || 0);
+                        return acc + (billableQ * Number(it.unit_price || 0));
+                    }, 0);
 
                     // Extraer desglose financiero de PQR (Factura Inicial, Deducción PQR y Total Facturable)
                     let pqrDeductionsTotal = 0;
@@ -7654,7 +7694,10 @@ export default function BillingDashboard() {
                                                 <tbody>
                                                     {orderDetailItems.map((item: any, idx: number) => {
                                                         const prodName = item.products?.name || item.nickname || 'Producto sin nombre';
-                                                        const itemTotal = Number(item.quantity || 0) * Number(item.unit_price || 0);
+                                                        const billableItemQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+                                                            ? Number(item.picked_quantity)
+                                                            : Number(item.quantity || 0);
+                                                        const itemTotal = billableItemQty * Number(item.unit_price || 0);
                                                         const structuredSpec = formatStructuredSpecification(item);
                                                         const presentation = formatItemQuantityPresentation(item);
                                                         const isLast = idx === orderDetailItems.length - 1;
@@ -8594,6 +8637,12 @@ export default function BillingDashboard() {
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}} />
+            <OverweightBillingArbitrationModal
+                isOpen={isOverweightModalOpen}
+                onClose={() => setIsOverweightModalOpen(false)}
+                selectedDate={selectedBillingDate === 'all' ? undefined : selectedBillingDate}
+                onUpdated={() => fetchData()}
+            />
         </main>
     );
 }

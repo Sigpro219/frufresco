@@ -63,7 +63,7 @@ export async function fetchGeminiExtraction(
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts }] }),
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json', ...(modelName.includes('2.5-flash') || modelName.includes('flash-latest') ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } }),
         signal: signal
       });
 

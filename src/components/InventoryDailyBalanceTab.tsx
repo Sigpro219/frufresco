@@ -165,6 +165,8 @@ export interface InventoryDailyRow {
     colN_employeeSales: number;
     // O: Devoluciones (+)
     colO_returns: number;
+    // O2: Faltante Devoluciones (-)
+    colO2_returnShortage: number;
     // P: Pesada (-)
     colP_weighingWaste: number;
     // Q: Desperdicio (-)
@@ -209,7 +211,7 @@ interface InventoryDailyBalanceTabProps {
 }
 
 export const DEFAULT_COLUMN_ORDER = [
-    'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'
+    'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'O2', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X'
 ];
 
 export const COLUMN_METADATA: Record<string, {
@@ -236,12 +238,13 @@ export const COLUMN_METADATA: Record<string, {
     M: { letter: 'M', title: 'Venta Adicional', shortName: 'Vta. Adicional', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta adicional extemporánea que ingresa con posterioridad a la hora de corte (-)', color: '#C084FC' },
     N: { letter: 'N', title: 'Venta Nómina', shortName: 'Vta. Nómina', sign: '(-)', block: 'EXCEPCIONES (-)', effect: 'Venta autorizada descontada a colaboradores (-)', color: '#60A5FA', borderRight: '2px solid #334155' },
     O: { letter: 'O', title: 'Devoluciones', shortName: 'Devoluciones', sign: '(+)', block: 'DEVOLUCIONES & MERMAS (+)', effect: 'Producto retornado por clientes al almacén (+)', color: '#FBBF24' },
+    O2: { letter: 'O2', title: 'Faltante Devoluciones', shortName: 'Falt. Dev.', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Diferencia faltante entre lo reportado devuelto en ruta (Col O) y lo que llegó físicamente en el camión (-)', color: '#F87171' },
     P: { letter: 'P', title: 'Merma Pesada', shortName: 'Pesada', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Merma por merma de peso, calibración o humedad (-)', color: '#FBBF24' },
     Q: { letter: 'Q', title: 'Desperdicio', shortName: 'Desperdicio', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Daño, maduración o pérdida en selección (-)', color: '#F87171' },
     R: { letter: 'R', title: 'Basura', shortName: 'Basura', sign: '(-)', block: 'DEVOLUCIONES & MERMAS (-)', effect: 'Descarte total no aprovechable (-)', color: '#FBBF24', borderRight: '2px solid #334155' },
-    S: { letter: 'S', title: 'Cálculo Final', shortName: 'Cálculo Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - P - Q - R', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4' },
-    T: { letter: 'T', title: 'Conteo Físico', shortName: 'Conteo Físico', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399' },
-    U: { letter: 'U', title: 'Inventario Bodega', shortName: 'Inv. Bodega', sign: '(T + O)', block: 'CIERRE & BODEGA', formula: 'U = (T != null ? T + O : S)', effect: 'Stock físico total en bodega para salida a siguiente jornada (T + O o fallback teórico S en transición)', color: '#F8FAFC', borderRight: '2px solid #334155' },
+    S: { letter: 'S', title: 'Cálculo Final', shortName: 'Cálculo Final', sign: '(=)', block: 'CIERRE & BODEGA', formula: 'S = E + F + G - H - J - K + L - M - N + O - O2 - P - Q - R - X', effect: 'Balance teórico calculado de masa al cierre de turno', color: '#5EEAD4' },
+    T: { letter: 'T', title: 'Conteo Físico', shortName: 'Conteo Físico', sign: '(Físico)', block: 'CIERRE & BODEGA', effect: 'Inventario físico real contado en bodega al cierre de jornada', color: '#34D399', borderRight: '2px solid #334155' },
+    U: { letter: 'U', title: 'Inventario Bodega', shortName: 'Inv. Bodega', sign: '(= T)', block: 'CIERRE & BODEGA', formula: 'U = T', effect: 'Unificado 1:1 con Conteo Físico (Col T) — SDD DT-19', color: '#F8FAFC', borderRight: '2px solid #334155' },
     V: { letter: 'V', title: 'Faltantes', shortName: 'Faltantes', sign: '(-)', block: 'CONCILIACIÓN (-)', formula: 'V = Max(0, S - T)', effect: 'Descuadre en contra: Falta producto físico respecto al calculado (-)', color: '#F87171' },
     W: { letter: 'W', title: 'Sobrantes', shortName: 'Sobrantes', sign: '(+)', block: 'CONCILIACIÓN (+)', formula: 'W = Max(0, T - S)', effect: 'Descuadre a favor: Sobra producto físico respecto al calculado (+)', color: '#34D399' },
     X: { letter: 'X', title: 'Donaciones', shortName: 'Donaciones', sign: '(-)', block: 'CONCILIACIÓN', effect: 'Baja autorizada para donación o Banco de Alimentos', color: '#F472B6' }
@@ -365,7 +368,13 @@ export default function InventoryDailyBalanceTab({
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        return parsed.filter(k => k !== 'J');
+                        const filtered = parsed.filter(k => k !== 'J' && k !== 'U');
+                        if (!filtered.includes('O2')) {
+                            const oIdx = filtered.indexOf('O');
+                            if (oIdx !== -1) filtered.splice(oIdx + 1, 0, 'O2');
+                            else filtered.push('O2');
+                        }
+                        return filtered;
                     }
                 }
             } catch (e) {}
@@ -1208,6 +1217,7 @@ interface CommittedSaleData {
             let m_additionalSales = 0;
             let n_employeeSales = 0;
             let o_returns = 0;
+            let o2_returnShortage = 0;
             let p_weighingWaste = 0;
             let q_damageWaste = 0;
             let r_cleaningWaste = 0;
@@ -1319,6 +1329,10 @@ interface CommittedSaleData {
                 else if (ref === 'route_return' || ref === 'return' || ref === 'devolucion') {
                     o_returns += rawQty;
                 }
+                // O2: Faltante Devoluciones (-)
+                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.RETURN_SHORTAGE || ref === 'return_shortage') {
+                    o2_returnShortage += rawQty;
+                }
                 // P: Pesada (-)
                 else if (ref === INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING) {
                     p_weighingWaste += rawQty;
@@ -1346,10 +1360,7 @@ interface CommittedSaleData {
                 }
             });
 
-            // DT-12 (SDD Escenario 387): Coexistencia aditiva con compras transaccionales de /ops/compras salvo reemplazo explícito
-            if (!hasManualOrSheetPurchaseOverride) {
-                g_purchases += (opsPurchasesMap.get(p.id) || 0);
-            }
+            // DT-17: Columna G (COMPRAS (+)) se alimenta exclusivamente de Recepción de Bodega (/ops/recepcion -> purchase_reception) o planilla física/manual; se excluye /ops/compras (opsPurchasesMap) para no inflar con compras aún no recibidas en bodega.
 
             // DT-14 (SDD Escenario 389): Sumar pedidos extemporáneos post-corte en Columna M (Venta Adicional)
             m_additionalSales += (postCutoffSalesMap.get(p.id) || 0);
@@ -1376,12 +1387,12 @@ interface CommittedSaleData {
                 initialStock = hasAnyMovements ? Math.max(0, currentStock - sumDeltasSinceStart) : 0;
             }
 
-            // S: Inventario Calculado
-            // S = E + F + G - H - J - K + L - M - N + O - P - Q - R
-            const calculatedStock = initialStock + f_corrections + g_purchases - h_salesKg - j_weightSalesUnits - k_shortage + l_unshipped - m_additionalSales - n_employeeSales + o_returns - p_weighingWaste - q_damageWaste - r_cleaningWaste;
+            // S: Inventario Calculado (SDD DT-17 & DT-19)
+            // S = E + F + G - H - J - K + L - M - N + O - O2 - P - Q - R - X
+            const calculatedStock = initialStock + f_corrections + g_purchases - h_salesKg - j_weightSalesUnits - k_shortage + l_unshipped - m_additionalSales - n_employeeSales + o_returns - o2_returnShortage - p_weighingWaste - q_damageWaste - r_cleaningWaste - x_foodBank;
 
-            // U: Inventario en bodega (devoluciones) = T + O (o fallback a cálculo final S en transición)
-            const bodegaPost10 = physicalCount !== null ? (physicalCount + o_returns) : calculatedStock;
+            // U: Unificado 1:1 con Conteo Físico T (SDD DT-19: Col U suprimida en UI)
+            const bodegaPost10 = physicalCount !== null ? physicalCount : calculatedStock;
 
             // V & W: Faltantes y Sobrantes (Magnitudes positivas como en el Excel del cliente)
             let missing = 0;
@@ -1424,6 +1435,7 @@ interface CommittedSaleData {
                 colM_additionalSales: m_additionalSales,
                 colN_employeeSales: n_employeeSales,
                 colO_returns: o_returns,
+                colO2_returnShortage: o2_returnShortage,
                 colP_weighingWaste: p_weighingWaste,
                 colQ_damageWaste: q_damageWaste,
                 evidencePhotosQ: evidenceQ,
@@ -1441,15 +1453,16 @@ interface CommittedSaleData {
         });
     }, [balanceDate, products, movements, opsPurchasesMap, previousClosingMap, costMatrixMap, committedSalesMap, postCutoffSalesMap]);
 
-    // Mapa en vivo para arbitraje Anti-Colisión OPS en Lector Multimodal de Planillas Físicas (SDD Escenario 391)
+    // Mapa en vivo para arbitraje Anti-Colisión OPS en Lector Multimodal de Planillas Físicas (SDD Escenario 391 / DT-19)
     const opsCurrentByProductAndCol = useMemo(() => {
-        const map = new Map<string, { G: number; T: number; Q: number; R: number }>();
+        const map = new Map<string, { G: number; T: number; Q: number; R: number; X?: number }>();
         dailyRows.forEach(r => {
             map.set(r.productId, {
                 G: r.colG_purchases || 0,
                 T: r.colT_physicalCount ?? 0,
                 Q: r.colQ_damageWaste || 0,
-                R: r.colR_cleaningWaste || 0
+                R: r.colR_cleaningWaste || 0,
+                X: r.colX_foodBank || 0
             });
         });
         return map;
@@ -1524,6 +1537,7 @@ interface CommittedSaleData {
                 colM_additionalSales: row.colM_additionalSales + children.reduce((s, c) => s + c.colM_additionalSales, 0),
                 colN_employeeSales: row.colN_employeeSales + children.reduce((s, c) => s + c.colN_employeeSales, 0),
                 colO_returns: row.colO_returns + children.reduce((s, c) => s + c.colO_returns, 0),
+                colO2_returnShortage: row.colO2_returnShortage + children.reduce((s, c) => s + c.colO2_returnShortage, 0),
                 colP_weighingWaste: row.colP_weighingWaste + children.reduce((s, c) => s + c.colP_weighingWaste, 0),
                 colQ_damageWaste: row.colQ_damageWaste + children.reduce((s, c) => s + c.colQ_damageWaste, 0),
                 colR_cleaningWaste: row.colR_cleaningWaste + children.reduce((s, c) => s + c.colR_cleaningWaste, 0),
@@ -1533,7 +1547,7 @@ interface CommittedSaleData {
                     : null,
                 hasPhysicalCount: row.hasPhysicalCount || children.some(c => c.hasPhysicalCount),
                 colU_bodegaPost10am: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
-                    ? (((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)) + (row.colO_returns + children.reduce((s, c) => s + c.colO_returns, 0)))
+                    ? ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0))
                     : (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)),
                 colV_missing: (row.hasPhysicalCount || children.some(c => c.hasPhysicalCount))
                     ? Math.max(0, (row.colS_calculated + children.reduce((s, c) => s + c.colS_calculated, 0)) - ((row.colT_physicalCount || 0) + children.reduce((s, c) => s + (c.colT_physicalCount || 0), 0)))
@@ -1648,6 +1662,7 @@ interface CommittedSaleData {
             (r.colM_additionalSales || 0) > 0.001 ||
             (r.colN_employeeSales || 0) > 0.001 ||
             (r.colO_returns || 0) > 0.001 ||
+            (r.colO2_returnShortage || 0) > 0.001 ||
             (r.colP_weighingWaste || 0) > 0.001 ||
             (r.colQ_damageWaste || 0) > 0.001 ||
             (r.colR_cleaningWaste || 0) > 0.001 ||
@@ -1760,6 +1775,7 @@ interface CommittedSaleData {
                         case 'M': return matchNumericFilter(row.colM_additionalSales, filterStr);
                         case 'N': return matchNumericFilter(row.colN_employeeSales, filterStr);
                         case 'O': return matchNumericFilter(row.colO_returns, filterStr);
+                        case 'O2': return matchNumericFilter(row.colO2_returnShortage, filterStr);
                         case 'P': return matchNumericFilter(row.colP_weighingWaste, filterStr);
                         case 'Q': return matchNumericFilter(row.colQ_damageWaste, filterStr);
                         case 'R': return matchNumericFilter(row.colR_cleaningWaste, filterStr);
@@ -1818,7 +1834,7 @@ interface CommittedSaleData {
     }, [allCollapsed, filteredFamilies]);
 
     // Columnas editables en orden secuencial para navegación Excel (Enter / Tab) — Col O excluida (Cable Pelado Calidad DT-13 / Escenario 388)
-    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'T', 'X'] as const;
+    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O2', 'P', 'Q', 'R', 'T', 'X'] as const;
 
     const getRowColumnValue = (row: InventoryDailyRow, colKey: string): number | null => {
         switch (colKey) {
@@ -1832,6 +1848,7 @@ interface CommittedSaleData {
             case 'M': return row.colM_additionalSales;
             case 'N': return row.colN_employeeSales;
             case 'O': return row.colO_returns;
+            case 'O2': return row.colO2_returnShortage;
             case 'P': return row.colP_weighingWaste;
             case 'Q': return row.colQ_damageWaste;
             case 'R': return row.colR_cleaningWaste;
@@ -1917,7 +1934,7 @@ interface CommittedSaleData {
         filteredFamilies.forEach(f => {
             const r = f.isParent ? f.consolidated : f.parent;
             const entradas = r.colE_initialStock + (r.colF_corrections > 0 ? r.colF_corrections : 0) + r.colG_purchases + r.colL_unshipped + r.colO_returns;
-            const salidas = r.colH_salesKg + r.colJ_weightSalesUnits + r.colK_shortage + r.colM_additionalSales + r.colN_employeeSales + r.colP_weighingWaste + r.colQ_damageWaste + r.colR_cleaningWaste;
+            const salidas = r.colH_salesKg + r.colJ_weightSalesUnits + r.colK_shortage + r.colM_additionalSales + r.colN_employeeSales + r.colO2_returnShortage + r.colP_weighingWaste + r.colQ_damageWaste + r.colR_cleaningWaste + r.colX_foodBank;
 
             totalEntradas += entradas;
             totalSalidas += salidas;
@@ -1972,6 +1989,7 @@ interface CommittedSaleData {
             totalM: list.reduce((acc, r) => acc + (r.colM_additionalSales || 0), 0),
             totalN: list.reduce((acc, r) => acc + (r.colN_employeeSales || 0), 0),
             totalO: list.reduce((acc, r) => acc + (r.colO_returns || 0), 0),
+            totalO2: list.reduce((acc, r) => acc + (r.colO2_returnShortage || 0), 0),
             totalP: list.reduce((acc, r) => acc + (r.colP_weighingWaste || 0), 0),
             totalQ: list.reduce((acc, r) => acc + (r.colQ_damageWaste || 0), 0),
             totalR: list.reduce((acc, r) => acc + (r.colR_cleaningWaste || 0), 0),
@@ -2017,6 +2035,7 @@ interface CommittedSaleData {
                 additionalSales: r.colM_additionalSales,
                 employeeSales: r.colN_employeeSales,
                 returns: r.colO_returns,
+                returnShortage: r.colO2_returnShortage,
                 weighingWaste: r.colP_weighingWaste,
                 damageWaste: r.colQ_damageWaste,
                 cleaningWaste: r.colR_cleaningWaste,
@@ -2117,12 +2136,13 @@ interface CommittedSaleData {
                     'Venta Adicional': Number(rowObj.colM_additionalSales.toFixed(2)),
                     'Venta adicional empleado': Number(rowObj.colN_employeeSales.toFixed(2)),
                     'Devoluciones': Number(rowObj.colO_returns.toFixed(2)),
+                    'Faltante de devoluciones': Number(rowObj.colO2_returnShortage.toFixed(2)),
                     'Pesada': Number(rowObj.colP_weighingWaste.toFixed(2)),
                     'Desperdicio': Number(rowObj.colQ_damageWaste.toFixed(2)),
                     'Basura': Number(rowObj.colR_cleaningWaste.toFixed(2)),
                     'Inventario calculado': Number(rowObj.colS_calculated.toFixed(2)),
                     'Inventario agregado bodega': rowObj.colT_physicalCount !== null ? Number(rowObj.colT_physicalCount.toFixed(2)) : '',
-                    'Inventario en bodega (devoluciones)': rowObj.colU_bodegaPost10am !== null ? Number(rowObj.colU_bodegaPost10am.toFixed(2)) : '',
+                    'Inventario en bodega': rowObj.colU_bodegaPost10am !== null ? Number(rowObj.colU_bodegaPost10am.toFixed(2)) : '',
                     'Faltantes': rowObj.colV_missing > 0 ? Number(rowObj.colV_missing.toFixed(2)) : 0,
                     'Sobrantes': rowObj.colW_surplus > 0 ? Number(rowObj.colW_surplus.toFixed(2)) : 0,
                     'Banco de alimentos': Number(rowObj.colX_foodBank.toFixed(2))
@@ -2148,12 +2168,13 @@ interface CommittedSaleData {
                             'Venta Adicional': Number(ch.colM_additionalSales.toFixed(2)),
                             'Venta adicional empleado': Number(ch.colN_employeeSales.toFixed(2)),
                             'Devoluciones': Number(ch.colO_returns.toFixed(2)),
+                            'Faltante de devoluciones': Number(ch.colO2_returnShortage.toFixed(2)),
                             'Pesada': Number(ch.colP_weighingWaste.toFixed(2)),
                             'Desperdicio': Number(ch.colQ_damageWaste.toFixed(2)),
                             'Basura': Number(ch.colR_cleaningWaste.toFixed(2)),
                             'Inventario calculado': Number(ch.colS_calculated.toFixed(2)),
                             'Inventario agregado bodega': ch.colT_physicalCount !== null ? Number(ch.colT_physicalCount.toFixed(2)) : '',
-                            'Inventario en bodega (devoluciones)': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
+                            'Inventario en bodega': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
                             'Faltantes': ch.colV_missing > 0 ? Number(ch.colV_missing.toFixed(2)) : 0,
                             'Sobrantes': ch.colW_surplus > 0 ? Number(ch.colW_surplus.toFixed(2)) : 0,
                             'Banco de alimentos': Number(ch.colX_foodBank.toFixed(2))
@@ -2168,29 +2189,29 @@ interface CommittedSaleData {
             for (let i = 0; i < rowsForExcel.length; i++) {
                 const rNum = i + 2; // Fila 1 es cabecera (1-indexed)
                 
-                // Col T: Inventario Calculado
-                // T = F + G + H - I - K - L + M - N - O + P - Q - R - S
-                const calcFormula = `F${rNum}+G${rNum}+H${rNum}-I${rNum}-K${rNum}-L${rNum}+M${rNum}-N${rNum}-O${rNum}+P${rNum}-Q${rNum}-R${rNum}-S${rNum}`;
-                ws[`T${rNum}`] = { t: 'n', f: calcFormula, v: rowsForExcel[i]['Inventario calculado'] };
+                // Col U: Inventario Calculado (S = E + F + G - H - J - K + L - M - N + O - O2 - P - Q - R - X)
+                // En columnas Excel: U = F + G + H - I - K - L + M - N - O + P - Q - R - S - T - Z
+                const calcFormula = `F${rNum}+G${rNum}+H${rNum}-I${rNum}-K${rNum}-L${rNum}+M${rNum}-N${rNum}-O${rNum}+P${rNum}-Q${rNum}-R${rNum}-S${rNum}-T${rNum}-Z${rNum}`;
+                ws[`U${rNum}`] = { t: 'n', f: calcFormula, v: rowsForExcel[i]['Inventario calculado'] };
 
-                // Col V: Inventario en bodega (devoluciones) (U + P)
-                const post10Formula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), "", U${rNum}+P${rNum})`;
-                ws[`V${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario en bodega (devoluciones)'] };
+                // Col W: Inventario en bodega (DT-17 Unificación Contable: igual a Conteo Físico V)
+                const post10Formula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), "", V${rNum})`;
+                ws[`W${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario en bodega'] };
 
-                // Col W: Faltantes (Si U < T => T - U)
-                const missingFormula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), 0, IF(U${rNum}<T${rNum}, T${rNum}-U${rNum}, 0))`;
-                ws[`W${rNum}`] = { t: 'n', f: missingFormula, v: rowsForExcel[i]['Faltantes'] };
+                // Col X: Faltantes (Si V < U => U - V)
+                const missingFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}<U${rNum}, U${rNum}-V${rNum}, 0))`;
+                ws[`X${rNum}`] = { t: 'n', f: missingFormula, v: rowsForExcel[i]['Faltantes'] };
 
-                // Col X: Sobrantes (Si U > T => U - T)
-                const surplusFormula = `IF(OR(ISBLANK(U${rNum}), U${rNum}=""), 0, IF(U${rNum}>T${rNum}, U${rNum}-T${rNum}, 0))`;
-                ws[`X${rNum}`] = { t: 'n', f: surplusFormula, v: rowsForExcel[i]['Sobrantes'] };
+                // Col Y: Sobrantes (Si V > U => V - U)
+                const surplusFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}>U${rNum}, V${rNum}-U${rNum}, 0))`;
+                ws[`Y${rNum}`] = { t: 'n', f: surplusFormula, v: rowsForExcel[i]['Sobrantes'] };
             }
 
             // Agregar Fila de Totales Matemáticos al pie
             const lastDataRow = rowsForExcel.length + 1;
             const totalRow = lastDataRow + 1;
 
-            const formulaCols = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
+            const formulaCols = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
             ws[`E${totalRow}`] = { t: 's', v: 'TOTALES GENERALES:' };
             formulaCols.forEach(c => {
                 ws[`${c}${totalRow}`] = {
@@ -2200,7 +2221,7 @@ interface CommittedSaleData {
             });
 
             // Actualizar rango !ref
-            ws['!ref'] = `A1:Y${totalRow}`;
+            ws['!ref'] = `A1:Z${totalRow}`;
 
             // Anchos de columna optimizados
             ws['!cols'] = [
@@ -2220,15 +2241,16 @@ interface CommittedSaleData {
                 { wch: 18 }, // N Venta Adic Cliente
                 { wch: 18 }, // O Venta Adic Empleado
                 { wch: 14 }, // P Devoluciones
-                { wch: 12 }, // Q Pesada
-                { wch: 14 }, // R Desperdicio
-                { wch: 12 }, // S Basura
-                { wch: 18 }, // T Calculado
-                { wch: 20 }, // U Agregado Bodega
-                { wch: 24 }, // V Inventario en bodega (devoluciones)
-                { wch: 14 }, // W Faltantes
-                { wch: 14 }, // X Sobrantes
-                { wch: 16 }  // Y Banco Alimentos
+                { wch: 22 }, // Q Faltante de devoluciones
+                { wch: 12 }, // R Pesada
+                { wch: 14 }, // S Desperdicio
+                { wch: 12 }, // T Basura
+                { wch: 18 }, // U Calculado
+                { wch: 20 }, // V Agregado Bodega
+                { wch: 20 }, // W Inventario en bodega
+                { wch: 14 }, // X Faltantes
+                { wch: 14 }, // Y Sobrantes
+                { wch: 16 }  // Z Banco Alimentos
             ];
 
             const wb = XLSX.utils.book_new();
@@ -2403,6 +2425,10 @@ interface CommittedSaleData {
                 movType = 'entry';
                 refType = 'route_return';
                 qty = newVal;
+            } else if (colKey === 'O2') {
+                movType = 'exit';
+                refType = INVENTORY_MOVEMENT_SUBTYPES.RETURN_SHORTAGE;
+                qty = -newVal;
             } else if (colKey === 'P') {
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING;
@@ -3384,6 +3410,7 @@ interface CommittedSaleData {
                                 {renderNumericCell(row.colO_returns)}
                             </td>
                         ),
+                        O2: (colIdx) => renderEditableCell(key, row.productId, 'O2', row.colO2_returnShortage, { ...getColStyle('O2', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colO2_returnShortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colO2_returnShortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         P: (colIdx) => renderEditableCell(key, row.productId, 'P', row.colP_weighingWaste, { ...getColStyle('P', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colP_weighingWaste > 0 ? '#D97706' : '#94A3B8', fontWeight: isParent ? '800' : (row.colP_weighingWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         Q: (colIdx) => renderEditableCell(key, row.productId, 'Q', row.colQ_damageWaste, { ...getColStyle('Q', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colQ_damageWaste > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colQ_damageWaste > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosQ?.length > 0 ? (

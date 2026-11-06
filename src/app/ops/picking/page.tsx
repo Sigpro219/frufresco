@@ -411,10 +411,10 @@ export default function PickingExecutionPage() {
     }, []);
 
     const quickComplete = (item: PickingItem) => {
-        const available = item.available_stock || 0;
-        if (false && available < item.quantity) {
-            window.showToast?.(`Stock insuficiente en inventario (${available} ${item.unit} disponibles). Usa el modal para registrar un faltante.`, 'error');
-            openExceptionModal(item);
+        const available = item.available_stock ?? 0;
+        // SDD DT-17: Restricción estricta de existencias (available_stock >= picked_quantity)
+        if (item.quantity > 0 && available < item.quantity - 0.0001) {
+            alert(`Restricción de Inventario (DT-17): "${item.product_name}" solo tiene ${available} ${item.unit || ''} disponibles en bodega (se requieren ${item.quantity}). Debe recibirse primero en /ops/recepcion o ajustarse a la cantidad real disponible.`);
             return;
         }
         setExceptionItem({
@@ -515,10 +515,10 @@ export default function PickingExecutionPage() {
         const qty = parseFloat(exceptionQty);
         if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
         
-        const available = exceptionItem.available_stock || 0;
-        if (false && qty > available) {
-            alert(`No puedes alistar más de lo disponible en inventario (${available} ${exceptionItem.unit})`);
-            return;
+        const available = exceptionItem.available_stock ?? 0;
+        // SDD DT-17: Restricción estricta de existencias en Alistamiento (available_stock >= picked_quantity)
+        if (qty > 0 && exceptionQuality !== 'red' && available < qty - 0.0001) {
+            return alert(`Restricción de Inventario (DT-17): "${exceptionItem.product_name}" tiene ${available} ${exceptionItem.unit || ''} en bodega y no permite despachar ${qty}. Debe recibirse en /ops/recepcion o despacharse máximo lo disponible.`);
         }
         setIsQuantityValidated(true);
     };
@@ -528,9 +528,10 @@ export default function PickingExecutionPage() {
         const qty = parseFloat(exceptionQty);
         if (isNaN(qty) || qty < 0) return alert('Cantidad inválida');
         
-        const available = exceptionItem.available_stock || 0;
-        if (false && qty > available) {
-            return alert(`Error: La cantidad a alistar (${qty}) supera el inventario disponible (${available} ${exceptionItem.unit})`);
+        const available = exceptionItem.available_stock ?? 0;
+        // SDD DT-17: Restricción estricta de existencias en Alistamiento (available_stock >= picked_quantity)
+        if (qty > 0 && exceptionQuality !== 'red' && available < qty - 0.0001) {
+            return alert(`Restricción de Inventario (DT-17): "${exceptionItem.product_name}" tiene ${available} ${exceptionItem.unit || ''} en bodega y no permite despachar ${qty}.`);
         }
         
         setIsSaving(true);
@@ -543,23 +544,17 @@ export default function PickingExecutionPage() {
 
             if (orderItemError) throw orderItemError;
 
-            // SDD Escenario 390 (DT-15): Gobernanza de Excedentes de Pesaje (Col P: waste_weighing vs Col M: additional_sale)
+            // SDD DT-17 (Ex-DT-15): Desacople del Maestro SKU y Cable Pelado hacia Facturación (Col P por defecto; Facturación arbitra Col M vs Col P por Pedido + Producto)
             if (qty > exceptionItem.quantity && exceptionQuality !== 'red') {
                 const deltaOverweight = Number((qty - exceptionItem.quantity).toFixed(2));
                 if (deltaOverweight > 0) {
                     const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
                         supabase.from('warehouses').select('id').limit(1).maybeSingle(),
-                        supabase.from('products').select('name, sku, charge_overweight').eq('id', exceptionItem.product_id).maybeSingle()
+                        supabase.from('products').select('name, sku').eq('id', exceptionItem.product_id).maybeSingle()
                     ]);
                     if (warehouseData?.id) {
-                        const isIndivisibleFruit = /papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(prodMeta?.name || exceptionItem.product_name || '');
-                        const chargeOverweight = typeof (prodMeta as any)?.charge_overweight === 'boolean'
-                            ? (prodMeta as any).charge_overweight
-                            : !isIndivisibleFruit;
-                        const refType = chargeOverweight ? 'additional_sale' : 'waste_weighing';
-                        const noteTag = chargeOverweight
-                            ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`
-                            : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`;
+                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`;
+                        await supabase.from('inventory_movements').delete().eq('reference_id', exceptionItem.id).in('reference_type', ['waste_weighing', 'additional_sale']);
                         await supabase.from('inventory_movements').insert([{
                             product_id: exceptionItem.product_id,
                             warehouse_id: warehouseData.id,
@@ -567,7 +562,7 @@ export default function PickingExecutionPage() {
                             type: 'exit',
                             status_to: 'available',
                             notes: noteTag,
-                            reference_type: refType,
+                            reference_type: 'waste_weighing',
                             reference_id: exceptionItem.id
                         }]);
                     }

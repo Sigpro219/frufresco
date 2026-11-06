@@ -25,6 +25,7 @@ interface ProductItem {
     unit_of_measure: string;
     quantity: number;
     picked_quantity: number;
+    available_stock?: number;
     notes?: string;
     physical_instruction?: string;
 }
@@ -63,7 +64,7 @@ function PickingClientContent() {
                     ),
                     order_items (
                         id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
-                        products (name, category, unit_of_measure)
+                        products (name, category, unit_of_measure, inventory_stocks (quantity))
                     )
                 `)
                 .eq('id', orderId)
@@ -122,6 +123,7 @@ function PickingClientContent() {
                         unit_of_measure: item.products?.unit_of_measure,
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || 0,
+                        available_stock: (Array.isArray(item.products?.inventory_stocks) ? item.products.inventory_stocks : []).reduce((acc: number, s: any) => acc + (Number(s?.quantity) || 0), 0),
                         physical_instruction: (item.selected_options as any)?._physical_instruction as string | undefined
                     };
                 });
@@ -141,6 +143,15 @@ function PickingClientContent() {
 
         try {
             const qty = parseFloat(pickedQty);
+            // SDD DT-17: Restricción de Existencias en Alistamiento — Solo se puede despachar (qty > 0) hasta las existencias disponibles en inventario (available_stock >= picked_quantity)
+            if (qty > 0 && quality !== 'red' && (selectedItem.available_stock ?? 0) < qty - 0.0001) {
+                const msg = `Restricción de Inventario (DT-17): "${selectedItem.product_name}" solo tiene ${selectedItem.available_stock ?? 0} ${selectedItem.unit_of_measure} en bodega y no permite despachar ${qty}. Debe recibirse primero en /ops/recepcion o ajustarse a lo disponible.`;
+                const win = window as unknown as { showToast?: (m: string, t: string) => void };
+                if (win.showToast) win.showToast(msg, 'error');
+                else alert(msg);
+                setProcessing(false);
+                return;
+            }
             const { error } = await supabase
                 .from('order_items')
                 .update({
@@ -151,23 +162,17 @@ function PickingClientContent() {
 
             if (error) throw error;
 
-            // SDD Escenario 390 (DT-15): Gobernanza de Excedentes de Pesaje (Col P: waste_weighing vs Col M: additional_sale)
+            // SDD DT-17 (Ex-DT-15): Desacople del Maestro SKU y Cable Pelado hacia Facturación (Col P vs Col M por Pedido + Producto)
             if (qty > selectedItem.quantity && quality !== 'red') {
                 const deltaOverweight = Number((qty - selectedItem.quantity).toFixed(2));
                 if (deltaOverweight > 0) {
                     const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
                         supabase.from('warehouses').select('id').limit(1).maybeSingle(),
-                        supabase.from('products').select('name, sku, charge_overweight').eq('id', selectedItem.product_id).maybeSingle()
+                        supabase.from('products').select('name, sku').eq('id', selectedItem.product_id).maybeSingle()
                     ]);
                     if (warehouseData?.id) {
-                        const isIndivisibleFruit = /papaya|mel[oó]n|patilla|sand[ií]a|ahuyama|calabaza/i.test(prodMeta?.name || selectedItem.product_name || '');
-                        const chargeOverweight = typeof (prodMeta as any)?.charge_overweight === 'boolean'
-                            ? (prodMeta as any).charge_overweight
-                            : !isIndivisibleFruit;
-                        const refType = chargeOverweight ? 'additional_sale' : 'waste_weighing';
-                        const noteTag = chargeOverweight
-                            ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`
-                            : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`;
+                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`;
+                        await supabase.from('inventory_movements').delete().eq('reference_id', selectedItem.id).in('reference_type', ['waste_weighing', 'additional_sale']);
                         await supabase.from('inventory_movements').insert([{
                             product_id: selectedItem.product_id,
                             warehouse_id: warehouseData.id,
@@ -175,7 +180,7 @@ function PickingClientContent() {
                             type: 'exit',
                             status_to: 'available',
                             notes: noteTag,
-                            reference_type: refType,
+                            reference_type: 'waste_weighing',
                             reference_id: selectedItem.id
                         }]);
                     }
@@ -342,7 +347,7 @@ function PickingClientContent() {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: '800', fontSize: '1.1rem' }}>{item.product_name}</div>
                                 <div style={{ fontSize: '0.9rem', color: '#9CA3AF', marginTop: '0.3rem' }}>
-                                    Pedido: <span style={{ color: 'white', fontWeight: 'bold' }}>{item.quantity} {item.unit_of_measure}</span>
+                                    Pedido: <span style={{ color: 'white', fontWeight: 'bold' }}>{item.quantity} {item.unit_of_measure}</span> • <span style={{ color: (item.available_stock ?? 0) > 0 ? '#34D399' : '#FCA5A5', fontWeight: '800' }}>Stock Bodega: {Number(item.available_stock ?? 0).toFixed(2)} {item.unit_of_measure}</span>
                                 </div>
                                 {item.physical_instruction && (
                                     <div style={{ fontSize: '0.78rem', color: '#6EE7B7', fontWeight: '700', marginTop: '0.2rem' }}>

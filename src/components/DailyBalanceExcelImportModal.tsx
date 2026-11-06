@@ -550,6 +550,62 @@ export default function DailyBalanceExcelImportModal({
                 if (insError) throw insError;
             }
 
+            // E: Persistir Inventario Inicial (Col E) como Línea Base Oficial en daily_inventory_closings (D-1)
+            const rowsWithInitial = rowsToInsert.filter(r => r.productId && r.initialStock > 0.0001);
+            if (rowsWithInitial.length > 0) {
+                const targetD = new Date(`${targetDate}T12:00:00-05:00`);
+                targetD.setDate(targetD.getDate() - 1);
+                const prevDateStr = targetD.toISOString().split('T')[0];
+
+                const snapshotItems = rowsToInsert.filter(r => r.productId).map(r => ({
+                    sku: r.matchedProduct?.sku || '',
+                    productId: r.productId,
+                    productName: r.productName,
+                    accountingId: r.accountingId,
+                    inventoryGroup: r.matchedProduct?.inventory_group || 'INVENTARIO GENERAL',
+                    initialStock: 0,
+                    corrections: 0,
+                    purchases: 0,
+                    salesKg: 0,
+                    salesUnits: 0,
+                    weightSalesUnits: 0,
+                    shortage: 0,
+                    unshipped: 0,
+                    unprepared: 0,
+                    additionalSales: 0,
+                    employeeSales: 0,
+                    returns: 0,
+                    weighingWaste: 0,
+                    damageWaste: 0,
+                    cleaningWaste: 0,
+                    calculatedStock: r.initialStock,
+                    physicalCount: r.initialStock,
+                    bodegaPost10am: r.initialStock,
+                    missing: 0,
+                    surplus: 0
+                }));
+
+                const totalInitial = rowsWithInitial.reduce((sum, r) => sum + r.initialStock, 0);
+
+                const closingPayload = {
+                    closing_date: prevDateStr,
+                    closed_at: `${prevDateStr}T23:59:59.000Z`,
+                    closed_by_name: 'Carga Masiva Excel (Línea Base Inicial)',
+                    notes: `Cierre Oficial de Línea Base establecido a partir del cargue masivo Excel (${fileName || 'archivo'})`,
+                    total_calculated: totalInitial,
+                    total_physical: totalInitial,
+                    total_missing: 0,
+                    total_surplus: 0,
+                    is_locked: true,
+                    snapshot_items: snapshotItems
+                };
+
+                const { error: closeErr } = await supabase
+                    .from('daily_inventory_closings')
+                    .upsert(closingPayload, { onConflict: 'closing_date' });
+                if (closeErr) console.warn('Warning guardando cierre previo inicial:', closeErr);
+            }
+
             setSuccessMessage(`¡Simulación inyectada con éxito! Se registraron ${movementsToInsert.length} transacciones operativas para la fecha ${targetDate}.`);
             setTimeout(() => {
                 onSuccess();
@@ -583,6 +639,16 @@ export default function DailyBalanceExcelImportModal({
                 .ilike('notes', '%[SIMULACIÓN]%');
 
             if (delError) throw delError;
+
+            // Limpiar cierre de línea base D-1 si fue creado por carga masiva Excel
+            const targetD = new Date(`${targetDate}T12:00:00-05:00`);
+            targetD.setDate(targetD.getDate() - 1);
+            const prevDateStr = targetD.toISOString().split('T')[0];
+            await supabase
+                .from('daily_inventory_closings')
+                .delete()
+                .eq('closing_date', prevDateStr)
+                .ilike('notes', '%cargue masivo Excel%');
 
             setSuccessMessage(`Se eliminaron con éxito los datos de simulación para ${targetDate}. El balance vuelve a su estado original.`);
             setTimeout(() => {
