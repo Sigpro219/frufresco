@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifySessionAndRole } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { getGeminiApiKey } from '@/lib/ai/aiModelConfig';
 import { PhysicalSheetType, RawExtractedSheetRow, parseHandwrittenQuantity } from '@/lib/inventory/physical-sheet-parser';
@@ -125,6 +126,44 @@ ESTRUCTURA JSON EXACTA REQUERIDA (Omite campos que sean null para máxima veloci
 
 export const maxDuration = 120;
 
+export async function GET(req: Request) {
+  try {
+    const auth = await verifySessionAndRole(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+    const { searchParams } = new URL(req.url);
+    const rawName = searchParams.get('fileName') || 'planilla.pdf';
+    const cleanName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `temp-ocr/${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${cleanName}`;
+
+    const supabaseAdmin = createAdminClient();
+    await supabaseAdmin.storage.createBucket('inventory-evidence', { public: true }).catch(() => null);
+
+    const { data, error } = await supabaseAdmin.storage
+      .from('inventory-evidence')
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message || 'No se pudo crear canal de carga' }, { status: 500 });
+    }
+
+    const { data: pubUrl } = supabaseAdmin.storage.from('inventory-evidence').getPublicUrl(storagePath);
+    return NextResponse.json({
+      success: true,
+      path: storagePath,
+      token: data.token,
+      signedUrl: data.signedUrl,
+      publicUrl: pubUrl.publicUrl
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Error creando URL firmada' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await verifySessionAndRole(req);
@@ -152,6 +191,7 @@ export async function POST(req: Request) {
     const balanceDate = (formData.get('balanceDate') as string) || new Date().toISOString().split('T')[0];
     const textInput = (formData.get('text') as string) || '';
     const fileUrl = (formData.get('fileUrl') as string) || '';
+    const storagePath = (formData.get('storagePath') as string) || '';
     const remoteFileName = (formData.get('fileName') as string) || 'Planilla_Escaneada.pdf';
     const remoteMimeType = (formData.get('fileMimeType') as string) || 'application/pdf';
 
@@ -181,6 +221,9 @@ export async function POST(req: Request) {
     // Si el archivo pesado (> 3.2 MB) vino vía Supabase Storage URL para evitar el límite 413 de Vercel
     if (fileUrl.trim()) {
       const remoteRes = await fetch(fileUrl.trim());
+      if (storagePath.trim()) {
+        void createAdminClient().storage.from('inventory-evidence').remove([storagePath.trim()]).catch(() => null);
+      }
       if (!remoteRes.ok) {
         throw new Error(`No se pudo descargar el documento desde el canal seguro (${remoteRes.status}).`);
       }

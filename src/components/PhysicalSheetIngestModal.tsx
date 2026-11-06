@@ -31,6 +31,65 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const isStaging = reconciledRows.length > 0;
 
+  // Si un PDF escaneado supera 3.2 MB (ej. CamScanner pesado), desglosar sus páginas en imágenes JPEG ligeras (~220 KB c/u) usando el mismo motor PDF.js 3.11.174 de PdfCanvasViewer
+  const sliceHeavyPdfIntoPageJpegs = async (file: File): Promise<File[]> => {
+    const MAX_VERCEL_SAFE_BYTES = 3.2 * 1024 * 1024;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf || file.size <= MAX_VERCEL_SAFE_BYTES || typeof window === 'undefined') {
+      return [file];
+    }
+    try {
+      setExtractionProgress(`Optimizando páginas de ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`);
+      if (!(window as any).pdfjsLib) {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.async = true;
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+        (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await (window as any).pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      const totalPages = Math.min(pdf.numPages || 1, 20);
+      const baseName = file.name.replace(/\.pdf$/i, '');
+      const pageFiles: File[] = [];
+
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        setExtractionProgress(`Preparando página ${pageNum} de ${totalPages} (${file.name})...`);
+        const page = await pdf.getPage(pageNum);
+        const unscaledVp = page.getViewport({ scale: 1 });
+        const maxDim = 1600;
+        const scale = Math.min(2.0, maxDim / Math.max(unscaledVp.width, unscaledVp.height, 1));
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const blob: Blob | null = await new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', 0.78));
+        if (blob) {
+          pageFiles.push(
+            new File([blob], `${baseName} - Pág ${pageNum}.jpg`, { type: 'image/jpeg' })
+          );
+        }
+      }
+      return pageFiles.length > 0 ? pageFiles : [file];
+    } catch (pdfErr) {
+      console.warn('Fallback a archivo PDF original:', pdfErr);
+      return [file];
+    }
+  };
+
   // Si una foto individual supera 3.2 MB (límite de Vercel = 4.5 MB), comprimirla ligeramente para evitar HTTP 413; de lo contrario enviarla intacta igual que en /admin/orders/create
   const ensureFileUnderVercelLimit = async (file: File): Promise<File> => {
     const MAX_VERCEL_SAFE_BYTES = 3.2 * 1024 * 1024;
@@ -130,51 +189,83 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
 
       const extractedRows: ReconciledSheetRow[] = [];
 
-      // 2. Enviar 1 archivo por petición igual que parseOrderWithAI(file) en /admin/orders/create
+      // 2. Preparar archivos (si algún PDF supera 3.2 MB, desglosar sus páginas en JPEGs ligeros ~220 KB c/u para no chocar jamás con el límite de 4.5 MB de Vercel)
       if (targetFiles.length > 0) {
-        for (let i = 0; i < targetFiles.length; i++) {
-          const rawFile = targetFiles[i];
+        const expandedFiles: File[] = [];
+        for (const f of targetFiles) {
+          const pagesOrFile = await sliceHeavyPdfIntoPageJpegs(f);
+          for (const pf of pagesOrFile) {
+            expandedFiles.push(await ensureFileUnderVercelLimit(pf));
+          }
+        }
+
+        // Agrupar páginas/archivos en lotes seguros de máximo 2 archivos y máximo 2.8 MB por petición HTTP
+        const requestBatches: File[][] = [];
+        let currentBatch: File[] = [];
+        let currentBatchBytes = 0;
+        const MAX_BATCH_BYTES = 2.8 * 1024 * 1024;
+
+        for (const ef of expandedFiles) {
+          if (
+            currentBatch.length > 0 &&
+            (currentBatch.length >= 2 || currentBatchBytes + ef.size > MAX_BATCH_BYTES)
+          ) {
+            requestBatches.push(currentBatch);
+            currentBatch = [];
+            currentBatchBytes = 0;
+          }
+          currentBatch.push(ef);
+          currentBatchBytes += ef.size;
+        }
+        if (currentBatch.length > 0) {
+          requestBatches.push(currentBatch);
+        }
+
+        for (let bIdx = 0; bIdx < requestBatches.length; bIdx++) {
+          const batch = requestBatches[bIdx];
+          const batchLabel = batch.map(f => f.name).join(', ');
           setExtractionProgress(
-            targetFiles.length > 1
-              ? `Procesando archivo ${i + 1} de ${targetFiles.length} (${rawFile.name})...`
-              : `Procesando ${rawFile.name} con IA...`
+            requestBatches.length > 1
+              ? `Interpretando con IA bloque ${bIdx + 1} de ${requestBatches.length} (${batchLabel})...`
+              : `Interpretando ${batchLabel} con IA...`
           );
 
-          const safeFile = await ensureFileUnderVercelLimit(rawFile);
           const formData = new FormData();
           formData.append('sheetType', targetSheetType);
           formData.append('balanceDate', balanceDate);
-          if (i === 0 && targetText.trim()) {
+          if (bIdx === 0 && targetText.trim()) {
             formData.append('text', targetText.trim());
           }
 
-          // Si es un PDF pesado (> 3.2 MB), subirlo a Supabase Storage para evitar el límite duro de 4.5 MB (HTTP 413) de Vercel
-          let uploadedTempStoragePath: string | null = null;
-          if (safeFile.size > 3.2 * 1024 * 1024) {
-            setExtractionProgress(`Subiendo documento pesado (${(safeFile.size / (1024 * 1024)).toFixed(1)} MB) al canal seguro...`);
-            const cleanName = safeFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-            const storagePath = `temp-ocr/${Date.now()}_${cleanName}`;
-            const { error: upErr } = await supabase.storage
-              .from('inventory-evidence')
-              .upload(storagePath, safeFile, { upsert: true, contentType: safeFile.type || 'application/pdf' });
-            if (!upErr) {
-              uploadedTempStoragePath = storagePath;
-              const { data: pubUrl } = supabase.storage.from('inventory-evidence').getPublicUrl(storagePath);
-              formData.append('fileUrl', pubUrl.publicUrl);
-              formData.append('fileName', rawFile.name);
-              formData.append('fileMimeType', safeFile.type || 'application/pdf');
+          // Si un archivo individual aún supera 3.2 MB, usar URL firmada con service_role en el servidor
+          const singleHeavyFile = batch.length === 1 && batch[0].size > 3.2 * 1024 * 1024 ? batch[0] : null;
+          if (singleHeavyFile) {
+            setExtractionProgress(`Subiendo documento (${(singleHeavyFile.size / (1024 * 1024)).toFixed(1)} MB) por canal seguro...`);
+            const signedRes = await fetch(
+              `/api/commercial/inventory/extract-physical-sheet?fileName=${encodeURIComponent(singleHeavyFile.name)}`,
+              { method: 'GET', headers, credentials: 'include' }
+            );
+            const signedData = await signedRes.json().catch(() => null);
+            if (signedRes.ok && signedData?.path && signedData?.token) {
+              const { error: upErr } = await supabase.storage
+                .from('inventory-evidence')
+                .uploadToSignedUrl(signedData.path, signedData.token, singleHeavyFile);
+              if (!upErr) {
+                formData.append('fileUrl', signedData.publicUrl);
+                formData.append('storagePath', signedData.path);
+                formData.append('fileName', singleHeavyFile.name);
+                formData.append('fileMimeType', singleHeavyFile.type || 'application/pdf');
+              } else {
+                formData.append('file', singleHeavyFile);
+              }
             } else {
-              formData.append('file', safeFile);
+              formData.append('file', singleHeavyFile);
             }
+          } else if (batch.length === 1) {
+            formData.append('file', batch[0]);
           } else {
-            formData.append('file', safeFile);
+            batch.forEach(f => formData.append('files', f));
           }
-
-          setExtractionProgress(
-            targetFiles.length > 1
-              ? `Interpretando con IA archivo ${i + 1} de ${targetFiles.length} (${rawFile.name})...`
-              : `Interpretando ${rawFile.name} con IA...`
-          );
 
           const response = await fetch('/api/commercial/inventory/extract-physical-sheet', {
             method: 'POST',
@@ -183,17 +274,13 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
             body: formData
           });
 
-          if (uploadedTempStoragePath) {
-            void supabase.storage.from('inventory-evidence').remove([uploadedTempStoragePath]);
-          }
-
           const responseText = await response.text();
           let data: any = null;
           try {
             data = JSON.parse(responseText);
           } catch {
             if (response.status === 413) {
-              throw new Error(`El archivo "${rawFile.name}" supera el límite de tamaño permitido por el servidor (4.5 MB). Intenta subir una foto o PDF más ligero.`);
+              throw new Error(`El bloque (${batchLabel}) excedió el límite de red (413). Intenta nuevamente.`);
             }
             if (!response.ok) {
               throw new Error(responseText || `Error de servidor (${response.status})`);
@@ -581,7 +668,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         )}
         {/* FILA 2 (FIJA / COMPACTA): SELECTOR DE LAS 5 MODALIDADES + CONTROLES COMPACTOS CUANDO LAS BARRAS CON X ESTÁN COLAPSADAS */}
         <div style={{ padding: isStaging ? '0.4rem 1rem' : '0.55rem 1.25rem', backgroundColor: '#FFFFFF', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '640px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.45rem' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.45rem' }}>
             {[
               { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa', colBadge: 'Col G (+)', color: '#059669', bg: '#ECFDF5', Icon: Truck },
               { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Cierre bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#0284C7', bg: '#E0F2FE', Icon: ClipboardCheck },
@@ -617,55 +704,57 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
             })}
           </div>
           {/* CLUSTER DERECHO ULTRA-COMPACTO CUANDO LAS BARRAS CON X ESTÁN COLAPSADAS */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-            {isStaging && collapseStatsBar && (
-              <>
-                <span
-                  onClick={() => setCollapseStatsBar(false)}
-                  title="Clic para desplegar detalle de validación"
-                  style={{ fontSize: '0.7rem', fontWeight: 900, padding: '4px 9px', borderRadius: '8px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
-                >
-                  <CheckCircle2 size={12} color="#16A34A" />
-                  <span>{stats.total} renglones ({stats.newEntries} nuevos)</span>
-                </span>
-                {digestionDuration && (
-                  <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #6EE7B7', padding: '4px 8px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
-                    <Zap size={11} fill="#059669" color="#059669" />
-                    <span>{digestionDuration}s</span>
+          {(collapseTitleBar || (isStaging && collapseStatsBar)) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+              {isStaging && collapseStatsBar && (
+                <>
+                  <span
+                    onClick={() => setCollapseStatsBar(false)}
+                    title="Clic para desplegar detalle de validación"
+                    style={{ fontSize: '0.7rem', fontWeight: 900, padding: '4px 9px', borderRadius: '8px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                  >
+                    <CheckCircle2 size={12} color="#16A34A" />
+                    <span>{stats.total} renglones ({stats.newEntries} nuevos)</span>
                   </span>
-                )}
-                <button type="button" onClick={() => appendFileInputRef.current?.click()} title="Añadir Otra Hoja / Foto" style={{ padding: '4px 9px', backgroundColor: '#FFFFFF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#0F766E', border: '1px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                  <Plus size={12} /><span>+ Hoja</span>
-                </button>
-                <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} title="Re-analizar con IA" style={{ padding: '4px 9px', backgroundColor: '#F8FAFC', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#334155', border: '1px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                  <RefreshCw size={12} className={isExtracting ? 'animate-spin' : ''} />
-                  <span>{isExtracting ? '...' : 'Re-analizar'}</span>
-                </button>
-                <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '4px 9px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#1D4ED8', border: '1px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                  <FileText size={12} />
-                  <span>{showSideDocPreview ? `Ocultar ${docTypeLabel}` : `Ver ${docTypeLabel}`}</span>
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                const nextCollapsed = !isCompactMode;
-                setCollapseTitleBar(nextCollapsed);
-                if (isStaging) setCollapseStatsBar(nextCollapsed);
-              }}
-              title={isCompactMode ? 'Expandir barras de título y validación' : 'Colapsar barras de título y validación para ganar más espacio'}
-              style={{ padding: '4px 8px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', color: '#334155', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}
-            >
-              {isCompactMode ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-              <span>{isCompactMode ? 'Expandir' : 'Compactar'}</span>
-            </button>
-            {collapseTitleBar && (
-              <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '8px', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={15} />
+                  {digestionDuration && (
+                    <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #6EE7B7', padding: '4px 8px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                      <Zap size={11} fill="#059669" color="#059669" />
+                      <span>{digestionDuration}s</span>
+                    </span>
+                  )}
+                  <button type="button" onClick={() => appendFileInputRef.current?.click()} title="Añadir Otra Hoja / Foto" style={{ padding: '4px 9px', backgroundColor: '#FFFFFF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#0F766E', border: '1px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                    <Plus size={12} /><span>+ Hoja</span>
+                  </button>
+                  <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} title="Re-analizar con IA" style={{ padding: '4px 9px', backgroundColor: '#F8FAFC', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#334155', border: '1px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                    <RefreshCw size={12} className={isExtracting ? 'animate-spin' : ''} />
+                    <span>{isExtracting ? '...' : 'Re-analizar'}</span>
+                  </button>
+                  <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '4px 9px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#1D4ED8', border: '1px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                    <FileText size={12} />
+                    <span>{showSideDocPreview ? `Ocultar ${docTypeLabel}` : `Ver ${docTypeLabel}`}</span>
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextCollapsed = !isCompactMode;
+                  setCollapseTitleBar(nextCollapsed);
+                  if (isStaging) setCollapseStatsBar(nextCollapsed);
+                }}
+                title={isCompactMode ? 'Expandir barras de título y validación' : 'Colapsar barras de título y validación para ganar más espacio'}
+                style={{ padding: '4px 8px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', color: '#334155', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}
+              >
+                {isCompactMode ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+                <span>{isCompactMode ? 'Expandir' : 'Compactar'}</span>
               </button>
-            )}
-          </div>
+              {collapseTitleBar && (
+                <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '8px', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleInitialFilesSelected(e.target.files); e.target.value = ''; }} />
         <input ref={appendFileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleAppendFilesSelected(e.target.files); e.target.value = ''; }} />
