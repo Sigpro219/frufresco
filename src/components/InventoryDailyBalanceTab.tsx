@@ -1833,8 +1833,11 @@ interface CommittedSaleData {
         });
     }, [allCollapsed, filteredFamilies]);
 
-    // Columnas editables en orden secuencial para navegación Excel (Enter / Tab) — Col O excluida (Cable Pelado Calidad DT-13 / Escenario 388)
-    const EDITABLE_COLUMNS = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O2', 'P', 'Q', 'R', 'T', 'X'] as const;
+    // Columnas editables en orden visual activo para navegación Excel (Flechas / Enter / Tab) — Excluye columnas de solo lectura (E, H, I, J, O, S, V, W)
+    const EDITABLE_COLUMNS = useMemo(() => {
+        const editableSet = new Set(['F', 'G', 'K', 'L', 'M', 'N', 'O2', 'P', 'Q', 'R', 'T', 'X']);
+        return columnOrder.filter(col => editableSet.has(col));
+    }, [columnOrder]);
 
     const getRowColumnValue = (row: InventoryDailyRow, colKey: string): number | null => {
         switch (colKey) {
@@ -2679,7 +2682,7 @@ interface CommittedSaleData {
                         type="text"
                         autoFocus
                         value={editingCell.currentValue}
-                        title="Navegación tipo Excel: Enter para ir abajo, Shift+Enter para ir arriba, Tab para ir al lado, Esc para cancelar. Soporta fórmulas (ej. =10+20 o +15-5)."
+                        title="Navegación tipo Excel: Flechas (↑ ↓ ← →), Enter/Shift+Enter y Tab/Shift+Tab para desplazarse, Esc para cancelar. Soporta fórmulas (ej. =10+20)."
                         onFocus={e => e.target.select()}
                         onChange={e => setEditingCell(prev => prev ? { ...prev, currentValue: e.target.value } : null)}
                         onKeyDown={e => {
@@ -2691,6 +2694,14 @@ interface CommittedSaleData {
                                 e.preventDefault();
                                 isNavigatingRef.current = true;
                                 handleCommitCellEditAndNavigate(e.shiftKey ? 'prev_col' : 'next_col');
+                            } else if (e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate('next_col');
+                            } else if (e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                isNavigatingRef.current = true;
+                                handleCommitCellEditAndNavigate('prev_col');
                             } else if (e.key === 'ArrowDown') {
                                 e.preventDefault();
                                 isNavigatingRef.current = true;
