@@ -1264,7 +1264,7 @@ export default function PqrAuditModal({
                     .insert([{
                         profile_id: pqr.client_id,
                         type: pqr.profiles?.role === 'b2c_client' ? 'B2C' : 'B2B',
-                        status: 'approved',
+                        status: 'pending_approval',
                         delivery_date: tomorrow,
                         delivery_slot: 'AM',
                         origin_source: 'customer_service_shortage_d1',
@@ -2820,7 +2820,7 @@ export default function PqrAuditModal({
                         .insert([{
                             profile_id: originalOrder.profile_id,
                             type: originalOrder.type,
-                            status: 'approved',
+                            status: 'pending_approval',
                             origin_source: 'customer_service',
                             delivery_date: scheduledDate,
                             delivery_slot: scheduledSlot,
