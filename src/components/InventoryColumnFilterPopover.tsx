@@ -56,8 +56,8 @@ export interface InventoryColumnFilterPopoverProps {
     onApplyFilter: (value: string) => void;
     onClearFilter: () => void;
     // Ordenamiento por columna
-    sortDirection?: 'asc' | 'desc' | null;
-    onApplySort?: (dir: 'asc' | 'desc' | null) => void;
+    sortDirection?: 'asc' | 'desc' | 'parents_first' | null;
+    onApplySort?: (dir: 'asc' | 'desc' | 'parents_first' | null) => void;
     // Opciones especializadas para Columna C (Célula)
     cellOptions?: CellFilterOption[];
     selectedCells?: string[];
@@ -436,6 +436,43 @@ export const InventoryColumnFilterPopover: React.FC<InventoryColumnFilterPopover
                                     <ArrowDownZA size={15} strokeWidth={2.3} />
                                     <span>Ordenar Z → A</span>
                                 </button>
+                                {colKey === 'product' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            onApplySort(sortDirection === 'parents_first' ? null : 'parents_first');
+                                            onClose();
+                                        }}
+                                        style={{
+                                            gridColumn: '1 / -1',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            padding: '7px 8px',
+                                            backgroundColor: sortDirection === 'parents_first' ? '#4F46E5' : '#EEF2FF',
+                                            color: sortDirection === 'parents_first' ? '#FFFFFF' : '#312E81',
+                                            border: sortDirection === 'parents_first' ? '1.5px solid #3730A3' : '1px solid #C7D2FE',
+                                            borderRadius: '7px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '800',
+                                            cursor: 'pointer'
+                                        }}
+                                        title="Ubica todas las Familias/Padres (P) arriba ordenadas A→Z (colapsadas) y los SKUs sueltos abajo A→Z"
+                                    >
+                                        <span style={{
+                                            backgroundColor: sortDirection === 'parents_first' ? '#FFFFFF' : '#4F46E5',
+                                            color: sortDirection === 'parents_first' ? '#4F46E5' : '#FFFFFF',
+                                            fontSize: '0.62rem',
+                                            fontWeight: '900',
+                                            padding: '1px 5px',
+                                            borderRadius: '4px'
+                                        }}>
+                                            P↑
+                                        </span>
+                                        <span>Padres arriba (A→Z) + Sueltos abajo</span>
+                                    </button>
+                                )}
                             </>
                         ) : colKey === 'id' ? (
                             <>

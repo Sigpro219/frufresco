@@ -495,7 +495,7 @@ export default function InventoryDailyBalanceTab({
     // Fila de Filtros y Ordenamiento Conmutables por Columna (SPEC.md §8.8.9)
     const [isColumnFilterOpen, setIsColumnFilterOpen] = useState<boolean>(false);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
-    const [columnSort, setColumnSort] = useState<{ colKey: string; direction: 'asc' | 'desc' } | null>(null);
+    const [columnSort, setColumnSort] = useState<{ colKey: string; direction: 'asc' | 'desc' | 'parents_first' } | null>(null);
     const [selectedCellsFilter, setSelectedCellsFilter] = useState<string[]>([]);
     const [hierarchyFilter, setHierarchyFilter] = useState<HierarchyFilterType>('ALL');
     const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>('ALL');
@@ -1948,7 +1948,7 @@ interface CommittedSaleData {
         if (!columnSort) return filtered;
 
         const { colKey, direction } = columnSort;
-        const factor = direction === 'asc' ? 1 : -1;
+        const factor = direction === 'desc' ? -1 : 1;
 
         return [...filtered].map(fam => {
             if ((colKey === 'product' || colKey === 'D') && fam.children.length > 1) {
@@ -1962,6 +1962,14 @@ interface CommittedSaleData {
             return fam;
         }).sort((a, b) => {
             if (colKey === 'product' || colKey === 'D') {
+                if (direction === 'parents_first') {
+                    const isParentA = (a.isParent || a.isP) ? 1 : 0;
+                    const isParentB = (b.isParent || b.isP) ? 1 : 0;
+                    if (isParentA !== isParentB) {
+                        return isParentB - isParentA;
+                    }
+                    return (a.consolidated.colD_productName || '').localeCompare(b.consolidated.colD_productName || '', 'es', { sensitivity: 'base' });
+                }
                 return factor * (a.consolidated.colD_productName || '').localeCompare(b.consolidated.colD_productName || '', 'es', { sensitivity: 'base' });
             }
             if (colKey === 'cell' || colKey === 'C') {
@@ -1987,7 +1995,25 @@ interface CommittedSaleData {
 
     // Estado colapsado de familias (por defecto colapsadas para vista ejecutiva compacta, auto-expandidas al buscar o filtrar hijos)
     const [collapsedFamilies, setCollapsedFamilies] = useState<Record<string, boolean>>({});
-    const isSearchActive = searchQuery.trim().length > 0 || hierarchyFilter === 'CHILDREN_ONLY' || Boolean(columnFilters['product']?.trim());
+    const isSearchActive = (searchQuery.trim().length > 0 || hierarchyFilter === 'CHILDREN_ONLY' || Boolean(columnFilters['product']?.trim()))
+        && !(columnSort?.colKey === 'product' && columnSort.direction === 'parents_first');
+
+    const cycleProductSort = useCallback(() => {
+        setColumnSort(prev => {
+            if (prev?.colKey !== 'product') {
+                return { colKey: 'product', direction: 'asc' };
+            }
+            if (prev.direction === 'asc') {
+                return { colKey: 'product', direction: 'desc' };
+            }
+            if (prev.direction === 'desc') {
+                // 3er clic: Padres arriba ordenados A→Z (colapsados sin expandir) y SKUs sueltos abajo A→Z
+                setCollapsedFamilies({});
+                return { colKey: 'product', direction: 'parents_first' };
+            }
+            return null;
+        });
+    }, []);
 
     const toggleFamily = useCallback((familyId: string) => {
         setCollapsedFamilies(prev => {
@@ -4893,8 +4919,8 @@ interface CommittedSaleData {
                                         <th 
                                             key="header-D"
                                             data-sticky-last="true"
-                                            onClick={() => setColumnSort(prev => prev?.colKey === 'product' ? (prev.direction === 'asc' ? { colKey: 'product', direction: 'desc' } : null) : { colKey: 'product', direction: 'asc' })}
-                                            title="Clic para ordenar Padres y Productos alfabéticamente (A → Z / Z → A)"
+                                            onClick={cycleProductSort}
+                                            title="Clic 1: Ordenar A→Z • Clic 2: Ordenar Z→A • Clic 3: Padres (P) arriba A→Z y SKUs sueltos abajo"
                                             style={{ 
                                                 height: '32px',
                                                 boxSizing: 'border-box',
@@ -4925,11 +4951,17 @@ interface CommittedSaleData {
                                                     fontWeight: '800',
                                                     padding: '1px 5px',
                                                     borderRadius: '4px',
-                                                    backgroundColor: columnSort?.colKey === 'product' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.08)',
-                                                    color: columnSort?.colKey === 'product' ? '#34D399' : '#94A3B8',
+                                                    backgroundColor: columnSort?.colKey === 'product'
+                                                        ? (columnSort.direction === 'parents_first' ? '#4F46E5' : 'rgba(16, 185, 129, 0.25)')
+                                                        : 'rgba(255,255,255,0.08)',
+                                                    color: columnSort?.colKey === 'product'
+                                                        ? (columnSort.direction === 'parents_first' ? '#FFFFFF' : '#34D399')
+                                                        : '#94A3B8',
                                                     textTransform: 'none'
                                                 }}>
-                                                    {columnSort?.colKey === 'product' ? (columnSort.direction === 'asc' ? 'A→Z ↑' : 'Z→A ↓') : 'A↕Z'}
+                                                    {columnSort?.colKey === 'product'
+                                                        ? (columnSort.direction === 'asc' ? 'A→Z ↑' : columnSort.direction === 'desc' ? 'Z→A ↓' : 'P↑ A→Z')
+                                                        : 'A↕Z'}
                                                 </span>
                                             </div>
                                         </th>
@@ -5304,17 +5336,21 @@ interface CommittedSaleData {
                                                         )}
                                                     </div>
 
-                                                    {/* Botón 1-Clic Orden Alfabético A→Z / Z→A */}
+                                                    {/* Botón 3-Clics Orden Alfabético: 1) A→Z, 2) Z→A, 3) Padres [P] arriba A→Z + Sueltos abajo */}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setColumnSort(prev => prev?.colKey === 'product' ? (prev.direction === 'asc' ? { colKey: 'product', direction: 'desc' } : null) : { colKey: 'product', direction: 'asc' })}
-                                                        title="Ordenar Padres y Productos alfabéticamente (A→Z / Z→A)"
+                                                        onClick={cycleProductSort}
+                                                        title="Clic 1: Ordenar A→Z • Clic 2: Ordenar Z→A • Clic 3: Padres (P) arriba A→Z (sin expandir) y SKUs sueltos abajo"
                                                         style={{
                                                             height: '26px',
-                                                            padding: '0 5px',
+                                                            padding: '0 6px',
                                                             borderRadius: '6px',
-                                                            border: columnSort?.colKey === 'product' ? '1.5px solid #059669' : '1.5px solid #94A3B8',
-                                                            backgroundColor: columnSort?.colKey === 'product' ? '#059669' : '#FFFFFF',
+                                                            border: columnSort?.colKey === 'product'
+                                                                ? (columnSort.direction === 'parents_first' ? '1.5px solid #4F46E5' : '1.5px solid #059669')
+                                                                : '1.5px solid #94A3B8',
+                                                            backgroundColor: columnSort?.colKey === 'product'
+                                                                ? (columnSort.direction === 'parents_first' ? '#4F46E5' : '#059669')
+                                                                : '#FFFFFF',
                                                             color: columnSort?.colKey === 'product' ? '#FFFFFF' : '#0F172A',
                                                             fontSize: '0.66rem',
                                                             fontWeight: '800',
@@ -5322,10 +5358,17 @@ interface CommittedSaleData {
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
+                                                            gap: '2px',
                                                             flexShrink: 0
                                                         }}
                                                     >
-                                                        {columnSort?.colKey === 'product' && columnSort.direction === 'desc' ? <ArrowDownZA size={13} strokeWidth={2.4} /> : <ArrowUpAZ size={13} strokeWidth={2.4} />}
+                                                        {columnSort?.colKey === 'product' && columnSort.direction === 'parents_first' ? (
+                                                            <span style={{ fontSize: '0.64rem', fontWeight: '900', letterSpacing: '0.01em' }}>P↑</span>
+                                                        ) : columnSort?.colKey === 'product' && columnSort.direction === 'desc' ? (
+                                                            <ArrowDownZA size={13} strokeWidth={2.4} />
+                                                        ) : (
+                                                            <ArrowUpAZ size={13} strokeWidth={2.4} />
+                                                        )}
                                                     </button>
 
                                                     {/* Botón Popover Jerarquía (Padres P / Hijos H / Independientes / Unidad) */}
@@ -5984,6 +6027,9 @@ interface CommittedSaleData {
                         if (!dir) {
                             setColumnSort(prev => (prev?.colKey === activeFilterPopover.colKey ? null : prev));
                         } else {
+                            if (dir === 'parents_first') {
+                                setCollapsedFamilies({});
+                            }
                             setColumnSort({ colKey: activeFilterPopover.colKey, direction: dir });
                         }
                     }}
