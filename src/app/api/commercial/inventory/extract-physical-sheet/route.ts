@@ -122,6 +122,8 @@ ESTRUCTURA JSON EXACTA REQUERIDA:
 `;
 }
 
+export const maxDuration = 120;
+
 export async function POST(req: Request) {
   try {
     const auth = await verifySessionAndRole(req);
@@ -165,37 +167,40 @@ export async function POST(req: Request) {
       items: RawExtractedSheetRow[];
     }> = [];
 
-    for (const file of uploadedFiles) {
-      if (!file || file.size === 0) continue;
-      const arrayBuffer = await file.arrayBuffer();
-      const lowerName = file.name.toLowerCase();
-      const isSpreadsheet = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
+    const validFiles = uploadedFiles.filter(file => file && file.size > 0);
+    const fileResults = await Promise.all(
+      validFiles.map(async file => {
+        const arrayBuffer = await file.arrayBuffer();
+        const lowerName = file.name.toLowerCase();
+        const isSpreadsheet = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv');
 
-      let rawResponse: unknown;
-      if (isSpreadsheet) {
-        const XLSX = await import('xlsx');
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetTexts: string[] = [];
-        workbook.SheetNames.forEach(sheetName => {
-          const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { blankrows: false });
-          if (csv.trim()) sheetTexts.push(`--- HOJA: ${sheetName} ---\n${csv}`);
-        });
-        const excelPrompt = `${basePrompt}\n\nCONTENIDO DEL ARCHIVO EXCEL (${file.name}):\n"""\n${sheetTexts.join('\n\n')}\n"""`;
-        rawResponse = await fetchGeminiExtraction(apiKey, excelPrompt);
-      } else {
-        const base64Data = Buffer.from(arrayBuffer).toString('base64');
-        const mimeType = file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-        rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType);
-      }
-      const normalized = normalizeGeminiItems(rawResponse);
+        let rawResponse: unknown;
+        if (isSpreadsheet) {
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetTexts: string[] = [];
+          workbook.SheetNames.forEach(sheetName => {
+            const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], { blankrows: false });
+            if (csv.trim()) sheetTexts.push(`--- HOJA: ${sheetName} ---\n${csv}`);
+          });
+          const excelPrompt = `${basePrompt}\n\nCONTENIDO DEL ARCHIVO EXCEL (${file.name}):\n"""\n${sheetTexts.join('\n\n')}\n"""`;
+          rawResponse = await fetchGeminiExtraction(apiKey, excelPrompt, undefined, 'application/pdf', 90000);
+        } else {
+          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          const mimeType = file.type || (lowerName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+          rawResponse = await fetchGeminiExtraction(apiKey, basePrompt, base64Data, mimeType, 90000);
+        }
+        const normalized = normalizeGeminiItems(rawResponse);
 
-      resultsByFile.push({
-        fileName: file.name,
-        sheetTitleDetected: normalized.sheetTitleDetected || file.name,
-        dateDetected: normalized.dateDetected || balanceDate,
-        items: normalized.items
-      });
-    }
+        return {
+          fileName: file.name,
+          sheetTitleDetected: normalized.sheetTitleDetected || file.name,
+          dateDetected: normalized.dateDetected || balanceDate,
+          items: normalized.items
+        };
+      })
+    );
+    resultsByFile.push(...fileResults);
 
     if (textInput.trim().length > 0) {
       const textPrompt = `${basePrompt}\n\nTEXTO A PROCESAR:\n"""\n${textInput.trim()}\n"""`;

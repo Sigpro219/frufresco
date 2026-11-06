@@ -36,7 +36,8 @@ export async function fetchGeminiExtraction(
   apiKey: string,
   prompt: string,
   base64Data?: string,
-  mimeType: string = 'application/pdf'
+  mimeType: string = 'application/pdf',
+  timeoutMs: number = 90000
 ): Promise<any> {
   const resolvedApiKey = apiKey?.trim() || getGeminiApiKey();
 
@@ -104,7 +105,9 @@ export async function fetchGeminiExtraction(
       apiKey: resolvedApiKey,
       moduleName: 'orders',
       operationName: 'order-parser-extraction',
-      timeoutMs: 45000,
+      timeoutMs,
+      cascadeOnTimeout: true,
+      cascade: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'],
     }
   );
 

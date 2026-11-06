@@ -44,6 +44,8 @@ export interface ObsolescenceGuardOptions {
   contextMetadata?: Record<string, any>;
   /** Collaborator name for audit trail */
   collaboratorName?: string;
+  /** Whether to cascade to the next model if a timeout or 503/504 gateway error occurs */
+  cascadeOnTimeout?: boolean;
 }
 
 /**
@@ -296,7 +298,17 @@ export async function executeWithObsolescenceGuard<T>(
 
       return result as T & { _obsolescenceWarning?: ObsolescenceWarningMetadata };
     } catch (err: any) {
-      if (isObsolescenceError(err)) {
+      const errMsgLower = String(err?.message || err || '').toLowerCase();
+      const status = extractStatusCode(err);
+      const isTimeoutOrTransient =
+        Boolean(options?.cascadeOnTimeout) &&
+        (err?.name === 'AbortError' ||
+          errMsgLower.includes('timed out') ||
+          errMsgLower.includes('timeout') ||
+          status === 503 ||
+          status === 504);
+
+      if (isObsolescenceError(err) || isTimeoutOrTransient) {
         const hasNextModel = i + 1 < cascade.length;
         const nextModel = hasNextModel ? cascade[i + 1] : undefined;
         const timestamp = new Date().toISOString();

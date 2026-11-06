@@ -20,6 +20,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const [stackedView, setStackedView] = useState<boolean>(false);
   const [showSideDocPreview, setShowSideDocPreview] = useState<boolean>(true);
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const [extractionProgress, setExtractionProgress] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [digestionDuration, setDigestionDuration] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -27,24 +28,183 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const isStaging = reconciledRows.length > 0;
+
+  // Optimización cliente de imágenes y división de PDFs escaneados multipágina en JPEGs ligeros (~200KB/pág) para evitar timeouts de 45s
+  const prepareOptimizedFilesForOcr = async (rawFiles: File[]): Promise<File[]> => {
+    const optimized: File[] = [];
+
+    const compressImageFile = async (imgFile: File): Promise<File> => {
+      if (imgFile.size < 350 * 1024) return imgFile;
+      return new Promise<File>((resolve) => {
+        const img = new Image();
+        const objUrl = URL.createObjectURL(imgFile);
+        img.onload = () => {
+          URL.revokeObjectURL(objUrl);
+          const maxDim = 1650;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(imgFile);
+            return;
+          }
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                resolve(imgFile);
+                return;
+              }
+              const baseName = imgFile.name.replace(/\.[^.]+$/, '');
+              resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            0.82
+          );
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(imgFile);
+        };
+        img.src = objUrl;
+      });
+    };
+
+    const splitPdfIntoPageImages = async (pdfFile: File): Promise<File[]> => {
+      try {
+        if (!(window as any).pdfjsLib) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          script.async = true;
+          await new Promise((res, rej) => {
+            script.onload = res;
+            script.onerror = rej;
+            document.head.appendChild(script);
+          });
+          (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const pdf = await (window as any).pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+        const pageFiles: File[] = [];
+        const baseName = pdfFile.name.replace(/\.pdf$/i, '');
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const unscaledViewport = page.getViewport({ scale: 1 });
+          const maxDim = 1650;
+          const scale = Math.min(2.0, maxDim / Math.max(unscaledViewport.width, unscaledViewport.height, 1));
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.82));
+          if (blob) {
+            const pageLabel = pdf.numPages > 1 ? `${baseName} (Pág ${pageNum}).jpg` : `${baseName}.jpg`;
+            pageFiles.push(new File([blob], pageLabel, { type: 'image/jpeg' }));
+          }
+        }
+        return pageFiles.length > 0 ? pageFiles : [pdfFile];
+      } catch (err) {
+        console.warn('Fallback a PDF original:', err);
+        return [pdfFile];
+      }
+    };
+
+    for (const f of rawFiles) {
+      const lower = f.name.toLowerCase();
+      if (f.type === 'application/pdf' || lower.endsWith('.pdf')) {
+        setExtractionProgress(`Optimizando páginas escaneadas de ${f.name}...`);
+        const pages = await splitPdfIntoPageImages(f);
+        optimized.push(...pages);
+      } else if (f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|bmp)$/i.test(lower)) {
+        setExtractionProgress(`Optimizando resolución de imagen ${f.name}...`);
+        const compressed = await compressImageFile(f);
+        optimized.push(compressed);
+      } else {
+        optimized.push(f);
+      }
+    }
+
+    return optimized;
+  };
+
   const executeAiExtraction = async (targetFiles: File[], targetText: string, targetSheetType: PhysicalSheetType, appendMode = false) => {
     if (targetFiles.length === 0 && !targetText.trim()) { setErrorMsg('Selecciona al menos un archivo (Foto, PDF o Excel) o pega el texto de la planilla.'); return; }
-    setIsExtracting(true); setErrorMsg(null);
+    setIsExtracting(true); setErrorMsg(null); setExtractionProgress('Preparando documentos...');
     const startMs = performance.now();
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token || '';
-      const formData = new FormData();
-      formData.append('sheetType', targetSheetType); formData.append('balanceDate', balanceDate);
-      if (targetText.trim()) formData.append('text', targetText.trim());
-      targetFiles.forEach(f => formData.append('files', f));
-      const res = await fetch('/api/commercial/inventory/extract-physical-sheet', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: formData });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
+      const optimizedFiles = targetFiles.length > 0 ? await prepareOptimizedFilesForOcr(targetFiles) : [];
       const extractedRows: ReconciledSheetRow[] = [];
-      (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
-        extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
-      });
+
+      // Procesar en bloques de máximo 2 páginas por petición para evitar timeouts en documentos multipágina densos
+      const batchSize = 2;
+      const totalBatches = Math.max(1, Math.ceil(optimizedFiles.length / batchSize));
+
+      if (optimizedFiles.length > 0) {
+        for (let i = 0; i < optimizedFiles.length; i += batchSize) {
+          const batch = optimizedFiles.slice(i, i + batchSize);
+          const batchNum = Math.floor(i / batchSize) + 1;
+          setExtractionProgress(
+            optimizedFiles.length > 1
+              ? `Digitalizando con IA página ${Math.min(i + 1, optimizedFiles.length)}–${Math.min(i + batch.length, optimizedFiles.length)} de ${optimizedFiles.length} (Lote ${batchNum}/${totalBatches})...`
+              : `Analizando caligrafía y homologando SKUs de ${batch[0].name}...`
+          );
+
+          const formData = new FormData();
+          formData.append('sheetType', targetSheetType);
+          formData.append('balanceDate', balanceDate);
+          if (i === 0 && targetText.trim()) formData.append('text', targetText.trim());
+          batch.forEach(f => formData.append('files', f));
+
+          const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            body: formData
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
+
+          (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
+            extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
+          });
+        }
+      } else if (targetText.trim()) {
+        setExtractionProgress('Analizando texto con IA...');
+        const formData = new FormData();
+        formData.append('sheetType', targetSheetType);
+        formData.append('balanceDate', balanceDate);
+        formData.append('text', targetText.trim());
+        const res = await fetch('/api/commercial/inventory/extract-physical-sheet', {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'No fue posible extraer la planilla física.');
+        (data.results || []).forEach((fileRes: { fileName: string; items: RawExtractedSheetRow[] }) => {
+          extractedRows.push(...buildReconciledSheetRows(fileRes.items || [], targetSheetType, fileRes.fileName, catalog, opsCurrentByProductAndCol));
+        });
+      }
+
       setDigestionDuration(((performance.now() - startMs) / 1000).toFixed(1));
       setReconciledRows(prev => (appendMode ? [...prev, ...extractedRows] : extractedRows));
       if (extractedRows.length === 0 && !appendMode) {
@@ -54,6 +214,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       setErrorMsg(err instanceof Error ? err.message : 'Error durante la lectura IA');
     } finally {
       setIsExtracting(false);
+      setExtractionProgress('');
     }
   };
   const handleInitialFilesSelected = (selectedList: FileList | null) => {
@@ -424,7 +585,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     <Loader2 size={56} color="#3B82F6" className="animate-spin" style={{ marginBottom: '1.25rem' }} />
                     <h3 style={{ fontSize: '1.35rem', fontWeight: 900, color: '#1E40AF', marginBottom: '0.4rem' }}>Procesando Documento...</h3>
-                    <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está leyendo la caligrafía de la planilla física y homologando SKUs del catálogo.</p>
+                    <p style={{ color: '#64748B', fontSize: '0.95rem' }}>{extractionProgress || 'La IA está leyendo la caligrafía de la planilla física y homologando SKUs del catálogo.'}</p>
                   </div>
                 ) : (
                   <>
