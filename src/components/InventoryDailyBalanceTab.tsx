@@ -814,7 +814,7 @@ interface CommittedSaleData {
             const stickyRect = stickyHeader?.getBoundingClientRect();
             const frozenWidth = stickyRect 
                 ? Math.round(stickyRect.right - containerRect.left)
-                : (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475));
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 459 : 545));
 
             // Espacio disponible en la pantalla para ver datos (ancho del viewport menos columnas fijas)
             const availableWidth = Math.max(100, container.clientWidth - frozenWidth);
@@ -2908,7 +2908,7 @@ interface CommittedSaleData {
         const stickyLeftWidth = isPanesFrozen
             ? (stickyRect
                 ? Math.round(stickyRect.right - contRect.left)
-                : (isCompactIdentification ? 240 : (isCellCollapsed ? 389 : 475)))
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 459 : 545)))
             : 0;
         const stickyTopHeight = isPanesFrozen ? (isColumnFilterOpen ? 66 : 32) : 0;
         const stickyBottomHeight = isPanesFrozen ? 36 : 0;
@@ -3427,11 +3427,14 @@ interface CommittedSaleData {
                         {/* D: Producto (Sticky) */}
                         <td 
                             key={`cell-${key}-D`}
+                            title={row.colD_productName}
                             style={{ 
                             padding: '6px 10px', 
-                            width: '190px',
-                            minWidth: '190px',
-                            maxWidth: '190px',
+                            width: '260px',
+                            minWidth: '260px',
+                            maxWidth: '260px',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
                             fontWeight: isParent ? '800' : '700', 
                             color: isParent ? '#854D0E' : '#0F172A', 
                             borderRight: '2px solid #CBD5E1',
@@ -3444,7 +3447,7 @@ interface CommittedSaleData {
                             transition: 'left 0.2s ease'
                         }}>
                             {isParent ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', width: '100%' }}>
                                     <button
                                         type="button"
                                         onClick={onToggle}
@@ -3460,6 +3463,7 @@ interface CommittedSaleData {
                                             gap: '3px',
                                             fontSize: '0.66rem',
                                             fontWeight: '800',
+                                            flexShrink: 0,
                                             transition: 'all 0.15s ease'
                                         }}
                                         title={isCollapsed ? `Expandir ${childCount} presentaciones` : "Colapsar familia"}
@@ -3467,9 +3471,9 @@ interface CommittedSaleData {
                                         {isCollapsed ? <ChevronRight size={11} strokeWidth={2.5} /> : <ChevronDown size={11} strokeWidth={2.5} />}
                                         <span>{childCount} pres.</span>
                                     </button>
-                                    <span style={{ fontWeight: '900', color: '#854D0E', fontSize: '0.8rem' }}>{row.colD_productName}</span>
+                                    <span style={{ fontWeight: '900', color: '#854D0E', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.colD_productName}</span>
                                     
-                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
+                                    <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
                                         <div style={{
                                             fontSize: '0.6rem',
                                             fontWeight: '700',
@@ -3499,9 +3503,9 @@ interface CommittedSaleData {
                                     </div>
                                 </div>
                             ) : isChild ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', paddingLeft: '18px' }}>
-                                    <span style={{ color: '#94A3B8', fontWeight: '900', fontSize: '0.75rem' }}>↳</span>
-                                    <span style={{ fontWeight: '600', color: '#334155' }}>{row.colD_productName}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', paddingLeft: '18px', overflow: 'hidden', width: '100%' }}>
+                                    <span style={{ color: '#94A3B8', fontWeight: '900', fontSize: '0.75rem', flexShrink: 0 }}>↳</span>
+                                    <span style={{ fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.colD_productName}</span>
                                     <div style={{
                                         fontSize: '0.6rem',
                                         fontWeight: '700',
@@ -3512,17 +3516,18 @@ interface CommittedSaleData {
                                         display: 'inline-flex',
                                         minWidth: '15px',
                                         justifyContent: 'center',
-                                        lineHeight: '1.2'
+                                        lineHeight: '1.2',
+                                        flexShrink: 0
                                     }} title={isBaseChild ? "Producto Hijo / SKU Base de la Familia" : "Producto Hijo / SKU Fraccionado"}>
                                         H
                                     </div>
-                                    <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>
+                                    <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#64748B', backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px', flexShrink: 0 }}>
                                         {row.unit_of_measure}
                                     </span>
                                 </div>
                             ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <span style={{ fontWeight: '800' }}>{row.colD_productName}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden', width: '100%' }}>
+                                    <span style={{ fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.colD_productName}</span>
                                     {row.isP && (
                                         <div style={{
                                             fontSize: '0.6rem',
@@ -5016,9 +5021,9 @@ interface CommittedSaleData {
                                                 boxSizing: 'border-box',
                                                 padding: '6px 10px', 
                                                 textAlign: 'left', 
-                                                width: '190px', 
-                                                minWidth: '190px', 
-                                                maxWidth: '190px', 
+                                                width: '260px', 
+                                                minWidth: '260px', 
+                                                maxWidth: '260px', 
                                                 borderRight: '2px solid #334155', 
                                                 position: 'sticky', 
                                                 top: 0, 
@@ -5250,7 +5255,7 @@ interface CommittedSaleData {
                                     ) : (
                                         <React.Fragment key="filter-traditional-id">
                                             {/* A: Botón Maestro Limpiar Todo / Contador */}
-                                            <th key="filter-A" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                            <th key="filter-A" style={{ height: '34px', width: '85px', minWidth: '85px', maxWidth: '85px', boxSizing: 'border-box', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? 0 : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
                                                 {activeFilterCount > 0 ? (
                                                     <button
                                                         type="button"
@@ -5299,7 +5304,7 @@ interface CommittedSaleData {
                                             </th>
 
                                             {/* B: ID Producto (Input Alto Contraste + Popover Orden/Rango) */}
-                                            <th key="filter-B" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                            <th key="filter-B" style={{ height: '34px', width: '70px', minWidth: '70px', maxWidth: '70px', boxSizing: 'border-box', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '85px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
                                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '26px' }}>
                                                     <input
                                                         type="text"
@@ -5351,7 +5356,7 @@ interface CommittedSaleData {
                                             </th>
 
                                             {/* C: Célula (Selector Visual 1-Clic sin Digitar + Orden por Célula) */}
-                                            <th key="filter-C" style={{ height: '34px', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
+                                            <th key="filter-C" style={{ height: '34px', width: isCellCollapsed ? '44px' : '130px', minWidth: isCellCollapsed ? '44px' : '130px', maxWidth: isCellCollapsed ? '44px' : '130px', boxSizing: 'border-box', padding: '3px 4px', position: 'sticky', top: '32px', left: isPanesFrozen ? '155px' : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0' }}>
                                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', height: '26px' }}>
                                                     <button
                                                         type="button"
@@ -5421,7 +5426,7 @@ interface CommittedSaleData {
                                             </th>
 
                                             {/* D: Producto (Buscador Alto Contraste + Botón Orden A-Z + Popover Jerarquía P/H y Unidad) */}
-                                            <th key="filter-D" style={{ height: '34px', padding: '3px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0', borderRight: '2px solid #94A3B8' }}>
+                                            <th key="filter-D" style={{ height: '34px', width: '260px', minWidth: '260px', maxWidth: '260px', boxSizing: 'border-box', padding: '3px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0', borderRight: '2px solid #94A3B8' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', height: '26px' }}>
                                                     <div style={{ position: 'relative', flex: 1, height: '26px', display: 'flex', alignItems: 'center' }}>
                                                         <input
@@ -5774,9 +5779,10 @@ interface CommittedSaleData {
                                         bottom: 0,
                                         zIndex: isPanesFrozen ? 35 : 25,
                                         boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
-                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
-                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '389px' : '475px'),
+                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
+                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
+                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
+                                        boxSizing: 'border-box',
                                     }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
