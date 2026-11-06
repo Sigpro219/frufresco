@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useMemo, useRef } from 'react';
-import { X, UploadCloud, Sparkles, Truck, ClipboardCheck, Trash2, AlertTriangle, ZoomIn, ZoomOut, RotateCw, FileText, RefreshCw, ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, Zap, Maximize2, Loader2, Plus } from 'lucide-react';
+import { X, UploadCloud, Sparkles, Truck, ClipboardCheck, Trash2, AlertTriangle, ZoomIn, ZoomOut, RotateCw, FileText, RefreshCw, ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, Zap, Maximize2, Loader2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
@@ -25,6 +25,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const [digestionDuration, setDigestionDuration] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reconciledRows, setReconciledRows] = useState<ReconciledSheetRow[]>([]);
+  const [collapseTitleBar, setCollapseTitleBar] = useState<boolean>(false);
+  const [collapseStatsBar, setCollapseStatsBar] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const isStaging = reconciledRows.length > 0;
@@ -242,6 +244,10 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
 
       setDigestionDuration(((performance.now() - startMs) / 1000).toFixed(1));
       setReconciledRows(prev => (appendMode ? [...prev, ...extractedRows] : extractedRows));
+      if (extractedRows.length > 0) {
+        setCollapseTitleBar(true);
+        setCollapseStatsBar(true);
+      }
       if (extractedRows.length === 0 && !appendMode) {
         setErrorMsg('No se detectaron renglones con cantidades diligenciadas en el documento.');
       }
@@ -281,6 +287,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     setErrorMsg(null);
     setDigestionDuration(null);
     setActiveFileIdx(0);
+    setCollapseTitleBar(false);
+    setCollapseStatsBar(false);
   };
   const handleRowProductChange = (rowId: string, newProductId: string) => {
     const prod = catalog.find(c => c.id === newProductId) || null;
@@ -530,66 +538,134 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
     activeFileName.endsWith('.xlsx') || activeFileName.endsWith('.xls') || activeFileName.endsWith('.csv');
   const isActivePdf = activeFile?.type === 'application/pdf' || activeFileName.endsWith('.pdf');
   const docTypeLabel = isActiveExcel ? 'Excel' : isActivePdf ? 'PDF' : 'Imagen';
+  const isCompactMode = collapseTitleBar && (collapseStatsBar || !isStaging);
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ width: '100%', maxWidth: '1600px', height: '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-        {/* CABECERA PRINCIPAL (ESTILO PEDIDOS) */}
-        <div style={{ padding: '1rem 1.75rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#ECFDF5', border: '1.5px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
-              <Sparkles size={20} strokeWidth={2.2} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0F172A' }}>
-                  Mesa de Trabajo Inteligente — Planillas Físicas de Bodega (IA)
-                </h2>
-                <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '3px 10px', borderRadius: '999px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <ShieldCheck size={13} /> Arbitraje Anti-Colisión OPS Activo
-                </span>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isStaging ? '0.4rem 0.65rem' : '1rem' }}>
+      <div style={{ width: '100%', maxWidth: '1600px', height: isStaging ? '96.5vh' : '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: isStaging ? '18px' : '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+        {/* FILA 1 (COLAPSIBLE): CABECERA PRINCIPAL */}
+        {!collapseTitleBar && (
+          <div style={{ padding: '0.7rem 1.25rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#ECFDF5', border: '1.5px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                <Sparkles size={18} strokeWidth={2.2} />
               </div>
-              <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B' }}>
-                Jornada contable destino: <strong style={{ color: '#0F172A' }}>{balanceDate}</strong> · Vista dividida Lado a Lado idéntica al Módulo de Pedidos
-              </p>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0F172A' }}>
+                    Mesa de Trabajo Inteligente — Planillas Físicas de Bodega (IA)
+                  </h2>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '2px 9px', borderRadius: '999px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <ShieldCheck size={12} /> Arbitraje Anti-Colisión OPS Activo
+                  </span>
+                </div>
+                <p style={{ margin: '1px 0 0', fontSize: '0.74rem', color: '#64748B' }}>
+                  Jornada contable destino: <strong style={{ color: '#0F172A' }}>{balanceDate}</strong> · Vista dividida Lado a Lado idéntica al Módulo de Pedidos
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setCollapseTitleBar(true)}
+                title="Colapsar esta cabecera para ganar espacio de trabajo"
+                style={{ padding: '5px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+              >
+                <ChevronUp size={14} />
+                <span>Ocultar título</span>
+              </button>
+              <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '9px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={16} />
+              </button>
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={18} />
-          </button>
-        </div>
-        {/* SELECTOR DE LAS 5 MODALIDADES DE PLANILLA */}
-        <div style={{ padding: '0.65rem 1.75rem', backgroundColor: '#FFFFFF', borderBottom: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.6rem' }}>
-          {[
-            { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa (cero recálculos)', colBadge: 'Col G (+)', color: '#059669', bg: '#ECFDF5', Icon: Truck },
-            { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Planillas cierre de bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#0284C7', bg: '#E0F2FE', Icon: ClipboardCheck },
-            { id: 'pedidos_desperdicio' as PhysicalSheetType, title: '3. Formato Pedidos (2 Cols)', subtitle: 'Susceptibles: Desperdicio y Basura', colBadge: 'Cols Q y R (-)', color: '#D97706', bg: '#FEF3C7', Icon: FileText },
-            { id: 'desperdicio' as PhysicalSheetType, title: '4. Desperdicio General', subtitle: 'Planilla libre de avería y descapote', colBadge: 'Cols Q y R (-)', color: '#E11D48', bg: '#FFE4E6', Icon: Trash2 },
-            { id: 'donaciones' as PhysicalSheetType, title: '5. Plantilla Donaciones', subtitle: 'Autorizadas por Supervisor de Planta', colBadge: 'Col X (-)', color: '#7C3AED', bg: '#F3E8FF', Icon: ShieldCheck }
-          ].map(card => {
-            const active = sheetType === card.id;
-            const IconComp = card.Icon;
-            return (
-              <button key={card.id} type="button" onClick={() => {
-                  setSheetType(card.id);
-                  if (files.length > 0 || rawText.trim()) void executeAiExtraction(files, rawText, card.id, false);
-                }}
-                style={{ textAlign: 'left', padding: '0.55rem 0.75rem', borderRadius: '12px', border: active ? `2px solid ${card.color}` : '1px solid #E2E8F0', backgroundColor: active ? card.bg : '#F8FAFC', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '0.55rem' }}
-              >
-                <div style={{ padding: '0.35rem', borderRadius: '8px', backgroundColor: active ? '#FFFFFF' : '#E2E8F0', color: active ? card.color : '#64748B' }}>
-                  <IconComp size={16} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0F172A' }}>{card.title}</span>
-                    <span style={{ fontSize: '0.62rem', fontWeight: 900, padding: '1px 6px', borderRadius: '6px', backgroundColor: '#FFFFFF', color: card.color, border: `1px solid ${card.color}44` }}>
-                      {card.colBadge}
-                    </span>
+        )}
+        {/* FILA 2 (FIJA / COMPACTA): SELECTOR DE LAS 5 MODALIDADES + CONTROLES COMPACTOS CUANDO LAS BARRAS CON X ESTÁN COLAPSADAS */}
+        <div style={{ padding: isStaging ? '0.4rem 1rem' : '0.55rem 1.25rem', backgroundColor: '#FFFFFF', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '640px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.45rem' }}>
+            {[
+              { id: 'entrada' as PhysicalSheetType, title: '1. Entradas Muelle', subtitle: 'Unidad compra directa', colBadge: 'Col G (+)', color: '#059669', bg: '#ECFDF5', Icon: Truck },
+              { id: 'inv_manual' as PhysicalSheetType, title: '2. Conteo Fin Turno', subtitle: 'Cierre bodega 7:00 PM', colBadge: 'Col T (Físico)', color: '#0284C7', bg: '#E0F2FE', Icon: ClipboardCheck },
+              { id: 'pedidos_desperdicio' as PhysicalSheetType, title: '3. Formato Pedidos', subtitle: 'Desperdicio y Basura', colBadge: 'Cols Q y R (-)', color: '#D97706', bg: '#FEF3C7', Icon: FileText },
+              { id: 'desperdicio' as PhysicalSheetType, title: '4. Desperdicio Gral.', subtitle: 'Avería y descapote', colBadge: 'Cols Q y R (-)', color: '#E11D48', bg: '#FFE4E6', Icon: Trash2 },
+              { id: 'donaciones' as PhysicalSheetType, title: '5. Donaciones', subtitle: 'Autorizadas Planta', colBadge: 'Col X (-)', color: '#7C3AED', bg: '#F3E8FF', Icon: ShieldCheck }
+            ].map(card => {
+              const active = sheetType === card.id;
+              const IconComp = card.Icon;
+              return (
+                <button key={card.id} type="button" onClick={() => {
+                    setSheetType(card.id);
+                    if (files.length > 0 || rawText.trim()) void executeAiExtraction(files, rawText, card.id, false);
+                  }}
+                  style={{ textAlign: 'left', padding: isStaging ? '0.35rem 0.55rem' : '0.45rem 0.65rem', borderRadius: '10px', border: active ? `2px solid ${card.color}` : '1px solid #E2E8F0', backgroundColor: active ? card.bg : '#F8FAFC', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                >
+                  <div style={{ padding: '0.28rem', borderRadius: '7px', backgroundColor: active ? '#FFFFFF' : '#E2E8F0', color: active ? card.color : '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IconComp size={14} />
                   </div>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#475569' }}>{card.subtitle}</p>
-                </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3px' }}>
+                      <span style={{ fontSize: '0.73rem', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.title}</span>
+                      <span style={{ fontSize: '0.58rem', fontWeight: 900, padding: '1px 5px', borderRadius: '5px', backgroundColor: '#FFFFFF', color: card.color, border: `1px solid ${card.color}44`, whiteSpace: 'nowrap' }}>
+                        {card.colBadge}
+                      </span>
+                    </div>
+                    {!isStaging && (
+                      <p style={{ margin: '1px 0 0', fontSize: '0.64rem', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.subtitle}</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {/* CLUSTER DERECHO ULTRA-COMPACTO CUANDO LAS BARRAS CON X ESTÁN COLAPSADAS */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+            {isStaging && collapseStatsBar && (
+              <>
+                <span
+                  onClick={() => setCollapseStatsBar(false)}
+                  title="Clic para desplegar detalle de validación"
+                  style={{ fontSize: '0.7rem', fontWeight: 900, padding: '4px 9px', borderRadius: '8px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                >
+                  <CheckCircle2 size={12} color="#16A34A" />
+                  <span>{stats.total} renglones ({stats.newEntries} nuevos)</span>
+                </span>
+                {digestionDuration && (
+                  <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #6EE7B7', padding: '4px 8px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                    <Zap size={11} fill="#059669" color="#059669" />
+                    <span>{digestionDuration}s</span>
+                  </span>
+                )}
+                <button type="button" onClick={() => appendFileInputRef.current?.click()} title="Añadir Otra Hoja / Foto" style={{ padding: '4px 9px', backgroundColor: '#FFFFFF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#0F766E', border: '1px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                  <Plus size={12} /><span>+ Hoja</span>
+                </button>
+                <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} title="Re-analizar con IA" style={{ padding: '4px 9px', backgroundColor: '#F8FAFC', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#334155', border: '1px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                  <RefreshCw size={12} className={isExtracting ? 'animate-spin' : ''} />
+                  <span>{isExtracting ? '...' : 'Re-analizar'}</span>
+                </button>
+                <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '4px 9px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 800, color: '#1D4ED8', border: '1px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                  <FileText size={12} />
+                  <span>{showSideDocPreview ? `Ocultar ${docTypeLabel}` : `Ver ${docTypeLabel}`}</span>
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const nextCollapsed = !isCompactMode;
+                setCollapseTitleBar(nextCollapsed);
+                if (isStaging) setCollapseStatsBar(nextCollapsed);
+              }}
+              title={isCompactMode ? 'Expandir barras de título y validación' : 'Colapsar barras de título y validación para ganar más espacio'}
+              style={{ padding: '4px 8px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', color: '#334155', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}
+            >
+              {isCompactMode ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+              <span>{isCompactMode ? 'Expandir' : 'Compactar'}</span>
+            </button>
+            {collapseTitleBar && (
+              <button type="button" onClick={onClose} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '8px', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={15} />
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
         <input ref={fileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleInitialFilesSelected(e.target.files); e.target.value = ''; }} />
         <input ref={appendFileInputRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,application/pdf,image/*" style={{ display: 'none' }} onChange={e => { handleAppendFilesSelected(e.target.files); e.target.value = ''; }} />
@@ -653,64 +729,76 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         ) : (
           /* FASE 2 (isStaging): MESA DE TRABAJO SPLIT-SCREEN LADO A LADO IDÉNTICA A /admin/orders/create */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '0.85rem 1.75rem', backgroundColor: '#F0FDF4', borderBottom: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <CheckCircle2 size={24} color="#16A34A" />
-                <div>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Validación de Planilla Física (Auditoría Lado a Lado en Vivo)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0F172A' }}>{stats.total} renglones extraídos</span>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC' }}>Nuevos: {stats.newEntries}</span>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>Conciliados OPS: {stats.matched}</span>
-                    {stats.discrepancies > 0 && (
-                      <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>Discrepancias OPS: {stats.discrepancies}</span>
-                    )}
+            {/* FILA 3 (COLAPSIBLE): BARRA VERDE DE VALIDACIÓN */}
+            {!collapseStatsBar && (
+              <div style={{ padding: '0.55rem 1.25rem', backgroundColor: '#F0FDF4', borderBottom: '1px solid #BBF7D0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <CheckCircle2 size={20} color="#16A34A" />
+                  <div>
+                    <div style={{ fontSize: '0.64rem', fontWeight: 900, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Validación de Planilla Física (Auditoría Lado a Lado en Vivo)
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '1px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 900, color: '#0F172A' }}>{stats.total} renglones extraídos</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '1px 7px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#15803D', border: '1px solid #86EFAC' }}>Nuevos: {stats.newEntries}</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '1px 7px', borderRadius: '6px', backgroundColor: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>Conciliados OPS: {stats.matched}</span>
+                      {stats.discrepancies > 0 && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '1px 7px', borderRadius: '6px', backgroundColor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>Discrepancias OPS: {stats.discrepancies}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {digestionDuration && (
+                    <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1.5px solid #6EE7B7', padding: '4px 10px', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Zap size={12} fill="#059669" color="#059669" />
+                      <span>Digestión: <strong>{digestionDuration}s</strong></span>
+                    </span>
+                  )}
+                  <button type="button" onClick={() => appendFileInputRef.current?.click()} style={{ padding: '5px 11px', backgroundColor: '#FFFFFF', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 800, color: '#0F766E', border: '1.5px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Plus size={12} /><span>Añadir Otra Hoja / Foto</span>
+                  </button>
+                  <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} style={{ padding: '5px 12px', backgroundColor: '#F8FAFC', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 800, color: '#334155', border: '1.5px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <RefreshCw size={12} className={isExtracting ? 'animate-spin' : ''} />
+                    <span>{isExtracting ? 'Re-analizando...' : 'Re-analizar con IA'}</span>
+                  </button>
+                  <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '5px 12px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 800, color: '#1D4ED8', border: '1.5px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <FileText size={13} />
+                    <span>{showSideDocPreview ? `Ocultar Visor ${docTypeLabel}` : `Ver ${docTypeLabel} Lado a Lado`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCollapseStatsBar(true)}
+                    title="Ocultar esta barra de resumen para ganar espacio vertical"
+                    style={{ padding: '5px 9px', backgroundColor: '#FFFFFF', borderRadius: '100px', fontSize: '0.7rem', fontWeight: 800, color: '#166534', border: '1px solid #86EFAC', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                  >
+                    <ChevronUp size={13} />
+                    <span>Ocultar</span>
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                {digestionDuration && (
-                  <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1.5px solid #6EE7B7', padding: '5px 12px', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    <Zap size={13} fill="#059669" color="#059669" />
-                    <span>Digestión: <strong>{digestionDuration}s</strong></span>
-                  </span>
-                )}
-                <button type="button" onClick={() => appendFileInputRef.current?.click()} style={{ padding: '6px 12px', backgroundColor: '#FFFFFF', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#0F766E', border: '1.5px solid #99F6E4', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                  <Plus size={13} /><span>Añadir Otra Hoja / Foto</span>
-                </button>
-                <button type="button" disabled={isExtracting} onClick={() => void executeAiExtraction(files, rawText, sheetType, false)} style={{ padding: '6px 14px', backgroundColor: '#F8FAFC', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#334155', border: '1.5px solid #CBD5E1', cursor: isExtracting ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <RefreshCw size={13} className={isExtracting ? 'animate-spin' : ''} />
-                  <span>{isExtracting ? 'Re-analizando...' : 'Re-analizar con IA'}</span>
-                </button>
-                <button type="button" onClick={() => setShowSideDocPreview(prev => !prev)} style={{ padding: '6px 14px', backgroundColor: showSideDocPreview ? '#DBEAFE' : '#EFF6FF', borderRadius: '100px', fontSize: '0.76rem', fontWeight: 800, color: '#1D4ED8', border: '1.5px solid #93C5FD', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <FileText size={14} />
-                  <span>{showSideDocPreview ? `Ocultar Visor ${docTypeLabel}` : `Ver ${docTypeLabel} Lado a Lado`}</span>
-                </button>
-              </div>
-            </div>
+            )}
             {errorMsg && (
-              <div style={{ margin: '0.5rem 1.5rem 0', padding: '0.6rem 1rem', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <AlertTriangle size={15} /><span>{errorMsg}</span>
+              <div style={{ margin: '0.4rem 1rem 0', padding: '0.5rem 0.85rem', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', fontSize: '0.76rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertTriangle size={14} /><span>{errorMsg}</span>
               </div>
             )}
             {/* CUERPO SPLIT-SCREEN: DOCUMENTO ORIGINAL A LA IZQUIERDA + TABLA IA A LA DERECHA */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
               {showSideDocPreview && (
-                <div style={{ width: '48%', minWidth: '420px', borderRight: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ width: '48%', minWidth: '420px', borderRight: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', padding: '0.45rem 0.65rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', gap: '6px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <FileText size={14} />{rawText && files.length === 0 ? 'Texto Original' : `${docTypeLabel} Original`}
+                      <span style={{ fontSize: '0.71rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <FileText size={13} />{rawText && files.length === 0 ? 'Texto Original' : `${docTypeLabel} Original`}
                       </span>
                       {files.length > 1 && files.map((f, idx) => (
-                        <button key={`${f.name}-${idx}`} type="button" onClick={() => { setActiveFileIdx(idx); setStackedView(false); }} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', border: activeFileIdx === idx && !stackedView ? '1.5px solid #2563EB' : '1px solid #CBD5E1', backgroundColor: activeFileIdx === idx && !stackedView ? '#DBEAFE' : '#FFFFFF', color: activeFileIdx === idx && !stackedView ? '#1E40AF' : '#475569' }}>
+                        <button key={`${f.name}-${idx}`} type="button" onClick={() => { setActiveFileIdx(idx); setStackedView(false); }} style={{ padding: '2px 7px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', border: activeFileIdx === idx && !stackedView ? '1.5px solid #2563EB' : '1px solid #CBD5E1', backgroundColor: activeFileIdx === idx && !stackedView ? '#DBEAFE' : '#FFFFFF', color: activeFileIdx === idx && !stackedView ? '#1E40AF' : '#475569' }}>
                           Pág {idx + 1}
                         </button>
                       ))}
                       {files.length > 1 && !isActivePdf && !isActiveExcel && (
-                        <button type="button" onClick={() => setStackedView(prev => !prev)} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', border: stackedView ? '1.5px solid #059669' : '1px solid #CBD5E1', backgroundColor: stackedView ? '#ECFDF5' : '#FFFFFF', color: stackedView ? '#065F46' : '#475569' }}>
+                        <button type="button" onClick={() => setStackedView(prev => !prev)} style={{ padding: '2px 7px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer', border: stackedView ? '1.5px solid #059669' : '1px solid #CBD5E1', backgroundColor: stackedView ? '#ECFDF5' : '#FFFFFF', color: stackedView ? '#065F46' : '#475569' }}>
                           {stackedView ? 'Vista Individual' : `Apilar (${files.length})`}
                         </button>
                       )}
@@ -718,22 +806,22 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                       {!isActivePdf && !isActiveExcel && activePreviewUrl && (
                         <>
-                          <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Alejar"><ZoomOut size={13} /></button>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569' }}>{Math.round(zoom * 100)}%</span>
-                          <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Acercar"><ZoomIn size={13} /></button>
-                          <button type="button" onClick={() => setRotation(r => (r + 90) % 360)} style={{ padding: '3px 6px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Rotar"><RotateCw size={13} /></button>
+                          <button type="button" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} style={{ padding: '2px 5px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Alejar"><ZoomOut size={12} /></button>
+                          <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#475569' }}>{Math.round(zoom * 100)}%</span>
+                          <button type="button" onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} style={{ padding: '2px 5px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Acercar"><ZoomIn size={12} /></button>
+                          <button type="button" onClick={() => setRotation(r => (r + 90) % 360)} style={{ padding: '2px 5px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', cursor: 'pointer' }} title="Rotar"><RotateCw size={12} /></button>
                         </>
                       )}
                       {activePreviewUrl && (
                         <a href={activePreviewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                          <button type="button" style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <button type="button" style={{ padding: '2px 7px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 700, backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', color: '#1E293B', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Maximize2 size={11} /> Abrir Pestaña
                           </button>
                         </a>
                       )}
                     </div>
                   </div>
-                  <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ flex: 1, borderRadius: '10px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column' }}>
                     {rawText && files.length === 0 ? (
                       <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#F0FDF4', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '0.84rem', whiteSpace: 'pre-wrap', color: '#0F172A' }}>{rawText}</div>
                     ) : isActiveExcel ? (
@@ -741,7 +829,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                     ) : isActivePdf ? (
                       <PdfCanvasViewer file={activeFile} fileUrl={activePreviewUrl} />
                     ) : stackedView && previewUrls.length > 1 ? (
-                      <div style={{ flex: 1, overflowY: 'auto', padding: '12px', backgroundColor: '#F1F5F9', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '10px', backgroundColor: '#F1F5F9', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {previewUrls.map((url, idx) => (
                           <div key={url} style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
                             <div style={{ padding: '4px 10px', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.68rem', fontWeight: 700, color: '#64748B' }}>Página {idx + 1} — {files[idx]?.name}</div>
@@ -750,7 +838,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                         ))}
                       </div>
                     ) : activePreviewUrl ? (
-                      <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', backgroundColor: '#F8FAFC' }}>
+                      <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', backgroundColor: '#F8FAFC' }}>
                         <img src={activePreviewUrl} alt="Planilla Original" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px', transform: `scale(${zoom}) rotate(${rotation}deg)`, transition: 'transform 0.15s ease' }} />
                       </div>
                     ) : null}
@@ -771,18 +859,18 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
                 onDeleteRow={rowId => setReconciledRows(prev => prev.filter(r => r.rowId !== rowId))}
               />
             </div>
-            <div style={{ padding: '1rem 1.75rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button type="button" onClick={handleResetWorkspace} style={{ padding: '9px 18px', borderRadius: '12px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 700, fontSize: '0.84rem', cursor: 'pointer' }}>
+            <div style={{ padding: '0.6rem 1.25rem', backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button type="button" onClick={handleResetWorkspace} style={{ padding: '7px 14px', borderRadius: '10px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>
                 Cancelar y Limpiar
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Renglones Homologados a Inyectar</div>
-                  <div style={{ fontSize: '1rem', fontWeight: 900, color: '#0F172A' }}>{stats.active} de {stats.total} productos listos ({balanceDate})</div>
+                  <div style={{ fontSize: '0.64rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase' }}>Renglones Homologados a Inyectar</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0F172A' }}>{stats.active} de {stats.total} productos listos ({balanceDate})</div>
                 </div>
-                <button type="button" disabled={isSaving || stats.active === 0} onClick={handleApproveAndCommit} style={{ padding: '11px 24px', borderRadius: '14px', border: 'none', backgroundColor: stats.active === 0 || isSaving ? '#94A3B8' : '#16A34A', color: '#FFFFFF', fontSize: '0.9rem', fontWeight: 900, cursor: stats.active === 0 || isSaving ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: stats.active === 0 || isSaving ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)' }}>
+                <button type="button" disabled={isSaving || stats.active === 0} onClick={handleApproveAndCommit} style={{ padding: '9px 20px', borderRadius: '12px', border: 'none', backgroundColor: stats.active === 0 || isSaving ? '#94A3B8' : '#16A34A', color: '#FFFFFF', fontSize: '0.86rem', fontWeight: 900, cursor: stats.active === 0 || isSaving ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', boxShadow: stats.active === 0 || isSaving ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)' }}>
                   <span>{isSaving ? 'Inyectando a la Sábana...' : 'Confirmar e Inyectar a la Sábana'}</span>
-                  <ArrowRight size={16} />
+                  <ArrowRight size={15} />
                 </button>
               </div>
             </div>

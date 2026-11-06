@@ -1,13 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
   Info,
   Calculator,
   Plus,
-  Trash2
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  Search,
+  X
 } from 'lucide-react';
 import {
   PhysicalSheetType,
@@ -16,6 +21,22 @@ import {
   ReconciledSheetRow,
   ArbitrationResolution
 } from '@/lib/inventory/physical-sheet-parser';
+
+type SortField = 'rawName' | 'matchedProduct' | 'quantity' | null;
+type SortOrder = 'asc' | 'desc';
+
+function normalizePhoneticSpanish(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/z/g, 's')
+    .replace(/ce/g, 'se')
+    .replace(/ci/g, 'si')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 interface PhysicalSheetStagingTableProps {
   sheetType: PhysicalSheetType;
@@ -62,40 +83,103 @@ export default function PhysicalSheetStagingTable({
   onAddManualRow,
   onDeleteRow
 }: PhysicalSheetStagingTableProps) {
-  const [sortAlpha, setSortAlpha] = useState<boolean>(false);
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [rowFilterQuery, setRowFilterQuery] = useState<string>('');
   const [showFormulaTooltip, setShowFormulaTooltip] = useState<boolean>(false);
   const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
   const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
   const [focusedDropdownItemIndex, setFocusedDropdownItemIndex] = useState<number>(0);
   const [rawQtyDrafts, setRawQtyDrafts] = useState<Record<string, string>>({});
 
-  const displayRows = sortAlpha
-    ? [...reconciledRows].sort((a, b) =>
-        (a.rawProductName || a.matchedProductName || '').localeCompare(
-          b.rawProductName || b.matchedProductName || '',
-          'es',
-          { sensitivity: 'base' }
-        )
-      )
-    : reconciledRows;
+  // Ciclo Tri-Estado Inviolable: Neutral (null) -> Ascendente ('asc') -> Descendente ('desc') -> Neutral (null)
+  const handleToggleSort = (field: Exclude<SortField, null>) => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortOrder('asc');
+    } else if (sortOrder === 'asc') {
+      setSortOrder('desc');
+    } else {
+      setSortField(null);
+      setSortOrder('asc');
+    }
+  };
+
+  const displayRows = useMemo(() => {
+    let base = reconciledRows;
+    const qRaw = rowFilterQuery.trim();
+    if (qRaw) {
+      if (qRaw.startsWith('#')) {
+        const idTarget = qRaw.slice(1).trim().toLowerCase();
+        base = base.filter(r => String(r.matchedAccountingId || '').toLowerCase() === idTarget);
+      } else if (qRaw.toLowerCase() === '@sinmatch' || qRaw.toLowerCase() === '@alerta') {
+        base = base.filter(r => !r.matchedProductId || r.conciliationStatus === 'discrepancy');
+      } else {
+        const tokens = normalizePhoneticSpanish(qRaw).split(' ').filter(Boolean);
+        base = base.filter(r => {
+          const haystack = normalizePhoneticSpanish(
+            `${r.rawProductName} ${r.matchedProductName} ${r.matchedAccountingId} ${r.supplierName || ''}`
+          );
+          return tokens.every(t => haystack.includes(t));
+        });
+      }
+    }
+
+    if (!sortField) return base;
+
+    return [...base].sort((a, b) => {
+      if (sortField === 'quantity') {
+        const numA = Number(a.quantity) || 0;
+        const numB = Number(b.quantity) || 0;
+        return sortOrder === 'asc' ? numA - numB : numB - numA;
+      }
+      const valA =
+        sortField === 'rawName'
+          ? a.rawProductName || a.matchedProductName || ''
+          : a.matchedProductName || a.rawProductName || '';
+      const valB =
+        sortField === 'rawName'
+          ? b.rawProductName || b.matchedProductName || ''
+          : b.matchedProductName || b.rawProductName || '';
+      const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true });
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [reconciledRows, rowFilterQuery, sortField, sortOrder]);
 
   const allSelected =
     reconciledRows.length > 0 && reconciledRows.every(r => r.selected);
 
+  // Protocolo 4.1 estandar-galerias-frufresco: Tolerancia Fonética Z<->S, Multi-Token no contiguo y prioridad (ID) +8000 pts
   const getScoredProductsForQuery = (query: string): CatalogProductOption[] => {
-    const q = (query || '').trim().toLowerCase();
-    if (!q) return filteredCatalog.slice(0, 25);
+    const qRaw = (query || '').trim();
+    if (!qRaw) return filteredCatalog.slice(0, 25);
+
+    const parenMatch = qRaw.match(/\((\d+)\)/);
+    const explicitId = parenMatch ? parenMatch[1] : qRaw.startsWith('#') ? qRaw.slice(1).trim() : null;
+    const normQ = normalizePhoneticSpanish(qRaw);
+    const queryTokens = normQ.split(' ').filter(Boolean);
+
     const scored = filteredCatalog
       .map(p => {
-        const nameLow = p.name.toLowerCase();
-        const accLow = (p.accounting_id || p.sku || '').toLowerCase();
+        const accRaw = String(p.accounting_id || p.sku || '').trim().toLowerCase();
+        const normName = normalizePhoneticSpanish(p.name || '');
+        const normHaystack = `${normName} ${accRaw}`;
         let score = 0;
-        if (accLow === q) score += 120;
-        else if (accLow.startsWith(q)) score += 90;
-        if (nameLow === q) score += 100;
-        else if (nameLow.startsWith(q)) score += 80;
-        else if (nameLow.includes(q)) score += 50;
-        else if (accLow.includes(q)) score += 45;
+
+        if (explicitId && accRaw === explicitId.toLowerCase()) {
+          score += 8000;
+        }
+        if (accRaw === qRaw.toLowerCase()) score += 1200;
+        else if (accRaw.startsWith(qRaw.toLowerCase())) score += 600;
+
+        if (normName === normQ) score += 1000;
+        else if (normName.startsWith(normQ)) score += 500;
+        else if (normName.includes(normQ)) score += 250;
+
+        if (queryTokens.length > 0 && queryTokens.every(tok => normHaystack.includes(tok))) {
+          score += 180 + queryTokens.length * 25;
+        }
+
         return { p, score };
       })
       .filter(x => x.score > 0)
@@ -114,17 +198,29 @@ export default function PhysicalSheetStagingTable({
     }
   };
 
+  const stickyThBase: React.CSSProperties = {
+    position: 'sticky',
+    top: 0,
+    zIndex: 30,
+    backgroundColor: '#F8FAFC',
+    borderBottom: '2px solid #E2E8F0',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+    fontSize: '0.71rem',
+    fontWeight: 800,
+    color: '#475569',
+    letterSpacing: '0.04em',
+    userSelect: 'none'
+  };
+
   return (
     <div
       id="physical-staged-scroll-container"
       style={{ flex: 1, minWidth: '460px', padding: 0, overflowY: 'auto', height: '100%', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
     >
-      <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
-        <thead
-          style={{ position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-        >
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-            <th style={{ padding: '0.85rem 0.5rem', textAlign: 'center', width: '36px' }}>
+      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', position: 'relative' }}>
+        <thead>
+          <tr>
+            <th style={{ ...stickyThBase, padding: '0.55rem 0.45rem', textAlign: 'center', width: '36px' }}>
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -133,30 +229,71 @@ export default function PhysicalSheetStagingTable({
               />
             </th>
             <th
-              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 1rem', textAlign: 'left', width: '32%' }}
+              onClick={() => handleToggleSort('rawName')}
+              title="Clic para ordenar: Ascendente (A→Z) → Descendente (Z→A) → Orden natural del documento"
+              style={{ ...stickyThBase, padding: '0.55rem 0.85rem', textAlign: 'left', width: '32%', cursor: 'pointer' }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: sortField === 'rawName' ? '#059669' : '#475569' }}>
                 <span>NOMBRE EN DOCUMENTO</span>
-                <button
-                  type="button"
-                  onClick={() => setSortAlpha(prev => !prev)}
-                  title={sortAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', border: sortAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1', backgroundColor: sortAlpha ? '#ECFDF5' : '#F8FAFC', color: sortAlpha ? '#065F46' : '#64748B' }}
-                >
-                  A→Z
-                </button>
+                {sortField === 'rawName' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                ) : (
+                  <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
+                )}
               </div>
             </th>
             <th
-              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 0.75rem', textAlign: 'left', width: '38%' }}
+              style={{ ...stickyThBase, padding: '0.45rem 0.65rem', textAlign: 'left', width: '40%' }}
             >
-              TU PRODUCTO (ID CONTABLE)
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <div
+                  onClick={() => handleToggleSort('matchedProduct')}
+                  title="Clic para ordenar por Producto Homologado (Tri-Estado)"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: sortField === 'matchedProduct' ? '#059669' : '#475569', whiteSpace: 'nowrap' }}
+                >
+                  <span>TU PRODUCTO (ID)</span>
+                  {sortField === 'matchedProduct' ? (
+                    sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                  ) : (
+                    <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
+                  )}
+                </div>
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '7px', padding: '2px 7px', flex: 1, maxWidth: '185px' }}
+                >
+                  <Search size={11} color="#64748B" />
+                  <input
+                    type="text"
+                    value={rowFilterQuery}
+                    onChange={e => setRowFilterQuery(e.target.value)}
+                    placeholder="Filtrar #ID, @sinmatch..."
+                    style={{ border: 'none', outline: 'none', fontSize: '0.68rem', fontWeight: 700, color: '#0F172A', width: '100%', backgroundColor: 'transparent' }}
+                  />
+                  {rowFilterQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setRowFilterQuery('')}
+                      style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: '#94A3B8' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              </div>
             </th>
             <th
-              style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em', padding: '0.85rem 0.75rem', textAlign: 'center', width: '30%' }}
+              onClick={() => handleToggleSort('quantity')}
+              title="Clic para ordenar por Cantidad (Menor→Mayor → Mayor→Menor → Natural)"
+              style={{ ...stickyThBase, padding: '0.55rem 0.65rem', textAlign: 'center', width: '28%', cursor: 'pointer' }}
             >
-              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
-                <span>CANT. / COLUMNA</span>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative', color: sortField === 'quantity' ? '#059669' : '#475569' }}>
+                <span>CANT. / COL</span>
+                {sortField === 'quantity' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
+                ) : (
+                  <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
+                )}
                 <div
                   style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
                   onMouseEnter={() => setShowFormulaTooltip(true)}
@@ -212,7 +349,7 @@ export default function PhysicalSheetStagingTable({
                 id={`physical-staged-row-${idx}`}
                 style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: isActiveRow ? '#FFFFFF' : row.conciliationStatus === 'discrepancy' ? '#FFFBEB' : row.matchedProductId ? isConfidenceHigh ? '#FFFFFF' : '#FEFCE8' : '#FFF7ED', boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.16)' : 'none', borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent', zIndex: isActiveRow ? 20 : 1, position: 'relative', transition: 'all 0.15s ease' }}
               >
-                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', width: '36px' }}>
+                <td style={{ padding: '0.45rem 0.45rem', textAlign: 'center', width: '36px', borderBottom: '1px solid #F1F5F9' }}>
                   <input
                     type="checkbox"
                     checked={row.selected}
@@ -222,7 +359,7 @@ export default function PhysicalSheetStagingTable({
                 </td>
 
                 {/* COLUMNA 1: NOMBRE EN DOCUMENTO + PÍLDORAS IGUAL A PEDIDOS */}
-                <td style={{ padding: '0.75rem 1rem', width: '32%' }}>
+                <td style={{ padding: '0.45rem 0.85rem', width: '32%', borderBottom: '1px solid #F1F5F9' }}>
                   <div style={{ fontSize: isActiveRow ? '0.9rem' : '0.86rem', fontWeight: 800, color: '#0F172A' }}>
                     {row.rawProductName || 'Ítem manual'}
                   </div>
@@ -288,7 +425,7 @@ export default function PhysicalSheetStagingTable({
                 </td>
 
                 {/* COLUMNA 2: BUSCADOR INTERACTIVO DE PRODUCTO (IDÉNTICO A PEDIDOS) */}
-                <td style={{ padding: '0.45rem 0.75rem', position: 'relative', width: '38%' }}>
+                <td style={{ padding: '0.4rem 0.65rem', position: 'relative', width: '40%', borderBottom: '1px solid #F1F5F9' }}>
                   <input
                     id={`physical-sku-input-${idx}`}
                     type="text"
@@ -390,7 +527,7 @@ export default function PhysicalSheetStagingTable({
                 </td>
 
                 {/* COLUMNA 3: CANTIDAD CON FÓRMULAS EXCEL + DESTINO SÁBANA */}
-                <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', width: '30%' }}>
+                <td style={{ padding: '0.4rem 0.65rem', textAlign: 'center', width: '28%', borderBottom: '1px solid #F1F5F9' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     <input
                       id={`physical-qty-input-${idx}`}
