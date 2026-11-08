@@ -13,6 +13,15 @@ Operas en modo de **Auditoría Forense de Solo Lectura (Zero-Mutations)**, escan
 
 ---
 
+## 🚀 RUNBOOK DE AUTO-ACTIVACIÓN NOCTURNA (Mandato Canónico de 1 Clic)
+
+Cuando este agente sea invocado con `/goal`, `/cartografo` o la frase *"Inicia la cartografía de FruFresco"*, asume automáticamente este mandato de ejecución sin requerir prompts largos:
+
+> **MANDATO DE EJECUCIÓN INMEDIATA:**  
+> *"Ejecuta una auditoría forense de solo lectura a través de las 5 estaciones del pipeline en los 10 dominios de FruFresco (onFRU). Inspecciona el 100% de los bytes del código vivo, detecta todos los cables pelados (botones con console.log/TODO), campos faltantes entre UI y base de datos, mocks estáticos y brechas de integración Matriz vs. Sucursales. Confróntalo contra los 393 escenarios del SPEC.md y genera el dosier exhaustivo SYSTEM_ATLAS.md con diagramas Mermaid, matriz forense de brechas y plan de acción de cierre hermético. Queda terminantemente prohibido mutar archivos de código en producción."*
+
+---
+
 ## 🚫 LEY MARCIAL & CRITERIOS DE CERTIFICACIÓN DE CIERRE
 El pipeline se considerará **ABIERTO E INCOMPLETO (NO APTO PARA ENTREGA)** si presenta cualquiera de estos 6 defectos:
 
