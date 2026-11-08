@@ -382,7 +382,9 @@ export default function InventoryDailyBalanceTab({
                         return filtered;
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.warn('[BalanceDiario] Error reading frufresco_inventory_col_order from localStorage:', e);
+            }
         }
         return DEFAULT_COLUMN_ORDER;
     });
@@ -435,7 +437,9 @@ export default function InventoryDailyBalanceTab({
             try {
                 const saved = localStorage.getItem('frufresco_inventory_col_widths');
                 if (saved) return JSON.parse(saved);
-            } catch (e) {}
+            } catch (e) {
+                console.warn('[BalanceDiario] Error reading frufresco_inventory_col_widths from localStorage:', e);
+            }
         }
         return {};
     });
@@ -450,7 +454,9 @@ export default function InventoryDailyBalanceTab({
             delete next[colKey];
             try {
                 localStorage.setItem('frufresco_inventory_col_widths', JSON.stringify(next));
-            } catch (e) {}
+            } catch (e) {
+                console.warn('[BalanceDiario] Error saving frufresco_inventory_col_widths to localStorage:', e);
+            }
             return next;
         });
     }, []);
@@ -472,7 +478,9 @@ export default function InventoryDailyBalanceTab({
                 const next = { ...prev, [colKey]: newWidth };
                 try {
                     localStorage.setItem('frufresco_inventory_col_widths', JSON.stringify(next));
-                } catch (err) {}
+                } catch (err) {
+                    console.warn('[BalanceDiario] Error persisting col width resize:', err);
+                }
                 return next;
             });
         };
@@ -563,6 +571,8 @@ export default function InventoryDailyBalanceTab({
         }
     }, [externalDate]);
 
+
+
     const handleDateChange = (newDate: string) => {
         setBalanceDate(newDate);
         setColumnOrder(DEFAULT_COLUMN_ORDER);
@@ -573,6 +583,12 @@ export default function InventoryDailyBalanceTab({
     };
 
     const [sheetMode, setSheetMode] = useState<'view' | 'manual_edit'>('view');
+
+    // MODO SANDBOX DE SIMULACIÓN AISLADA (SPEC.md §8.8.13)
+    const [isSandbox, setIsSandbox] = useState<boolean>(false);
+    const [isPurgeModalOpen, setIsPurgeModalOpen] = useState<boolean>(false);
+    const [purgeConfirmText, setPurgeConfirmText] = useState<string>('');
+    const [isPurging, setIsPurging] = useState<boolean>(false);
     // Estado persistido de visibilidad de indicadores (Por defecto colapsado para maximizar área de tabla)
     const [showKpis, setShowKpis] = useState<boolean>(false);
 
@@ -813,7 +829,7 @@ interface CommittedSaleData {
             const stickyRect = stickyHeader?.getBoundingClientRect();
             const frozenWidth = stickyRect 
                 ? Math.round(stickyRect.right - containerRect.left)
-                : (isCompactIdentification ? 240 : (isCellCollapsed ? 459 : 545));
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 529 : 615));
 
             // Espacio disponible en la pantalla para ver datos (ancho del viewport menos columnas fijas)
             const availableWidth = Math.max(100, container.clientWidth - frozenWidth);
@@ -866,14 +882,28 @@ interface CommittedSaleData {
         else setLoading(true);
 
         try {
-            // 0. Cargar estado de cierre oficial de la fecha seleccionada
+            // 0. Cargar estado de cierre de la fecha seleccionada (Oficial vs Sandbox - SPEC.md §8.8.13)
             try {
-                const { data: closeData } = await supabase
-                    .from('daily_inventory_closings')
-                    .select('*')
-                    .eq('closing_date', balanceDate)
-                    .maybeSingle();
-                setClosingRecord(closeData || null);
+                if (isSandbox) {
+                    const { data: sbCloseSetting } = await supabase
+                        .from('app_settings')
+                        .select('value')
+                        .eq('key', `sandbox_daily_closing_${balanceDate}`)
+                        .maybeSingle();
+                    if (sbCloseSetting?.value) {
+                        const parsed = typeof sbCloseSetting.value === 'string' ? JSON.parse(sbCloseSetting.value) : sbCloseSetting.value;
+                        setClosingRecord(parsed);
+                    } else {
+                        setClosingRecord(null);
+                    }
+                } else {
+                    const { data: closeData } = await supabase
+                        .from('daily_inventory_closings')
+                        .select('*')
+                        .eq('closing_date', balanceDate)
+                        .maybeSingle();
+                    setClosingRecord(closeData || null);
+                }
             } catch (closeErr) {
                 console.warn('daily_inventory_closings no disponible o tabla pendiente:', closeErr);
                 setClosingRecord(null);
@@ -908,6 +938,42 @@ interface CommittedSaleData {
                 const targetDMinus1Date = latestMovDate && (!latestCloseDate || latestMovDate > latestCloseDate)
                     ? latestMovDate
                     : latestCloseDate;
+
+                // En Sandbox, verificar si existe cierre D-1 en sandbox_daily_closing_*
+                if (isSandbox) {
+                    try {
+                        const { data: sbClosings } = await supabase
+                            .from('app_settings')
+                            .select('key, value')
+                            .like('key', 'sandbox_daily_closing_%');
+                        if (sbClosings && sbClosings.length > 0) {
+                            const validPastClosings = sbClosings
+                                .map(c => {
+                                    const d = c.key.replace('sandbox_daily_closing_', '');
+                                    const parsedVal = typeof c.value === 'string' ? JSON.parse(c.value) : c.value;
+                                    return { date: d, val: parsedVal };
+                                })
+                                .filter(c => c.date < balanceDate)
+                                .sort((a, b) => b.date.localeCompare(a.date));
+
+                            if (validPastClosings.length > 0) {
+                                const latestPrev = validPastClosings[0].val;
+                                if (latestPrev?.snapshot_items && Array.isArray(latestPrev.snapshot_items)) {
+                                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
+                                    latestPrev.snapshot_items.forEach((item: any) => {
+                                        if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
+                                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
+                                            ? Number(item.physicalCount)
+                                            : 0;
+                                        prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
+                                    });
+                                }
+                            }
+                        }
+                    } catch (sbPrevErr) {
+                        console.warn('Error cargando D-1 de Sandbox:', sbPrevErr);
+                    }
+                }
 
                 if (targetDMinus1Date) {
                     // 1. Si existe snapshot de cierre formal en la jornada D-1 objetivo, cargarlo como línea base
@@ -1004,7 +1070,13 @@ interface CommittedSaleData {
                 .order('created_at', { ascending: false });
 
             if (movErr) throw movErr;
-            setMovements((movData as any) || []);
+            // Blindaje de Entorno: En Producción filtrar estrictamente movimientos de sandbox (SPEC.md §8.8.13)
+            const rawMovsList = (movData as any[] || []);
+            const segregatedMovs = rawMovsList.filter(m => {
+                const isSbMov = (m.reference_type || '').startsWith('sandbox_') || (m.notes || '').includes('[SANDBOX]');
+                return isSandbox ? true : !isSbMov;
+            });
+            setMovements(segregatedMovs);
 
             // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
             try {
@@ -2240,6 +2312,42 @@ interface CommittedSaleData {
                 foodBank: r.colX_foodBank
             }));
 
+            if (isSandbox) {
+                const sbClosingRecord = {
+                    id: `sandbox-close-${balanceDate}-${Date.now()}`,
+                    closing_date: balanceDate,
+                    closed_at: new Date().toISOString(),
+                    closed_by_name: 'Supervisor Sandbox (Pruebas)',
+                    notes: closingNotes || 'Cierre de prueba ejecutado en Modo Sandbox',
+                    total_calculated: totalCalculated,
+                    total_physical: totalPhysical,
+                    total_missing: totalMissing,
+                    total_surplus: totalSurplus,
+                    is_locked: true,
+                    is_sandbox: true,
+                    snapshot_items: snapshotItems,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+
+                const { error: sbCloseErr } = await supabase
+                    .from('app_settings')
+                    .upsert({
+                        key: `sandbox_daily_closing_${balanceDate}`,
+                        value: JSON.stringify(sbClosingRecord),
+                        description: `Cierre de prueba Sandbox para la fecha ${balanceDate}`,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'key' });
+
+                if (sbCloseErr) throw sbCloseErr;
+
+                setClosingRecord(sbClosingRecord as any);
+                setIsClosingModalOpen(false);
+                setClosingNotes('');
+                notify(`Jornada Sandbox del ${balanceDate} cerrada y congelada en modo simulación.`, 'success');
+                return;
+            }
+
             const { data, error } = await supabase
                 .from('daily_inventory_closings')
                 .upsert({
@@ -2283,6 +2391,30 @@ interface CommittedSaleData {
         }
 
         try {
+            if (isSandbox) {
+                if (closingRecord) {
+                    const updated = {
+                        ...closingRecord,
+                        is_locked: false,
+                        notes: `${closingRecord.notes || ''} | Reabierto en Sandbox el ${new Date().toLocaleString()}`,
+                        updated_at: new Date().toISOString()
+                    };
+                    const { error: sbReopenErr } = await supabase
+                        .from('app_settings')
+                        .upsert({
+                            key: `sandbox_daily_closing_${balanceDate}`,
+                            value: JSON.stringify(updated),
+                            description: `Cierre de prueba Sandbox para la fecha ${balanceDate}`,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'key' });
+
+                    if (sbReopenErr) throw sbReopenErr;
+                    setClosingRecord(prev => prev ? { ...prev, is_locked: false } : null);
+                    notify(`Jornada Sandbox del ${balanceDate} reabierta en modo simulación.`, 'success');
+                }
+                return;
+            }
+
             const { error } = await supabase
                 .from('daily_inventory_closings')
                 .update({
@@ -2687,13 +2819,15 @@ interface CommittedSaleData {
             const { data: whData } = await supabase.from('warehouses').select('id').limit(1).single();
             const warehouseId = whData?.id;
             const timestampIso = `${balanceDate}T12:00:00.000Z`;
+            const effectiveRefType = isSandbox ? `sandbox_${refType}` : refType;
+            const effectiveNote = isSandbox ? `[SANDBOX] ${noteDesc}` : noteDesc;
 
             if (Math.abs(newVal) < 0.0001) {
                 const { error: delErr } = await supabase
                     .from('inventory_movements')
                     .delete()
                     .eq('product_id', productId)
-                    .eq('reference_type', refType)
+                    .eq('reference_type', effectiveRefType)
                     .gte('created_at', `${balanceDate}T00:00:00.000Z`)
                     .lte('created_at', `${balanceDate}T23:59:59.999Z`);
 
@@ -2704,7 +2838,7 @@ interface CommittedSaleData {
                     .from('inventory_movements')
                     .select('id')
                     .eq('product_id', productId)
-                    .eq('reference_type', refType)
+                    .eq('reference_type', effectiveRefType)
                     .gte('created_at', `${balanceDate}T00:00:00.000Z`)
                     .lte('created_at', `${balanceDate}T23:59:59.999Z`);
 
@@ -2715,7 +2849,7 @@ interface CommittedSaleData {
                         .update({
                             quantity: qty,
                             type: movType,
-                            notes: noteDesc
+                            notes: effectiveNote
                         })
                         .eq('id', targetId)
                         .select()
@@ -2746,8 +2880,8 @@ interface CommittedSaleData {
                             warehouse_id: warehouseId,
                             quantity: qty,
                             type: movType,
-                            reference_type: refType,
-                            notes: noteDesc,
+                            reference_type: effectiveRefType,
+                            notes: effectiveNote,
                             created_at: timestampIso
                         }])
                         .select()
@@ -2865,7 +2999,7 @@ interface CommittedSaleData {
         const stickyLeftWidth = isPanesFrozen
             ? (stickyRect
                 ? Math.round(stickyRect.right - contRect.left)
-                : (isCompactIdentification ? 240 : (isCellCollapsed ? 459 : 545)))
+                : (isCompactIdentification ? 240 : (isCellCollapsed ? 529 : 615)))
             : 0;
         const stickyTopHeight = isPanesFrozen ? (isColumnFilterOpen ? 66 : 32) : 0;
         const stickyBottomHeight = isPanesFrozen ? 36 : 0;
@@ -3386,21 +3520,21 @@ interface CommittedSaleData {
                             key={`cell-${key}-D`}
                             title={row.colD_productName}
                             style={{ 
-                            padding: '6px 10px', 
-                            width: '260px',
-                            minWidth: '260px',
-                            maxWidth: '260px',
+                            padding: '6px 12px', 
+                            width: '330px',
+                            minWidth: '330px',
+                            maxWidth: '330px',
                             boxSizing: 'border-box',
                             overflow: 'hidden',
                             fontWeight: isParent ? '800' : '700', 
                             color: isParent ? '#854D0E' : '#0F172A', 
-                            borderRight: '2px solid #CBD5E1',
+                            borderRight: isPanesFrozen ? '3px solid #94A3B8' : '1px solid #CBD5E1',
                             borderBottom: cellBorderBottom,
                             position: isPanesFrozen ? 'sticky' : 'static', 
                             left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
                             zIndex: isPanesFrozen ? 11 : undefined, 
                             backgroundColor: rowBg, 
-                            boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.06)' : undefined, 
+                            boxShadow: isPanesFrozen ? '5px 0 14px -3px rgba(15, 23, 42, 0.16)' : undefined, 
                             transition: 'left 0.2s ease'
                         }}>
                             {isParent ? (
@@ -3428,7 +3562,7 @@ interface CommittedSaleData {
                                         {isCollapsed ? <ChevronRight size={11} strokeWidth={2.5} /> : <ChevronDown size={11} strokeWidth={2.5} />}
                                         <span>{childCount} pres.</span>
                                     </button>
-                                    <span style={{ fontWeight: '900', color: '#854D0E', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.colD_productName}</span>
+                                    <span style={{ fontWeight: '900', color: '#854D0E', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>{row.colD_productName}</span>
                                     
                                     <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
                                         <div style={{
@@ -3462,7 +3596,7 @@ interface CommittedSaleData {
                             ) : isChild ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', paddingLeft: '18px', overflow: 'hidden', width: '100%' }}>
                                     <span style={{ color: '#94A3B8', fontWeight: '900', fontSize: '0.75rem', flexShrink: 0 }}>↳</span>
-                                    <span style={{ fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.colD_productName}</span>
+                                    <span style={{ fontWeight: '600', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>{row.colD_productName}</span>
                                     <div style={{
                                         fontSize: '0.6rem',
                                         fontWeight: '700',
@@ -3741,6 +3875,41 @@ interface CommittedSaleData {
         );
     };
 
+    // Recargar datos automáticamente al conmutar entre Oficial y Sandbox (SPEC.md §8.8.13)
+    useEffect(() => {
+        loadDailyData();
+    }, [isSandbox]);
+
+    // MANEJADOR DE PURGA SEGURA DE SANDBOX (SPEC.md §8.8.13)
+    const handlePurgeSandbox = async () => {
+        try {
+            setIsPurging(true);
+            // 1. Eliminar movimientos de sandbox
+            const { error: movErr } = await supabase
+                .from('inventory_movements')
+                .delete()
+                .like('reference_type', 'sandbox_%');
+            if (movErr) console.warn('Aviso purga movimientos sandbox:', movErr);
+
+            // 2. Eliminar cierres y configuraciones de sandbox en app_settings
+            const { error: settErr } = await supabase
+                .from('app_settings')
+                .delete()
+                .like('key', 'sandbox_daily_%');
+            if (settErr) console.warn('Aviso purga settings sandbox:', settErr);
+
+            notify('Entorno Sandbox limpiado exitosamente. Todos los datos de prueba han sido purgados.', 'success');
+            setIsPurgeModalOpen(false);
+            setPurgeConfirmText('');
+            loadDailyData();
+        } catch (err: any) {
+            console.error('Error al purgar sandbox:', err);
+            notify('Error al limpiar el entorno sandbox: ' + (err.message || err), 'error');
+        } finally {
+            setIsPurging(false);
+        }
+    };
+
     return (
         <div style={isFullscreen ? {
             position: 'fixed',
@@ -3755,12 +3924,19 @@ interface CommittedSaleData {
             boxSizing: 'border-box',
             padding: '0.5rem 0.75rem',
             gap: '0.4rem',
-            fontFamily: 'var(--font-outfit), sans-serif'
+            fontFamily: 'var(--font-outfit), sans-serif',
+            border: isSandbox ? '3.5px solid #D97706' : 'none',
+            boxShadow: isSandbox ? 'inset 0 0 25px rgba(217, 119, 6, 0.4), 0 0 20px rgba(217, 119, 6, 0.3)' : 'none'
         } : {
             display: 'flex',
             flexDirection: 'column',
             gap: '0.65rem',
-            fontFamily: 'var(--font-outfit), sans-serif'
+            fontFamily: 'var(--font-outfit), sans-serif',
+            border: isSandbox ? '3.5px solid #D97706' : '1px solid #E2E8F0',
+            borderRadius: '16px',
+            padding: isSandbox ? '0.65rem' : '0',
+            boxShadow: isSandbox ? '0 0 25px rgba(217, 119, 6, 0.25)' : 'none',
+            transition: 'border 0.2s ease, box-shadow 0.2s ease'
         }}>
             <style>{`
                 .daily-balance-table tr:hover td {
@@ -3789,6 +3965,58 @@ interface CommittedSaleData {
                     animation: subtlePulseAmber 2.2s infinite ease-in-out;
                 }
             `}</style>
+
+            {/* BANNER STICKY POKA-YOKE DE MODO SANDBOX (SPEC.md §8.8.13) */}
+            {isSandbox && (
+                <div style={{
+                    backgroundColor: '#FEF3C7',
+                    border: '1.5px solid #F59E0B',
+                    borderRadius: '10px',
+                    padding: '0.45rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.2)',
+                    zIndex: 80,
+                    animation: 'subtlePulseAmber 3s infinite ease-in-out'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400E', fontSize: '0.78rem', fontWeight: '800' }}>
+                        <AlertTriangle size={17} strokeWidth={2.6} color="#D97706" />
+                        <span>MODO SANDBOX ACTIVO — SIMULACIÓN AISLADA CON PERSISTENCIA DE PRUEBAS (NO AFECTA PRODUCCIÓN)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '0.70rem', color: '#B45309', fontWeight: '600' }}>
+                            Los conteos, mermas y cierres se guardan exclusivamente en el casillero de pruebas
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setIsPurgeModalOpen(true)}
+                            style={{
+                                backgroundColor: '#FEE2E2',
+                                color: '#991B1B',
+                                border: '1px solid #FCA5A5',
+                                borderRadius: '6px',
+                                padding: '3px 10px',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FECACA'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+                            title="Eliminar todos los registros de simulación sandbox y reiniciar a cero"
+                        >
+                            <Trash2 size={12} strokeWidth={2.4} />
+                            <span>Limpiar Sandbox</span>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Notificación Toast Corporativa Accesible */}
             {toast && (
@@ -4061,6 +4289,67 @@ interface CommittedSaleData {
                                 }}
                             >
                                 Hoy
+                            </button>
+                        </div>
+
+                        {/* SELECTOR DE ENTORNO: Oficial (Producción) vs Sandbox (Simulación Aislada - SPEC.md §8.8.13) */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: isSandbox ? '#FEF3C7' : '#F1F5F9',
+                            borderRadius: '8px',
+                            padding: '2px',
+                            border: `1.5px solid ${isSandbox ? '#D97706' : '#CBD5E1'}`,
+                            boxShadow: isSandbox ? '0 0 10px rgba(217, 119, 6, 0.35)' : '0 1px 2px rgba(0,0,0,0.02)',
+                            height: '32px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsSandbox(false)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: !isSandbox ? '#0D7A57' : 'transparent',
+                                    color: !isSandbox ? '#FFFFFF' : '#64748B',
+                                    fontSize: '0.73rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                title="Entorno Oficial: Datos reales de inventario y balance contable de producción"
+                            >
+                                <ShieldCheck size={13} strokeWidth={2.4} />
+                                <span>Oficial</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsSandbox(true)}
+                                style={{
+                                    padding: '0 0.55rem',
+                                    height: '100%',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: isSandbox ? '#D97706' : 'transparent',
+                                    color: isSandbox ? '#FFFFFF' : '#64748B',
+                                    fontSize: '0.73rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                title="Entorno Sandbox: Simulación aislada con persistencia histórica (no afecta producción)"
+                            >
+                                <Sparkles size={13} strokeWidth={2.4} color={isSandbox ? '#FEF3C7' : 'currentColor'} />
+                                <span>Sandbox</span>
                             </button>
                         </div>
 
@@ -4978,16 +5267,16 @@ interface CommittedSaleData {
                                                 boxSizing: 'border-box',
                                                 padding: '6px 10px', 
                                                 textAlign: 'left', 
-                                                width: '260px', 
-                                                minWidth: '260px', 
-                                                maxWidth: '260px', 
-                                                borderRight: '2px solid #334155', 
+                                                width: '330px', 
+                                                minWidth: '330px', 
+                                                maxWidth: '330px', 
+                                                borderRight: '3px solid #64748B', 
                                                 position: 'sticky', 
                                                 top: 0, 
                                                 left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, 
                                                 zIndex: isPanesFrozen ? 55 : 45, 
                                                 backgroundColor: '#0F172A', 
-                                                boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
+                                                boxShadow: isPanesFrozen ? '5px 0 14px -3px rgba(0,0,0,0.45)' : undefined,
                                                 cursor: 'pointer',
                                                 userSelect: 'none',
                                                 transition: 'left 0.2s ease, width 0.2s ease'
@@ -5383,7 +5672,7 @@ interface CommittedSaleData {
                                             </th>
 
                                             {/* D: Producto (Buscador Alto Contraste + Botón Orden A-Z + Popover Jerarquía P/H y Unidad) */}
-                                            <th key="filter-D" style={{ height: '34px', width: '260px', minWidth: '260px', maxWidth: '260px', boxSizing: 'border-box', padding: '3px 6px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0', borderRight: '2px solid #94A3B8' }}>
+                                            <th key="filter-D" style={{ height: '34px', width: '330px', minWidth: '330px', maxWidth: '330px', boxSizing: 'border-box', padding: '3px 8px', position: 'sticky', top: '32px', left: isPanesFrozen ? (isCellCollapsed ? '199px' : '285px') : undefined, zIndex: isPanesFrozen ? 55 : 45, backgroundColor: '#E2E8F0', borderRight: '3px solid #94A3B8', boxShadow: isPanesFrozen ? '5px 0 14px -3px rgba(15, 23, 42, 0.16)' : undefined }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%', height: '26px' }}>
                                                     <div style={{ position: 'relative', flex: 1, height: '26px', display: 'flex', alignItems: 'center' }}>
                                                         <input
@@ -5729,16 +6018,16 @@ interface CommittedSaleData {
                                         textAlign: 'left',
                                         backgroundColor: '#0F172A',
                                         color: '#F8FAFC',
-                                        borderRight: '2px solid #334155',
+                                        borderRight: '3px solid #64748B',
                                         borderTop: '2px solid #334155',
                                         position: 'sticky',
                                         left: isPanesFrozen ? 0 : undefined,
                                         bottom: 0,
                                         zIndex: isPanesFrozen ? 35 : 25,
-                                        boxShadow: isPanesFrozen ? '4px 0 10px -2px rgba(0,0,0,0.3)' : undefined,
-                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
-                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
-                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '459px' : '545px'),
+                                        boxShadow: isPanesFrozen ? '5px 0 14px -3px rgba(0,0,0,0.45)' : undefined,
+                                        width: isCompactIdentification ? '240px' : (isCellCollapsed ? '529px' : '615px'),
+                                        minWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '529px' : '615px'),
+                                        maxWidth: isCompactIdentification ? '240px' : (isCellCollapsed ? '529px' : '615px'),
                                         boxSizing: 'border-box',
                                     }}
                                 >
@@ -6168,6 +6457,133 @@ interface CommittedSaleData {
                     selectedUnit={selectedUnitFilter}
                     onChangeSelectedUnit={setSelectedUnitFilter}
                 />
+            )}
+            {/* MODAL DE PURGA SEGURA DE SANDBOX (SPEC.md §8.8.13) */}
+            {isPurgeModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 10000,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        border: '2px solid #F87171',
+                        maxWidth: '480px',
+                        width: '100%',
+                        padding: '1.5rem',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                backgroundColor: '#FEE2E2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#DC2626'
+                            }}>
+                                <Trash2 size={20} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#0F172A' }}>
+                                    Limpiar Entorno Sandbox
+                                </h3>
+                                <p style={{ margin: '2px 0 0 0', fontSize: '0.75rem', color: '#64748B' }}>
+                                    Purga segura exclusiva de datos simulados
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            backgroundColor: '#FEF2F2',
+                            border: '1px solid #FECACA',
+                            borderRadius: '10px',
+                            padding: '0.75rem',
+                            fontSize: '0.78rem',
+                            color: '#991B1B',
+                            lineHeight: 1.4
+                        }}>
+                            <strong>Aviso de Seguridad:</strong> Se eliminarán todos los conteos físicos, mermas, ajustes y cierres registrados en <strong>Modo Sandbox</strong>. La operación real de producción no se verá afectada.
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '700', color: '#334155', marginBottom: '4px' }}>
+                                Para confirmar, escribe <strong>BORRAR</strong> a continuación:
+                            </label>
+                            <input
+                                type="text"
+                                value={purgeConfirmText}
+                                onChange={e => setPurgeConfirmText(e.target.value.toUpperCase())}
+                                placeholder="BORRAR"
+                                style={{
+                                    width: '100%',
+                                    padding: '0.5rem 0.75rem',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #CBD5E1',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '700',
+                                    outline: 'none',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsPurgeModalOpen(false);
+                                    setPurgeConfirmText('');
+                                }}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#F8FAFC',
+                                    color: '#475569',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePurgeSandbox}
+                                disabled={purgeConfirmText !== 'BORRAR' || isPurging}
+                                style={{
+                                    padding: '0.5rem 1.1rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: purgeConfirmText === 'BORRAR' ? '#DC2626' : '#FCA5A5',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '800',
+                                    cursor: purgeConfirmText === 'BORRAR' && !isPurging ? 'pointer' : 'not-allowed',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <Trash2 size={13} />
+                                <span>{isPurging ? 'Purgando...' : 'Confirmar Purga'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
