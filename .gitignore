@@ -49,7 +49,12 @@ brain/
 scratch/
 models_list*.json
 gcp-service-account.json
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/skills/**
+!.agents/rules/
+!.agents/rules/**
+!.agents/AGENTS.md
 endpoint_results.json
 backups/
 

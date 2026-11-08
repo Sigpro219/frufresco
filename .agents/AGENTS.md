@@ -38,7 +38,8 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 ---
 
 ## 4. Identificadores de Producto y Denominación de Categorías
-* **Campos SKU en Excel e Interfaz:** Queda estrictamente prohibido mostrar o requerir el campo `SKU` en interfaces de usuario, modales, ranking de productos y planillas Excel (.xlsx). En su lugar, se debe utilizar únicamente la columna **`accounting_id`** (ID Contable) para asociar los registros de productos de manera inequívoca.
+* **Error Histórico SKU vs. Prevalencia Absoluta de `accounting_id` (Exclusivo FruFresco):** El campo `sku` en la base de datos de FruFresco fue un error del inicio del proyecto que no se pudo erradicar a tiempo y cuya eliminación física es peligrosa por dependencias relacionales históricas; por tanto, se convive con él exclusivamente en la capa de persistencia interna.
+* **Prohibición Estricta en UI, Gráficas y Reportes:** En cualquier gráfica (ej. Pareto, barras, tendencias), galería, tarjeta de producto, modal, ranking, planilla Excel (.xlsx) o informe nuevo o modificado dentro de FruFresco, **DEBE PREVALECER de forma absoluta el `accounting_id` (ID Contable, renderizado como `#ID`)**. Queda terminantemente prohibido mostrar, etiquetar o requerir el campo `SKU` en la capa visual o de cara al usuario.
 * **Nombres Completos de Categoría:** En toda la interfaz de usuario queda prohibido mostrar códigos abreviados de categoría (`VE`, `TU`, `FR`, `HO`, `DE`, `LA`, `CO`, `PR`). Se deben mapear siempre a sus nombres completos en español: **Verdura**, **Tubérculo**, **Fruta**, **Hortaliza**, **Despensa**, **Lácteo**, **Congelado**, **Procesado**.
 
 ---
