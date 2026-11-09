@@ -2531,6 +2531,67 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     setDuplicateMatchConfirm(null);
   };
 
+  // Helper canónico para detectar duplicados residuales en editableItems
+  const hasDuplicates = useMemo(() => {
+    const seen = new Set<string>();
+    for (const item of editableItems) {
+      if (!item || item.isDeleted || item.isMetadata || !item.matched_product_id) continue;
+      const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+      const cleanUnit = (item.unit || item.originalUnit || 'Kg').trim().toLowerCase();
+      const key = `${item.matched_product_id}_${cleanLabel}_${cleanUnit}`;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
+  }, [editableItems]);
+
+  // Consolidación idempotente en lote a 1 clic para la mesa de trabajo de EmailDraftsModule
+  const handleConsolidateAllDuplicates = () => {
+    setEditableItems(prev => {
+      const map = new Map<string, any>();
+      let mergedCount = 0;
+      prev.forEach(item => {
+        if (!item || item.isDeleted || item.isMetadata || !item.matched_product_id) {
+          const uniqueKey = item?.id ? `id_${item.id}` : `raw_${Math.random()}`;
+          map.set(uniqueKey, { ...item });
+          return;
+        }
+        const cleanLabel = (item.variant_label || '').trim().toLowerCase();
+        const cleanUnit = (item.unit || item.originalUnit || 'Kg').trim().toLowerCase();
+        const key = `${item.matched_product_id}_${cleanLabel}_${cleanUnit}`;
+
+        if (map.has(key)) {
+          const existing = { ...map.get(key) };
+          const currentOrigQty = parseFloat(item.originalQuantity || item.quantity || '0');
+          const existingOrigQty = parseFloat(existing.originalQuantity || existing.quantity || '0');
+          const sumOrigQty = parseFloat((existingOrigQty + currentOrigQty).toFixed(3));
+
+          const factor = existing.conversion_factor || item.conversion_factor || 1;
+          existing.originalQuantity = sumOrigQty;
+          existing.quantity = parseFloat((sumOrigQty * factor).toFixed(3));
+          existing.isConfirmed = true;
+
+          if (item.observations) {
+            existing.observations = [existing.observations, item.observations].filter(Boolean).join(' | ');
+          }
+
+          map.set(key, existing);
+          mergedCount++;
+        } else {
+          map.set(key, { ...item });
+        }
+      });
+
+      if (mergedCount > 0) {
+        showToast(`Se consolidaron ${mergedCount} líneas duplicadas en el pedido.`, 'success');
+      } else {
+        showToast('No se encontraron líneas duplicadas para consolidar.', 'info');
+      }
+
+      return Array.from(map.values());
+    });
+  };
+
   const handleAddManualItem = () => {
     setEditableItems(prev => [
       ...prev,
@@ -4774,6 +4835,33 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         };
       });
       setEditableItems(initialEdits);
+
+      // Chequeo proactivo post-ingesta / carga de borrador: Disparar modal ante duplicados emparejados (Escenario 414 SDD)
+      if (isNewDraft) {
+        const seenMap = new Map<string, number>();
+        for (let i = 0; i < initialEdits.length; i++) {
+          const it = initialEdits[i];
+          if (!it || it.isDeleted || it.isMetadata || !it.matched_product_id) continue;
+          const cleanLabel = (it.variant_label || '').trim().toLowerCase();
+          const cleanUnit = (it.unit || it.originalUnit || 'Kg').trim().toLowerCase();
+          const key = `${it.matched_product_id}_${cleanLabel}_${cleanUnit}`;
+          if (seenMap.has(key)) {
+            const firstIdx = seenMap.get(key)!;
+            const duplicateProduct = products.find(p => p.id === it.matched_product_id) || {
+              id: it.matched_product_id,
+              name: it.name || it.originalName || 'Producto'
+            };
+            setDuplicateMatchConfirm({
+              isOpen: true,
+              product: duplicateProduct,
+              rowIndex: i,
+              duplicateIndex: firstIdx
+            });
+            break;
+          }
+          seenMap.set(key, i);
+        }
+      }
 
       const computedSlot = getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
       if (isNewDraft) {
@@ -7847,17 +7935,44 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       padding: '4px 10px', 
                       borderRadius: '100px', 
                       fontSize: '0.76rem', 
-                      fontWeight: '800',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      fontWeight: '800', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '5px', 
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)' 
                     }}>
                       {isAllMatched ? <CheckCircle2 size={13} color="#059669" /> : <AlertTriangle size={13} color="#D97706" />}
                       <span>{isAllMatched ? `100% Auditado (${matchedCount}/${activeItems.length})` : `${matchedCount}/${activeItems.length} SKUs listos`}</span>
                     </span>
                   );
                 })()}
+
+                {/* Botón Docked Canónico de Consolidación de Duplicados en Lote (Escenario 414 SDD) */}
+                {hasDuplicates && (
+                  <button
+                    type="button"
+                    onClick={handleConsolidateAllDuplicates}
+                    style={{
+                      padding: '5px 12px',
+                      backgroundColor: '#FEF3C7',
+                      color: '#92400E',
+                      border: '1.5px solid #F59E0B',
+                      borderRadius: '100px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      fontSize: '0.76rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      boxShadow: '0 2px 4px rgba(245, 158, 11, 0.15)',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="Unificar automáticamente filas con el mismo producto y variante"
+                  >
+                    <AlertTriangle size={13} color="#D97706" />
+                    <span>Consolidar Duplicados</span>
+                  </button>
+                )}
 
                 {/* Botón de Descarte / Rechazo con Causal o Restauración en Mesa de Trabajo */}
                 {(selectedDraft.status === 'approved' || Boolean(metadata.orderId)) ? null : selectedDraft.status === 'rejected' ? (

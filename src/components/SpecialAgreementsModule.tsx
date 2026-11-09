@@ -1451,52 +1451,126 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                     return;
                 }
 
-                // Indexar los ítems reales actuales por SKU, código y nombre normalizado para conservar costos y metadatos reales de BD
+                // Indexar los ítems reales actuales por Accounting ID, SKU, código y nombre normalizado para conservar costos y metadatos reales de BD
+                const existingByAccountingId = new Map<string, AgreementItem>();
                 const existingBySku = new Map<string, AgreementItem>();
                 const existingByName = new Map<string, AgreementItem>();
+                const existingByProdId = new Map<string, AgreementItem>();
+
                 agreementItems.forEach(item => {
-                    if (item.mapped_sku) existingBySku.set(String(item.mapped_sku).toUpperCase(), item);
-                    if (item.client_code) existingBySku.set(String(item.client_code).toUpperCase(), item);
+                    const cleanAcct = String(item.accounting_id || item.client_code || '').replace(/^#/, '').trim();
+                    if (cleanAcct) {
+                        existingByAccountingId.set(cleanAcct.toUpperCase(), item);
+                    }
+                    if (item.mapped_sku) existingBySku.set(String(item.mapped_sku).trim().toUpperCase(), item);
+                    if (item.client_code) existingBySku.set(String(item.client_code).trim().toUpperCase(), item);
+                    if (item.product_id) existingByProdId.set(String(item.product_id).trim().toLowerCase(), item);
                     existingByName.set(normalizeSearchStr(item.raw_name), item);
                 });
 
-                const parsed: AgreementItem[] = jsonRows.map((row, i): AgreementItem => {
-                    const rawName = String(row['Nombre Item'] ?? row['Descripcion'] ?? row['Producto'] ?? row['PRODUCTO'] ?? '').trim();
-                    const skuRaw = String(row['Accounting ID'] ?? row['ID Contable'] ?? row['SKU FruFresco'] ?? row['Material'] ?? row['Código'] ?? row['Cód Item'] ?? '').trim();
-                    const existing = existingBySku.get(skuRaw.toUpperCase()) || existingByName.get(normalizeSearchStr(rawName));
+                // Helper para buscar valor en fila ignorando mayúsculas/minúsculas y tildes en los encabezados
+                const getRowVal = (row: Record<string, unknown>, keys: string[]): any => {
+                    const normalizedKeys = keys.map(k => normalizeSearchStr(k));
+                    for (const [colName, val] of Object.entries(row)) {
+                        const normCol = normalizeSearchStr(colName);
+                        if (normalizedKeys.includes(normCol)) {
+                            return val;
+                        }
+                    }
+                    return undefined;
+                };
 
-                    const realCost = existing?.corabastos_cost ?? (Number(row['COSTO CORABASTOS'] ?? row['Costo'] ?? 0) || 0);
+                const parseNumericVal = (val: any): number => {
+                    if (val === null || val === undefined || val === '') return 0;
+                    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+                    const cleaned = String(val).replace(/[^0-9.-]/g, '').trim();
+                    const num = parseFloat(cleaned);
+                    return isNaN(num) ? 0 : num;
+                };
+
+                let updatedCount = 0;
+                const parsed: AgreementItem[] = jsonRows.map((row, i): AgreementItem => {
+                    const rawName = String(
+                        getRowVal(row, ['Nombre Item', 'Descripcion', 'DESCRIPCION', 'Producto', 'PRODUCTO', 'Nombre', 'Item']) ?? ''
+                    ).trim();
+
+                    const skuRaw = String(
+                        getRowVal(row, ['Accounting ID', 'ID Contable', 'ID', 'Codigo', 'CODIGO', 'Cód Item', 'SKU FruFresco', 'SKU', 'Material']) ?? ''
+                    ).trim();
+
+                    const cleanSku = skuRaw.replace(/^#/, '').trim();
+
+                    // Resolución jerárquica: 1. Accounting ID, 2. SKU/Material, 3. Product ID, 4. Nombre normalizado
+                    const existing = (cleanSku ? existingByAccountingId.get(cleanSku.toUpperCase()) : null) ||
+                                     (skuRaw ? existingBySku.get(skuRaw.toUpperCase()) : null) ||
+                                     (cleanSku ? existingByProdId.get(cleanSku.toLowerCase()) : null) ||
+                                     existingByName.get(normalizeSearchStr(rawName));
+
+                    const realCost = existing?.corabastos_cost ?? (parseNumericVal(getRowVal(row, ['COSTO CORABASTOS', 'Costo Corabastos', 'Costo', 'COSTO'])) || 0);
                     const rulePct = existing?.inst_rule_margin_pct ?? 0;
                     const baseline = existing?.baseline_price ?? (realCost > 0 ? Math.ceil((realCost * (1 + rulePct / 100)) / 50) * 50 : 0);
-                    const sipsa = Number(row['$ SIPSA Anterior'] ?? row['$ SIPSA'] ?? existing?.sipsa_price ?? 0) || 0;
-                    const prima = Number(row['Prima $ COP'] ?? row['Prima $  COP '] ?? existing?.prima_cop ?? 0) || 0;
-                    const proposed = Number(
-                        row['PRECIO PROPUESTO CLIENTE'] ??
-                        row['PRECIO VIGENTE ANTERIOR'] ??
-                        row['NUE PRE'] ??
-                        (prima + sipsa > 0 ? prima + sipsa : existing?.client_proposed_price) ??
-                        0
-                    ) || 0;
+                    const sipsa = parseNumericVal(getRowVal(row, ['$ SIPSA Anterior', '$ SIPSA', 'SIPSA', 'Precio SIPSA'])) || (existing?.sipsa_price ?? 0);
+                    const prima = parseNumericVal(getRowVal(row, ['Prima $ COP', 'Prima $  COP ', 'Prima', 'Prima COP'])) || (existing?.prima_cop ?? 0);
+
+                    // Detección ultra-flexible del Nuevo Precio / Contrapropuesta
+                    const explicitNewPrice = parseNumericVal(
+                        getRowVal(row, [
+                            'NUEVO PRECIO',
+                            'Nuevo Precio',
+                            'NUEVO PRECIO A FIJAR',
+                            'Nuevo Precio a Fijar',
+                            'CONTRAPROPUESTA FRUFRESCO',
+                            'Contrapropuesta FruFresco',
+                            'Contrapropuesta',
+                            'Precio Final',
+                            'PRECIO',
+                            'Precio',
+                            'NUE PRE'
+                        ])
+                    );
+
+                    const proposedInFile = parseNumericVal(
+                        getRowVal(row, [
+                            'PRECIO PROPUESTO CLIENTE',
+                            'Precio Propuesto Cliente',
+                            'PRECIO VIGENTE ANTERIOR',
+                            'Precio Vigente Anterior',
+                            'Precio Anterior',
+                            'ANT PRE'
+                        ])
+                    );
+
+                    const proposed = proposedInFile > 0
+                        ? proposedInFile
+                        : (prima + sipsa > 0 ? prima + sipsa : (existing?.client_proposed_price ?? 0));
+
                     const suggested = existing?.suggested_price ?? (realCost > 0 ? Math.ceil((realCost * (1 + rulePct / 100)) / 50) * 50 : proposed);
-                    const counter = Number(
-                        row['Contrapropuesta FruFresco'] ??
-                        row['CONTRAPROPUESTA FRUFRESCO'] ??
-                        row['NUEVO PRECIO A FIJAR'] ??
-                        row['Precio Final'] ??
-                        proposed
-                    ) || suggested;
+
+                    const counter = explicitNewPrice > 0
+                        ? explicitNewPrice
+                        : (existing?.our_counterproposal && existing.our_counterproposal > 0 ? existing.our_counterproposal : suggested);
+
+                    // Si el archivo trae un precio explícito mayor a 0, se marca congelado (is_frozen_override = true)
+                    const isFrozen = explicitNewPrice > 0 || Boolean(existing?.is_frozen_override);
+                    if (explicitNewPrice > 0 && existing) {
+                        updatedCount++;
+                    }
 
                     return {
                         id: existing?.id || `${selectedClient}-upload-${i}`,
                         quote_item_id: existing?.quote_item_id,
                         product_id: existing?.product_id,
-                        client_code: skuRaw || existing?.client_code || (i + 1),
-                        raw_name: rawName || existing?.raw_name || `Fila ${i + 1}`,
-                        unified_name: '',
+                        client_code: cleanSku || existing?.client_code || (i + 1),
+                        accounting_id: existing?.accounting_id ?? cleanSku ?? (i + 1),
+                        raw_name: existing?.raw_name || rawName || `Fila ${i + 1}`,
+                        unified_name: existing?.unified_name || '',
                         mapped_sku: existing?.mapped_sku || skuRaw,
-                        chain_name: existing?.chain_name || (row['Nombre Cadena o Compañía'] ? String(row['Nombre Cadena o Compañía']).trim() : undefined),
-                        unit: existing?.unit || String(row['U.M'] ?? 'KG').trim(),
+                        chain_name: existing?.chain_name || (getRowVal(row, ['Nombre Cadena o Compañía', 'Cadena']) ? String(getRowVal(row, ['Nombre Cadena o Compañía', 'Cadena'])).trim() : undefined),
+                        unit: existing?.unit || String(getRowVal(row, ['U.M', 'UM', 'Unidad']) ?? 'KG').trim(),
                         monthly_consumption_kg: existing?.monthly_consumption_kg || 1,
+                        demand_volume: existing?.demand_volume,
+                        demand_orders_count: existing?.demand_orders_count,
+                        demand_revenue: existing?.demand_revenue,
                         baseline_price: baseline,
                         corabastos_cost: realCost,
                         inst_rule_margin_pct: rulePct,
@@ -1506,15 +1580,55 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                         previous_price: existing?.previous_price ?? proposed,
                         suggested_price: suggested,
                         our_counterproposal: counter,
+                        is_frozen_override: isFrozen,
                         status_change: counter > proposed ? 'SUBIÓ' : (counter < proposed ? 'BAJÓ' : 'IGUAL'),
                         iva_rate: existing?.iva_rate ?? 0
                     };
                 }).filter(r => Boolean(r.raw_name));
 
                 if (parsed.length > 0) {
-                    setAgreementItems(parsed);
-                    setSuccessMsg(`Importadas ${parsed.length} filas cruzadas contra el catálogo de Supabase en ${modelsMeta[selectedClient].name}.`);
-                    setTimeout(() => setSuccessMsg(null), 4000);
+                    // Si el Excel trajo un subconjunto o las filas del catálogo, preservamos los ítems completos del acuerdo actualizando los que venían en el archivo
+                    const parsedMap = new Map<string, AgreementItem>();
+                    parsed.forEach(p => {
+                        if (p.product_id) parsedMap.set(String(p.product_id), p);
+                        if (p.accounting_id) parsedMap.set(String(p.accounting_id), p);
+                        if (p.raw_name) parsedMap.set(normalizeSearchStr(p.raw_name), p);
+                    });
+
+                    const finalItems: AgreementItem[] = agreementItems.length > 0
+                        ? agreementItems.map((orig): AgreementItem => {
+                            const match = (orig.product_id ? parsedMap.get(String(orig.product_id)) : null) ||
+                                          (orig.accounting_id ? parsedMap.get(String(orig.accounting_id)) : null) ||
+                                          parsedMap.get(normalizeSearchStr(orig.raw_name));
+                            if (match) {
+                                const newProposed = match.client_proposed_price > 0 ? match.client_proposed_price : orig.client_proposed_price;
+                                const statusChange: 'SUBIÓ' | 'BAJÓ' | 'IGUAL' = match.our_counterproposal > orig.client_proposed_price
+                                    ? 'SUBIÓ'
+                                    : (match.our_counterproposal < orig.client_proposed_price ? 'BAJÓ' : 'IGUAL');
+
+                                return {
+                                    ...orig,
+                                    our_counterproposal: match.our_counterproposal,
+                                    client_proposed_price: newProposed,
+                                    is_frozen_override: match.is_frozen_override,
+                                    status_change: statusChange
+                                };
+                            }
+                            return orig;
+                        })
+                        : parsed;
+
+                    setAgreementItems(finalItems);
+
+                    // Persistencia inmediata del borrador en BD (app_settings) para inmunidad ante F5 / recargas
+                    if (selectedClient === 'general_quincenal' || selectedClient === 'general_mensual') {
+                        await saveGeneralListDraftToDb(selectedClient, finalItems);
+                    }
+
+                    setSuccessMsg(
+                        `¡Excel procesado con éxito! Se reconciliaron ${parsed.length} productos (${updatedCount} con nuevo precio congelado) en ${modelsMeta[selectedClient].name}. Guardado en borrador persistente.`
+                    );
+                    setTimeout(() => setSuccessMsg(null), 5000);
                 }
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : 'Error desconocido';

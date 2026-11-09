@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.372 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..394 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
-> **Fecha:** 6 de Noviembre, 2026  
+> **Versión:** 1.9.374 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..396 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
+> **Fecha:** 9 de Noviembre, 2026  
 > **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..394) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..396) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **393 Escenarios Canónicos (1..393)** | **🟢 100%** |
+| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **396 Escenarios Canónicos (1..396)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
@@ -177,11 +177,11 @@ Para conciliar la identidad comercial ante el mercado, la inmutabilidad tributar
 - **Criterio de Aceptación:** Cumplido. La fecha extraída por la IA ya no se pierde y el operador no tiene que seleccionarla manualmente a menos que desee modificarla.
 
 ### ✅ DEUDA TÉCNICA 2: Paridad Financiera e IVA en Aprobación de Correos
-- **Implementación:** En `src/app/api/orders/email-drafts/approve/route.ts`, se consultan en lote los productos de la orden para obtener su `iva_rate`. Se calcula el impuesto individualmente con la fórmula canónica de FruFresco (`itemTotal * (rate / (100 + rate))`) y se persisten `subtotal`, `tax` y `total` consistentes contablemente con la DIAN y el modo manual.
+- **Implementación:** En `src/app/api/orders/email-drafts/approve/rroute.ts`, se consultan en lote los productos de la orden para obtener su `iva_rate`. Se calcula el impuesto individualmente con la fórmula canónica de FruFresco (`itemTotal * (rate / (100 + rate))`) y se persisten `subtotal`, `tax` y `total` consistentes contablemente con la DIAN y el modo manual.
 - **Criterio de Aceptación:** Cumplido. La aprobación de borradores ya no quema `$0` en impuestos y coincide 1:1 con el modo manual.
 
 ### ✅ DEUDA TÉCNICA 3: Cubicación y Peso Logístico en Aprobación de Correos
-- **Implementación:** En `src/app/api/orders/email-drafts/approve/route.ts`, se totaliza el peso en kilogramos (`total_weight_kg`) considerando la unidad de medida (`unit_of_measure`), factores para libras (0.5 kg) o el peso específico del SKU (`weight_kg`). Este valor se guarda en la cabecera `orders` y permite al módulo de transporte cubicar la capacidad de carga del camión (ej. 2000 kg o canastillas).
+- **Implementación:** En `src/app/api/orders/email-drafts/approve/rroute.ts`, se totaliza el peso en kilogramos (`total_weight_kg`) considerando la unidad de medida (`unit_of_measure`), factores para libras (0.5 kg) o el peso específico del SKU (`weight_kg`). Este valor se guarda en la cabecera `orders` y permite al módulo de transporte cubicar la capacidad de carga del camión (ej. 2000 kg o canastillas).
 - **Criterio de Aceptación:** Cumplido. Los pedidos nacidos de correo ahora tienen cubicaje exacto.
 
 ### ✅ DEUDA TÉCNICA 4: Botón de Aprobación Directa en Mesa de Trabajo de Documentos
@@ -204,7 +204,7 @@ Para conciliar la identidad comercial ante el mercado, la inmutabilidad tributar
 - **Diagnóstico:** Los pedidos creados por carga manual de PDF/Excel subían el documento al bucket `order-attachments` y guardaban la URL en `orders.document_url`, permitiendo que en `/admin/orders/loading` se mostrara el botón interactivo "Ver Anexo ↗". Sin embargo, en la ingesta por correo (`EmailDraftsModule` y `/api/orders/email-drafts/approve`), el archivo se almacenaba en `order_drafts.extracted_items[0].attachmentUrl` pero al momento de confirmar/aprobar el borrador hacia la tabla `orders`, el campo `document_url` se omitía (quedaba `null`), perdiendo el acceso visual al soporte original.
 - **Implementación:**
   - En `src/components/EmailDraftsModule.tsx` (tanto en la confirmación directa `handleConfirmOrderDirectly` como en el modal de confirmación `onConfirm`), se extrae `draftAttachmentUrl` de los anexos del borrador (`metadata?.attachments[selectedAttachmentIndex]?.url || metadata?.attachmentUrl || metadata?.attachments?.[0]?.url`) y se asigna a `document_url` al insertar la cabecera en `orders`.
-  - En `src/app/api/orders/email-drafts/approve/route.ts`, se recibe `documentUrl` del payload, o de forma reactiva y autónoma se consulta `order_drafts` para extraer el `attachmentUrl` de los metadatos de extracción, insertándolo en `orders.document_url`.
+  - En `src/app/api/orders/email-drafts/approve/rroute.ts`, se recibe `documentUrl` del payload, o de forma reactiva y autónoma se consulta `order_drafts` para extraer el `attachmentUrl` de los metadatos de extracción, insertándolo en `orders.document_url`.
 - **Criterio de Aceptación:** Cumplido. Cualquier orden originada por un documento (correo electrónico o carga manual directa) queda enlazada permanentemente a su archivo físico en `orders.document_url`, garantizando auditoría contable y despacho con visualización del anexo en un solo clic.
 
 ### ✅ DEUDA TÉCNICA 9: Enlace Directo «Abrir Original ↗» en Adjuntos de Borradores de Correo
@@ -312,7 +312,7 @@ Para conciliar la identidad comercial ante el mercado, la inmutabilidad tributar
        * 🔴 **Ítem Retirado:** Fondo rojo suave con texto tachado `[- RETIRADO / AGOTADO]`.
 - **Implementación Full-Stack:**
   - `src/lib/emailTemplates.ts`: Unificación de la plantilla con el componente canónico `Letterhead` de remisiones.
-  - `src/app/api/orders/update/route.ts`: Detección diferencial de ítems (`idsToDelete`, `itemsToUpsert`, comparación de cantidades) y encolamiento de remisión rectificativa.
+  - `src/app/api/orders/update/rroute.ts`: Detección diferencial de ítems (`idsToDelete`, `itemsToUpsert`, comparación de cantidades) y encolamiento de remisión rectificativa.
   - Tabla `mail`: Soporte de `scheduled_at` para respeto del buffer de gracia de 2 minutos.
 - **Criterio de Aceptación:** Cumplido. Cero bucles en recepción; cliente recibe remisión formal con buffer de 2 minutos y diff cromático en correcciones.
 
@@ -782,7 +782,7 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
 - [x] **Tarea COM-2:** Estandarizar `src/app/admin/commercial/quotes/create/page.tsx` para aplicar el redondeo a múltiplos superiores de $50 COP en el precio unitario antes de IVA y en variantes.
 - [x] **Tarea COM-3:** Asegurar que la acción de aceptación en `quotes/[id]/page.tsx` priorice la formalización canónica hacia Acuerdo Comercial (`status = 'agreement'`) y registre el log de auditoría correspondiente en `audit_logs`.
 - [x] **Tarea COM-4:** Verificar y blindar en `orders/create/page.tsx` y `EmailDraftsModule.tsx` la prevalencia estricta de Nivel 1 (Acuerdo Sucursal) sobre Nivel 2 (Acuerdo Matriz).
-- [x] **Tarea COM-5 (Brecha 1):** Sustituir IVA hardcodeado en `activate-agreement/route.ts` por cálculo dinámico por producto (`item.matched_product?.iva_rate`), desglose por ítem y trazabilidad en `audit_logs`.
+- [x] **Tarea COM-5 (Brecha 1):** Sustituir IVA hardcodeado en `activate-agreement/rroute.ts` por cálculo dinámico por producto (`item.matched_product?.iva_rate`), desglose por ítem y trazabilidad en `audit_logs`.
 - [x] **Tarea COM-6 (Brecha 2):** Eliminar referencia a columna inexistente `target_price` en `commercial-parser-engine.ts` y aplicar la fórmula canónica de margen sobre venta $\frac{\text{Costo}}{1 - 0.20}$ con redondeo a $50 COP.
 - [x] **Tarea COM-7 (Brecha 3):** Blindar la Inmunidad Contractual de Acuerdos: Las campañas comerciales modulan productos de catálogo libre, pero nunca perforan ítems pactados bajo acuerdo comercial activo.
 - [x] **Tarea COM-8 (Brecha 4):** Diferenciar visualmente los acuerdos de Sucursal (`<Building />`) vs Matriz (`<Building2 />`) en el panel de Acuerdos Comerciales (`CommercialAgreementsModule.tsx`).
@@ -1955,22 +1955,42 @@ Para facilitar la fiscalización y comparación directa cara a cara entre column
      Al pulsarlo, la cuadrícula restaura en 0ms la secuencia original A a X de la ecuación de balance de masa.
    - **Retorno Automático por Defecto:** Al recargar la página, cambiar de jornada o salir del modo pantalla completa, el sistema restablece de forma automática y transparente el ordenamiento canónico oficial.
 
-#### 8.8.11 Desacoplamiento de Acciones de Captura Operativa hacia el Dashboard Directivo & Minimalismo Zen en Sábana (Resolutivo Gemba Octubre 2026)
+#### 8.8.11 Evolución Arquitectónica: Poda Radical de Botones de Taller en Dashboard Directivo, Automatización de Ingesta (IA / Excel) y Flujo Nativo de Ventas por Nómina (Resolutivo Gemba Noviembre 2026)
 
-Para honrar el principio de segregación funcional y erradicar la saturación visual de botones de captura manual sobre la matriz de balance diario, se establece la **Reubicación Canónica de Acciones**:
+Tras la consolidación operativa del **Lector Multimodal IA (`PhysicalSheetIngestModal.tsx`)** y el **Digestor Masivo Excel (`DailyBalanceExcelImportModal.tsx`)**, se deroga formalmente la ubicación de los botones de taller manual (`[+ Registrar Novedad ▾]` y `[⚡ Compras Plaza]`) en el Dashboard Directivo. Se consagra el siguiente estándar canónico:
 
-1. **Reubicación de Acciones en `Dashboard Directivo` (`InventoryUnifiedDashboard.tsx`):**
-   - Los botones de captura operativa manual:
-     - **`[+ Registrar Novedad ▾]`:** Menú de Mermas/Bajas con evidencia fotográfica (Cols P, Q, R), Descuentos de Nómina (Col N) y Ventas Extra (Col M).
-     - **`[⚡ Compras Plaza]`:** Ingesta rápida de compras de Corabastos por sublistas de células de trabajo (Col G).
-   - Se trasladan formalmente a la barra de acciones rápidas del **Dashboard Directivo**, permitiendo a la jefatura de inventario y administradores registrar novedades desde el centro de control y visualización de indicadores sin invadir la matriz de datos de la sábana.
+1. **Dashboard Directivo de Telemetría Pura (`InventoryUnifiedDashboard.tsx`):**
+   - El Cockpit de Inventarios opera estrictamente como un **centro de monitoreo, telemetría y exportación ejecutiva de informes** (`[📥 Informes & Exportaciones ▾]`).
+   - Se erradican por completo de su barra de comandos los botones de digitación unitaria o novedades manuales (`[+ Registrar Novedad ▾]`, `[⚡ Compras Plaza]`), honrando el principio **/spacex** (*"The best part is no part"*).
 
-2. **Purificación Minimalista de la Barra Zen de `Balance Diario` (`InventoryDailyBalanceTab.tsx`):**
-   - La barra superior de la sábana de balance diario queda estrictamente saneada, eliminando botones redundantes o decorativos y conservando únicamente los controles indispensables para la auditoría y cierre:
-     - **Contexto Temporal & Modo:** Fecha del corte con botón "Hoy" + Conmutador `Sábana Oficial` / `Modo Edición`.
-     - **Herramientas de Densidad & Filtrado:** Buscador Omnibox compacto, conmutador de filtros por columna **`[🔍 Filtros Columna]`** (`Ctrl + Shift + L`), y botón condicional de restauración **`[↺ Restablecer Orden Canónico]`** (cuando existan columnas desplazadas).
-     - **Acción de Cierre y Retorno:** Botón de congelamiento **`[🔒 Cerrar Día]`** (en Modo Edición) y botón explícito **`[✕ Salir]`** de pantalla completa.
-   - **Resultado:** Desaparece el amontonamiento de botones multicolores sobre la tabla, ofreciendo una experiencia de usuario sobria, limpia, de estética suiza industrial y 100% enfocada en la precisión numérica.
+2. **Matriz Canónica de Ingesta Automatizada de Columnas:**
+   - **Columna G (Compras Plaza):** Se alimenta mediante tres canales automatizados:
+     1. *Lector IA Multimodal (`PhysicalSheetIngestModal.tsx`):* Lectura de la fotografía/escáner de la planilla manuscrita de Corabastos con inyección masiva en 3 segundos.
+     2. *Carga Masiva Excel (`DailyBalanceExcelImportModal.tsx`):* Ingesta de planillas digitales en `.xlsx`.
+     3. *Módulo Móvil Operativo (`/ops/compras`):* Registro digital directo de compradores en Corabastos.
+     4. *Edición Inline en Sábana:* Ajuste directo sobre la celda en `InventoryDailyBalanceTab.tsx` para contingencias.
+     *(El modal arcaico de transcripción unitaria `FastPlazaPurchasesModal` queda formalmente deprecado).*
+   - **Columnas P, Q, R (Mermas, Desperdicio y Basura):**
+     1. *Lector IA Bicolumna:* Lectura de los formatos de pedidos y formatos de desperdicio/basura de planta directo a Cols Q y R.
+     2. *Balance Automatizado de Procesados (`/ops/procesados`):* Cumplimiento estricto de la conservación de masa $M_{\text{in}} = M_{\text{hijo}} + M_Q + M_R$.
+     3. *Edición Inline en Sábana o Carga Excel:* Edición celda por celda o importación por lote.
+     *(El modal flotante unitario `InventoryWasteModal` queda deprecado).*
+   - **Columna M (Ventas Extra / Mostrador):**
+     1. *Flujo Comercial de Pedidos:* Registro de órdenes formales en `/admin/orders/create` o Landing Page.
+     2. *Carga Masiva Excel o Edición Inline en Sábana:* Ingesta por lote o celda directa.
+     *(El modal flotante `InventoryAdditionalSalesModal` queda deprecado).*
+
+3. **Columna N (Ventas por Nómina a Colaboradores — Flujo Nativo de Pedidos con Cable Pelado de Descuento):**
+   - Se erradica conceptualmente la venta a colaboradores como un "ajuste manual de inventario".
+   - **Flujo Canónico Nativo:** Toda venta a empleados se origina como una **orden de compra regular en el Módulo de Pedidos / Landing Page**, asociando la identidad del colaborador (`profile_id`).
+   - **Cable Pelado para Regla de Precios y Descuento:** La arquitectura reserva un hook/interfaz limpia para calcular el descuento o subsidio parametrizable sobre productos seleccionados para colaboradores.
+   - **Sincronización Automática con Balance de Masa:** Al formalizarse la compra, el peso físico (Kg) y el valor liquidado se integran automáticamente en la **Columna N (VENTA NÓMINA)** del Balance Diario, cerrando el circuito contable de nómina sin requerir modales manuales aislados (`InventoryPayrollModal` queda formalmente deprecado).
+
+4. **Barra de Herramientas de la Sábana Zen (`InventoryDailyBalanceTab.tsx`):**
+   - Conserva exclusivamente los accesos a los canales modernos de ingesta y gobernanza:
+     - **Conmutador de Entorno:** `[ 🟢 Oficial | 🧪 Sandbox ]` con Poka-Yoke visual.
+     - **Ingesta Automatizada:** `[Cargar Planillas Físicas (IA)]` y `[Cargar Excel]`.
+     - **Gobernanza Numérica:** Filtros de columna, Omnibox, `[🔒 Cerrar Día]` y exportación.
 
 #### 8.8.12 Mesa de Trabajo Inteligente de Planillas Físicas de Bodega (IA) — Ergonomía Galería Sticky, Anti-Duplicación de Zoom en PDF, Cero en Raya/Vacío e Inyección Estricta > 0 (Resolutivo Gemba Noviembre 2026)
 
@@ -1990,6 +2010,39 @@ Para el procesamiento de planillas físicas escaneadas o fotografiadas en bodega
      - En la mesa de trabajo, únicamente pueden estar seleccionados (`selected: true`) los renglones homologados (`matchedProductId !== null`) cuya cantidad sea estrictamente mayor a cero (**`quantity > 0`**). Si el operador digita un valor `> 0` en un renglón que venía en `0`, el renglón se marca automáticamente (`selected: true`); si lo deja en `0` o sin producto homologado, permanece desmarcado (`selected: false`) y el checkbox individual se deshabilita mientras la cantidad sea `0` o carezca de producto homologado.
      - Al pulsar **`Confirmar e Inyectar a la Sábana`**, el motor filtra estrictamente **`r.quantity > 0`** (`item.totalQuantity > 0`) para **todas las columnas de destino (`Col G`, `Col T`, `Col Q`, `Col R`, `Col X`)**, garantizando que al Balance Diario se exporten e inyecten únicamente los productos parametrizados con valor **`> 0`**.
      - **Inyección por Lotes y Resumen Ejecutivo de Cargue (`commitSummary`):** La persistencia en `inventory_movements` consulta en una sola petición los movimientos existentes del día para los SKUs afectados, inserta en bloque los registros nuevos y actualiza en paralelo los existentes. Al concluir la inyección, el modal presenta una pantalla de confirmación de éxito con el resumen ejecutivo de lo cargado (total de SKUs inyectados, nuevos vs. actualizados, renglones en `0` omitidos, totales por columna y tabla detallada de productos inyectados con su ID contable, cantidad y estado) junto con acciones para cargar otra planilla o volver a la Sábana.
+
+---
+
+#### 8.8.13 Entorno de Simulación Aislado (Modo Sandbox con Persistencia Histórica, Marco Perimetral Inconfundible y Purga Segura)
+
+A partir del requerimiento operativo de experimentación continua en planta, se formaliza la arquitectura del **Modo Sandbox del Balance Diario (24 Columnas)**:
+
+1. **Principio de Inviolabilidad de Operación Real (Zero Production Contamination):**
+   - El Modo Operación (Línea Oficial) permanece 100% inalterado en su comportamiento, consultas, cierres y cálculos. No sufre modificaciones en su esquema de negocio ni riesgo de alteración de inventario contable.
+   - El Modo Sandbox permite al operador o directivo ensayar escenarios hipotéticos, ingresar conteos físicos arbitrarios, cargar planillas ficticias y registrar cierres diarios de prueba a través de múltiples fechas continuas (días, semanas o meses).
+
+2. **Doble Estado Reactivo en la Misma Interfaz (Cero Duplicación de Código):**
+   - El operador conmuta de entorno directamente desde la barra de herramientas del Balance Diario (`InventoryDailyBalanceTab.tsx`) mediante un selector dual interactivo:
+     $$\mathbf{Selector\ Maestro:} \quad \text{[ 🟢 Modo Oficial (Producción) ]} \quad \longleftrightarrow \quad \text{[ 🧪 Modo Sandbox (Simulación) ]}$$
+   - Ambas modalidades conservan el 100% de la ergonomía, navegación por teclado (`Enter`, `Tab`, `Shift+Enter`), atajos `[Ctrl + Shift + L]`, fórmulas inline, inyección de planillas y validación matemática de las 24 columnas.
+
+3. **Gobernanza Visual Inconfundible (Poka-Yoke Anti-Confusión Visual):**
+   - **Marco Perimetral de Alta Visibilidad:** Al activarse el Modo Sandbox, todo el contenedor de la sábana adopta un **marco perimetral continuo de 3.5px en color Ámbar Industrial / Neón (`#D97706` / `#F59E0B`)** con sombra difusa perimetral.
+   - **Banner Superior Fijo de Advertencia:** Se despliega una franja sticky superior de alto contraste con icono SVG vectorial `AlertTriangle` de Lucide (cero emojis unicode en UI):
+     $\mathbf{Aviso\ Poka-Yoke:} \quad \text{MODO SANDBOX ACTIVO — SIMULACIÓN AISLADA CON PERSISTENCIA DE PRUEBAS (NO AFECTA PRODUCCIÓN)}$
+   - El botón conmutador emite una animación de respiración sutil (`subtlePulseAmber`) y el fondo de cabecera refleja un matiz distintivo (`#FFFBEB`).
+   - Al retornar al Modo Oficial, el marco se restablece instantáneamente al tono neutro Slate industrial (`#E2E8F0`), garantizando que sea visualmente imposible equivocarse de entorno.
+
+4. **Persistencia Histórica Aislada & Discriminador de Entorno:**
+   - **Discriminador Canónico de Movimientos:** Toda transacción o ajuste efectuado bajo este modo se persiste en `inventory_movements` con el discriminador `reference_type` prefijado como `sandbox_${refType}` y la etiqueta explícita `notes: '[SANDBOX]...'` (garantizando compatibilidad inmediata con el esquema relacional de Supabase).
+   - **Cierres de Jornada en Sandbox:** Para garantizar cero colisiones con la restricción de unicidad de fecha en `daily_inventory_closings`, los balances cerrados en modo simulación se persisten de forma aislada en `app_settings` bajo la llave `sandbox_daily_closing_${date}` con su payload completo auditado.
+   - **Encadenamiento Multi-Día en Simulación:** Permite encadenar simulaciones multi-día: el Saldo Final de prueba de una fecha se traslada como Saldo Inicial de prueba del día siguiente en sandbox sin afectar la cadena oficial.
+   - **Blindaje Estricto en Consultas de Producción (Defensa en Profundidad):** Todos los endpoints y vistas de la operación real (`/ops/compras`, `/ops/picking`, Kardex oficial `page.tsx`, `Dashboard Directivo` / `InventoryUnifiedDashboard.tsx` y facturación) imponen de forma inviolable el filtro PostgREST `.not('reference_type', 'like', 'sandbox_%')` complementado con filtrado en memoria en JavaScript (`cleanMovements`), blindando al 100% las métricas y KPIs oficiales.
+
+5. **Acción de Purga Segura (`[Limpiar / Reiniciar Sandbox]`):**
+   - Disponible exclusivamente cuando el operador se encuentra en Modo Sandbox.
+   - Incorpora diálogo modal de confirmación obligatoria con doble factor de seguridad: exige tipear la palabra clave `BORRAR` para prevenir clics accidentales.
+   - Ejecuta una purga atómica que elimina única y exclusivamente los registros de movimientos con `reference_type LIKE 'sandbox_%'` y las llaves de cierre `sandbox_daily_%` en `app_settings`, restableciendo el entorno de simulación a un estado limpio sin tocar un solo registro de producción.
 
 ---
 
@@ -5119,11 +5172,11 @@ Para erradicar la fricción y el colapso operativo en cocinas HORECA cuando un p
 > **Fecha de Entrada en Vigor:** 30 de Septiembre, 2026  
 > **Estado:** 🟢 Aprobado & Activo en Contrato  
 > **Rutas & Componentes Nucleares:**  
-> - Motor de Cola y Worker: `/api/mail/process` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/mail/process/route.ts))  
+> - Motor de Cola y Worker: `/api/mail/process` ([rroute.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/mail/process/rroute.ts))  
 > - Generador Canónico de Plantillas: `src/lib/emailTemplates.ts` ([emailTemplates.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/lib/emailTemplates.ts))  
-> - Notificación de Ítems Eliminados / Agotados: `/api/orders/notify-deleted-item` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/notify-deleted-item/route.ts))  
-> - Rechazo Tipificado de Solicitudes: `/api/orders/reject-draft` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/reject-draft/route.ts))  
-> - Contraofertas Comerciales B2B: `/api/commercial/send-counter-offer` ([route.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/commercial/send-counter-offer/route.ts))  
+> - Notificación de Ítems Eliminados / Agotados: `/api/orders/notify-deleted-item` ([rroute.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/notify-deleted-item/rroute.ts))  
+> - Rechazo Tipificado de Solicitudes: `/api/orders/reject-draft` ([rroute.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/orders/reject-draft/rroute.ts))  
+> - Contraofertas Comerciales B2B: `/api/commercial/send-counter-offer` ([rroute.ts](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/app/api/commercial/send-counter-offer/rroute.ts))  
 > - Bandeja de Salida y Auditoría: `src/components/EmailOutboxModule.tsx` ([EmailOutboxModule.tsx](file:///C:/Users/German%20Higuera/OneDrive/Documentos/Projects/frufresco/src/components/EmailOutboxModule.tsx))  
 > - Tabla Base de Datos: `public.mail` con soporte de retry backoff, scheduled buffer y metadatos de auditoría.
 
@@ -7310,7 +7363,7 @@ Queda formalmente prohibido en todo el pipeline de pedidos aplicar redondeos a 2
    - En `src/app/admin/orders/create/page.tsx`:
      - `calculatedQty` del carrito y el factor de conversión deben soportar 3 decimales (`toFixed(3)` y `step="0.001"`).
      - La acumulación de peso total de la orden (`total_weight_kg`) debe preservarse con `toFixed(3)`.
-   - En `/api/orders/email-drafts/approve/route.ts`:
+   - En `/api/orders/email-drafts/approve/rroute.ts`:
      - `roundedWeight` en cabecera de la orden debe computarse como:
        $$\text{roundedWeight} = \frac{\text{Math.round}(\text{totalWeightKg} \times 1000)}{1000}$$
 
@@ -10910,6 +10963,11 @@ El Command Center (`/admin/command-center`) es la consola técnica suprema reser
        - **`Esta Semana` (Columnas Diarias `Lun` a `Dom`):** Muestra en cada columna diaria el `% de merma` y los `Kg perdidos` de ese día, junto con `Kg Comprados`, `Kg Entregados` y `% Merma Semanal`.
        - **`Este Mes` (Columnas Semanales `Sem 1` a `Sem 4+`):** Muestra en cada columna semanal el `% de merma` y los `Kg perdidos` de esa semana del mes, junto con el consolidado mensual.
        - **`Este Trimestre` (Columnas Mensuales + Comparativo de las 3 Magnitudes):** Muestra los 3 meses del trimestre (`Mes -2`, `Mes -1`, `Mes Actual`) y las **3 Magnitudes Comparadas lado a lado (`% Esta Semana` vs `% Este Mes` vs `% Este Trimestre`)** para que Dirección determine la frecuencia óptima de evaluación y calibre los márgenes esperados por presentación.
+     - **Ordenamiento Interactivo de Encabezados (Estándar de Galerías FruFresco `estandar-galerias-frufresco`):**
+       * Cada columna clave (`CÓD / PRODUCTO`, `COMPRADO`, `MERMA (P+Q+R)`, `ENTREGADO`, `% SEMANA`, `% MES`, `% TRIMESTRE`) cuenta con ordenadores de clic táctico con íconos vectoriales `ArrowUp`, `ArrowDown` y `ArrowUpDown`.
+       * **Ciclo de Clic (3 Estados):** Primer clic activa orden natural (`asc` en nombres, `desc` en mermas/volumen), segundo clic invierte el sentido y tercer clic restablece el orden inteligente por defecto.
+       * **Regla Chromium:** `borderCollapse: 'separate', borderSpacing: 0` y `position: 'sticky', top: 0, zIndex: 20` con fondo sólido en cada celda `<th>` para eliminar sangrado al scrollear.
+       * **Telemetría en Barra Pedagógica:** Proyecta la métrica de ordenamiento activa y botón `Restablecer orden`.
   2. **Simplificación Radical del Algoritmo `SUGERIDO IA` y Erradicación de SIPSA DANE en `SpecialAgreementsModule.tsx`:**
      - Se elimina por completo la columna `SIPSA DANE`, el botón de sincronización `SIPSA DANE` y toda intervención del boletín mayorista en la fórmula de precios sugeridos, así como la píldora de código SKU en la columna `PRODUCTO EN LISTA`.
      - **Principio de Margen Integral en Lista Institucional (`pricing_rules.margin_adjustment`):** El porcentaje de utilidad esperada configurado por presentación en la **Lista Institucional Dinámica (`% Lista Inst.`)** ya incluye de forma integral la utilidad base (ej. `+20%` en bulto sin lavar), la merma física real del producto (ej. `+20%` en papa lavada) y el proceso operativo de selección o tamizado (ej. `+20%` adicional en selección estándar para un total de `+60%`, o `+40%` en tamizado calibre 40g para un total de `+80%`).
@@ -11115,7 +11173,7 @@ flowchart TD
 ---
 
 ### Escenario 253: Asignación de Descuento Comercial (`X%`) durante la Vigencia del Acuerdo Aplicado a la Fecha del Pedido y Triple Consecuencia Transversal: Remisiones Impresas, Badge Exclusivo en Facturación (Sustitución de `Crédito 30d`) y Columna 38 del Archivo Plano World Office (SDD v1.9.223)
-- **Given** la consola de Acuerdos Comerciales (`src/components/CommercialAgreementsModule.tsx`), el motor de resolución de acuerdos (`src/app/api/orders/resolve-agreement-pricing/route.ts`), el generador de remisiones y documentos impresos (`src/app/admin/orders/contingency-print/page.tsx`), la galería de Facturación (`src/app/admin/commercial/billing/page.tsx`) y el motor de exportación contable World Office (`src/lib/worldOfficeExport.ts`),
+- **Given** la consola de Acuerdos Comerciales (`src/components/CommercialAgreementsModule.tsx`), el motor de resolución de acuerdos (`src/app/api/orders/resolve-agreement-pricing/rroute.ts`), el generador de remisiones y documentos impresos (`src/app/admin/orders/contingency-print/page.tsx`), la galería de Facturación (`src/app/admin/commercial/billing/page.tsx`) y el motor de exportación contable World Office (`src/lib/worldOfficeExport.ts`),
 - **When** el usuario comercial sube un nuevo acuerdo comercial o edita uno existente y le asigna al cliente un porcentaje de descuento del `X%` durante la vigencia del acuerdo (`start_date` a `valid_until`),
 - **Then** el sistema aplica automáticamente las siguientes reglas de persistencia, cálculo anti-doble-descuento y tres (3) consecuencias obligatorias:
   1. **Esquema en BD (`quotes.discount_percentage`), Evaluación por Fecha del Pedido y Snapshot Inmutable (`orders.logistics_data.agreement_discount_pct`):**
@@ -11202,7 +11260,7 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 
 | ID | Prioridad | Módulo / Dominio | Hallazgo Técnico y Operativo | Archivos / Tablas Clave | Esfuerzo Estimado | Estado |
 | :---: | :---: | :--- | :--- | :--- | :---: | :---: |
-| **DT-03** | 🟠 **P1** (Rendimiento API) | **Endpoints de Facturación y Pedidos** (`/api/*`) | **Bucles Secuenciales `N+1` (`await supabase` dentro de `for`):**<br>En 4 endpoints críticos se actualizan ítems fila por fila dentro de un bucle `for` secuencial en lugar de ejecutar `Promise.all` por lotes o `upsert` masivo, aumentando la latencia en pedidos de > 40 productos. | `api/commercial/billing/assign-off-agreement-prices/route.ts`, `api/commercial/billing/liquidate-open-order/route.ts`, `api/orders/email-drafts/approve/route.ts`, `api/b2b/quote/route.ts` | **~25 min** | ⏳ Pendiente |
+| **DT-03** | 🟠 **P1** (Rendimiento API) | **Endpoints de Facturación y Pedidos** (`/api/*`) | **Bucles Secuenciales `N+1` (`await supabase` dentro de `for`):**<br>En 4 endpoints críticos se actualizan ítems fila por fila dentro de un bucle `for` secuencial en lugar de ejecutar `Promise.all` por lotes o `upsert` masivo, aumentando la latencia en pedidos de > 40 productos. | `api/commercial/billing/assign-off-agreement-prices/rroute.ts`, `api/commercial/billing/liquidate-open-order/rroute.ts`, `api/orders/email-drafts/approve/rroute.ts`, `api/b2b/quote/rroute.ts` | **~25 min** | ⏳ Pendiente |
 | **DT-05** *(Ex DT-20)* | 🟠 **P1** (Control Muelle-Pagos) | **Supervisor Recepción vs. Tesorería** (`/ops/recepcion/supervisor`) | **Conciliación de Diferencias de Báscula en Muelle vs. Pago a Proveedores:**<br>Cuando el supervisor aprueba un excedente de peso o rechaza parte de un lote en muelle, el inventario físico se ajusta vía RPC, pero Tesorería/Compras carece de una bandeja/alerta que resalte las compras donde `picked_up_quantity !== quantity` antes de desembolsar al proveedor. | `src/app/ops/recepcion/supervisor/page.tsx`, `src/app/admin/procurement/treasury/page.tsx` | **~30 min** | ⏳ Pendiente |
 | **DT-06** *(Ex COM-36)* | 🟡 **P2** (Comercial) | **Campañas Comerciales** (`/admin/commercial/campaigns`) | **Fase de Pulido Táctico de Campañas (4 Brechas §7.10.D):**<br>1. Modal de edición in-situ y extensión de fechas (`handleEditCampaign`).<br>2. Botón de pausa/reanudación en 1 clic (`status: 'paused'`).<br>3. Telemetría de ROI cruzando pedidos reales contra `campaign_items` (kg vendidos y margen cedido).<br>4. Duplicación rápida (`duplicateCampaign`). | `src/app/admin/commercial/campaigns/page.tsx` | **~35 min** | ⏳ Pendiente |
 | **DT-07** *(Ex DEBT-003)* | 🟡 **P2** (Mantenibilidad) | **6 Archivos Monstruo (> 8.000 LOC)** | **Desmantelamiento Quirúrgico Modular (Fase 2 y 3):**<br>Extraer sub-modales y custom hooks de los 6 archivos mayores sin alterar lógica: `EmailDraftsModule.tsx` (13.877 LOC), `orders/create/page.tsx` (12.894 LOC), `CommercialAgreementsModule.tsx` (11.956 LOC), `ClientsModule.tsx` (11.427 LOC), `orders/loading/page.tsx` (8.912 LOC) y `commercial/billing/page.tsx` (8.599 LOC). | 6 componentes principales (ejecutable por archivo individual) | **~30 min / archivo** | ⏳ Pendiente |
@@ -11335,7 +11393,7 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 ---
 
 ### Escenario 260: Protocolo de Ingesta Omnicanal de Pedidos por Correo (Texto, Adjuntos, Capturas Spliced & Híbridos) con Poka-Yoke Anti-Duplicación de Firmas Institucionales (`/api/orders/email-ingest` — SDD v1.9.231)
-- **Given** el motor de ingesta de pedidos por correo electrónico inbound (`src/app/api/orders/email-ingest/route.ts`), la bandeja de revisión y auditoría comercial (`src/components/EmailDraftsModule.tsx`), y la diversidad omnicanal de pedidos de clientes B2B/B2C (pedidos escritos en el cuerpo de texto, adjuntos formales en PDF/Excel/ODS, fotografías de comandas físicas o capturas de pantalla de WhatsApp divididas en múltiples partes),
+- **Given** el motor de ingesta de pedidos por correo electrónico inbound (`src/app/api/orders/email-ingest/rroute.ts`), la bandeja de revisión y auditoría comercial (`src/components/EmailDraftsModule.tsx`), y la diversidad omnicanal de pedidos de clientes B2B/B2C (pedidos escritos en el cuerpo de texto, adjuntos formales en PDF/Excel/ODS, fotografías de comandas físicas o capturas de pantalla de WhatsApp divididas en múltiples partes),
 - **When** un cliente corporativo (ej. Beer Station Titán / IRCC S.A.S.) envía un pedido con productos especificados en el texto del mensaje y cuyo cliente de correo (Outlook/Gmail) adjunta automáticamente imágenes inline o firmas institucionales con logotipos corporativos (ej. banner de grupo empresarial o logo institucional con nombres genéricos tipo `image.png`),
 - **Then** el sistema preserva la flexibilidad omnicanal completa sin amputar ninguna modalidad de pedido y aplica un blindaje de 4 capas deterministas que erradica la duplicación de ítems:
   1. **Delimitación Estricta de Fuente en el Prompt Multimodal (Separación de Canales):**
@@ -12122,7 +12180,7 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
      - Esta restricción opera a nivel de motor de almacenamiento: si dos transacciones concurrentes intentasen insertar o promover dos acuerdos como activos para el mismo `client_id`, la base de datos rechaza de inmediato con violación de unicidad (`PostgreSQL 23505 duplicate key`), haciendo físicamente imposible el traslape en el almacenamiento.
      - Verificado mediante prueba de penetración concurrente en disco (Status: 100% Blindado).
   2. **Candado 2: Protocolo Sistemático de Auto-Supersede en Todos los Puntos de Activación:**
-     - En todos los puntos de entrada del sistema donde un acuerdo se crea o formaliza (`quotes/[id]/page.tsx`, `quotes/page.tsx`, `CommercialAgreementsModule.tsx` y `/api/commercial/activate-agreement/route.ts`), el sistema ejecuta de forma obligatoria y previa la degradación atómica:
+     - En todos los puntos de entrada del sistema donde un acuerdo se crea o formaliza (`quotes/[id]/page.tsx`, `quotes/page.tsx`, `CommercialAgreementsModule.tsx` y `/api/commercial/activate-agreement/rroute.ts`), el sistema ejecuta de forma obligatoria y previa la degradación atómica:
        `UPDATE quotes SET status = 'superseded', updated_at = NOW() WHERE client_id = target_client_id AND status = 'agreement' AND id != target_quote_id;`
      - Los acuerdos antiguos quedan preservados para auditoría histórica con estado `superseded`, liberando el cupo único del índice parcial sin colisión.
   3. **Candado 3: Cortocircuito Jerárquico Estricto en Motores de Resolució de Precios (Zero Fallthrough / Zero Split-Brain):**
@@ -12959,7 +13017,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 ### Escenario 337: Gobernanza Cronológica Canónica en Matriz Comercial de Costos, Eliminación de Inserciones Sintéticas en `purchases` y Sincronización Instantánea de Carga Masiva Excel (SDD v1.9.319)
 - **Given** el hallazgo operativo reportado en producción donde al cargar el archivo Excel `ACTUALIZACION COSTOS 2DA Q SEPTIEMBRE.xlsx` (319 filas / 314 productos únicos) en `/admin/commercial/cost-matrix`, el proceso presentaba un retraso de ~28 segundos y, pese a indicar carga exitosa y marcar los productos como `Vigente (0d)`, las columnas **`ÚLTIMA`** y **`COSTO BASE FRUFRESCO`** seguían mostrando costos antiguos en 276 productos (ej. *Pulpa de arazá* mostraba $14.100 en lugar de $15.000, *Pulpa de corozo* $12.500 en lugar de $13.000 y *Pulpa de curuba* $12.000 en lugar de $13.000),
-- **When** se realiza la auditoría forense de extremo a extremo sobre `/api/commercial/cost-matrix/bulk-import/route.ts`, `src/app/admin/commercial/cost-matrix/page.tsx` y los triggers de base de datos en Supabase:
+- **When** se realiza la auditoría forense de extremo a extremo sobre `/api/commercial/cost-matrix/bulk-import/rroute.ts`, `src/app/admin/commercial/cost-matrix/page.tsx` y los triggers de base de datos en Supabase:
   1. El endpoint `bulk-import` actualizaba correctamente `commercial_cost_matrix` pero acto seguido intentaba insertar 319 compras ficticias de `1 Kg` en la tabla contable `purchases` en 4 lotes (100 + 100 + 100 + 19).
   2. La tabla `purchases` poseía el trigger legado `trigger_purchases_pricing_sync` (`FOR EACH ROW EXECUTE FUNCTION trigger_recalculate_pricing()`), el cual recalculaba los 6 modelos comerciales sobre todo el catálogo por cada fila insertada (600 recálculos por lote), provocando que los primeros 3 lotes abortaran por `statement_timeout` (3 × 8s = 24s) y solo sobreviviera el lote final de 19 productos.
   3. En la interfaz de la Matriz de Costos (`page.tsx`), la columna `ÚLTIMA` ignoraba `commercial_cost_matrix` siempre que existiera cualquier compra histórica en `purchases`, y la columna `COSTO BASE FRUFRESCO` ignoraba los costos con origen `EXCEL-IMPORT` o `AI-DELTA-AUTO`, reconociendo únicamente `MANUAL_OVERRIDE`.
@@ -12977,13 +13035,13 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 
 ### Escenario 338: Cierre Quirúrgico de Deuda Técnica DT-01 (Unificación del Motor de Precios y Erradicación de Márgenes Negativos) y DT-04 (Persistencia Estructurada `[BLIND_COUNT_META]` en Conteo Físico Ciego $\to$ Columna T) (SDD v1.9.321)
 - **Given** dos pasivos técnicos detectados en la Cola Viva de Deuda Técnica (§43.2):
-  1. **`DT-01` (Motor de Precios & Triggers SQL):** La tabla `pricing_model_prices` solo materializaba 280 productos (de 475 activos con costo), el endpoint `/api/products/sync-prices/route.ts` aún escribía en el campo legado `products.base_price` e invocaba la función SQL legada `recalculate_model_prices` (que borraba los productos de `commercial_cost_matrix` e ignoraba `theoretical_shrinkage_pct`), y los productos sin regla explícita en `General institucional dinámico` (`base_margin_percent = 0`) heredaban `0%` en `General` y márgenes negativos (`-1%`, `-2%`, `-3%` — venta a pérdida) en `Pequeño`, `Mediano` y `Grande`.
+  1. **`DT-01` (Motor de Precios & Triggers SQL):** La tabla `pricing_model_prices` solo materializaba 280 productos (de 475 activos con costo), el endpoint `/api/products/sync-prices/rroute.ts` aún escribía en el campo legado `products.base_price` e invocaba la función SQL legada `recalculate_model_prices` (que borraba los productos de `commercial_cost_matrix` e ignoraba `theoretical_shrinkage_pct`), y los productos sin regla explícita en `General institucional dinámico` (`base_margin_percent = 0`) heredaban `0%` en `General` y márgenes negativos (`-1%`, `-2%`, `-3%` — venta a pérdida) en `Pequeño`, `Mediano` y `Grande`.
   2. **`DT-04` (Ex DT-19 — Conteo Físico Ciego en Bodega $\to$ Columna T):** En `/ops/inventory`, los conteos ciegos de fin de turno solo insertaban un registro en `inventory_movements` cuando `Math.abs(diff) > 0.0001` (perdiendo el bloqueo al recargar cuando el conteo coincidía con el stock teórico) e incrustaban la cantidad contada únicamente como texto libre (`Contado: X`), obligando a `InventoryDailyBalanceTab.tsx` (Columna T) a depender de una expresión regular frágil.
-- **When** se ejecutan las intervenciones quirúrgicas sobre `src/lib/pricingUtils.ts`, `src/app/api/products/sync-prices/route.ts`, `src/app/ops/inventory/page.tsx`, `src/components/InventoryDailyBalanceTab.tsx` y la base de datos viva en Supabase:
+- **When** se ejecutan las intervenciones quirúrgicas sobre `src/lib/pricingUtils.ts`, `src/app/api/products/sync-prices/rroute.ts`, `src/app/ops/inventory/page.tsx`, `src/components/InventoryDailyBalanceTab.tsx` y la base de datos viva en Supabase:
 - **Then** el sistema garantiza el cumplimiento estricto de las siguientes invariantes:
   1. **Unificación Canónica del Motor de Precios (`DT-01`):**
      - `src/lib/pricingUtils.ts` (`recalculateAndSyncProductPrices` y `batchRecalculateAndSyncPrices`) aplica precedencia cronológica entre `commercial_cost_matrix.updated_at` y `purchase_history_normalized.created_at`, factor de merma teórica `1 / (1 - theoretical_shrinkage_pct / 100)`, margen base piso de **`25%` (`DEFAULT_INSTITUTIONAL_MARGIN_PCT`)** para `General institucional dinámico` (`d90a91e5-827c-473d-9d4f-3e28c7c91e15`) cuando un SKU carece de regla explícita (`> 0`), y blindaje de **`0%` de utilidad** exclusivo para el `Modelo Corporativo` (`31c6d356-2d52-488f-81d6-abffaed295cf` — *Familia Cortés*).
-     - `/api/products/sync-prices/route.ts` delega el 100% de la sincronización a `batchRecalculateAndSyncPrices`, erradicando toda escritura sobre `products.base_price` (§7.2) y toda invocación al RPC legado `recalculate_model_prices`.
+     - `/api/products/sync-prices/rroute.ts` delega el 100% de la sincronización a `batchRecalculateAndSyncPrices`, erradicando toda escritura sobre `products.base_price` (§7.2) y toda invocación al RPC legado `recalculate_model_prices`.
      - La base de datos viva queda sincronizada con **475 productos activos** materializados en `pricing_model_prices` (**3.113 filas totales** en los 6 modelos) y **0 productos con `price <= cost`** en `General institucional dinámico`, `Pequeño`, `Mediano`, `Grande` y `Clientes Hogar`.
   2. **Persistencia Estructurada `[BLIND_COUNT_META]` y Gobernanza Bimodal (`DT-04`):**
      - `handleSaveSingleItem` y `handleSavePhysicalCountBatch` en `src/app/ops/inventory/page.tsx` registran siempre el movimiento `blind_count_shift_close` en `inventory_movements` (incluso cuando `diff === 0`) e inyectan el bloque JSON tipado `[BLIND_COUNT_META: {"counted_quantity":...,"previous_quantity":...,"diff_quantity":...,"cell_name":...,"operator":...}]`.
@@ -12998,7 +13056,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
   2. En `CommercialUnifiedDashboard.tsx`: Mapa de última compra (`latestPurchaseMap`) desierto para SKUs cuya última compra no estuviese entre las 1.000 más recientes.
   3. En `/api/b2b/quote`: Cotizaciones generadas con costos en 0 o desactualizados para productos con historial antiguo.
   4. En `/ops/compras` (`runConsolidation`): Riesgo crítico de amputación en compras consolidadas si los ítems activos de pedidos en alistamiento superaban 1.000 filas.
-- **When** se aplica el helper canónico de paginación transparente `fetchAllRows<T>` (`src/lib/supabase.ts`) y `fetchAllQueryRows<T>` (`src/app/api/b2b/quote/route.ts`):
+- **When** se aplica el helper canónico de paginación transparente `fetchAllRows<T>` (`src/lib/supabase.ts`) y `fetchAllQueryRows<T>` (`src/app/api/b2b/quote/rroute.ts`):
 - **Then** el sistema garantiza el cumplimiento estricto de las siguientes invariantes:
   1. **Transparencia y Cero Overhead para Datasets Pequeños:** Si el resultado posee menos de 1.000 filas, se ejecuta en una única petición HTTP (1 round-trip) sin penalización de latencia.
   2. **Resolución Exhaustiva sin Pérdida:** Datasets que superen 1.000 filas se iteran automáticamente en bloques continuos (`from = 0, 1000, 2000...`) hasta el tope de seguridad (25.000 filas), garantizando integridad referencial del 100% de los datos.
@@ -13278,7 +13336,7 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
 ---
 
 ### Escenario 351: Trazabilidad Histórica en Matriz de Costos (`commercial_cost_matrix_history`), Herencia Padre→Hijo en Importación Masiva Excel, Variación Inmediata en Sparkline y Conteo Explícito de SKUs Activos en Maestro de Productos (SDD v1.9.334)
-- **Given** la pantalla de **Matriz de Costos** (`/admin/commercial/cost-matrix`, `src/app/admin/commercial/cost-matrix/page.tsx`), el endpoint de importación masiva (`/api/commercial/cost-matrix/bulk-import/route.ts`), la política de vigencia (`src/lib/commercial/costFreshnessPolicy.ts`) y el **Maestro de Productos** (`/admin/master/products`, `src/app/admin/master/products/page.tsx`),
+- **Given** la pantalla de **Matriz de Costos** (`/admin/commercial/cost-matrix`, `src/app/admin/commercial/cost-matrix/page.tsx`), el endpoint de importación masiva (`/api/commercial/cost-matrix/bulk-import/rroute.ts`), la política de vigencia (`src/lib/commercial/costFreshnessPolicy.ts`) y el **Maestro de Productos** (`/admin/master/products`, `src/app/admin/master/products/page.tsx`),
 - **When** el operador importa o audita costos en la Matriz Comercial o consulta los indicadores superiores del Maestro de Productos:
 - **Then** el sistema garantiza:
   1. **Archivo Histórico de Cargas de Matriz Comercial (`app_settings.key = 'commercial_cost_matrix_history'`) sin Contaminar Órdenes de Compra:**
@@ -13500,10 +13558,14 @@ Al auditar forensemente el motor de permisos RBAC (`src/lib/authContext.tsx` y `
 
 #### 3. Evidencias y Pruebas Automatizadas
 * **Matriz de Pruebas Unitarias:** Ejecución de pruebas con perfiles reales de Supabase confirmando:
-  - `check('admin.commercial')` $ightarrow$ `true`.
-  - `check('admin.commercial.billing')` $ightarrow$ `true`.
-  - `check('admin.commercial.inventory')` $ightarrow$ `false`.
-  - `check('admin.commercial.inventory.counts')` $ightarrow$ `false`.
+  - `check('admin.commercial')` $
+ightarrow$ `true`.
+  - `check('admin.commercial.billing')` $
+ightarrow$ `true`.
+  - `check('admin.commercial.inventory')` $
+ightarrow$ `false`.
+  - `check('admin.commercial.inventory.counts')` $
+ightarrow$ `false`.
 * **TypeScript Compilation:** `tsc --noEmit` con código de salida `0` (cero errores en todo el proyecto).
 
 
@@ -14167,7 +14229,7 @@ Actualmente, la digitación manual de estos costos en la Matriz de Costos o en e
 #### 2. Reutilización de Infraestructura Existente de IA de Pedidos
 El módulo de pedidos ya cuenta con un motor maduro y probado en producción:
 - **Sanitización de Texto Inteligente y Normalización:** `sanitizeDocText` en `src/lib/orders/order-parser-engine.ts`, con corrección de caracteres homóglifos, tildes, colapso de kerning y jerga agrícola colombiana.
-- **Motor Multimodal Gemini Flash / Pro:** Endpoint `src/app/api/ai/extract-order/route.ts` que procesa indistintamente archivos (PDFs, planillas Excel, imágenes JPG/PNG) y texto libre / transcripciones de WhatsApp.
+- **Motor Multimodal Gemini Flash / Pro:** Endpoint `src/app/api/ai/extract-order/rroute.ts` que procesa indistintamente archivos (PDFs, planillas Excel, imágenes JPG/PNG) y texto libre / transcripciones de WhatsApp.
 - **Cascada Anti-Obsolescencia:** `CANONICAL_MODEL_CASCADE` que conmuta automáticamente entre modelos de Gemini sin interrupción de servicio.
 
 #### 3. Especificación Técnica de la Adaptación a Inventarios
@@ -14896,19 +14958,116 @@ flowchart TD
 
 ---
 
-### Escenario 394: Blindaje Anti-Falsos Positivos del Sentinel de Salud IA (`/api/ai/health`): Cascada Automática ante Micro-Cortes de Red, Deduplicación Concurrente y Caché de 60 Segundos (`src/app/api/ai/health/route.ts`) (SDD v1.9.372)
+### Escenario 394: Blindaje Anti-Falsos Positivos del Sentinel de Salud IA (`/api/ai/health`): Cascada Automática ante Micro-Cortes de Red, Deduplicación Concurrente y Caché de 60 Segundos (`src/app/api/ai/health/rroute.ts`) (SDD v1.9.372)
 
 #### 1. Contexto y Diagnóstico Forense del Gemba
 - **Given** que el módulo de Alistamiento y Carga de Pedidos (`/admin/orders/loading`) y el submódulo embebido de Bandeja de Correo (`EmailDraftsModule.tsx`) invocan concurrentemente `GET /api/ai/health` al montar la vista (hasta 4 peticiones simultáneas en React StrictMode):
   1. Tras periodos de reposo de red (idle socket reset), una petición aislada al modelo primario (`gemini-2.5-flash`) puede sufrir un micro-corte transitorio de socket (`fetch failed` en $< 60\text{ ms}$) mientras la petición hermana en el mismo segundo responde con éxito (`200 OK`).
   2. Anteriormente, `/api/ai/health` realizaba un único intento sin recorrer la cascada de modelos (`CANONICAL_MODEL_CASCADE`) ni deduplicar peticiones en vuelo, provocando que el banner ámbar `Aviso de Motor IA` parpadeara brevemente por un falso positivo de red antes de auto-limpiarse.
 
-#### 2. Especificación Técnica de Resiliencia (`src/app/api/ai/health/route.ts`)
+#### 2. Especificación Técnica de Resiliencia (`src/app/api/ai/health/rroute.ts`)
 - **When** cualquier cliente o módulo invoca `GET /api/ai/health`:
 - **Then** el endpoint garantiza disponibilidad continua y cero falsos positivos mediante tres mecanismos:
   1. **Reintento Automático en Cascada (`pingWithCascadeFallback`):** Si el ping inicial falla por un micro-corte de red (`fetch failed`), `503 Service Unavailable` o modelo deprecado (`404`), el Sentinel recorre automáticamente `CANONICAL_MODEL_CASCADE` (`gemini-2.5-flash` $\to$ `gemini-flash-latest` $\to$ `gemini-3.8-flash` $\to$ `gemini-3.7-flash` $\to$ `gemini-3.5-flash`). Únicamente aborta de inmediato ante errores no recuperables de credenciales o cuota (`429 QUOTA_EXCEEDED`, `API_KEY_INVALID`).
   2. **Deduplicación de Peticiones en Vuelo (`inFlightHealthCheck`):** Si llegan múltiples llamadas HTTP simultáneas al montar `/admin/orders/loading` y `EmailDraftsModule`, comparten la misma promesa en vuelo hacia Google Cloud en lugar de disparar múltiples pings redundantes.
   3. **Caché en Memoria de Estado Saludable (`HEALTH_CACHE_TTL_MS = 60_000`):** Cuando el motor IA responde `healthy`, el resultado se conserva en caché durante 60 segundos (`cached: true`) para respuestas instantáneas ($< 5\text{ ms}$), permitiendo forzar una verificación fresca mediante `?refresh=true` o `?strict=true`.
+
+---
+
+### Escenario 395: Arquitectura de Resiliencia Territorial de Dominio & Canales de Correo Corporativo (`frufresco.co`): Emancipación ante Bloqueo de Proveedor Hostil y Nómina Canónica de 15 Cuentas Operativas (SDD v1.9.373)
+
+#### 1. Contexto Operativo y Diagnóstico Forense del Gemba
+- **Given** la retención o disputa hostil del dominio histórico `frufresco.com` y sus cuentas de correo por parte del proveedor saliente:
+  1. La operación agro-logística de FruFresco y la ingesta multimodal de pedidos institucionales (IDP-AI) no pueden detenerse ni depender de litigios externos para su continuidad transaccional.
+  2. El dominio de nivel superior territorial colombiano **`frufresco.co`** se consagra como el activo canónico soberano para el despliegue inmediato de la infraestructura de comunicaciones de la compañía.
+  3. Se erradican formalmente las entradas obsoletas o erróneas (`Gerencia@` y la errata sintáctica `gestion.@`) y se incorporan los buzones de espejo y control, consolidando una nómina canónica de exactamente quince (15) buzones corporativos activos.
+
+#### 2. Matriz Canónica de Cuentas de Correo Soberanas (`@frufresco.co`) (15 Buzones Canónicos — 100% Provisionados & Activos)
+- **Gobernanza y Cuenta Maestra de Administración:**
+  - **Portal de Control Maestro (hPanel / DNS / Facturación):** `https://hpanel.hostinger.com`
+  - **Usuario Administrador Principal:** `frufrescodigital@gmail.com`
+  - **Buzón Corporativo de Administración Operativa:** `gestion.administrativa@frufresco.co`
+  - **Acceso Webmail General:** `https://mail.hostinger.com` | App Móvil Oficial: *Titan: Correo para empresas*
+- **When** se provisiona el servicio de correo corporativo bajo la infraestructura de Hostinger / Titan Email:
+- **Then** se configuran, gobiernan y monitorean exactamente quince (15) buzones corporativos bajo el dominio `frufresco.co`:
+  1. 🟡 **`pedidos@frufresco.co`** *(Misión Crítica / Entrada Oficial)*: Receptor primario donde los clientes envían sus órdenes de compra. Cuenta con regla de reenvío automático (*Forwarder*) activa y verificada con copia retenida en buzón original (`keep_copy: true`) hacia `copia.pedidos@frufresco.co` y `frufrescodigital@gmail.com`.
+  2. 🪞 **`copia.pedidos@frufresco.co`** *(Buzón Espejo / Pipeline IDP-AI)*: Réplica espejo inmutable del tráfico de pedidos para ingesta automática de Gemini, auditoría forense y aislamiento de lectura sin interferencia de operadores humanos.
+  3. `direccion.operaciones@frufresco.co`: Logística, flota, despacho y telemetría satelital (GPS Apps-360).
+  4. `facturacion.electronica@frufresco.co`: Recepción y emisión de comprobantes fiscales DIAN y notas contables.
+  5. `gestion.administrativa@frufresco.co`: Tesorería, compras administrativas y contratos de soporte.
+  6. `gestion.tesoreria@frufresco.co`: Pagos a proveedores, tesorería, flujo de caja y bancos.
+  7. `gestion.comercial@frufresco.co`: Acuerdos comerciales, atención a cuentas B2B, listas de precios y prospección.
+  8. `gestion.contable@frufresco.co`: Balances contables, conciliación de cartera e integración World Office.
+  9. `gestion.facturacion@frufresco.co`: Radicación de facturas físicas y gestión de cobros HORECA.
+  10. `gestion.humana@frufresco.co`: Nómina, talento humano y seguridad y salud en el trabajo (SST).
+  11. `gestion.inventario@frufresco.co`: Auditoría de mermas, balance diario (Kardex) y supervisión de acopio.
+  12. `gestion.juridica@frufresco.co`: Asuntos legales, contratos de suministro y protección de activos.
+  13. `gestion.clientes@frufresco.co`: Servicio al cliente corporativo (SAC), atención de cuentas y soporte B2B.
+  14. `contador@frufresco.co`: Dictamen fiscal, estados financieros y auditoría de revisoría fiscal.
+  15. `gestion.calidad@frufresco.co`: Control de calidad en acopio/despacho, actas de no conformidad (RNC) y trazabilidad de producto.
+
+#### 3. Regla de Enrutamiento Inmutable en Ingesta IDP-AI (`src/app/api/orders/email-ingest/route.ts`)
+- **Given** la arquitectura de desacoplamiento por buzón espejo:
+- **When** se invoca el pipeline de ingesta automática de órdenes:
+- **Then** tanto los correos dirigidos a `pedidos@frufresco.co` como a `copia.pedidos@frufresco.co` y sus cuentas puente (`frufrescodigital@gmail.com`, `pedidos@frufresco.com`, `e.copia@frufresco.com`) son reconocidos como buzones oficiales de órdenes (`isOrdersRecipient`) e incluidos en `corporateEmails` para resolución de remitente original en reenvíos (`forwardedOriginalEmail`), disparando la extracción con Gemini 3.8 Flash y preservando la trazabilidad en `public.order_drafts`.
+
+#### 4. Cláusula Canónica de Coexistencia Dual & Propiedad de Ambos Dominios (`frufresco.co` + `frufresco.com`)
+- **Given** la recuperación jurídica o técnica del dominio histórico `frufresco.com`, consolidando la titularidad de ambos activos:
+- **When** cualquier usuario, cliente o robot interactúe con el ecosistema web o de mensajería:
+- **Then** el sistema garantiza convergencia absoluta hacia la misma infraestructura unificada:
+  1. **Capa Web (Vercel / Cloudflare DNS):** Tanto `frufresco.co` como `frufresco.com` (así como sus variantes `www`) resuelven de forma indistinta y transparente al mismo despliegue central, asegurando redirección canónica y certificados SSL automáticos.
+  2. **Capa de Correo (Hostinger / Titan):** `frufresco.com` se incorpora como **Domain Alias / Dominio Espejo**, permitiendo que cualquier mensaje enviado a `[cuenta]@frufresco.com` sea recibido de forma nativa e instantánea en el buzón respectivo `[cuenta]@frufresco.co` sin requerir buzones duplicados ni costos adicionales.
+
+---
+
+### Escenario 396: Instrumento 4 — Conciliador Transaccional Dual-Agent (Gemini Maker + DeepSeek Checker) para Transición Multi-Canal Cero-Duplicados y Cero-Pérdida (`src/app/api/orders/email-ingest/route.ts`) (SDD v1.9.374)
+
+#### 1. Contexto Operativo y Problema del Gemba en Transición
+- **Given** la coexistencia temporal de tres canales de entrada de órdenes de compra durante la transición de dominio:
+  - **Canal 1:** `pedidos@frufresco.com` (Servidor heredado bajo ordeño / reenvío).
+  - **Canal 2:** `frufrescodigital@gmail.com` (Puente central de ingesta).
+  - **Canal 3:** `pedidos@frufresco.co` y `copia.pedidos@frufresco.co` (Nuevo dominio soberano en Hostinger).
+- **And** el riesgo real de que un mismo cliente institucional envíe simultáneamente o con minutos de diferencia el mismo pedido a ambos dominios (`.com` y `.co`), o envíe una corrección parcial con asunto distinto:
+  1. Una deduplicación puramente sintáctica (por `Message-ID` o hash de archivo) falla cuando el correo es reenviado manualmente o cambia su asunto.
+  2. El negocio exige garantía estricta de **Cero Pedidos Duplicados en Bodega** y **Cero Pedidos Perdidos**.
+
+#### 2. Especificación Técnica del Instrumento 4 (Tándem Maker-Checker)
+- **When** ingresa un correo por cualquiera de los canales (`1`, `2` o `3`) hacia `POST /api/orders/email-ingest`:
+- **Then** el sistema procesa la orden bajo el flujo de dos agentes asimétricos:
+  0. **Afinación de Compuertas Sintácticas Pre-Gemini (Anti-Cortocircuito de Deltas):**
+     - Las compuertas rápidas de 15 y 5 minutos previas a Gemini solo descartan en seco un correo si coincide el `Message-ID`, o si (teniendo o no la misma OC en el asunto) los archivos adjuntos tienen exactamente el mismo nombre **y** tamaño en bytes (`size`) **y** el cuerpo de texto plano limpio (`plainText.slice(0, 300)`) es idéntico. Si el cuerpo del correo cambió o el tamaño del adjunto difiere (ej. respuesta o modificación sobre la misma OC), pasa a Gemini y al Instrumento 4.
+  1. **Agente 1 — Extractor Multimodal (Maker: Gemini 3.8 Flash) & Normalización Local:**
+     - Ejecuta la extracción multimodal, resuelve el perfil del cliente (`profile_id`, `client_detected_name`, `source_email`), empareja productos (`processItemsArray` $\to$ `matched_product_id`, `originalName`, `quantity`, `unit`), ejecuta `deduplicateMirrorItems` y construye el arreglo `draftsToInsert` para `public.order_drafts`.
+  2. **Punto de Inyección y Compuerta Fast-Path (Cero Latencia Innecesaria):**
+     - Justo antes de ejecutar `.upsert(draftsToInsert)` en `public.order_drafts` (y únicamente si `process.env.ENABLE_DUAL_AGENT_RECONCILER !== 'false'` y el borrador tiene ítems válidos `status === 'pending'`), el sistema consulta en `public.order_drafts` los registros creados en las últimas 24 horas (`created_at >= now() - 24h`, `id != mailId`, `status != 'rejected'`) que coincidan con el mismo cliente (`profile_id = draft.profile_id` cuando no es nulo, o `source_email = draft.source_email`, o `client_detected_name` igual ignorando mayúsculas/acentos).
+     - Si **NO existen borradores previos en las últimas 24 horas** para ese cliente, la orden toma la vía rápida (*Fast-Path*) y ejecuta `.upsert(draftsToInsert)` directamente sin invocar a DeepSeek.
+  3. **Agente 2 — Juez de Conciliación Lógica (Checker: DeepSeek API `deepseek-chat`):**
+     - Si **SÍ existen borradores previos del mismo cliente en la ventana de 24h**, por cada borrador en `draftsToInsert` se invoca `POST https://api.deepseek.com/v1/chat/completions` (`model: 'deepseek-chat'`, `temperature: 0`, `response_format: { type: 'json_object' }`, `AbortSignal.timeout(4000)`) enviando un JSON ligero con:
+       - `incoming_draft`: `{ client_detected_name, source_email, purchase_order, delivery_date, address, email_subject, items: [{ matched_product_id, name: originalName, quantity, unit }] }`.
+       - `existing_drafts`: Arreglo de candidatos del día con `{ draft_id: id, status, client_detected_name, purchase_order, delivery_date, address, email_subject, items: [...] }`.
+     - **Regla de Multi-Sucursal / Multi-OC:** El prompt de sistema de DeepSeek instruye explícitamente que si la dirección de entrega (`address`), sede (`client_detected_name`) o número de Orden de Compra (`purchase_order`) corresponden a otra sucursal o pedido distinto (ej. Colsubsidio / Aldimark / Monserrate), el veredicto DEBE ser `INSERT_NEW`.
+     - **Contrato JSON de Salida de DeepSeek:**
+       ```json
+       {
+         "verdict": "IGNORE_DUPLICATE" | "UPDATE_DELTA" | "INSERT_NEW",
+         "target_draft_id": "uuid-del-borrador-existente-o-null",
+         "reason": "Explicación concisa de la decisión"
+       }
+       ```
+     - **Acción Transaccional Determinista según Veredicto:**
+       - **`IGNORE_DUPLICATE`:**
+         1. No se inserta este borrador. Si `draft.id === mailId` (el placeholder `[RAW_WEBHOOK]` pre-insertado al inicio del request) y ningún otro adjunto del correo lo reutiliza, se elimina físicamente el placeholder (`await supabaseAdmin.from('order_drafts').delete().eq('id', mailId)`) para evitar registros huérfanos.
+         2. En el borrador original superviviente (`target_draft_id`), se anexa en su objeto metadata (`extracted_items[0].reconcilerLog`) el registro de absorción `{ timestamp, action: 'IGNORE_DUPLICATE', absorbed_from: recipientEmail, reason }`.
+         3. El endpoint concluye limpiamente y responde `200 OK`.
+       - **`UPDATE_DELTA`:**
+         1. Si el borrador objetivo (`target_draft_id`) existe y su estado es `status === 'pending'`, se actualiza dicho borrador (`target_draft_id`) en `public.order_drafts`: se antepone `[DELTA DETECTADO POR CENTINELA]` a su `email_subject` (si no lo tenía), se reemplazan sus ítems por la nueva versión o se actualiza `extracted_items` conservando en `extracted_items[0].reconcilerLog` los ítems previos (`previous_items`) y la `reason` de DeepSeek; y se elimina el placeholder temporal `mailId` (si `mailId !== target_draft_id`).
+         2. Si el borrador objetivo ya fue aprobado (`status === 'approved'`) o no es editable, el nuevo borrador se inserta como registro nuevo con `email_subject` prefijado con `[DELTA DETECTADO POR CENTINELA]` y `extracted_items[0].reconcilerDelta = { target_draft_id, reason }` para que el operador gestione la adición.
+       - **`INSERT_NEW`:**
+         1. Se conserva en `draftsToInsert` y se persiste normalmente en `public.order_drafts`, registrando `extracted_items[0].reconcilerVerdict = 'INSERT_NEW'`.
+  4. **Fallback de Alta Disponibilidad (Fail-Open Seguro):**
+     - Si `DEEPSEEK_API_KEY` no está configurada, o la API de DeepSeek excede `4.000 ms`, retorna HTTP $\ge 400$ o un JSON inválido, el sistema captura la excepción sin abortar, antepone la etiqueta `[REVISIÓN CENTINELA PENDIENTE]` en `email_subject` (y `extracted_items[0].reconcilerFallback = true`) e inserta el borrador en `public.order_drafts` garantizando **Cero Pedidos Perdidos**.
+  5. **Cláusula de Desconexión Limpia (Sunset Clause):**
+     - El Instrumento 4 está gobernado por `process.env.ENABLE_DUAL_AGENT_RECONCILER` (activo por defecto si `DEEPSEEK_API_KEY` existe; se apaga explícitamente con `ENABLE_DUAL_AGENT_RECONCILER=false`) sin alterar el flujo base de `pedidos@frufresco.co`.
 
 ---
 
@@ -15362,3 +15521,232 @@ Al momento de formalizar el cierre documental con el cliente, se generará un do
    - ❌ Cero prompts de ingeniería de IA, cascadas de modelos Gemini o arquitectura de memoria de aprendizaje (`document_learning_memory`).
    - ❌ Cero fórmulas algorítmicas internas, estructuras de payloads JSON, ni detalles de implementación que permitan hacer ingeniería inversa del motor `onFRU`.
    - ❌ Cero bitácoras internas de deuda técnica o diagnósticos forenses de código.
+
+---
+
+#### 47.5.1 Checklist Oficial: Actividades por Ejecutar para la Entrega y Cierre Formal (Fases I y II)
+
+| Fase / Bloque | ID Actividad | Actividad Operativa / Entregable | Criterio de Aceptación (DoD) | Responsable | Estado |
+| :--- | :---: | :--- | :--- | :---: | :---: |
+| **Bloque A: Entregables Documentales y Cierre Formal Fase I** | **ACT-01** | **Generación del Dossier Ejecutivo (`DT-20`)**<br>`docs/ONFRU_DOSSIER_EJECUTIVO_CLIENTE.md` | Redactar dossier funcional de 10 dominios y catálogo de 76 pantallas de `onFRU`, suprimiendo 100% código, SQL y prompts de IA. | Delta CoreTech | [ ] Pendiente |
+| | **ACT-02** | **Guía Gerencial de la Sábana de Inventario (Columnas A–X)** | Documento operativo para gerencia explicando el ciclo diario de inventario y cuadre físico de las 7:00 PM. | Delta CoreTech | [ ] Pendiente |
+| | **ACT-03** | **Acta de Certificación y Cierre Funcional Fase I** | Firma formal de conformidad sobre los módulos de Pedidos, Facturación, Cartera, Muelle y Despachos de `onFRU v1.x`. | Gerencia FruFresco / Delta CoreTech | [ ] Pendiente |
+| | **ACT-04** | **Presentación Dossier de Expansión Fase II (`onFRU v2.0`)** | Socialización comercial de Capítulos 45 (WFM/Radar RTLS), 46 (MES IV Gama) y 47 (Friogan Carnes) bajo Utilidad Delta ($\Delta$). | Dirección Comercial | [ ] Pendiente |
+| **Bloque B: Soberanía Digital y Transición de Correo (Cap. 48)** | **ACT-05** | **Emisión de Requerimiento Prejudicial al Proveedor Hostil** | Notificación formal de 48 horas exigiendo entrega de código EPP y liberación de DNS bajo ley colombiana (Ley 256/1996 y 1273/2009). | Jurídico / Gerencia | [ ] Pendiente |
+| | **ACT-06** | **Operación en Silencio de Radio y Ordeño Diario Incremental** | Mantener puente activo en Gmail y ejecutar ordeño diario silencioso vía IMAP (`npm run backup:imap`) para resguardar correos nuevos en bóveda local sin alertar al proveedor. | Operaciones IT | [x] En Curso |
+| | **ACT-07** | **Bifurcación y Activación de Dominio Definitivo** | Toma de control de DNS de `frufresco.com` (si cede) o compra inmediata de `frufresco.co` ($12 USD) en registrador soberano. | Operaciones IT | [ ] Pendiente |
+| | **ACT-08** | **Aprovisionamiento de Google Workspace Empresarial** | Creación de cuenta Workspace corporativa, configuración de MX, SPF, DKIM y DMARC y creación de alias de buzones operativos. | Operaciones IT | [ ] Pendiente |
+| | **ACT-09** | **Migración Cero-Pérdida de Historial de Correos** | Ejecución del Servicio de Migración de Datos (DMS) de Google Workspace para importar historial desde las cuentas Gmail temporales y los 18 buzones Maildir respaldados. | Operaciones IT | [ ] Pendiente |
+| **Bloque C: Switch-Off ERP Legado y Salida a Producción (§44.3)** | **ACT-10** | **3 Jornadas Consecutivas en Modo Transición** | Auditoría diaria de balance de masa en `/admin/commercial/inventory` con delta de discrepancia < 1.0%. | Supervisor de Planta | [ ] Pendiente |
+| | **ACT-11** | **Activación del Candado de Cierre Físico 7:00 PM** | Encendido del modo estricto en la Sábana de Inventario y prohibición de modificaciones retroactivas sin clave de supervisor. | IT / Operaciones | [ ] Pendiente |
+| | **ACT-12** | **Switch-Off Definitivo del ERP Legado** | Apagado definitivo del registro en hojas paralelas o ERP anterior; consagración de `onFRU` como única fuente de la verdad. | Gerencia / Operaciones | [ ] Pendiente |
+| | **ACT-13** | **Capacitación Operativa en Gemba y Entrega de Perfiles** | Certificación de operarios en muelle de recepción, picking, pesaje y mesa de ayuda. | Delta CoreTech | [ ] Pendiente |
+
+---
+
+### Capítulo 48: Protocolo de Soberanía Digital, Resguardo Forense y Transición Desacoplada de Correo e Infraestructura (Crisis Mitigation & Hostile Provider Decoupling — SDD v1.9.234)
+
+#### 48.1 Diagnóstico de Crisis y Aislamiento de Activos Digitales
+- **Contexto Operativo:** El proveedor anterior (inqnova.com) retiene la titularidad del dominio raíz frufresco.com (alojado en Hostinger con bloqueo client transfer prohibited y DNS en Cloudflare).
+- **Vulnerabilidad Evitada:** Depender de la buena voluntad del proveedor para la operación diaria exponía a la empresa al secuestro de su canal de recepción de pedidos B2B y pérdida de histórico comercial.
+- **Acciones Forenses Ejecutadas (Resguardo Cero-Pérdida):**
+  1. **Bóveda Local Air-Gapped:** Descarga e inspección íntegra en disco local (C:\Projects\frufresco_backups\) del respaldo comprimido rufresco.2026-11-07_18-09-05.tar (2.08 GB).
+  2. **Recuperación de Histórico Completo:** 18 buzones de correo en formato canónico Maildir con **2.600 correos electrónicos**, cabeceras, adjuntos y carpetas de enviados.
+  3. **Extracción de Bases de Datos:** Volcados completos de MySQL (rufresco_general y rufresco_frufresco_shop).
+  4. **Recuperación de Credenciales Maestras:** Detección de claves de servicio para acceso directo vía IMAP/SMTP (pedidos@frufresco.com) sin tocar el panel administrativo del proveedor.
+
+---
+
+#### 48.2 Arquitectura de Transición: Doble Espejo Desacoplado (Anti-Contaminación de IA)
+
+Para garantizar la continuidad operativa inmediata sin incurrir en costos prematuros de licenciamiento ni contaminar el motor de ingesta de pedidos:
+
+`mermaid
+flowchart TD
+    subgraph Servidor Heredado Hostil
+        P_OLD[pedidos@frufresco.com]
+        OP_OLD[direccion.operaciones@\ngestion.comercial@\nffacturacion.electronica@]
+    end
+
+    subgraph Canales Espejo de Transición
+        G_ORDERS[frufrescodigital@gmail.com\nBuzón Exclusivo de Pedidos]
+        G_OPS[adminfrufrescodigital@gmail.com\nBuzón Espejo Administrativo y Operativo]
+    end
+
+    subgraph Cerebro FruFresco onFRU
+        GAS[Google Apps Script\nBridge cada 3 min]
+        V_INGEST[Vercel API\n/api/orders/email-ingest]
+        GEMINI[Gemini Multimodal AI\nExtracción de Productos]
+        DRAFTS[EmailDraftsModule\nTorre de Control de Pedidos]
+    end
+
+    P_OLD -->|IMAP / Extracción Silenciosa| G_ORDERS
+    OP_OLD -->|Copia Espejo Operativa| G_OPS
+
+    G_ORDERS --> GAS
+    GAS -->|POST Payload JSON| V_INGEST
+    V_INGEST --> GEMINI
+    GEMINI --> DRAFTS
+`
+
+#### 48.2.1 Especificaciones de Transporte, Cuotas y Seguridad del Bridge
+1. **Mecanismo de Extracción desde Servidor Heredado:**
+   - La extracción silenciosa de pedidos@frufresco.com hacia frufrescodigital@gmail.com opera mediante sondeo POP3 SSL (puerto 995 sobre 82.180.136.155) configurado en Gmail con resguardo de copia en el servidor, o alternativamente mediante cliente IMAP SSL local.
+   - **Regla del Buzón de Sombra (e.copia@frufresco.com):** El sistema reconoce a e.copia@frufresco.com como alias de auditoría forense heredado. Cualquier correo entrante con destino o copia a este buzón es reconocido con idéntica prioridad de preservación en route.ts.
+2. **Gobernanza de Cuotas en Google Apps Script:**
+   - El disparador de scripts/google_apps_script_bridge.js se espacia a **cada 3 minutos** (.everyMinutes(3)) garantizando un consumo menor a 40 minutos de CPU diarios (respetando la cuota máxima de 90 min/día de Google).
+3. **Seguridad y Límite de Payloads de Vercel (4.5 MB):**
+   - El webhook soporta token de autenticación compartido ?secret=.
+   - Los adjuntos superiores a 3.5 MB se procesan evitando desbordar el límite infranqueable de 4.5 MB de request body de Vercel.
+
+1. **Canal Exclusivo de Pedidos (frufrescodigital@gmail.com):**
+   - Dedicado **100% de forma exclusiva** a la recepción de órdenes de compra.
+   - Mantiene activo el daemon [scripts/google_apps_script_bridge.js](file:///c:/Projects/frufresco/scripts/google_apps_script_bridge.js), etiquetando las conversaciones tramitadas con PROCESADO_FRUFRESCO.
+   - **Poka-Yoke Anti-Contaminación:** Se prohíbe el desvío de facturas de proveedores, correos de cartera o notificaciones de la DIAN a este buzón para evitar que el pipeline de IA genere falsos borradores de pedidos.
+2. **Canal Espejo Administrativo y Comercial (adminfrufrescodigital@gmail.com):**
+   - Centraliza el flujo de las demás cuentas estratégicas (direccion.operaciones@, gestion.comercial@, facturacion.electronica@, info@, gestion.cartera@).
+   - route.ts reconoce explícitamente adminfrufrescodigital@gmail.com dentro de la clasificación de isCommercialRecipient para archivo de correspondencia administrativa y cotizaciones.
+
+#### 48.2.1 Daemon de Ordeño Forense Incremental (Cold Backup IMAP — `scripts/daily_imap_backup.js`)
+Para blindar a la empresa contra cualquier desconexión abrupta antes de la transición definitiva, se consagró un mecanismo de **ordeño silencioso diario**:
+- **Acceso Directo Sin Rastro:** Conexión TLS al puerto 993 de la IP del servidor (`82.180.136.155`), eludiendo por completo el panel web (HestiaCP / Hostinger).
+- **Modo Solo Lectura (Zero-Fingerprint):** Utiliza comandos IMAP no invasivos (`UID SEARCH` y `FETCH BODY.PEEK`), garantizando que los correos en el servidor permanezcan sin alterar y con sus marcas de lectura (`\Seen`) intactas.
+- **Rastreo Incremental por UID:** El script registra el estado en `C:\Projects\frufresco_backups\incremental_pedidos\sync_state.json`, tomando como línea base el UID 37043 (último correo del backup inicial) y descargando únicamente los mensajes nuevos.
+- **Almacenamiento Local Air-Gapped:** Cada mensaje descargado se almacena como archivo canónico `.eml` en la bóveda local (`C:\Projects\frufresco_backups\incremental_pedidos\`), listo para consolidarse en Google Workspace el día de la conmutación de dominio.
+- **Ejecución Operativa:** Se ejecuta con el comando `npm run backup:imap` o mediante tarea programada del sistema.
+
+---
+
+#### 48.3 Protocolo de Migración Futura a Google Workspace y Coherencia de Marca
+
+1. **Fase de Negociación y Requerimiento Legal:**
+   - Emisión de requerimiento formal con plazo perentorio de 48 horas bajo la legislación colombiana (Ley 256/1996 de Competencia Desleal, Ley 1273/2009 de Delitos Informáticos y jurisdicción de la Superintendencia de Industria y Comercio - SIC).
+2. **Bifurcación de Migración Definitiva:**
+   - **Caso A (Recuperación Exitosa de frufresco.com):**
+     * Toma de control de DNS en Cloudflare / Hostinger.
+     * Delegación de registros MX hacia Google Workspace.
+     * Enlace del dominio custom en Vercel (frufresco.com y www.frufresco.com) cuando la dirección apruebe el encendido de la landing page.
+   - **Caso B (Retención Persistente / Transición a Dominio Alterno):**
+     * Adquisición de dominio alterno bajo control directo del cliente (frufresco.co / frufresco.com.co / onfru.com).
+     * Creación de instancia Google Workspace con licencia base única y configuración de alias corporativos.
+     * Migración transparente de correos desde los buzones espejo temporales (`frufrescodigital@gmail.com` y `adminfrufrescodigital@gmail.com`) mediante el servicio nativo de migración de datos de Google Workspace (*Data Migration Service* - DMS), el cual traslada automáticamente todos los hilos, etiquetas y adjuntos a las casillas empresariales definitivas sin duplicación ni pérdida.
+     * Ingesta complementaria del archivo histórico: Importación de los 18 buzones Maildir (2.600 correos) resguardados en la bóveda local (`C:\Projects\frufresco_backups\`) para consolidar la memoria histórica de 11 meses de la empresa.
+     * Mantenimiento en segundo plano del ordeño residual por IMAP sobre el servidor anterior hasta completar la transición de clientes antiguos.
+
+---
+
+### Escenario 410: Ingesta Invariante de Pedidos bajo Crisis de Dominio y Transición Limpia a Google Workspace (SDD v1.9.234)
+- **Given** la retención de DNS del dominio raíz por parte de un proveedor hostil y la existencia de una bóveda local con el respaldo forense completo de 18 buzones de correo (C:\Projects\frufresco_backups\),
+- **When** ingresan nuevos pedidos de clientes B2B dirigidos a pedidos@frufresco.com,
+- **And** en caso de que el proveedor suspenda repentinamente la conectividad con el servidor HestiaCP (82.180.136.155) provocando el rebote del MX principal,
+- **Then** se activa el **Protocolo de Conmutación de Emergencia de Pedidos**:
+  1. La dirección comercial emite notificación inmediata a la cartera de clientes indicando el desvío operativo hacia frufrescodigital@gmail.com (o el dominio alterno activo).
+  2. El enrutamiento dinámico en `src/app/api/orders/email-ingest/route.ts` acepta de forma nativa frufrescodigital@gmail.com y e.copia@frufresco.com como destinos legítimos de pedidos (isOrdersRecipient), manteniendo la extracción de IA intacta.
+  3. adminfrufrescodigital@gmail.com se enruta de forma automática a la bandeja comercial (isCommercialRecipient), impidiendo falsos pedidos de facturación.
+- **Then** el sistema asegura la continuidad operativa bajo tres (3) garantías de invarianza:
+  1. **Aislamiento de Ingesta:** Los pedidos fluyen hacia frufrescodigital@gmail.com y son procesados por el bridge hacia /api/orders/email-ingest sin interrupción, manteniendo su extracción multimodal íntegra.
+  2. **Inmunidad ante Sabotaje del Servidor:** En caso de que el proveedor suspenda el hosting anterior, la empresa cuenta con el histórico completo desempaquetado en Maildir listo para importación directa en Google Workspace o cliente local.
+  3. **Migración Cero-Pérdida:** La activación futura de Google Workspace (sea sobre frufresco.com o frufresco.co) permite absorber las bandejas temporales y alias sin generar duplicados y manteniendo la trazabilidad histórica de los clientes.
+
+---
+
+### Escenario 411: Estandarización de Ordenamiento Interactivo de Encabezados en Curva de Mermas Reales de Inventario (Swiss Precision & Estándar de Galerías FruFresco — SDD v1.9.235)
+- **Given** la tabla "Registro Histórico & Curva de Mermas Reales por Producto" en `/admin/commercial/inventory` (`src/components/InventoryUnifiedDashboard.tsx`),
+- **When** el usuario interactúa con los encabezados de columna para priorizar el análisis de mermas, compras o alistamiento en cualquiera de las 3 magnitudes temporales (`Esta Semana`, `Este Mes`, `Este Trimestre`),
+- **Then** el sistema asegura la adherencia estricta al **Estándar de Galerías FruFresco** (`estandar-galerias-frufresco`):
+  1. **Ordenadores Interactivos de Encabezado con Iconografía Vectorial (`lucide-react`):**
+     - Se equipan las columnas clave con ordenadores interactivos: `CÓD / PRODUCTO`, `COMPRADO (7D/MES/TRIM)`, `MERMA (P+Q+R)`, `ENTREGADO`, `% SEMANA`, `% MES` y `% TRIMESTRE`.
+     - Estado neutral / no activo: Proyecta `<ArrowUpDown size={11} color="#94A3B8" opacity={0.45} />`.
+     - Estado activo ascendente: Proyecta `<ArrowUp size={12} strokeWidth={2.5} />`.
+     - Estado activo descendente: Proyecta `<ArrowDown size={12} strokeWidth={2.5} />`.
+  2. **Ciclo Táctico de Clic en 3 Estados:**
+     - **1° Clic:** Activa el sentido natural de la métrica (alfabético `A -> Z` para texto en `CÓD / PRODUCTO`, o de mayor a menor `desc` para métricas numéricas y porcentajes de merma).
+     - **2° Clic:** Invierte el sentido del ordenamiento (`asc <-> desc`).
+     - **3° Clic:** Restablece al orden heurístico inteligente por defecto (productos con mayor impacto y porcentaje de merma primero).
+  3. **Blindaje de Renderizado en Motores Chromium (Blink):**
+     - Configuración de tabla con `borderCollapse: 'separate', borderSpacing: 0` para erradicar el bug de desincronización por capas GPU de Chromium.
+     - Anclaje `position: 'sticky', top: 0, zIndex: 20` con fondo 100% opaco y sólido (`#F8FAFC`, prohibido transparente) en cada celda `<th>`, garantizando que las filas del `tbody` se deslicen limpiamente por debajo sin sangrados ni flotaciones.
+  4. **Telemetría y Reset en Barra Pedagógica:**
+     - La barra superior dinámica detecta el orden activo (ej. `Orden activo: % Merma Esta Semana (Mayor a menor ▼)`) y proporciona un botón de 1 clic para `Restablecer orden` sin recargar la pantalla.
+
+---
+
+### Escenario 412: Prevalencia Absoluta de ID Contable (`#accounting_id`) en Gráficas, Galerías y Reportes frente a Convivencia Residual con SKU en Persistencia (Resolutivo Gemba & /learn — SDD v1.9.236)
+- **Given** la existencia histórica del campo `sku` en la base de datos de FruFresco como residuo del inicio del proyecto cuya eliminación física DDL es riesgosa por dependencias relacionales históricas,
+- **When** se diseña, renderiza o actualiza cualquier componente visual, gráfica (Pareto, barras, curvas de merma), tarjeta de producto, ranking, modal, galería o exportación en pantalla dentro de FruFresco,
+- **Then** el sistema asegura la supremacía visual y analítica absoluta del **ID Contable (`accounting_id`)**:
+  1. **Principio de Convivencia Residual Controlada (Persistencia vs Capa Visual):**
+     - El campo `sku` se tolera exclusivamente en la capa de persistencia y esquemas de base de datos (`inventory_movements`, `products`) para satisfacer restricciones foráneas y unicidad técnica heredada.
+     - Queda estrictamente vetado proyectar, mostrar o requerir el campo `sku` en cualquier interfaz de usuario o reporte de FruFresco.
+  2. **Identificación Canónica Universal (`#ID`):**
+     - Todo producto se identifica ante directivos, operadores y clientes mediante su ID Contable formateado como `#${product.accounting_id}` (ej. `#HO-0106`, `#104`, `#V-012`).
+     - En el Cockpit de Inventarios (`InventoryUnifiedDashboard.tsx`), el ranking de Pareto Top 5 de Fuga Financiera, las tarjetas métricas y los desgloses por célula exhiben exclusivamente el `#accounting_id`, sustituyendo cualquier vestigio de `sku`.
+  3. **Copys y Titulares Descontaminados:**
+     - Se erradica la palabra "SKU" de subtítulos y encabezados en la UI, adoptando la denominación universal en español "Producto" o "Productos" (ej. "Los 5 productos con mayor impacto...", "Total Productos").
+
+---
+
+### Escenario 413: Fusión Arquitectónica SpaceX de Consolidado y Kardex en la Pestaña Unificada «Kardex & Existencias» (SDD v1.9.237)
+- **Given** la duplicidad de layouts, filtros y métricas entre la pestaña estática de existencias (`Consolidado` / `activeTab === 'stock'`) y la pestaña de transacciones (`Movimientos / Kardex` / `activeTab === 'movements'`) en `/admin/commercial/inventory`,
+- **When** se aplica el principio **/spacex** (*"The best part is no part"*) para eliminar la grasa de navegación sin amputar músculo de negocio,
+- **Then** el sistema consolida la arquitectura en **5 Pestañas Maestras Limpias**:
+  1. `Dashboard Directivo` (Telemetría de Indicadores, Rotación DOH, IRA, Pareto y Exportaciones)
+  2. `Balance Diario (24 Col)` (El corazón operativo diario, masa, entradas, salidas, mermas y Sandbox)
+  3. `Kardex & Existencias` (Fusión Unificada de Stock, Trazabilidad y Retornos)
+  4. `Auditoría` (Conteos Cíclicos y Tareas Aleatorias de Piso)
+  5. `Gobernanza` (Células Lean, Colaboradores y Configuración de Parámetros)
+- **Then** dentro de la pestaña unificada `Kardex & Existencias`, la barra de herramientas docked sticky provee un **conmutador tripartito de alta densidad visual**:
+  - **[ ⏱️ Flujo & Kardex ]:** Presenta los KPIs de entradas/salidas/flujo neto y la tabla cronológica de transacciones por SKU y familia.
+  - **[ 📦 Existencias & Valor ]:** Presenta los KPIs de stock físico (Kg/Ton), valor en libros ($), alertas bajo mínimo y la tabla de inventario valorizado con desglose por bodegas/almacenes.
+  - **[ 🚚 Novedades / Retornos ]:** Presenta el registro de devoluciones de conductores con fotografía de evidencia y decisión de bodega.
+- **Then** la navegación conserva el 100% de la compatibilidad con enlaces profundos y selecciones desde el Dashboard Directivo (`onSelectProduct` $\rightarrow$ conmuta automáticamente a `Kardex & Existencias` con sub-vista `Existencias & Valor`).
+
+---
+
+### Escenario 414: Protocolo Canónico Poka-Yoke de Deduplicación Omnicanal e Interaccional en Ingesta de Pedidos (Canal B Universal & SDD v1.9.238)
+- **Given** cualquier mecanismo de entrada y carga de pedidos en FruFresco:
+  - **Mecanismo 1 (Email Inbound - `EmailDraftsModule.tsx`):** Ingesta automática IMAP, correos con adjuntos PDF/Excel o texto plano procesados por Gemini.
+  - **Mecanismo 2 (Mesa de Trabajo / Carga Manual - `orders/create/page.tsx`):** Drag & Drop de archivos PDF/Excel, pegado de pedidos de WhatsApp/Chat o montaje directo en mesa de auditoría (`stagedItems`).
+- **When** la inteligencia artificial o el operador incorporan datos a la mesa de trabajo y se detectan dos o más filas activas que resuelven al mismo producto (`product_id` / `accounting_id`), variante y unidad de medida:
+- **Then** el sistema activa el **Protocolo de Interacción de 3 Opciones (Canal B Poka-Yoke)**:
+  1. **Disparo Automático Post-Ingesta:**
+     - Al culminar la extracción por IA o al cargar el borrador en pantalla, el sistema audita de inmediato las líneas activas.
+     - Si existen productos duplicados emparejados (ej. dos líneas de *Cebolla cabezona blanca #106* con 20 Kg y 8 Kg), se suspende la confirmación pasiva y se proyecta de forma proactiva el modal interactivo de decisión.
+  2. **Las 3 Opciones Canónicas de Resolución:**
+     - 🟢 **Opción 1: «Sumar y unificar cantidades» (`handleMergeDuplicate`):**
+       - Acumula las cantidades con precisión matemática estricta a 3 decimales ($\text{Qty}_{\text{final}} = \text{round}_3(\text{Qty}_1 + \text{Qty}_2)$).
+       - Concatena y preserva las observaciones de ambas líneas (`obs_1 | obs_2`).
+       - Marca la línea como confirmada (`isConfirmed = true`) y purga o descarta limpiamente la fila duplicada.
+     - 🔵 **Opción 2: «Mantener filas separadas» (`handleKeepBoth`):**
+       - Conserva ambas líneas independientes en la mesa de trabajo para respetar solicitudes expresas del cliente (ej. centros de costo, empaques o destinos diferenciados).
+     - ⚪ **Opción 3: «Cancelar / Omitir»:**
+       - Cierra el modal sin alterar la mesa, permitiendo que el operador audite manualmente el documento.
+  3. **Botón Docked Permanente de Respaldo (`[⚠️ Consolidar Duplicados]`):**
+     - En ambas interfaces (`EmailDraftsModule` y `orders/create`), la barra superior de herramientas expone el botón visible `[⚠️ Consolidar Duplicados]` siempre que existan duplicados residuales en la mesa de trabajo (`hasDuplicates === true`).
+     - Al pulsarlo, ejecuta la consolidación idempotente en lote de todas las filas repetidas en 1 solo clic.
+  4. **Calidad de Interfaz & Tipado:**
+     - Iconografía 100% vectorial con `lucide-react` (prohibido el uso de emojis unicode en la UI).
+     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
+
+---
+
+### Escenario 415: Resiliencia Omnicanal de Importación Excel y Persistencia Inmediata en Listas Generales (Quincenal / Mensual) (SDD v1.9.239)
+- **Given** el módulo de Acuerdos Especiales y Listas Generales (`/admin/commercial/agreements` & `SpecialAgreementsModule.tsx`) en los modelos `general_quincenal` y `general_mensual`,
+- **When** el usuario presiona el botón `[Importar Excel]` y carga una planilla de precios (ej. generada desde el sistema, modificada por la gerencia comercial o con variaciones en Aguacate, Banano Bocadillo, etc.),
+- **Then** el motor de ingesta y reconciliación garantiza el cumplimiento estricto de las siguientes 4 reglas de negocio:
+  1. **Lector de Columnas Ultra-Flexible (Anti-Fragilidad de Cabeceras):**
+     - El lector analiza los encabezados de forma insensible a mayúsculas, minúsculas, espacios y acentos.
+     - **Nuevo Precio / Contrapropuesta:** Resuelve el valor a fijar reconociendo indistintamente: `'NUEVO PRECIO'`, `'Nuevo Precio'`, `'nuevo precio'`, `'CONTRAPROPUESTA FRUFRESCO'`, `'Contrapropuesta FruFresco'`, `'NUEVO PRECIO A FIJAR'`, `'PRECIO'`, `'Precio'`, `'NUE PRE'`, `'PRECIO VIGENTE'`, `'Precio Final'`.
+     - **Identificador de Producto:** Cruza de forma prioritaria por:
+       1. `accounting_id` (limpiando prefijos `#`, espacios y ceros no significativos, ej. `#106` $\rightarrow$ `106`).
+       2. `client_code` / `Material`.
+       3. `mapped_sku` / `product_id`.
+       4. Nombre normalizado sin tildes ni caracteres especiales (`normalizeSearchStr(raw_name)`).
+  2. **Preservación de Entidad e Integridad de BD (`is_frozen_override`):**
+     - El cruce actualiza los ítems existentes en memoria preservando sus llaves relacionales primarias (`product_id`, `quote_item_id`, costos de Corabastos, márgenes institucionales e IVA).
+     - Todo producto cuyo precio importado varíe o difiera del precio anterior se estampa con **`is_frozen_override = true`**, visualizándose con el badge esmeralda `[Congelado]` para protegerlo contra sobreescrituras automáticas de tarifas dinámicas.
+  3. **Persistencia Inmediata en Borrador (`saveGeneralListDraftToDb`):**
+     - Al completar la lectura de las filas válidas, el sistema ejecuta de inmediato `await saveGeneralListDraftToDb(selectedClient, updatedItems)` persistiendo el payload en `app_settings` (`${modelId}_negotiation_draft`).
+     - Esto garantiza inmunidad total ante recargas de página (`F5`), cierres de sesión o conmutaciones de pestañas.
+  4. **Feedback de Telemetría Preciso:**
+     - Despliega un mensaje de éxito indicando la cantidad exacta de productos cruzados y actualizados en el catálogo, con cero pérdida de datos.

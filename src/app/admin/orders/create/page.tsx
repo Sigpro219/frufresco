@@ -3637,6 +3637,34 @@ function CreateOrderContent() {
 
             setStagedItems(suggested);
             setIsStaging(true);
+
+            // Chequeo proactivo post-ingesta IA / carga de documento: Disparar modal ante duplicados emparejados (Escenario 414 SDD)
+            const seenMap = new Map<string, number>();
+            for (let i = 0; i < suggested.length; i++) {
+                const it = suggested[i];
+                if (!it || !it.suggestedProduct) continue;
+                const cleanLabel = (it.variant_label || '').trim().toLowerCase();
+                const cleanUnit = (it.originalUnit || it.suggestedProduct.unit_of_measure || 'Kg').trim().toLowerCase();
+                const schedule = (it.deliverySchedule || '').trim().toLowerCase();
+                const key = `${it.suggestedProduct.id}_${cleanLabel}_${cleanUnit}_${schedule}`;
+                if (seenMap.has(key)) {
+                    const firstIdx = seenMap.get(key)!;
+                    setDuplicateStagedMatchConfirm({
+                        isOpen: true,
+                        product: it.suggestedProduct,
+                        stagedItemId: it.id,
+                        rowIndex: i,
+                        duplicateIndex: firstIdx,
+                        pendingQty: it.quantity,
+                        pendingUnit: it.originalUnit || it.suggestedProduct.unit_of_measure,
+                        pendingFactor: it.conversion_factor || 1,
+                        pendingVariantLabel: it.variant_label
+                    });
+                    break;
+                }
+                seenMap.set(key, i);
+            }
+
             showToast(`${isTextInput ? 'Texto de WhatsApp' : 'Documento'} procesado en ${elapsedSec}s (${suggested.length} productos detectados)`, 'success');
         } catch (error: any) {
             const isAuthErr = error.message?.includes('Auth session missing') || 
