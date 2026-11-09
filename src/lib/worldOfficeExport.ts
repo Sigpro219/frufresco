@@ -200,11 +200,20 @@ export function calculateDueDate(baseDateInput: string | Date | null | undefined
 }
 
 export function normalizeWorldOfficeUom(rawUom: string | null | undefined): string {
-    const clean = String(rawUom || 'kg').trim();
+    const clean = String(rawUom || 'kg').trim().toLowerCase();
+    // 1. Libras (si el cliente factura en libras)
     if (/^(lb|lbs|libra|libras)$/i.test(clean)) return 'LB';
-    if (/^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(clean)) return 'kg';
-    if (/^(und|und\.|unidad|unidades|un|pz|pza)$/i.test(clean)) return 'Und.';
-    return clean || 'kg';
+    // 2. Unidades (und, unidad, paquete, atado, bulto, caja, bandeja, un, pz, etc.)
+    if (
+        /^(und|und\.|unidad|unidades|un|pz|pza|paquete|atado|bulto|caja|bandeja|canastilla|malla|sobre)/i.test(clean) ||
+        clean.includes('unidad') ||
+        clean.includes('und') ||
+        clean.includes('paquete')
+    ) {
+        return 'Und.';
+    }
+    // 3. Regla Estricta por defecto: Todo lo demás (peso, granel, kg, gramos) es 'kg'
+    return 'kg';
 }
 
 /**

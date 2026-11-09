@@ -10,7 +10,7 @@ import {
     Unlink, Plus, Trash2, Loader2, Maximize2, DollarSign, Percent,
     PackageMinus, AlertCircle, Edit2, RotateCcw, ExternalLink, Copy,
     Clock, ArrowRight, PackageX, ShoppingBag, Package, Save, HeartHandshake,
-    Info, Lock, Unlock, Printer, Eye
+    Info, Lock, Unlock, Printer, Eye, Divide
 } from 'lucide-react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import {
@@ -197,6 +197,8 @@ export default function PqrAuditModal({
     const [rcaSubtypeL2, setRcaSubtypeL2] = useState('aplastamiento_sobreestiba');
     const [rcaResponsible, setRcaResponsible] = useState<'proveedor' | 'bodega' | 'picking' | 'transporte' | 'comercial' | 'cliente'>('transporte');
     const [rcaEvidenceNotes, setRcaEvidenceNotes] = useState('');
+    const [rcaDiagnosisMode, setRcaDiagnosisMode] = useState<'global' | 'by_item'>('global');
+    const [itemRcaOverrides, setItemRcaOverrides] = useState<Record<string, { subtypeL2?: string; affectationDescription?: string }>>({});
 
     // Imputation Matrix State
     const [imputedTargetType, setImputedTargetType] = useState<'provider' | 'employee' | 'driver' | 'sales_rep' | 'client' | 'none'>('driver');
@@ -450,6 +452,20 @@ export default function PqrAuditModal({
         const rca = parseRcaFromRecord(pqr);
         setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
         setRcaSubtypeL2(rca.subtypeL2 || '');
+        const hasItemRcaNotes = Boolean(rca.itemImputations && rca.itemImputations.some((it: any) => it.notes || it.subtypeL2));
+        setRcaDiagnosisMode(hasItemRcaNotes ? 'by_item' : 'global');
+        const restoredOverrides: Record<string, { subtypeL2?: string; affectationDescription?: string }> = {};
+        if (Array.isArray(rca.itemImputations)) {
+            rca.itemImputations.forEach((it: any) => {
+                if (it.returnId) {
+                    restoredOverrides[it.returnId] = {
+                        subtypeL2: it.subtypeL2 || '',
+                        affectationDescription: it.notes || ''
+                    };
+                }
+            });
+        }
+        setItemRcaOverrides(restoredOverrides);
         const currentResp = (rca.responsible !== 'no_definido' ? rca.responsible : 'transporte') as any;
         setRcaResponsible(currentResp);
         setRcaEvidenceNotes(rca.notes || '');
@@ -496,6 +512,20 @@ export default function PqrAuditModal({
         const rca = parseRcaFromRecord(pqr);
         setRcaCategoryL1(rca.categoryL1 || 'dano_mecanico');
         setRcaSubtypeL2(rca.subtypeL2 || '');
+        const hasItemRcaNotes = Boolean(rca.itemImputations && rca.itemImputations.some((it: any) => it.notes || it.subtypeL2));
+        setRcaDiagnosisMode(hasItemRcaNotes ? 'by_item' : 'global');
+        const restoredOverrides: Record<string, { subtypeL2?: string; affectationDescription?: string }> = {};
+        if (Array.isArray(rca.itemImputations)) {
+            rca.itemImputations.forEach((it: any) => {
+                if (it.returnId) {
+                    restoredOverrides[it.returnId] = {
+                        subtypeL2: it.subtypeL2 || '',
+                        affectationDescription: it.notes || ''
+                    };
+                }
+            });
+        }
+        setItemRcaOverrides(restoredOverrides);
         const currentResp = (rca.responsible !== 'no_definido' ? rca.responsible : 'transporte') as any;
         setRcaResponsible(currentResp);
         setRcaEvidenceNotes(rca.notes || '');
@@ -629,6 +659,8 @@ export default function PqrAuditModal({
                     }
                     if (draft.rcaCategoryL1) setRcaCategoryL1(draft.rcaCategoryL1);
                     if (draft.rcaSubtypeL2 !== undefined) setRcaSubtypeL2(draft.rcaSubtypeL2);
+                    if (draft.rcaDiagnosisMode) setRcaDiagnosisMode(draft.rcaDiagnosisMode);
+                    if (draft.itemRcaOverrides && typeof draft.itemRcaOverrides === 'object') setItemRcaOverrides(draft.itemRcaOverrides);
                     if (draft.rcaResponsible) setRcaResponsible(draft.rcaResponsible);
                     if (draft.rcaEvidenceNotes !== undefined) setRcaEvidenceNotes(draft.rcaEvidenceNotes);
                     if (draft.imputedTargetType) setImputedTargetType(draft.imputedTargetType);
@@ -999,6 +1031,8 @@ export default function PqrAuditModal({
                     resolutionOption,
                     rcaCategoryL1,
                     rcaSubtypeL2,
+                    rcaDiagnosisMode,
+                    itemRcaOverrides,
                     rcaResponsible,
                     rcaEvidenceNotes,
                     imputedTargetType,
@@ -1035,6 +1069,8 @@ export default function PqrAuditModal({
         resolutionOption,
         rcaCategoryL1,
         rcaSubtypeL2,
+        rcaDiagnosisMode,
+        itemRcaOverrides,
         rcaResponsible,
         rcaEvidenceNotes,
         imputedTargetType,
@@ -1770,6 +1806,46 @@ export default function PqrAuditModal({
             recalculateFromMultiMatrix(nextMatrix);
             return nextMatrix;
         });
+    };
+
+    const handleUpdateItemAffectation = async (returnId: string, affectationText: string) => {
+        setItemRcaOverrides(prev => ({
+            ...prev,
+            [returnId]: {
+                ...prev[returnId],
+                affectationDescription: affectationText
+            }
+        }));
+
+        const existingReturn = caseReturns.find((r: any) => r.id === returnId);
+        if (existingReturn) {
+            try {
+                const baseReason = (existingReturn.reason || '').replace(/\s*\|\s*Afectación:[^|]*/gi, '').trim();
+                const updatedReason = affectationText.trim() ? `${baseReason} | Afectación: ${affectationText.trim()}` : baseReason;
+                const baseNotes = (existingReturn.notes || '').replace(/\s*\[AFECTACIÓN:[^\]]*\]/gi, '').trim();
+                const updatedNotes = affectationText.trim() ? `${baseNotes} [AFECTACIÓN: ${affectationText.trim()}]`.trim() : baseNotes;
+
+                await supabase
+                    .from('billing_returns')
+                    .update({
+                        reason: updatedReason,
+                        notes: updatedNotes
+                    })
+                    .eq('id', returnId);
+            } catch (err) {
+                console.error('Error persisting item affectation in billing_returns:', err);
+            }
+        }
+    };
+
+    const handleUpdateItemSubtype = (returnId: string, subtypeCode: string) => {
+        setItemRcaOverrides(prev => ({
+            ...prev,
+            [returnId]: {
+                ...prev[returnId],
+                subtypeL2: subtypeCode
+            }
+        }));
     };
 
     const handleItemAreaChange = (returnId: string, responsible: any) => {
@@ -2572,6 +2648,17 @@ export default function PqrAuditModal({
             const itemAmount = Math.round(unitPrice * (Number(ret.quantity_returned) || 0));
             const pName = ret.products?.name || oi?.products?.name || 'Producto';
 
+            const itemOverride = itemRcaOverrides[ret.id];
+            const parsedRetAffectation = (() => {
+                const matchNote = (ret.notes || '').match(/\[AFECTACIÓN:\s*([^\]]+)\]/i);
+                if (matchNote) return matchNote[1].trim();
+                const matchReason = (ret.reason || '').match(/\|\s*Afectación:\s*([^|]+)/i);
+                if (matchReason) return matchReason[1].trim();
+                return '';
+            })();
+            const effectiveItemNotes = itemOverride?.affectationDescription !== undefined ? itemOverride.affectationDescription : parsedRetAffectation;
+            const effectiveItemSubtype = itemOverride?.subtypeL2 || rcaSubtypeL2;
+
             const multiEntry = itemMultiImputations[ret.id];
             if (multiEntry && ((multiEntry.collaborators && multiEntry.collaborators.length > 0) || multiEntry.responsible === 'proveedor' || multiEntry.responsible === 'cliente')) {
                 const firstCol = multiEntry.collaborators?.[0];
@@ -2583,6 +2670,9 @@ export default function PqrAuditModal({
                     unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
                     unitPrice: unitPrice,
                     amount: itemAmount,
+                    categoryL1: rcaCategoryL1,
+                    subtypeL2: effectiveItemSubtype,
+                    notes: effectiveItemNotes,
                     responsible: multiEntry.responsible || rcaResponsible || 'picking',
                     collaborators: multiEntry.collaborators,
                     imputedEntity: firstCol ? {
@@ -2608,6 +2698,9 @@ export default function PqrAuditModal({
                 unitOfMeasure: ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg',
                 unitPrice: unitPrice,
                 amount: itemAmount,
+                categoryL1: rcaCategoryL1,
+                subtypeL2: effectiveItemSubtype,
+                notes: effectiveItemNotes,
                 responsible: imp?.responsible || rcaResponsible || 'picking',
                 imputedEntity: imp && imp.entityId ? {
                     id: imp.entityId,
@@ -3609,7 +3702,7 @@ export default function PqrAuditModal({
                                             }}
                                         >
                                             <ShoppingBag size={14} />
-                                            <span>Opción A: Sustituir SKU en Bodega</span>
+                                            <span>Opción A: Sustituir Producto en Bodega</span>
                                         </button>
 
                                         {/* Opción B: Retiro Limpio / Col K */}
@@ -3843,7 +3936,7 @@ export default function PqrAuditModal({
                                                                     const isZeroRep = Number(o.total || 0) === 0;
                                                                     return {
                                                                         value: o.id,
-                                                                        label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` ★ Coincide (${matchedList.join(', ')})` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
+                                                                        label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` [Coincide: ${matchedList.join(', ')}]` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
                                                                         sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || 'Sede')}`,
                                                                         badge: formatMoney(o.total || 0)
                                                                     };
@@ -3917,7 +4010,7 @@ export default function PqrAuditModal({
                                                             const isZeroRep = Number(o.total || 0) === 0;
                                                             return {
                                                                 value: o.id,
-                                                                label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` ★ Coincide (${matchedList.join(', ')})` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
+                                                                label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` [Coincide: ${matchedList.join(', ')}]` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
                                                                 sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || o.shipping_address || 'Sede')}`,
                                                                 badge: formatMoney(o.total || 0)
                                                             };
@@ -4429,9 +4522,29 @@ export default function PqrAuditModal({
                                                         </div>
                                                     </div>
 
-                                                    <div>
-                                                        <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Cantidad Afectada</label>
-                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(180px, 1fr)', gap: '8px', alignItems: 'flex-end' }}>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '3px' }}>
+                                                                Descripción / Hallazgo de Afectación al Producto
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Ej. Maduro con golpes de canastilla, hongo en corona, calibre pequeño..."
+                                                                value={noveltyReason}
+                                                                onChange={e => setNoveltyReason(e.target.value)}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter' && selectedItemId && noveltyQty > 0 && !actionLoading) {
+                                                                        e.preventDefault();
+                                                                        handleCreateNovelty();
+                                                                    }
+                                                                }}
+                                                                style={{ width: '100%', padding: '6px 8px', fontSize: '0.72rem', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: '#0F172A', outline: 'none' }}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label style={{ fontSize: '0.68rem', fontWeight: '700', color: '#64748B', display: 'block', marginBottom: '3px' }}>Cantidad Afectada</label>
+                                                            <div style={{ display: 'flex', gap: '6px' }}>
                                                             <input
                                                                 ref={noveltyQtyInputRef}
                                                                 type="text"
@@ -4474,6 +4587,7 @@ export default function PqrAuditModal({
                                                                 <span>Agregar</span>
                                                             </button>
                                                         </div>
+                                                    </div>
                                                     </div>
                                                 </div>
 
@@ -4638,6 +4752,58 @@ export default function PqrAuditModal({
                                                         </div>
                                                     </div>
 
+                                                    {/* Campo inline de Afectación Específica por Producto */}
+                                                    <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '6px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                                                            Afectación:
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Describe aquí la afectación física o hallazgo de este producto..."
+                                                            value={(() => {
+                                                                const ov = itemRcaOverrides[ret.id]?.affectationDescription;
+                                                                if (ov !== undefined) return ov;
+                                                                const matchNote = (ret.notes || '').match(/\[AFECTACIÓN:\s*([^\]]+)\]/i);
+                                                                if (matchNote) return matchNote[1].trim();
+                                                                const matchReason = (ret.reason || '').match(/\|\s*Afectación:\s*([^|]+)/i);
+                                                                if (matchReason) return matchReason[1].trim();
+                                                                return '';
+                                                            })()}
+                                                            onChange={e => handleUpdateItemAffectation(ret.id, e.target.value)}
+                                                            style={{
+                                                                flex: 1,
+                                                                padding: '4px 8px',
+                                                                fontSize: '0.70rem',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '5px',
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#0F172A',
+                                                                outline: 'none'
+                                                            }}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteNovelty(ret.id)}
+                                                            style={{
+                                                                padding: '4px 6px',
+                                                                backgroundColor: '#FEE2E2',
+                                                                color: '#DC2626',
+                                                                border: '1px solid #FECACA',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.64rem',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px'
+                                                            }}
+                                                            title="Eliminar esta novedad del pedido"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                            <span>Eliminar</span>
+                                                        </button>
+                                                    </div>
+
                                                     {/* Fila Área Causal + Acciones */}
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -4685,20 +4851,27 @@ export default function PqrAuditModal({
                                                                 }}
                                                                 title="Divide el costo del producto en partes iguales entre los funcionarios asignados"
                                                             >
-                                                                <span>➗ Repartir en partes iguales (${formatMoney(Math.round(itemAmount / assignedCols.length))} c/u)</span>
+                                                                <Divide size={12} color="#4F46E5" />
+                                                                <span>Repartir en partes iguales (${formatMoney(Math.round(itemAmount / assignedCols.length))} c/u)</span>
                                                             </button>
                                                         )}
                                                     </div>
 
                                                     {/* Imputación según Área */}
                                                     {itemResponsible === 'proveedor' ? (
-                                                        <div style={{ padding: '8px 12px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.72rem', color: '#B45309', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                            <span>🏢 Imputado a Proveedor (Campo / Origen) — Aplica Nota Débito automática</span>
+                                                        <div style={{ padding: '8px 12px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.72rem', color: '#B45309', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <Building2 size={13} color="#B45309" />
+                                                                <span>Imputado a Proveedor (Campo / Origen) — Aplica Nota Débito automática</span>
+                                                            </div>
                                                             <strong>{formatMoney(itemAmount)}</strong>
                                                         </div>
                                                     ) : itemResponsible === 'cliente' ? (
-                                                        <div style={{ padding: '8px 12px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', color: '#475569', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                            <span>👤 Imputado al Cliente ({pqr?.profiles?.company_name || 'Autogestión'}) — No genera deducción interna</span>
+                                                        <div style={{ padding: '8px 12px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', color: '#475569', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <User size={13} color="#475569" />
+                                                                <span>Imputado al Cliente ({pqr?.profiles?.company_name || 'Autogestión'}) — No genera deducción interna</span>
+                                                            </div>
                                                             <strong>{formatMoney(itemAmount)}</strong>
                                                         </div>
                                                     ) : (
@@ -5133,7 +5306,7 @@ export default function PqrAuditModal({
                                             unit: pUnit,
                                             refPrice: pPrice,
                                             label: `${cp.name} (${pUnit})`,
-                                            sublabel: `Precio Catálogo Base: ${formatMoney(pPrice)} / ${pUnit}${cp.sku ? ` • SKU: ${cp.sku}` : ''}`,
+                                            sublabel: `Precio Catálogo Base: ${formatMoney(pPrice)} / ${pUnit}`,
                                             badge: 'Catálogo FruFresco'
                                         });
                                     });
@@ -5440,7 +5613,7 @@ export default function PqrAuditModal({
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
                                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase' }}>
-                                                    B. Canasta Editable de Productos a Reponer (Permite Trueque de SKU y Ajuste de Cantidad)
+                                                    B. Canasta Editable de Productos a Reponer (Permite Trueque de Producto y Ajuste de Cantidad)
                                                 </span>
                                                 <button
                                                     type="button"
@@ -5830,10 +6003,50 @@ export default function PqrAuditModal({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {/* Macrocausa L1 & Subtype L2 Selection */}
                             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
-                                        1. Diagnóstico de Causa Raíz (RCA)
-                                    </span>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#475569' }}>
+                                            1. Diagnóstico de Causa Raíz (RCA)
+                                        </span>
+                                        {caseReturns.length > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#E2E8F0', padding: '2px', borderRadius: '6px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRcaDiagnosisMode('global')}
+                                                    style={{
+                                                        padding: '3px 8px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: '700',
+                                                        borderRadius: '4px',
+                                                        border: 'none',
+                                                        backgroundColor: rcaDiagnosisMode === 'global' ? '#FFFFFF' : 'transparent',
+                                                        color: rcaDiagnosisMode === 'global' ? '#0F172A' : '#64748B',
+                                                        boxShadow: rcaDiagnosisMode === 'global' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Diagnóstico General
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRcaDiagnosisMode('by_item')}
+                                                    style={{
+                                                        padding: '3px 8px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: '700',
+                                                        borderRadius: '4px',
+                                                        border: 'none',
+                                                        backgroundColor: rcaDiagnosisMode === 'by_item' ? '#0D7A57' : 'transparent',
+                                                        color: rcaDiagnosisMode === 'by_item' ? '#FFFFFF' : '#64748B',
+                                                        boxShadow: rcaDiagnosisMode === 'by_item' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Por Producto ({caseReturns.length})
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={onOpenTaxonomyModal}
@@ -5932,6 +6145,112 @@ export default function PqrAuditModal({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Diagnóstico Granular por Producto (Desglose de Afectación Individual) */}
+                            {rcaDiagnosisMode === 'by_item' && caseReturns.length > 0 && (
+                                <div style={{ padding: '12px 14px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '800', textTransform: 'uppercase', color: '#166534' }}>
+                                            Afectación & Subtipo RCA Específico por Producto
+                                        </span>
+                                        <span style={{ fontSize: '0.64rem', color: '#15803D', fontWeight: '600' }}>
+                                            Permite detallar el daño físico, biológico o de picking para cada ítem reclamado
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {caseReturns.map((ret: any) => {
+                                            const oi = orderItems.find(o => o.product_id === ret.product_id) || 
+                                                       ret.orders?.order_items?.find((o: any) => o.product_id === ret.product_id);
+                                            const pName = ret.products?.name || oi?.products?.name || 'Producto';
+                                            const uom = ret.products?.unit_of_measure || oi?.products?.unit_of_measure || 'Kg';
+                                            const itemSubtype = itemRcaOverrides[ret.id]?.subtypeL2 || rcaSubtypeL2;
+                                            const itemAffectation = (() => {
+                                                const ov = itemRcaOverrides[ret.id]?.affectationDescription;
+                                                if (ov !== undefined) return ov;
+                                                const matchNote = (ret.notes || '').match(/\[AFECTACIÓN:\s*([^\]]+)\]/i);
+                                                if (matchNote) return matchNote[1].trim();
+                                                const matchReason = (ret.reason || '').match(/\|\s*Afectación:\s*([^|]+)/i);
+                                                if (matchReason) return matchReason[1].trim();
+                                                return '';
+                                            })();
+
+                                            return (
+                                                <div
+                                                    key={ret.id}
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: '1px solid #CBD5E1',
+                                                        borderRadius: '8px',
+                                                        padding: '10px 12px',
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'minmax(180px, 1.2fr) minmax(200px, 1.3fr) minmax(240px, 2fr)',
+                                                        gap: '10px',
+                                                        alignItems: 'center'
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong style={{ fontSize: '0.78rem', color: '#0F172A', display: 'block' }}>
+                                                            {pName}
+                                                        </strong>
+                                                        <span style={{ fontSize: '0.65rem', color: '#64748B' }}>
+                                                            {ret.quantity_returned} {uom} reclamados
+                                                        </span>
+                                                    </div>
+
+                                                    <div>
+                                                        <label style={{ fontSize: '0.62rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '2px' }}>
+                                                            Subtipo Específico (RCA L2):
+                                                        </label>
+                                                        <select
+                                                            value={itemSubtype}
+                                                            onChange={e => handleUpdateItemSubtype(ret.id, e.target.value)}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '5px 8px',
+                                                                fontSize: '0.68rem',
+                                                                fontWeight: '600',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '5px',
+                                                                backgroundColor: '#F8FAFC',
+                                                                color: '#0F172A'
+                                                            }}
+                                                        >
+                                                            {availableSubtypes.map(s => (
+                                                                <option key={s.code} value={s.code}>
+                                                                    {s.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label style={{ fontSize: '0.62rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '2px' }}>
+                                                            Descripción de la Afectación Física:
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Ej. Machucado en descargue, calibre inferior a especificación..."
+                                                            value={itemAffectation}
+                                                            onChange={e => handleUpdateItemAffectation(ret.id, e.target.value)}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '5px 8px',
+                                                                fontSize: '0.70rem',
+                                                                border: '1px solid #CBD5E1',
+                                                                borderRadius: '5px',
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#0F172A',
+                                                                outline: 'none'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Responsible Area Grid (6 Cards) */}
                             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -6037,8 +6356,9 @@ export default function PqrAuditModal({
 
                                 {imputationMode === 'by_item' ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '6px 10px', borderRadius: '6px' }}>
-                                            ✨ <strong>Imputación Granular Activa:</strong> Cada producto averiado o faltante se asigna a su propio causante nominal. La deducción se liquida por el valor exacto de la referencia dañada.
+                                        <div style={{ fontSize: '0.68rem', fontWeight: '700', color: '#047857', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', padding: '6px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Sparkles size={12} color="#059669" />
+                                            <span><strong>Imputación Granular Activa:</strong> Cada producto averiado o faltante se asigna a su propio causante nominal. La deducción se liquida por el valor exacto de la referencia dañada.</span>
                                         </div>
 
                                         {caseReturns.map((ret: any) => {
@@ -6139,12 +6459,14 @@ export default function PqrAuditModal({
                                                                 Responsable Asignado
                                                             </label>
                                                             {itemResponsible === 'proveedor' ? (
-                                                                <div style={{ padding: '6px 8px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.70rem', color: '#B45309', fontWeight: '700' }}>
-                                                                    🏢 Asignado al Proveedor (Campo / Origen)
+                                                                <div style={{ padding: '6px 8px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px', fontSize: '0.70rem', color: '#B45309', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <Building2 size={12} color="#B45309" />
+                                                                    <span>Asignado al Proveedor (Campo / Origen)</span>
                                                                 </div>
                                                             ) : itemResponsible === 'cliente' ? (
-                                                                <div style={{ padding: '6px 8px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.70rem', color: '#475569', fontWeight: '700' }}>
-                                                                    👤 Cliente ({pqr?.profiles?.company_name || 'Autogestión'})
+                                                                <div style={{ padding: '6px 8px', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.70rem', color: '#475569', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <User size={12} color="#475569" />
+                                                                    <span>Cliente ({pqr?.profiles?.company_name || 'Autogestión'})</span>
                                                                 </div>
                                                             ) : (
                                                                 <SearchableSelect

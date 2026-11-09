@@ -894,25 +894,26 @@ export default function BillingDashboard() {
         const cleanName = prodName.replace(/\s*\([^)]*\)/g, '').trim();
         const words = cleanName.split(/\s+/).filter((w: string) => w.length > 3);
 
-        // 1. Check matching return
-        const matchedReturn = returnsList.find(r => 
+        // 1. Check matching returns (match estricto por product_id o fallback por nombre limpio)
+        const matchingReturns = returnsList.filter(r => 
             (prodId && r.product_id === prodId) ||
-            (r.products?.name && r.products.name.toLowerCase().trim() === cleanName) ||
-            (r.reason && (r.reason.toLowerCase().includes(cleanName) || words.some((w: string) => r.reason.toLowerCase().includes(w))))
+            (!prodId && r.products?.name && r.products.name.toLowerCase().trim() === cleanName) ||
+            (!prodId && cleanName.length > 3 && r.reason && r.reason.toLowerCase().includes(cleanName))
         );
+        const matchedReturn = matchingReturns[0] || null;
 
         // 2. Check matching PQR (checking subject, description and resolution_notes)
         const matchedPqr = pqrsList.find(p => 
-            (p.subject && (p.subject.toLowerCase().includes(cleanName) || words.some((w: string) => p.subject.toLowerCase().includes(w)))) ||
-            (p.description && (p.description.toLowerCase().includes(cleanName) || words.some((w: string) => p.description.toLowerCase().includes(w)))) ||
-            (p.resolution_notes && (p.resolution_notes.toLowerCase().includes(cleanName) || words.some((w: string) => p.resolution_notes.toLowerCase().includes(w)))) ||
+            (cleanName.length > 3 && p.subject && p.subject.toLowerCase().includes(cleanName)) ||
+            (cleanName.length > 3 && p.description && p.description.toLowerCase().includes(cleanName)) ||
+            (cleanName.length > 3 && p.resolution_notes && p.resolution_notes.toLowerCase().includes(cleanName)) ||
             (matchedReturn?.reason && p.id && matchedReturn.reason.includes(p.id.substring(0, 8)))
         );
 
         if (!matchedReturn && !matchedPqr) return null;
 
-        // Quantity returned / claimed (check return, resolution_notes lines, or description)
-        let qtyClaimed = Number(matchedReturn?.quantity_returned) || 0;
+        // Quantity returned / claimed: suma de todas las devoluciones aprobadas o reportadas para este ítem
+        let qtyClaimed = matchingReturns.reduce((sum, r) => sum + (Number(r.quantity_returned) || 0), 0);
         let totalPqrClaimed = 0;
         pqrsList.forEach(p => {
             const resNotes = p.resolution_notes || '';
@@ -943,11 +944,12 @@ export default function BillingDashboard() {
         }
 
         const unit = item.unit || item.products?.unit_of_measure || 'Kg';
-        const notes = ((matchedPqr?.resolution_notes || '') + ' ' + (matchedReturn?.reason || '')).toLowerCase();
+        const returnNotes = ((matchedReturn?.reason || '') + ' ' + (matchedReturn?.notes || '')).toLowerCase();
+        const pqrNotes = (matchedPqr?.resolution_notes || '').toLowerCase();
         const pqrStatus = matchedPqr?.status || '';
         const returnStatus = matchedReturn?.status || '';
 
-        // Determine Scenario
+        // Determine Scenario: Prioritize item-level return note, then PQR general resolution
         let scenarioType: 'sin_costo' | 'reposicion' | 'nota_credito' | 'ajuste_factura' | 'pendiente' = 'pendiente';
         let badgeText = '';
         let badgeBg = '#FEF3C7';
@@ -956,14 +958,30 @@ export default function BillingDashboard() {
         let invoiceInstruction = '';
         let resolutionTitle = '';
 
+        const hasItemLevelAjuste = (
+            returnNotes.includes('ajuste factura') ||
+            returnNotes.includes('ajuste de factura') ||
+            returnNotes.includes('ajuste en factura') ||
+            returnNotes.includes('sustracción') ||
+            returnNotes.includes('sustraccion')
+        );
+
         if (
-            returnStatus === 'rejected' ||
-            pqrStatus === 'rejected' ||
-            notes.includes('cerrado conforme') ||
-            notes.includes('rechazo de solicitud') ||
-            notes.includes('desestimado') ||
-            notes.includes('sin costo') ||
-            notes.includes('se factura 100%')
+            !hasItemLevelAjuste && (
+                returnStatus === 'rejected' ||
+                (pqrStatus === 'rejected' && !matchedReturn) ||
+                returnNotes.includes('cerrado conforme') ||
+                returnNotes.includes('rechazo de solicitud') ||
+                returnNotes.includes('desestimado') ||
+                returnNotes.includes('sin costo') ||
+                returnNotes.includes('se factura 100%') ||
+                (!returnNotes && (
+                    pqrNotes.includes('cerrado conforme') ||
+                    pqrNotes.includes('rechazo de solicitud') ||
+                    pqrNotes.includes('desestimado') ||
+                    pqrNotes.includes('sin costo')
+                ))
+            )
         ) {
             scenarioType = 'sin_costo';
             resolutionTitle = 'Cerrado Conforme / Desestimado sin Costo';
@@ -973,8 +991,11 @@ export default function BillingDashboard() {
             badgeBorder = '#A7F3D0';
             invoiceInstruction = `Calidad desestimó la afectación comercial por entrega conforme al estándar acordado. Facturar los ${item.quantity} ${unit} completos sin aplicar notas crédito ni deducciones.`;
         } else if (
-            notes.includes('ajuste de factura') ||
-            notes.includes('ajuste en factura')
+            hasItemLevelAjuste ||
+            (!returnNotes.includes('reprogramado') && !returnNotes.includes('reposición') && (
+                pqrNotes.includes('ajuste de factura') ||
+                pqrNotes.includes('ajuste en factura')
+            ))
         ) {
             scenarioType = 'ajuste_factura';
             resolutionTitle = 'Ajuste Directo en Factura Autorizado';
@@ -985,9 +1006,14 @@ export default function BillingDashboard() {
             const remainingQty = Math.max(0, Number(item.quantity || 0) - qtyClaimed);
             invoiceInstruction = `Calidad autorizó descontar ${qtyClaimed} ${unit} de este ítem en la factura. Facturar únicamente ${remainingQty} ${unit}.`;
         } else if (
-            notes.includes('nota crédito') ||
-            notes.includes('nota credito') ||
-            notes.includes('saldo a favor')
+            returnNotes.includes('nota crédito') ||
+            returnNotes.includes('nota credito') ||
+            returnNotes.includes('saldo a favor') ||
+            (!returnNotes.includes('reprogramado') && (
+                pqrNotes.includes('nota crédito') ||
+                pqrNotes.includes('nota credito') ||
+                pqrNotes.includes('saldo a favor')
+            ))
         ) {
             scenarioType = 'nota_credito';
             resolutionTitle = 'Nota Crédito / Saldo a Favor Emitido';
@@ -997,9 +1023,13 @@ export default function BillingDashboard() {
             badgeBorder = '#BFDBFE';
             invoiceInstruction = `Calidad emitió Nota Crédito por separado para compensar los ${qtyClaimed} ${unit}. La factura actual debe emitirse por el 100% (${item.quantity} ${unit}).`;
         } else if (
-            notes.includes('reposición') ||
-            notes.includes('reposicion') ||
-            notes.includes('reponer d+1')
+            returnNotes.includes('reprogramado') ||
+            returnNotes.includes('reposición') ||
+            returnNotes.includes('reposicion') ||
+            returnNotes.includes('reponer d+1') ||
+            pqrNotes.includes('reposición') ||
+            pqrNotes.includes('reposicion') ||
+            pqrNotes.includes('reponer d+1')
         ) {
             scenarioType = 'reposicion';
             resolutionTitle = 'Reposición Física D+1 Programada ($0 COP)';
@@ -1451,7 +1481,7 @@ export default function BillingDashboard() {
                     ),
                     billing_returns (
                         id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
-                        products:product_id ( id, name, sku )
+                        products:product_id ( id, name, sku, accounting_id )
                     ),
                     customer_service_pqrs (
                         id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
@@ -1512,7 +1542,7 @@ export default function BillingDashboard() {
                         ),
                         billing_returns (
                             id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
-                            products:product_id ( id, name, sku )
+                            products:product_id ( id, name, sku, accounting_id )
                         ),
                         customer_service_pqrs (
                             id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
@@ -2859,15 +2889,18 @@ export default function BillingDashboard() {
                         ? Number(item.picked_quantity)
                         : (Number(item.quantity) || 0);
                     // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
+                    // Solo se descuentan deducciones con destino expreso de AJUSTE FACTURA / sustracción.
+                    // Las reposiciones físicas ($0 COP en camión) NO descuentan de la Factura de Venta del padre.
                     const matchedReturn = (order.billing_returns || []).find((r: any) =>
                         (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
-                        (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO'))))
+                        (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO')))) &&
+                        !(r.reason && (r.reason.includes('Reprogramado en Pedido') || r.reason.toLowerCase().includes('reposición') || r.reason.toLowerCase().includes('reposicion')))
                     );
                     const deductionQty = matchedReturn ? Number(matchedReturn.quantity_returned || 0) : 0;
                     const rawQty = Math.max(0, baseItemQty - deductionQty);
                     if (rawQty <= 0) return; // Si la cantidad neta es 0, no viaja en la Factura de Venta
                     const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
 
                     const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
@@ -3032,7 +3065,7 @@ export default function BillingDashboard() {
                     // Omitir productos con cantidad 0 (no despachados o descontados 100% en PQR)
                     if (rawQty <= 0) return;
                     const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
 
                     const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
@@ -3179,7 +3212,7 @@ export default function BillingDashboard() {
                         ? Number(item.picked_quantity)
                         : (Number(item.quantity) || 0);
                     const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.unit || item.products?.unit_of_measure || 'KG';
+                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
                     const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
 
                     const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
@@ -5638,7 +5671,8 @@ export default function BillingDashboard() {
                                                                                         <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', backgroundColor: '#A855F7', opacity: 0.75, animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
                                                                                         <span style={{ position: 'relative', borderRadius: '50%', width: '6px', height: '6px', backgroundColor: '#7C3AED' }} />
                                                                                     </span>
-                                                                                    <span>⚡ NC WORLD OFFICE</span>
+                                                                                    <Zap size={11} color="#7C3AED" />
+                                                                                    <span>NC WORLD OFFICE</span>
                                                                                 </div>
 
                                                                                 {/* Subtexto Informativo de Monto y Peso en 1 Línea */}
@@ -6299,7 +6333,9 @@ export default function BillingDashboard() {
                                                             </td>
                                                             <td style={{ padding: '0.65rem 0.75rem' }}>
                                                                 <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>{ret.products?.name || 'Producto sin nombre'}</div>
-                                                                {ret.products?.sku && <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>SKU: {ret.products.sku}</span>}
+                                                                {(ret.products as any)?.accounting_id ? (
+                                                                    <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>#{(ret.products as any).accounting_id}</span>
+                                                                ) : null}
                                                             </td>
                                                             <td style={{ padding: '0.65rem 0.75rem' }}>
                                                                 <span style={{ fontWeight: '800', color: '#991B1B', backgroundColor: '#FEF2F2', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #FECACA', fontSize: '0.74rem' }}>
@@ -7343,19 +7379,24 @@ export default function BillingDashboard() {
                     }
 
                     // 2. Si no está en notas, calcular a partir de las novedades resueltas en ítems / devoluciones
+                    // Invariante Escenario 421: ÚNICAMENTE se deducen los ítems con destino 'ajuste_factura'.
+                    // Las reposiciones físicas viajan en camión $0 y se facturan al 100% en la orden padre.
                     if (pqrDeductionsTotal === 0 && (orderDetailReturns.length > 0 || orderDetailPqrs.length > 0)) {
                         let sumDeductions = 0;
                         orderDetailItems.forEach(it => {
                             const n = resolveItemNoveltyInfo(it, orderDetailReturns, orderDetailPqrs);
-                            if (n && n.scenarioType !== 'sin_costo' && (n as any).qtyClaimed > 0) {
+                            if (n && n.scenarioType === 'ajuste_factura' && (n as any).qtyClaimed > 0) {
                                 sumDeductions += ((n as any).qtyClaimed * Number(it.unit_price || 0));
                             }
                         });
                         if (sumDeductions === 0 && orderDetailReturns.length > 0) {
                             orderDetailReturns.forEach(r => {
-                                const pqr = orderDetailPqrs[0];
-                                const { ncAmount } = resolveReturnProductAndAmount(r, pqr);
-                                if (ncAmount > 0) sumDeductions += ncAmount;
+                                const isPhysicalRep = r.reason && (r.reason.includes('Reprogramado') || r.reason.toLowerCase().includes('reposición'));
+                                if (!isPhysicalRep && r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('sustracción'))) {
+                                    const pqr = orderDetailPqrs[0];
+                                    const { ncAmount } = resolveReturnProductAndAmount(r, pqr);
+                                    if (ncAmount > 0) sumDeductions += ncAmount;
+                                }
                             });
                         }
                         if (sumDeductions > 0) {
@@ -7792,10 +7833,10 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (() => {
-                                                                        const netQty = Number(item.quantity || 0);
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType === 'ajuste_factura' ? (() => {
+                                                                        const origQty = Number(item.quantity || 0);
                                                                         const claimed = Number((itemNovelty as any).qtyClaimed || 0);
-                                                                        const origQty = netQty + claimed;
+                                                                        const netQty = Math.max(0, origQty - claimed);
                                                                         const uom = item.unit || item.products?.unit_of_measure || 'Kg';
                                                                         return (
                                                                             <div>
@@ -7836,18 +7877,19 @@ export default function BillingDashboard() {
                                                                     {formatMoney(item.unit_price || 0)}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType !== 'sin_costo' ? (() => {
-                                                                        const netQty = Number(item.quantity || 0);
+                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType === 'ajuste_factura' ? (() => {
+                                                                        const origQty = Number(item.quantity || 0);
                                                                         const claimed = Number((itemNovelty as any).qtyClaimed || 0);
-                                                                        const origQty = netQty + claimed;
+                                                                        const netQty = Math.max(0, origQty - claimed);
                                                                         const origTotal = origQty * Number(item.unit_price || 0);
+                                                                        const netTotal = netQty * Number(item.unit_price || 0);
                                                                         return (
                                                                             <div>
                                                                                 <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
                                                                                     {formatMoney(origTotal)}
                                                                                 </div>
                                                                                 <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                                    {formatMoney(itemTotal)}
+                                                                                    {formatMoney(netTotal)}
                                                                                 </div>
                                                                             </div>
                                                                         );
@@ -8370,7 +8412,7 @@ export default function BillingDashboard() {
                                                                                 {it.products?.name || it.nickname || 'Producto'}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
-                                                                                SKU: {it.products?.sku || 'S/N'} · {it.unit || it.products?.unit_of_measure || 'Und'}
+                                                                                {it.products?.accounting_id ? `#${it.products.accounting_id} · ` : ''}{it.unit || it.products?.unit_of_measure || 'Und'}
                                                                             </div>
                                                                         </td>
                                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '800' }}>

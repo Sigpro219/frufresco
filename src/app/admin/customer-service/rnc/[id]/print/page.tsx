@@ -778,7 +778,26 @@ export default function RncPrintPage() {
                                             {item.quantity_returned} {item.products?.unit_of_measure || 'Kg'}
                                         </td>
                                         <td style={{ padding: '2.5px 6px', color: '#334155' }}>
-                                            {cleanReason(item.reason)}
+                                            <div>{cleanReason(item.reason)}</div>
+                                            {(() => {
+                                                const assignedImp = rca.itemImputations?.find((it: any) => it.returnId === item.id || it.productId === item.product_id);
+                                                const affectationNote = assignedImp?.notes || (() => {
+                                                    const matchNote = (item.notes || '').match(/\[AFECTACIÓN:\s*([^\]]+)\]/i);
+                                                    if (matchNote) return matchNote[1].trim();
+                                                    const matchReason = (item.reason || '').match(/\|\s*Afectación:\s*([^|]+)/i);
+                                                    if (matchReason) return matchReason[1].trim();
+                                                    return '';
+                                                })();
+
+                                                if (affectationNote) {
+                                                    return (
+                                                        <div style={{ fontSize: '5.8pt', color: '#0369A1', fontWeight: '700', marginTop: '2px' }}>
+                                                            • Hallazgo/Afectación: {affectationNote}
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </td>
                                         <td style={{ padding: '2.5px 6px', textAlign: 'right', fontWeight: '800', color: item.status === 'approved' ? '#15803D' : item.status === 'rejected' ? '#64748B' : '#B45309' }}>
                                             {item.status === 'approved' ? 'Aprobada' : item.status === 'rejected' ? 'Sin Costo' : 'En Revisión'}

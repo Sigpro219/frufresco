@@ -1032,7 +1032,7 @@ Para la integración con **World Office Desktop (instalación local sobre Micros
      | 30 | `Encab: Clasificación` | `""` |
      | 31 | `Detalle: Producto` | ID contable numérico del producto en World Office (`products.accounting_id`, con fallback a `products.sku` solo si no existiera) |
      | 32 | `Detalle: Bodega` | `"Principal"` |
-     | 33 | `Detalle: UnidadDeMedida` | `"kg"`, `"Und."` |
+     | 33 | `Detalle: UnidadDeMedida` | Obligatoriamente `"kg"`, `"Und."` o `"LB"`. Resuelto prioritariamente desde la unidad oficial de compra/catálogo del SKU (`products.unit_of_measure`). Normalizado sin excepción por `normalizeWorldOfficeUom` para erradicar gramajes o descripciones compuestas de despacho (ej. `"Unidad 1800 gr"` -> `"Und."` o `"kg"`). |
      | 34 | `Detalle: Cantidad` | Cantidad entregada a satisfacción |
      | 35 | `Detalle: IVA` | `0` (Excluido/Exento) o `0.19` (Gravado 19%) |
      | 36 | `Detalle: Valor Unitario` | Tarifa pactada por ítem |
@@ -15918,6 +15918,24 @@ Para blindar a la empresa contra cualquier desconexión abrupta antes de la tran
 
 ---
 
+
+#### Escenario 420: Normalización Estricta de Unidad de Medida en Exportación Contable World Office Desktop (Columna 34) (SDD v1.9.376)
+- **Given** el módulo de Facturación Masiva y Liquidación Contable (`/admin/commercial/billing`) y el motor generador del archivo plano oficial de 57 columnas para World Office Desktop (`src/lib/worldOfficeExport.ts`).
+- **When** se generan los planos de facturación (`downloadWorldOfficeExcel`) para importación local en World Office Desktop (Cortes programados, Exportación de Pendientes o Pre-Cortes):
+- **Then** el sistema impone las siguientes reglas innegociables de gobernanza de datos y formato contable:
+  1. **Prevalencia Absoluta de la Unidad de Compra / Catálogo del SKU:**
+     - La unidad de medida de cada línea en el plano contable se resuelve prioritariamente desde la unidad oficial configurada en el maestro de productos (`item.products?.unit_of_measure`).
+     - Queda estrictamente prohibido arrastrar descripciones de variantes físicas o gramajes de empaque del pedido (`item.unit`, ej. `"Unidad 1800 gr"`, `"Unidad 140 gr"`, `"Paquete 500 gramos"`) a la Columna 34 de World Office.
+     - Únicamente si el producto carece de unidad configurada en catálogo, se utiliza `item.unit` como fallback.
+  2. **Válvula de Normalización Canónica Hermética (`normalizeWorldOfficeUom`):**
+     - La Columna 34 (`Detalle: UnidadDeMedida`) solo admite estrictamente 3 valores posibles en World Office:
+       * **`"kg"`**: Para todo producto a granel, por peso (`kg`, `kilo`, `gramo`, `litro`) o como valor canónico por defecto.
+       * **`"Und."`**: Para todo producto discreto (`unidad`, `und`, `paquete`, `atado`, `bulto`, `caja`, `bandeja`, `malla`).
+       * **`"LB"`**: Únicamente cuando el cliente posee configuración explícita de facturación en libras (`billing_weight_unit === 'lb'`).
+     - Se erradica por completo cualquier fuga de cadenas compuestas o texto libre a la Columna 34.
+  3. **Verificación Mecánica:**
+     - Verificación TypeScript estricta (`tsc --noEmit`) con 0 errores.
+
 ### Escenario 419: Registro Transaccional de Peso de Más / Sobrepeso y Ajuste a Factura Definitiva (SDD v1.9.243)
 - **Given** un pedido registrado en el expediente `/admin/orders/[id]` (`src/app/admin/orders/[id]/page.tsx`) o en navegación con el widget flotante PQR/Novedades (`src/components/PQRFloatingWidget.tsx`):
   - El pedido cuenta con una canasta de `order_items` con cantidades pactadas (`quantity`), pesaje de báscula (`picked_quantity`), precio unitario (`unit_price`), `selected_options` y metadatos de producto (`products: { id, name, unit_of_measure, accounting_id, iva_rate }`).
@@ -15966,3 +15984,104 @@ Para blindar a la empresa contra cualquier desconexión abrupta antes de la tran
      - El ajuste queda estrictamente **BLOQUEADO** si la orden se encuentra en estado `invoiced`, o si posee `invoice_number` no nulo, o si cuenta con factura electrónica emitida en `electronic_invoices` con estado `DIAN_ACCEPTED` / `AUTHORIZED`. En tal caso, el sistema exige emitir nota de ajuste formal o nueva remisión complementaria.
      - Cero emojis unicode en toda la interfaz (100% iconos de `lucide-react`: `Scale`, `CheckCircle2`, `AlertTriangle`, `FileText`, `X`).
      - Verificación mecánica con TypeScript estricto (`tsc --noEmit` con 0 errores).
+
+---
+
+### Escenario 420: Canasta Mixta de Auditoría SAC: Reposición Física ($0 COP) vs Ajuste de Factura por Línea en Opción 2 (SDD v1.9.244)
+- **Given** el modal de resolución y auditoría técnica SAC (`src/app/admin/customer-service/components/PqrAuditModal.tsx`) en el Paso 2 (*Decisión Comercial*), bajo la **Opción 2: Reponer Físicamente ($0 COP)**:
+  - El expediente PQR ampara un pedido original con múltiples novedades o ítems en la canasta editable (`replacementPlanItems`), cuya interface TypeScript se extiende formalmente con:
+    ```typescript
+    actionDestination?: 'replacement' | 'invoice_adjustment'; // Por defecto: 'replacement'
+    ```
+- **When** el analista comercial y el cliente acuerdan una resolución mixta o híbrida dentro de la Opción 2 (donde ciertos ítems se despachan físicamente en camión a $0 COP en la fecha programada y otros se descuentan de la liquidación de factura del pedido padre sin reposición física):
+- **Then** el sistema ejecuta el protocolo hermético sin ambigüedades, sellando todos los puntos ciegos del stress-test Goldfish:
+  1. **Selector de Acción / Destino por Línea en la Canasta (`actionDestination`):**
+     - En cada fila de `replacementPlanItems`, se incorpora un selector o toggle visual de alta densidad:
+       - 🟢 **`[📦 Reponer $0 COP]`** (`actionDestination = 'replacement'`, valor por defecto).
+       - 🔵 **`[🧾 Ajuste Factura]`** (`actionDestination = 'invoice_adjustment'`).
+     - Al alternar el selector, se marca automáticamente `isReplacementPlanCustomized = true`, garantizando que la selección persista íntegra en `localStorage` (`pqr_audit_draft_${pqr.id}`).
+     - **Regla Poka-Yoke Anti-Trueque Incoherente:** Si un ítem se marca como `invoice_adjustment`, el selector de producto a entregar se congela o revierte al producto reclamado original (`targetProductId = originalProductId`), impidiendo trueques ficticios de SKU que no viajarán en camión.
+  2. **Telemetría y Fórmulas Matemáticas de Paridad en Tiempo Real:**
+     - **Fórmula de Valor a Reponer Físicamente ($0 COP):**
+       $$\text{Valor Reposición} = \sum_{\text{destination} = \text{'replacement'}} (\text{targetQty} \times \text{referenceUnitPrice})$$
+     - **Fórmula Única de Valor a Ajustar en Factura (Sustracción):**
+       $$\text{Valor Ajuste Factura} = \sum_{\text{destination} = \text{'invoice\_adjustment'}} (\text{targetQty} \times \text{originalUnitPrice})$$
+       *(Rige siempre el precio pactado original del ítem en el pedido padre, garantizando precisión contable exacta).*
+     - **Cabecera de Paridad:** Desglosa con claridad:
+       - `Valor Reclamado Total` $\rightarrow$ `Físico ($0 COP): $X` + `Ajuste Factura: $Y`.
+  3. **Persistencia Transaccional y Bifurcación Atómica al Guardar/Resolver:**
+     - **A. Rama Reposición Física (si existen ítems con `destination === 'replacement'`):**
+       - Crea el pedido hijo `#XXXX` con estado `pending_approval`, `total = 0`, `subtotal = 0`, y fecha/ventana programada.
+       - Calcula `total_weight_kg` **únicamente** con la masa de los ítems destinados al camión.
+       - Inserta en `order_items` del hijo solo los productos físicos.
+     - **B. Rama Ajuste de Factura (si existen ítems con `destination === 'invoice_adjustment'`):**
+       - Actualiza o crea los registros correspondientes en `billing_returns` con:
+         - `status = 'approved'`
+         - `quantity_returned = targetQty`
+         - `reason = "[AJUSTE DE FACTURA SAC - SIN REPOSICIÓN FÍSICA | PQR #" + pqr.id.substring(0,8) + "]"`
+         - `notes = "Aprobado en resolución mixta SAC. Se descuenta de la factura final del pedido padre."`
+       - No muta destructivamente `orders.total` directo para evitar doble descuento con el módulo de facturación; estampa la auditoría en `orders.admin_notes` del pedido padre y marca `logistics_data.sync_world_office_status: 'pending_update'`.
+     - **C. Caso Borde 100% Ajuste de Factura:**
+       - Si el usuario marca el $100\%$ de los ítems como `invoice_adjustment`, el sistema avisa con confirmación clara, omite crear un pedido hijo con 0 ítems, aprueba las devoluciones en `billing_returns` y finaliza el caso PQR sin generar órdenes vacías.
+  4. **Poka-Yoke DIAN & Seguridad Legal:**
+     - Si el pedido padre ya fue formalmente facturado ante la DIAN (`status === 'invoiced'`, `invoice_number != null` o registro autorizado en `electronic_invoices`), el sistema advierte que el ajuste de factura requerirá trámite de Nota Crédito en el módulo de facturación masiva.
+     - Cero emojis unicode (100% iconos de `lucide-react`: `Truck`, `Receipt`, `Scale`, `CheckCircle2`, `AlertTriangle`, `Trash2`).
+     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
+
+### Escenario 421: Desacoplamiento y Prevalencia Estricta por Línea en Módulo de Facturación ante Resoluciones Mixtas SAC (SDD v1.9.245)
+- **Given** el módulo de Facturación Masiva (`src/app/admin/commercial/billing/page.tsx`), la función `resolveItemNoveltyInfo(item, orderDetailReturns, orderDetailPqrs)`, el motor exportador a World Office (`downloadWorldOfficeExcel`), y la tabla de detalle por ítems del pedido:
+  - Un pedido ampara reclamaciones donde SAC emitió un dictamen comercial mixto (ej. PQR donde un producto fue programado a reposición física en camión $0 COP con Pedido Hijo y otro producto fue aprobado como sustracción/ajuste directo en la factura final).
+- **When** se evalúa cada ítem de la orden para determinar su estado contable (`scenarioType`), badge visual, directriz de facturación (`invoiceInstruction`) y liquidación en planos contables:
+- **Then** el sistema impone las siguientes invariantes arquitectónicas de desacoplamiento y blindaje contable:
+  1. **Prevalencia Absoluta de la Devolución por Ítem (`returnNotes`):**
+     - La inspección de estado se evalúa prioritariamente a nivel de la novedad/devolución individual (`matchedReturn.reason` y `matchedReturn.notes`) mediante matching primario estricto por `product_id`. Solo si no existe coincidencia por ID se recurre a matching por denominación exacta limpia.
+     - Queda terminantemente prohibido que las notas globales de un PQR ("Se autoriza reposición...") o su estado (`pqrStatus === 'rejected'`) contaminen o anulen ítems cuya devolución individual estipula explícitamente `[AJUSTE FACTURA]`, `[AJUSTE DE FACTURA]` o `sustracción` aprobada.
+     - **Agregación de Cardinalidad 1:N:** Si existen múltiples devoluciones aprobadas para un mismo ítem, la cantidad reclamada se totaliza de forma aditiva (`qtyClaimed = SUM(quantity_returned)`).
+  2. **Matriz Canónica de Banderas y Badges:**
+     - **Caso A (Ajuste en Factura Directo):** Si `returnNotes` contiene `ajuste factura`, `ajuste de factura`, `ajuste en factura` o `sustracción`:
+       - `scenarioType = 'ajuste_factura'`
+       - `badgeText = 'Reclamo {qty} {unit}: Ajuste Autorizado • Descontar en Factura'`
+       - Color: Rojo/Ámbar (`#FEF2F2` / `#991B1B`)
+       - Directriz: Resta `qtyClaimed` de la cantidad facturable y recalcula el subtotal e IVA de la línea.
+     - **Caso B (Reposición Física D+1):** Si `returnNotes` contiene `reprogramado`, `reposición` o `reponer d+1`, o en su defecto si `pqrNotes` indica reposición sin que el ítem tenga marca de ajuste:
+       - `scenarioType = 'reposicion'`
+       - `badgeText = 'Reclamo {qty} {unit}: Reposición D+1 • Facturar 100% Original'`
+       - Color: Púrpura (`#FAF5FF` / `#6B21A8`)
+       - Directriz: Se factura al 100% en la orden padre; el Pedido Hijo viaja con tarifa $0 COP.
+  3. **Fórmula Matemática Canónica de Visualización y Facturación:**
+     - La cantidad original pactada en el pedido padre es `origQty = Number(item.quantity || 0)`.
+     - La cantidad neta facturable se rige estrictamente por:
+       $$\text{netBillableQty} = \begin{cases} \max(0, \text{origQty} - \text{qtyClaimed}) & \text{si } \text{scenarioType} == \text{'ajuste\_factura'} \\ \text{origQty} & \text{en cualquier otro caso (reposición D+1, NC, o sin costo)} \end{cases}$$
+     - El total de deducciones a nivel de cabecera (`pqrDeductionsTotal`) **únicamente suma** ítems con `scenarioType === 'ajuste_factura'`. Los ítems con reposición física jamás restan del total a pagar de la orden padre.
+  4. **Blindaje en Exportación Masiva World Office Desktop (Columna Factura de Venta):**
+     - En la generación del plano contable de Factura de Venta (`downloadWorldOfficeExcel`), **únicamente se descuentan del ítem las devoluciones cuyo destino sea `AJUSTE FACTURA` o sustracción autorizada**.
+     - Queda estrictamente prohibido deducir cantidades en la Factura de Venta si la devolución corresponde a una Reposición Física (`reprogramado`, `reposición`), salvaguardando a la empresa de la doble gratuidad (pérdida neta de inventario).
+  5. **Trazabilidad y Cero Falsos Positivos:**
+     - En el modal de detalle de novedad (`selectedNoveltyDetail`), el dictamen de calidad refleja con precisión el desglose de ítems imputados y el concepto específico que ampara al producto inspeccionado.
+     - Prevalencia absoluta de `#ID` contable (`accounting_id`) sobre cualquier mención de `SKU`.
+     - Cero emojis unicode (100% componentes vectoriales SVG de `lucide-react`).
+     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
+### Escenario 422: Auditoría Técnica SAC & Diagnóstico Granular de Causa Raíz (RCA) y Afectación por Producto (SDD v1.9.377)
+- **Given** el módulo de Servicio al Cliente & Auditoría Técnica SAC (`src/app/admin/customer-service/components/PqrAuditModal.tsx`), la taxonomía de fallas técnicas (`src/lib/rcaTaxonomy.ts`), la persistencia en `billing_returns` (`reason` y `notes`), el payload JSONB `rca_imputation_data` en `customer_service_pqrs`, y el Acta Oficial RNC Imprimible (`src/app/admin/customer-service/rnc/[id]/print/page.tsx`):
+  - Un auditor de calidad o SAC abre el modal de auditoría técnica sobre un pedido con uno o múltiples productos en reclamación (`caseReturns`).
+- **When** el auditor interactúa con el **Paso 1 (Hecho & Evidencias)** y el **Paso 3 (Causa Raíz & Imputación)**:
+- **Then** el sistema garantiza las siguientes capacidades e invariantes de diagnóstico granular de calidad:
+  1. **Captura Ergonómica en Paso 1 (Hecho & Evidencias):**
+     - En el bloque de registro de novedades, se habilita el campo de texto explícito *"Descripción / Hallazgo de Afectación al Producto"* junto al selector de causal y cantidad afectada.
+     - En la tabla de productos declarados (`caseReturns`), cada tarjeta de producto expone un campo editable inline de *Afectación* con sincronización bidireccional automática a la base de datos (`billing_returns.notes` y `billing_returns.reason` con patrón `[AFECTACIÓN: ...]` / `| Afectación: ...`) y botón de eliminación rápida (`Trash2`).
+  2. **Modo Dual de Diagnóstico en Paso 3 (Causa Raíz & Imputación):**
+     - La sección *1. Diagnóstico de Causa Raíz (RCA)* incorpora un control de alternancia conmutador:
+       - **Diagnóstico General:** Aplica la Macrocausa (L1) y Subtipo general (L2) a todo el expediente (para reclamos homogéneos).
+       - **Por Producto:** Despliega la matriz técnica de productos reclamados, permitiendo a los auditores afinar para cada ítem individual su propio Subtipo Técnico L2 (ej. daño mecánico en canastilla vs hongo/biológico vs calibre) y su nota descriptiva de afectación física directa.
+  3. **Persistencia e Integración de Contratos:**
+     - Al serializar los datos en `buildSerializedItemImputations`, cada ítem de reclamación guarda en `itemImputations[]`:
+       - `categoryL1`: Macrocausa general seleccionada.
+       - `subtypeL2`: Subtipo específico asignado al ítem (o fallback a L2 general).
+       - `notes`: Descripción de la afectación física individual del producto.
+     - Preservación en borrador local (`localStorage`) con auto-guardado reactivo (debounce 400ms) y restauración exacta al reabrir el caso.
+  4. **Fidelidad en Acta RNC Imprimible:**
+     - En la vista de impresión Carta SGC Golden Print (`/rnc/[id]/print`), la tabla de productos no conformes renderiza bajo la causal el hallazgo de afectación específico por producto en tipografía técnica (`• Hallazgo/Afectación: ...`).
+  5. **Reglas de Calidad y Estándares Visuales:**
+     - Cero emojis unicode (100% componentes vectoriales SVG de `lucide-react`: `AlertTriangle`, `Trash2`, `Sparkles`, `PackageMinus`, `PackageX`, `Check`).
+     - Prevalencia absoluta de ID Contable (`#ID`).
+     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
