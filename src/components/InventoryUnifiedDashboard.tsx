@@ -46,7 +46,10 @@ import {
     ShoppingCart,
     Search,
     HelpCircle,
-    Info
+    Info,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react';
 import { WorkCell, WorkCellHistoryEntry } from '@/types/workCells';
 import InventoryWasteModal from '@/components/InventoryWasteModal';
@@ -56,6 +59,7 @@ import FastPlazaPurchasesModal from '@/components/FastPlazaPurchasesModal';
 
 type TimeRange = 'today' | '7d' | '15d' | '30d' | 'this_month';
 type ShrinkageTimeScale = 'week' | 'month' | 'quarter';
+type ShrinkageSortKey = 'product' | 'purchased' | 'waste' | 'delivered' | 'pct_week' | 'pct_month' | 'pct_quarter';
 
 // Compact money formatter for large figures ($9.87B, $35.9M, $45.000)
 const formatCompactMoney = (num: number): string => {
@@ -171,6 +175,10 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const [shrinkageScale, setShrinkageScale] = useState<ShrinkageTimeScale>('week');
     const [shrinkageSearch, setShrinkageSearch] = useState<string>('');
     const [onlyWithShrinkageOrFlow, setOnlyWithShrinkageOrFlow] = useState<boolean>(true);
+    const [shrinkageSort, setShrinkageSort] = useState<{
+        colKey: ShrinkageSortKey;
+        direction: 'asc' | 'desc';
+    } | null>(null);
     const [activeShrinkageTooltip, setActiveShrinkageTooltip] = useState<string | null>(null);
     
     // Centro de Informes & Exportaciones
@@ -245,10 +253,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
                 supabase.from('inventory_movements')
                     .select('id, product_id, quantity, type, notes, created_at, reference_type')
+                    .not('reference_type', 'like', 'sandbox_%')
                     .gte('created_at', startIso)
                     .lte('created_at', endIso),
                 supabase.from('inventory_movements')
                     .select('id, product_id, quantity, type, notes, created_at, reference_type')
+                    .not('reference_type', 'like', 'sandbox_%')
                     .gte('created_at', quarterStartIso)
                     .lte('created_at', endIso)
                     .limit(10000),
@@ -290,8 +300,10 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
             setProducts(productsRes.data || []);
             setStocks(stocksRes.data || []);
-            setMovements(movementsRes.data || []);
-            setQuarterlyMovements(quarterlyMovsRes.data || []);
+            const cleanMovements = (movementsRes.data || []).filter((m: any) => !m.reference_type?.startsWith('sandbox_') && !m.notes?.includes('[SANDBOX]'));
+            const cleanQuarterly = (quarterlyMovsRes.data || []).filter((m: any) => !m.reference_type?.startsWith('sandbox_') && !m.notes?.includes('[SANDBOX]'));
+            setMovements(cleanMovements);
+            setQuarterlyMovements(cleanQuarterly);
             setTasks(tasksRes.data || []);
             setCollaborators(collabsRes.data || []);
             setClosings(closingsRes.data || []);
@@ -463,7 +475,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
         let exitKg = 0;
         let wasteKg = 0;
         let wasteCost = 0;
-        const productWasteMap: Record<string, { kg: number; cost: number; name: string; sku: string }> = {};
+        const productWasteMap: Record<string, { kg: number; cost: number; name: string; accounting_id: string }> = {};
 
         const productDict = new Map<string, any>();
         products.forEach(p => productDict.set(p.id, p));
@@ -480,10 +492,10 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
                 const prod = productDict.get(m.product_id);
                 const name = prod?.name || 'Producto Desconocido';
-                const sku = prod?.sku || '---';
+                const accounting_id = prod?.accounting_id || '---';
 
                 if (!productWasteMap[m.product_id]) {
-                    productWasteMap[m.product_id] = { kg: 0, cost: 0, name, sku };
+                    productWasteMap[m.product_id] = { kg: 0, cost: 0, name, accounting_id };
                 }
                 productWasteMap[m.product_id].kg += q;
                 productWasteMap[m.product_id].cost += lossAmount;
@@ -500,10 +512,10 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
                     const prod = productDict.get(m.product_id);
                     const name = prod?.name || 'Producto Desconocido';
-                    const sku = prod?.sku || '---';
+                    const accounting_id = prod?.accounting_id || '---';
 
                     if (!productWasteMap[m.product_id]) {
-                        productWasteMap[m.product_id] = { kg: 0, cost: 0, name, sku };
+                        productWasteMap[m.product_id] = { kg: 0, cost: 0, name, accounting_id };
                     }
                     productWasteMap[m.product_id].kg += q;
                     productWasteMap[m.product_id].cost += lossAmount;
@@ -650,6 +662,22 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     }, [closings, movements, costMatrix]);
 
     // 6. Registro Histórico de Mermas por Producto en 3 Magnitudes de Tiempo (Semana por Días, Mes por Semanas, Trimestre por Meses + Comparativo — Escenario 245)
+    // Controlador de ordenamiento de columnas de la tabla de mermas
+    const handleToggleShrinkageSort = useCallback((key: ShrinkageSortKey) => {
+        setShrinkageSort(prev => {
+            if (!prev || prev.colKey !== key) {
+                // Sentido inicial: 'asc' para texto (nombre de producto), 'desc' para métricas numéricas y porcentajes
+                return { colKey: key, direction: key === 'product' ? 'asc' : 'desc' };
+            }
+            if (prev.direction === (key === 'product' ? 'asc' : 'desc')) {
+                // Invertir sentido
+                return { colKey: key, direction: key === 'product' ? 'desc' : 'asc' };
+            }
+            // Tercer clic: restablecer al orden inteligente por defecto
+            return null;
+        });
+    }, []);
+
     const historicalShrinkageData = useMemo(() => {
         const now = new Date();
         const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -853,7 +881,29 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 return true;
             })
             .sort((a, b) => {
-                // Ordenar primero por mayor % de merma en la escala activa, luego por mayor volumen de merma en Kg
+                if (shrinkageSort) {
+                    const { colKey, direction } = shrinkageSort;
+                    const factor = direction === 'asc' ? 1 : -1;
+
+                    switch (colKey) {
+                        case 'product':
+                            return factor * a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+                        case 'purchased':
+                            return factor * (a.activeTotal.purchasedKg - b.activeTotal.purchasedKg);
+                        case 'waste':
+                            return factor * (a.activeTotal.totalWasteKg - b.activeTotal.totalWasteKg);
+                        case 'delivered':
+                            return factor * (a.activeTotal.deliveredKg - b.activeTotal.deliveredKg);
+                        case 'pct_week':
+                            return factor * (a.weekTotal.shrinkagePct - b.weekTotal.shrinkagePct);
+                        case 'pct_month':
+                            return factor * (a.monthTotal.shrinkagePct - b.monthTotal.shrinkagePct);
+                        case 'pct_quarter':
+                            return factor * (a.quarterTotal.shrinkagePct - b.quarterTotal.shrinkagePct);
+                    }
+                }
+
+                // Orden por defecto: mayor % de merma en la escala activa, luego por mayor volumen de merma en Kg
                 if (Math.abs(b.activeTotal.shrinkagePct - a.activeTotal.shrinkagePct) > 0.05) {
                     return b.activeTotal.shrinkagePct - a.activeTotal.shrinkagePct;
                 }
@@ -869,7 +919,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             quarterMonthBuckets,
             rows
         };
-    }, [filteredProducts, quarterlyMovements, movements, costMatrix, shrinkageScale, shrinkageSearch, onlyWithShrinkageOrFlow]);
+    }, [filteredProducts, quarterlyMovements, movements, costMatrix, shrinkageScale, shrinkageSearch, onlyWithShrinkageOrFlow, shrinkageSort]);
 
     // Motor Exportador de Informes Ejecutivos (Centro de Descargas Centralizado)
     const handleExportExecutiveReports = useCallback(async (type: 'kardex' | 'stock' | 'payroll' | 'daily_balance') => {
@@ -964,45 +1014,67 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     }, [products, stocks, costMatrix, movements, timeRange]);
 
     return (
-        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem 3rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.75rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.85rem', fontFamily: THEME.typography.fontFamilySecondary }}>
             
-            {/* 1. COCKPIT HEADER & TIME RANGE / CELL SELECTOR */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: THEME.colors.surface, padding: '1.25rem 1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                <div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: THEME.typography.fontFamilyMain, letterSpacing: '-0.02em' }}>
-                        <BarChart3 size={24} color={THEME.colors.primary} /> Cockpit de Inventarios & Telemetría Operativa
-                    </h1>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500', fontFamily: THEME.typography.fontFamilySecondary }}>
-                        Monitoreo en tiempo real de valor en bodega, stock físico, mermas operativas y gobernanza de células.
-                    </p>
-                </div>
+            {/* 1. COCKPIT COMMAND BAR (FROSTED INDUSTRIAL SKIN 1 - SPACEX SINGLE ROW) */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                backgroundColor: THEME.colors.surface,
+                padding: '0.55rem 0.9rem',
+                borderRadius: THEME.radius.lg,
+                border: `1px solid ${THEME.colors.border}`,
+                boxShadow: THEME.shadow.sm
+            }}>
+                {/* Left: Branding & Fast Selectors */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: THEME.radius.sm,
+                            backgroundColor: THEME.colors.primaryLight,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: THEME.colors.primary
+                        }}>
+                            <BarChart3 size={15} strokeWidth={2.4} />
+                        </div>
+                        <span style={{ fontSize: '0.88rem', fontWeight: '800', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilyMain, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                            Telemetría de Inventarios
+                        </span>
+                    </div>
 
-                {/* Controls: Cell filter dropdown + Time range selector pills + Refresh button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                    <div style={{ width: '1px', height: '18px', backgroundColor: THEME.colors.border, margin: '0 2px' }} />
+
                     {/* Cell Selector Pill */}
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
+                        gap: '5px',
                         backgroundColor: '#F8FAFC',
-                        padding: '4px 10px',
+                        padding: '3px 8px',
                         borderRadius: THEME.radius.md,
                         border: `1px solid ${THEME.colors.border}`
                     }}>
-                        <Filter size={13} color={THEME.colors.textSecondary} />
-                        <span style={{ fontSize: '0.72rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilyMain }}>Célula:</span>
+                        <Filter size={12} color={THEME.colors.textSecondary} />
+                        <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', fontFamily: THEME.typography.fontFamilyMain }}>Célula:</span>
                         <select
                             value={selectedCellId}
                             onChange={(e) => setSelectedCellId(e.target.value)}
                             style={{
                                 border: 'none',
                                 backgroundColor: 'transparent',
-                                fontSize: '0.78rem',
+                                fontSize: '0.76rem',
                                 fontWeight: '700',
                                 color: THEME.colors.textMain,
                                 outline: 'none',
                                 cursor: 'pointer',
-                                maxWidth: '220px',
+                                maxWidth: '210px',
                                 fontFamily: THEME.typography.fontFamilySecondary
                             }}
                         >
@@ -1016,7 +1088,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* Time Range Pills */}
-                    <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                    <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
                         {(
                             [
                                 { id: 'today', label: 'Hoy' },
@@ -1032,8 +1104,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     key={t.id}
                                     onClick={() => setTimeRange(t.id)}
                                     style={{
-                                        padding: '0.35rem 0.85rem',
-                                        fontSize: '0.78rem',
+                                        padding: '0.3rem 0.65rem',
+                                        fontSize: '0.74rem',
                                         fontWeight: isSelected ? '800' : '600',
                                         color: isSelected ? '#FFFFFF' : THEME.colors.textSecondary,
                                         backgroundColor: isSelected ? THEME.colors.primary : 'transparent',
@@ -1057,7 +1129,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         disabled={loading || refreshing}
                         title="Actualizar métricas en tiempo real"
                         style={{
-                            padding: '0.45rem',
+                            padding: '0.38rem',
                             borderRadius: THEME.radius.md,
                             backgroundColor: '#F8FAFC',
                             border: `1px solid ${THEME.colors.border}`,
@@ -1068,9 +1140,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             justifyContent: 'center'
                         }}
                     >
-                        <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
                     </button>
+                </div>
 
+                {/* Right: Operational Actions & Reports */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                     {/* CENTRO DE INFORMES & EXPORTACIONES EJECUTIVAS */}
                     <div style={{ position: 'relative' }} ref={reportsMenuRef}>
                         <button
@@ -1079,13 +1154,13 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '0.42rem 0.85rem',
+                                gap: '5px',
+                                padding: '0.38rem 0.75rem',
                                 borderRadius: THEME.radius.md,
                                 backgroundColor: isReportsMenuOpen ? '#ECFDF5' : '#FFFFFF',
                                 border: `1px solid ${isReportsMenuOpen ? '#10B981' : THEME.colors.border}`,
                                 color: isReportsMenuOpen ? '#0D7A57' : THEME.colors.textMain,
-                                fontSize: '0.78rem',
+                                fontSize: '0.76rem',
                                 fontWeight: '800',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
@@ -1093,9 +1168,9 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             }}
                             title="Centro de Extracción de Informes y Descargas Excel"
                         >
-                            <Download size={14} color={isReportsMenuOpen ? '#0D7A57' : THEME.colors.textSecondary} />
-                            <span>Informes & Exportaciones</span>
-                            <ChevronDown size={13} style={{ transform: isReportsMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                            <Download size={13} color={isReportsMenuOpen ? '#0D7A57' : THEME.colors.textSecondary} />
+                            <span>Informes</span>
+                            <ChevronDown size={12} style={{ transform: isReportsMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                         </button>
 
                         {isReportsMenuOpen && (
@@ -1238,170 +1313,6 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </div>
                         )}
                     </div>
-
-                    {/* DROPDOWN NOVEDADES OPERATIVAS (SPEC.md §8.8.11) */}
-                    <div style={{ position: 'relative' }} ref={noveltyMenuRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsNoveltyMenuOpen(prev => !prev)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '0.42rem 0.85rem',
-                                borderRadius: THEME.radius.md,
-                                backgroundColor: isNoveltyMenuOpen ? '#FEF3C7' : '#FFFFFF',
-                                border: '1.5px solid #F59E0B',
-                                color: '#B45309',
-                                fontSize: '0.78rem',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                boxShadow: THEME.shadow.sm
-                            }}
-                            title="Registrar Mermas, Descuento de Nómina o Venta Extra"
-                        >
-                            <Plus size={14} strokeWidth={2.5} />
-                            <span>+ Registrar Novedad</span>
-                            <ChevronDown size={13} strokeWidth={2.5} style={{ transform: isNoveltyMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
-                        </button>
-
-                        {isNoveltyMenuOpen && (
-                            <div style={{
-                                position: 'absolute',
-                                right: 0,
-                                top: 'calc(100% + 6px)',
-                                width: '270px',
-                                backgroundColor: '#FFFFFF',
-                                borderRadius: THEME.radius.md,
-                                border: `1px solid ${THEME.colors.border}`,
-                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 0 1px 1px rgba(0, 0, 0, 0.05)',
-                                zIndex: 100,
-                                padding: '6px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '3px'
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsNoveltyMenuOpen(false);
-                                        setIsWasteModalOpen(true);
-                                    }}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '8px',
-                                        padding: '8px 10px',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        color: '#0F172A',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FEF3C7')}
-                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                >
-                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#FDE68A', color: '#B45309', display: 'flex' }}>
-                                        <Trash2 size={13} strokeWidth={2.2} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Merma / Baja de Producto</div>
-                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Pesada, daño o descapote</div>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsNoveltyMenuOpen(false);
-                                        setIsPayrollModalOpen(true);
-                                    }}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '8px',
-                                        padding: '8px 10px',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        color: '#0F172A',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EFF6FF')}
-                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                >
-                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#DBEAFE', color: '#1D4ED8', display: 'flex' }}>
-                                        <User size={13} strokeWidth={2.2} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Descuento de Nómina</div>
-                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta autorizada a empleados</div>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsNoveltyMenuOpen(false);
-                                        setIsAdditionalSalesModalOpen(true);
-                                    }}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '8px',
-                                        padding: '8px 10px',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        color: '#0F172A',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#FAF5FF')}
-                                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                >
-                                    <div style={{ marginTop: '2px', padding: '4px', borderRadius: '5px', backgroundColor: '#F3E8FF', color: '#7E22CE', display: 'flex' }}>
-                                        <ShoppingCart size={13} strokeWidth={2.2} />
-                                    </div>
-                                    <div>
-                                        <div style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A' }}>Venta Extra / Mostrador</div>
-                                        <div style={{ fontSize: '0.66rem', color: '#64748B' }}>Venta directa en bodega</div>
-                                    </div>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* BOTÓN COMPRAS PLAZA (SPEC.md §8.8.11) */}
-                    <button
-                        type="button"
-                        onClick={() => setIsFastPlazaModalOpen(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '0.42rem 0.85rem',
-                            borderRadius: THEME.radius.md,
-                            border: '1.5px solid #0D7A57',
-                            backgroundColor: '#0D7A57',
-                            color: '#FFFFFF',
-                            fontSize: '0.78rem',
-                            fontWeight: '800',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 4px rgba(13, 122, 87, 0.25)',
-                            transition: 'all 0.15s ease'
-                        }}
-                        title="Ingesta directa de compras en Corabastos"
-                    >
-                        <Zap size={14} strokeWidth={2.5} />
-                        <span>Compras Plaza</span>
-                    </button>
                 </div>
             </div>
 
@@ -1415,7 +1326,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 }}>
                     
                     {/* CARD 1: VALOR EN BODEGA */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1427,7 +1338,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <DollarSign size={16} color={THEME.colors.primary} />
                             </div>
                         </div>
@@ -1443,7 +1354,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 lineHeight: 1.15
                             }}
                         >
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatHeroSales(totalStockValue).val}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1451,9 +1362,9 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {filteredProducts.length} SKUs
+                                {filteredProducts.length} Productos
                             </span>
                             <strong style={{ color: THEME.colors.primary, fontWeight: '800', fontFamily: THEME.typography.fontFamilyMain, flexShrink: 0, marginLeft: '4px' }}>
                                 {formatCompactMoney(totalStockValue)}
@@ -1462,7 +1373,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* CARD 2: STOCK FÍSICO EN PISO */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1474,7 +1385,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: THEME.radius.sm, backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Package size={16} color="#334155" />
                             </div>
                         </div>
@@ -1490,7 +1401,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 lineHeight: 1.15
                             }}
                         >
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatHeroVolume(totalPhysicalStockQty).val}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1498,7 +1409,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {activeCell ? activeCell.name : 'Consolidado'}
                             </span>
@@ -1509,7 +1420,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* CARD 3: ROTACIÓN (DOH) */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1533,13 +1444,13 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: daysOnHand > 4 ? '#FEF3C7' : THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: THEME.radius.sm, backgroundColor: daysOnHand > 4 ? '#FEF3C7' : THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Clock size={16} color={daysOnHand > 4 ? '#D97706' : THEME.colors.primary} />
                             </div>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.3rem 0 0 0', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatNumber(daysOnHand, 1)}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1547,7 +1458,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 Velocidad
                             </span>
@@ -1558,7 +1469,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* CARD 4: EXACTITUD DE INVENTARIO (IRA %) */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1582,13 +1493,13 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: THEME.radius.sm, backgroundColor: THEME.colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <CheckCircle2 size={16} color={THEME.colors.primary} />
                             </div>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.3rem 0 0 0', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: iraAccuracy >= 98 ? THEME.colors.primary : '#D97706', letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: iraAccuracy >= 98 ? THEME.colors.primary : '#D97706', letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : `${formatNumber(iraAccuracy, 1)}%`}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1596,7 +1507,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 Tol: ±2.5%
                             </span>
@@ -1607,7 +1518,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* CARD 5: TASA DE MERMA OPERATIVA */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1647,7 +1558,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.3rem 0 0 0', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : `${formatNumber(massBalance.shrinkageRate, 2)}%`}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1655,7 +1566,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {formatNumber(massBalance.wasteKg, 1)} Kg
                             </span>
@@ -1666,7 +1577,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     </div>
 
                     {/* CARD 6: IMPACTO EN MERMA ($ D+P+F) */}
-                    <div style={{ backgroundColor: THEME.colors.surface, padding: '1rem 1.05rem', minHeight: '142px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ backgroundColor: THEME.colors.surface, padding: '0.65rem 0.8rem', minHeight: '105px', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: THEME.typography.fontFamilyMain, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1678,7 +1589,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: '30px', height: '30px', borderRadius: THEME.radius.md, backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: THEME.radius.sm, backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <DollarSign size={16} color="#475569" />
                             </div>
                         </div>
@@ -1694,7 +1605,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 lineHeight: 1.15
                             }}
                         >
-                            <span style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
+                            <span style={{ fontSize: '1.3rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', fontFamily: THEME.typography.fontFamilyMain }}>
                                 {loading ? '...' : formatHeroSales(massBalance.wasteCost).val}
                             </span>
                             <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilyMain }}>
@@ -1702,7 +1613,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                             </span>
                         </div>
                         
-                        <div style={{ marginTop: '0.55rem', paddingTop: '0.45rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
+                        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: `1px solid ${THEME.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem' }}>
                             <span style={{ color: THEME.colors.textSecondary, fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 Consolidado
                             </span>
@@ -1936,7 +1847,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                     <BarChart3 size={20} color={THEME.colors.primary} /> Pareto Top 5: Fuga Financiera ($)
                                 </h2>
                                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                    Los 5 SKUs con mayor impacto acumulado de merma, pesada y faltante.
+                                    Los 5 productos con mayor impacto acumulado de merma, pesada y faltante.
                                 </p>
                             </div>
                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#334155', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px 8px', borderRadius: THEME.radius.sm, fontFamily: THEME.typography.fontFamilySecondary }}>
@@ -1981,7 +1892,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                                         {item.name}
                                                     </span>
                                                     <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        ({item.sku})
+                                                        {item.accounting_id && item.accounting_id !== '---' ? `(#${item.accounting_id})` : ''}
                                                     </span>
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
@@ -2028,7 +1939,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem' }}>Célula / Línea</th>
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem' }}>Líder Responsable</th>
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem' }}>Suplente</th>
-                                <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem', textAlign: 'center' }}>SKUs</th>
+                                <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem', textAlign: 'center' }}>Productos</th>
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem', textAlign: 'right' }}>Stock Físico (KG)</th>
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem', textAlign: 'right' }}>Valor Bodega ($)</th>
                                 <th style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.75rem 1rem', textAlign: 'right' }}>Fuga Merma ($)</th>
@@ -2331,12 +2242,12 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
                 {/* Barra Pedagógica de Altura Fija (Cero salto de layout al hacer hover en los encabezados) */}
                 <div style={{
-                    backgroundColor: activeShrinkageTooltip ? '#0F172A' : '#F8FAFC',
-                    color: activeShrinkageTooltip ? '#F8FAFC' : '#64748B',
+                    backgroundColor: activeShrinkageTooltip ? '#0F172A' : (shrinkageSort ? '#F0FDF4' : '#F8FAFC'),
+                    color: activeShrinkageTooltip ? '#F8FAFC' : (shrinkageSort ? '#166534' : '#64748B'),
                     padding: '0.5rem 0.95rem',
                     minHeight: '38px',
                     borderRadius: THEME.radius.md,
-                    border: activeShrinkageTooltip ? '1px solid #334155' : `1px dashed ${THEME.colors.border}`,
+                    border: activeShrinkageTooltip ? '1px solid #334155' : (shrinkageSort ? '1px solid #BBF7D0' : `1px dashed ${THEME.colors.border}`),
                     fontSize: '0.75rem',
                     display: 'flex',
                     alignItems: 'center',
@@ -2345,38 +2256,126 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     transition: 'background-color 0.15s ease, color 0.15s ease'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Info size={15} color={activeShrinkageTooltip ? '#34D399' : '#94A3B8'} style={{ flexShrink: 0 }} />
+                        <Info size={15} color={activeShrinkageTooltip ? '#34D399' : (shrinkageSort ? '#10B981' : '#94A3B8')} style={{ flexShrink: 0 }} />
                         <span>
-                            {activeShrinkageTooltip || 'Pasa el cursor sobre cualquier encabezado de columna (?) para ver la definición exacta de esa métrica o periodo.'}
+                            {activeShrinkageTooltip || (
+                                shrinkageSort ? (
+                                    <span>
+                                        <strong>Orden activo:</strong> {
+                                            shrinkageSort.colKey === 'product' ? 'Código / Producto (A-Z)' :
+                                            shrinkageSort.colKey === 'purchased' ? 'Kilos Comprados' :
+                                            shrinkageSort.colKey === 'waste' ? 'Kilos de Merma (P+Q+R)' :
+                                            shrinkageSort.colKey === 'delivered' ? 'Kilos Entregados' :
+                                            shrinkageSort.colKey === 'pct_week' ? '% Merma Esta Semana' :
+                                            shrinkageSort.colKey === 'pct_month' ? '% Merma Este Mes' : '% Merma Este Trimestre'
+                                        } ({shrinkageSort.direction === 'desc' ? 'Mayor a menor ▼' : 'Menor a mayor ▲'}). Haz clic en el encabezado para invertir o en restablecer.
+                                    </span>
+                                ) : 'Pasa el cursor sobre cualquier encabezado (?) o haz clic en los títulos con flecha para ordenar la tabla según la columna deseada.'
+                            )}
                         </span>
                     </div>
+                    {shrinkageSort && (
+                        <button
+                            type="button"
+                            onClick={() => setShrinkageSort(null)}
+                            style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #86EFAC',
+                                borderRadius: '6px',
+                                padding: '3px 9px',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                color: '#166534',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}
+                            title="Restablecer orden inteligente por defecto"
+                        >
+                            <span>Restablecer orden</span>
+                        </button>
+                    )}
                 </div>
 
-                {/* Tabla Dinámica según la Magnitud de Tiempo Seleccionada */}
+                {/* Tabla Dinámica según la Magnitud de Tiempo Seleccionada (Estándar Galerías: border-separate border-spacing-0) */}
                 <div style={{ overflowX: 'auto', maxHeight: '540px', overflowY: 'auto', border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.78rem', fontFamily: THEME.typography.fontFamilySecondary }}>
-                        <thead style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}` }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.78rem', fontFamily: THEME.typography.fontFamilySecondary }}>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F8FAFC' }}>
                             <tr>
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('CÓD / PRODUCTO: Identificador contable (accounting_id), presentación del producto y célula operativa responsable en bodega.')}
+                                    onClick={() => handleToggleShrinkageSort('product')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('CÓD / PRODUCTO: Identificador contable (accounting_id), presentación del producto y célula operativa responsable en bodega. Clic para ordenar A-Z / Z-A.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="Código contable (accounting_id), nombre de la presentación y célula responsable en bodega."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.85rem', whiteSpace: 'nowrap' }}
+                                    title="Ordenar por Código y Nombre de Producto"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.85rem',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        backgroundColor: shrinkageSort?.colKey === 'product' ? '#E2E8F0' : '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                         <span>CÓD / PRODUCTO</span>
-                                        <HelpCircle size={11} color="#94A3B8" />
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'product' ? (
+                                                shrinkageSort.direction === 'asc' ? (
+                                                    <ArrowUp size={12} color="#059669" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowDown size={12} color="#059669" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#94A3B8" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                        <HelpCircle size={10} color="#94A3B8" />
                                     </div>
                                 </th>
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('KG COMPRADOS (ENTRADAS): Total de kilos recepcionados desde compra en Corabastos / proveedores (Col G de Sábana Oficial) durante el periodo seleccionado.')}
+                                    onClick={() => handleToggleShrinkageSort('purchased')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('KG COMPRADOS (ENTRADAS): Total de kilos recepcionados desde compra en Corabastos / proveedores (Col G de Sábana Oficial) durante el periodo seleccionado. Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="Total de kilos comprados/recepcionados (Col G) en la ventana de tiempo activa."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#047857' }}
+                                    title="Ordenar por Kilos Comprados"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.65rem',
+                                        textAlign: 'right',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        color: '#047857',
+                                        backgroundColor: shrinkageSort?.colKey === 'purchased' ? '#D1FAE5' : '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>COMPRADO ({shrinkageScale === 'week' ? '7D' : shrinkageScale === 'month' ? 'MES' : 'TRIM'})</span>
-                                        <HelpCircle size={11} color="#047857" />
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'purchased' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#047857" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#047857" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#047857" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                        <HelpCircle size={10} color="#047857" />
                                     </div>
                                 </th>
 
@@ -2387,7 +2386,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         onMouseEnter={() => setActiveShrinkageTooltip(`${day.label} (${day.subLabel}): Muestra el % de merma real de ese día y debajo los kilogramos perdidos en Pesada + Desperdicio + Basura.`)}
                                         onMouseLeave={() => setActiveShrinkageTooltip(null)}
                                         title={`Desperdicio y merma real del día ${day.label} (${day.subLabel}): % sobre volumen procesado y Kg perdidos.`}
-                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0', borderBottom: `2px solid ${THEME.colors.border}` }}
                                     >
                                         <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.72rem' }}>{day.label}</div>
                                         <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{day.subLabel}</div>
@@ -2401,7 +2400,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         onMouseEnter={() => setActiveShrinkageTooltip(`${wk.label} (${wk.subLabel}): Muestra el % de merma real acumulado en esa semana del mes y los Kg de merma vs Kg procesados.`)}
                                         onMouseLeave={() => setActiveShrinkageTooltip(null)}
                                         title={`Merma real acumulada en ${wk.label} (${wk.subLabel}): % de merma y Kg perdidos en esa semana.`}
-                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0', borderBottom: `2px solid ${THEME.colors.border}` }}
                                     >
                                         <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.73rem' }}>{wk.label}</div>
                                         <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{wk.subLabel}</div>
@@ -2415,7 +2414,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                         onMouseEnter={() => setActiveShrinkageTooltip(`Mes de ${mo.label} ${mo.subLabel}: Muestra el % de merma real mensual y los Kg perdidos en ese mes.`)}
                                         onMouseLeave={() => setActiveShrinkageTooltip(null)}
                                         title={`Merma real consolidada en ${mo.label} ${mo.subLabel}.`}
-                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0' }}
+                                        style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.55rem 0.65rem', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#F1F5F9', borderLeft: '1px solid #E2E8F0', borderBottom: `2px solid ${THEME.colors.border}` }}
                                     >
                                         <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.73rem' }}>{mo.label}</div>
                                         <div style={{ fontSize: '0.63rem', color: '#64748B', fontWeight: 600 }}>{mo.subLabel}</div>
@@ -2423,52 +2422,192 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 ))}
 
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('MERMA DESAGREGADA (P+Q+R): Suma física en Kg de Pesada (Col P) + Desperdicio (Col Q) + Basura/Descapote (Col R) + Faltantes en el periodo.')}
+                                    onClick={() => handleToggleShrinkageSort('waste')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('MERMA DESAGREGADA (P+Q+R): Suma física en Kg de Pesada (Col P) + Desperdicio (Col Q) + Basura (Col R) + Faltantes en el periodo. Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="Kilos totales perdidos en Merma (Col P Pesada + Col Q Desperdicio + Col R Basura + Faltantes) y su costo en pesos."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#B45309', borderLeft: '1px solid #E2E8F0' }}
+                                    title="Ordenar por Kilos de Merma"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.65rem',
+                                        textAlign: 'right',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        color: '#B45309',
+                                        borderLeft: '1px solid #E2E8F0',
+                                        backgroundColor: shrinkageSort?.colKey === 'waste' ? '#FEF3C7' : '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>MERMA (P+Q+R)</span>
-                                        <HelpCircle size={11} color="#B45309" />
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'waste' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#B45309" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#B45309" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#B45309" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                        <HelpCircle size={10} color="#B45309" />
                                     </div>
                                 </th>
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('KG ENTREGADOS / VENDIDOS: Kilos efectivos que sí salieron facturados/entregados a clientes luego de descontar la merma.')}
+                                    onClick={() => handleToggleShrinkageSort('delivered')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('KG ENTREGADOS / VENDIDOS: Kilos efectivos que sí salieron facturados/entregados a clientes luego de descontar la merma. Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="Kilos efectivos vendidos/entregados a clientes después de la merma."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.65rem', textAlign: 'right', whiteSpace: 'nowrap', color: '#1E293B' }}
+                                    title="Ordenar por Kilos Entregados/Vendidos"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.65rem',
+                                        textAlign: 'right',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        color: '#1E293B',
+                                        backgroundColor: shrinkageSort?.colKey === 'delivered' ? '#E2E8F0' : '#F8FAFC',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', width: '100%' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
                                         <span>ENTREGADO</span>
-                                        <HelpCircle size={11} color="#64748B" />
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'delivered' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#1E293B" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#1E293B" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#64748B" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                        <HelpCircle size={10} color="#64748B" />
                                     </div>
                                 </th>
 
                                 {/* COMPARATIVO DE LAS 3 MAGNITUDES SIEMPRE VISIBLE AL DERECHO PARA CALIBRAR FRECUENCIA */}
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTA SEMANA: Porcentaje de merma real de los últimos 7 días = (Kg Merma 7d / Kg Procesados 7d) × 100.')}
+                                    onClick={() => handleToggleShrinkageSort('pct_week')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTA SEMANA: Porcentaje de merma real de los últimos 7 días = (Kg Merma 7d / Kg Procesados 7d) * 100. Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="% Merma Real de Esta Semana (7 días)."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'week' ? '#ECFDF5' : '#F8FAFC', borderLeft: '2px solid #CBD5E1' }}
+                                    title="Ordenar por % Merma Semana"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.6rem',
+                                        textAlign: 'center',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        backgroundColor: shrinkageSort?.colKey === 'pct_week' ? '#CBD5E1' : (shrinkageScale === 'week' ? '#ECFDF5' : '#F8FAFC'),
+                                        borderLeft: '2px solid #CBD5E1',
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    % SEMANA
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
+                                        <span>% SEMANA</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'pct_week' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#0F172A" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#0F172A" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#64748B" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                    </div>
                                 </th>
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE MES: Porcentaje de merma real consolidado del mes en curso = (Kg Merma Mes / Kg Procesados Mes) × 100.')}
+                                    onClick={() => handleToggleShrinkageSort('pct_month')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE MES: Porcentaje de merma real consolidado del mes en curso = (Kg Merma Mes / Kg Procesados Mes) * 100. Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="% Merma Real de Este Mes."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'month' ? '#ECFDF5' : '#F8FAFC' }}
+                                    title="Ordenar por % Merma Mes"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.6rem',
+                                        textAlign: 'center',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        backgroundColor: shrinkageSort?.colKey === 'pct_month' ? '#CBD5E1' : (shrinkageScale === 'month' ? '#ECFDF5' : '#F8FAFC'),
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    % MES
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
+                                        <span>% MES</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'pct_month' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#0F172A" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#0F172A" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#64748B" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                    </div>
                                 </th>
                                 <th
-                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE TRIMESTRE: Porcentaje estructural de merma real en los últimos 3 meses (90 días). Ideal para calibrar el % de Lista Institucional sin ruido de un día atípico.')}
+                                    onClick={() => handleToggleShrinkageSort('pct_quarter')}
+                                    onMouseEnter={() => setActiveShrinkageTooltip('% ESTE TRIMESTRE: Porcentaje estructural de merma real en los últimos 3 meses (90 días). Clic para ordenar.')}
                                     onMouseLeave={() => setActiveShrinkageTooltip(null)}
-                                    title="% Merma Real Consolidada del Trimestre (3 meses)."
-                                    style={{ ...THEME.typography.tableHeader, fontFamily: THEME.typography.fontFamilyMain, padding: '0.7rem 0.6rem', textAlign: 'center', whiteSpace: 'nowrap', backgroundColor: shrinkageScale === 'quarter' ? '#ECFDF5' : '#F8FAFC' }}
+                                    title="Ordenar por % Merma Trimestre"
+                                    style={{
+                                        ...THEME.typography.tableHeader,
+                                        fontFamily: THEME.typography.fontFamilyMain,
+                                        padding: '0.7rem 0.6rem',
+                                        textAlign: 'center',
+                                        whiteSpace: 'nowrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 20,
+                                        backgroundColor: shrinkageSort?.colKey === 'pct_quarter' ? '#CBD5E1' : (shrinkageScale === 'quarter' ? '#ECFDF5' : '#F8FAFC'),
+                                        borderBottom: `2px solid ${THEME.colors.border}`,
+                                        transition: 'background-color 0.15s ease'
+                                    }}
                                 >
-                                    % TRIMESTRE
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'center' }}>
+                                        <span>% TRIMESTRE</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                            {shrinkageSort?.colKey === 'pct_quarter' ? (
+                                                shrinkageSort.direction === 'desc' ? (
+                                                    <ArrowDown size={12} color="#0F172A" strokeWidth={2.5} />
+                                                ) : (
+                                                    <ArrowUp size={12} color="#0F172A" strokeWidth={2.5} />
+                                                )
+                                            ) : (
+                                                <ArrowUpDown size={11} color="#64748B" style={{ opacity: 0.45 }} />
+                                            )}
+                                        </span>
+                                    </div>
                                 </th>
                             </tr>
                         </thead>

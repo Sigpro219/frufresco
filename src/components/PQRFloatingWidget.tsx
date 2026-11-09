@@ -6,7 +6,7 @@ import {
     MessageSquarePlus, X, Send, CheckCircle2,
     UploadCloud, Loader2, Search, Building2, UserCheck,
     ShieldAlert, Settings, Users, Wrench, Clock,
-    AlertTriangle, PackageX, Truck, FileText, Edit3
+    AlertTriangle, PackageX, Truck, FileText, Edit3, Scale
 } from 'lucide-react';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
@@ -133,6 +133,15 @@ const QUICK_CHIPS: QuickChip[] = [
         scope: 'client',
         category: 'facturacion',
         defaultType: 'reclamo',
+        defaultPriority: 'normal'
+    },
+    {
+        id: 'client_sobrepeso',
+        label: 'Peso de más / Sobrepeso',
+        icon: Scale,
+        scope: 'client',
+        category: 'facturacion',
+        defaultType: 'peticion',
         defaultPriority: 'normal'
     },
     {

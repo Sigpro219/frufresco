@@ -3976,7 +3976,7 @@ useEffect(() => {
                         <div style={{ color: '#94A3B8', marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
                             <PackageOpen size={54} strokeWidth={1.2} />
                         </div>
-                        <div style={{ color: '#0F172A', fontWeight: '800', fontSize: '1.1rem', marginBottom: '0.4rem' }}>
+                        <div style={{ color: '#0F172A', fontWeight: '800', fontSize: '0.95rem', marginBottom: '0.4rem' }}>
                             No se encontraron pedidos con estos criterios
                         </div>
                         <div style={{ color: '#64748B', fontSize: '0.85rem', marginBottom: '1.5rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
@@ -4611,7 +4611,7 @@ useEffect(() => {
                     </>
                 )}
 
-                <div style={{ textAlign: 'center', marginTop: '1.5rem', color: '#94A3B8', fontSize: '0.8rem', fontWeight: '700' }}>
+                <div style={{ textAlign: 'center', marginTop: '1rem', color: '#94A3B8', fontSize: '0.8rem', fontWeight: '700' }}>
                     {filteredOrders.length} pedido(s) encontrado(s) en {viewMode === 'table' ? 'vista lista' : 'vista cuadrícula'}
                 </div>
 
@@ -6787,10 +6787,12 @@ useEffect(() => {
                             <div 
                                 style={{ 
                                     backgroundColor: 'white', 
-                                    padding: '2rem', 
+                                    padding: '1.25rem 1.5rem', 
                                     borderRadius: '24px', 
                                     width: '95%', 
                                     maxWidth: '820px', 
+                                    maxHeight: '90vh',
+                                    overflowY: 'auto',
                                     boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', 
                                     position: 'relative',
                                     textAlign: 'left'
@@ -6819,19 +6821,17 @@ useEffect(() => {
                                 </button>
 
                                 {/* Flex container for header */}
-                                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.65rem', flexWrap: 'wrap' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                                         {selectedProductForVariant.image_url ? (
                                             <img 
                                                 src={selectedProductForVariant.image_url} 
                                                 alt={selectedProductForVariant.name}
-                                                style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                                style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
                                             />
                                         ) : (
                                             <div style={{
-                                                width: '80px',
-                                                height: '80px',
-                                                borderRadius: '16px',
+                                                width: '48px', height: '48px', borderRadius: '10px',
                                                 backgroundColor: '#F3F4F6',
                                                 border: '1px solid #E5E7EB',
                                                 display: 'flex',
@@ -6839,11 +6839,11 @@ useEffect(() => {
                                                 justifyContent: 'center',
                                                 boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                             }}>
-                                                <Package size={32} style={{ color: '#9CA3AF' }} />
+                                                <Package size={22} style={{ color: '#9CA3AF' }} />
                                             </div>
                                         )}
                                         <div>
-                                            <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
+                                            <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForVariant.name}</h3>
                                             <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
                                                 Personaliza tu producto:
                                             </p>
@@ -6882,8 +6882,7 @@ useEffect(() => {
                                     gap: '12px',
                                     fontSize: '0.75rem',
                                     color: '#9CA3AF',
-                                    marginBottom: '1.5rem',
-                                    fontWeight: '700'
+                                    marginBottom: '0.75rem', fontWeight: '700'
                                 }}>
                                     <button
                                         type="button"
@@ -6934,6 +6933,7 @@ useEffect(() => {
                                 </div>
 
                                 {/* Options Rendering */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                 {normalizedLoadingOptions.map((opt: any, index: number) => {
                                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                                     const isGram = opt.name.toLowerCase().includes('gramaje');
@@ -6955,8 +6955,8 @@ useEffect(() => {
                                     const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
 
                                     return (
-                                        <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
-                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <div key={opt.name} style={{ marginBottom: '0.65rem', textAlign: 'left' }}>
+                                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                 {opt.name}
                                             </label>
                                             <select
@@ -7009,10 +7009,10 @@ useEffect(() => {
                                                 onKeyDown={(e) => handleSelectKeyDown(e, index, normalizedLoadingOptions.length)}
                                                 style={{
                                                     width: '100%',
-                                                    padding: '0.8rem',
+                                                    padding: '0.5rem 0.75rem',
                                                     border: '2px solid #E2E8F0',
                                                     borderRadius: '10px',
-                                                    fontSize: '1rem',
+                                                    fontSize: '0.92rem',
                                                     backgroundColor: '#F9FAFB',
                                                     outline: 'none',
                                                     transition: 'all 0.2s ease-in-out'
@@ -7042,10 +7042,12 @@ useEffect(() => {
                                     );
                                 })}
 
+                                </div>
+
                                 {/* Quantity & Unit select grid */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '0.75rem 0', textAlign: 'left' }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             Cantidad
                                         </label>
                                         <input
@@ -7069,11 +7071,11 @@ useEffect(() => {
                                             }}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.7rem 0.8rem',
+                                                padding: '0.5rem 0.75rem',
                                                 borderRadius: '10px',
                                                 border: '2px solid #E2E8F0',
                                                 fontWeight: '700',
-                                                fontSize: '1.1rem',
+                                                fontSize: '0.95rem',
                                                 textAlign: 'center',
                                                 outline: 'none',
                                                 backgroundColor: '#F9FAFB',
@@ -7157,10 +7159,10 @@ useEffect(() => {
                                             }}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.8rem',
+                                                padding: '0.5rem 0.75rem',
                                                 border: '2px solid #E2E8F0',
                                                 borderRadius: '10px',
-                                                fontSize: '1rem',
+                                                fontSize: '0.92rem',
                                                 backgroundColor: '#F9FAFB',
                                                 outline: 'none',
                                                 transition: 'all 0.2s ease-in-out'
@@ -7186,7 +7188,7 @@ useEffect(() => {
                                 {/* Panel de Equivalencias Premium */}
                                 {itemConversions.length > 0 && (
                                     <div style={{
-                                        margin: '1.5rem 0',
+                                        margin: '0.75rem 0',
                                         padding: '1rem',
                                         backgroundColor: '#F0FDF4',
                                         borderRadius: '12px',
@@ -7253,7 +7255,7 @@ useEffect(() => {
                                         }}
                                         style={{
                                             width: '100%',
-                                            padding: '0.65rem 0.8rem',
+                                            padding: '0.45rem 0.75rem',
                                             borderRadius: '10px',
                                             border: '1.5px solid #CBD5E1',
                                             fontSize: '0.88rem',
@@ -7275,7 +7277,19 @@ useEffect(() => {
                                 </div>
 
                                 {/* Footer buttons */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                                <div style={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: '1fr 1fr', 
+                                    gap: '1rem', 
+                                    marginTop: '1rem',
+                                    position: 'sticky',
+                                    bottom: '-2rem',
+                                    backgroundColor: 'white',
+                                    paddingTop: '1rem',
+                                    paddingBottom: '0.5rem',
+                                    borderTop: '1px solid #F1F5F9',
+                                    zIndex: 10
+                                }}>
                                     <button 
                                         onClick={() => {
                                             setSelectedProductForVariant(null);
@@ -7562,7 +7576,7 @@ useEffect(() => {
                                         {reassignStep === 'confirm' ? <AlertTriangle size={20} /> : <UserCheck size={20} />}
                                     </div>
                                     <div>
-                                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', color: '#1E293B' }}>
+                                        <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: '#1E293B' }}>
                                             {reassignStep === 'confirm' ? 'Confirmar Reasignación de Pedido' : `Reasignar Pedido ${getFriendlyOrderId(selectedOrder)}`}
                                         </h3>
                                         <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748B' }}>
@@ -7580,7 +7594,7 @@ useEffect(() => {
                                         width: '36px',
                                         height: '36px',
                                         borderRadius: '10px',
-                                        fontSize: '1.1rem',
+                                        fontSize: '0.95rem',
                                         cursor: isReassigning ? 'not-allowed' : 'pointer',
                                         color: '#64748B',
                                         display: 'flex',
@@ -7763,12 +7777,12 @@ useEffect(() => {
                                         {/* Results List */}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
                                             {reassignLoadingClients ? (
-                                                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748B', fontSize: '0.85rem' }}>
+                                                <div style={{ textAlign: 'center', padding: '1.25rem 1.5rem', color: '#64748B', fontSize: '0.85rem' }}>
                                                     <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#2563EB' }} />
                                                     Cargando clientes y sucursales...
                                                 </div>
                                             ) : filteredReassignClients.length === 0 ? (
-                                                <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8', fontSize: '0.85rem' }}>
+                                                <div style={{ textAlign: 'center', padding: '1.25rem 1.5rem', color: '#94A3B8', fontSize: '0.85rem' }}>
                                                     {reassignClientTypeTab === 'b2c'
                                                         ? 'No se encontraron clientes Hogar (B2C) con esa búsqueda.'
                                                         : reassignClientTypeTab === 'b2b'
@@ -8250,7 +8264,7 @@ useEffect(() => {
                                         <RotateCcw size={20} strokeWidth={2.5} />
                                     </div>
                                     <div>
-                                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900', color: '#1E1B4B' }}>
+                                        <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '900', color: '#1E1B4B' }}>
                                             Marcar Pedido como Reposición en Garantía
                                         </h3>
                                         <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: '500' }}>
@@ -8307,7 +8321,7 @@ useEffect(() => {
                                     </label>
 
                                     {loadingPastOrders ? (
-                                        <div style={{ padding: '2rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <div style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                             <Loader2 size={18} className="animate-spin" /> Consultando historial del cliente...
                                         </div>
                                     ) : pastOrdersList.length === 0 ? (
@@ -8637,7 +8651,7 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.9rem' }}>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ fontWeight: '900', fontSize: '1.1rem', color: duplicateInfo ? '#991B1B' : '#111827' }}>{friendlyId}</div>
+                                <div style={{ fontWeight: '900', fontSize: '0.95rem', color: duplicateInfo ? '#991B1B' : '#111827' }}>{friendlyId}</div>
                                 {order.created_at && (
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                                         <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: '700', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '5px', letterSpacing: '0.01em', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -8863,7 +8877,7 @@ export default function OrderLoadingPage() {
     return (
         <Suspense fallback={
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#F8FAFC' }}>
-                <div style={{ color: '#0D7A57', fontWeight: '700', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ color: '#0D7A57', fontWeight: '700', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '18px', height: '18px', border: '3px solid #0D7A57', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                     Cargando módulo de pedidos...
                 </div>

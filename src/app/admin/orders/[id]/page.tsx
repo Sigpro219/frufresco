@@ -29,8 +29,10 @@ import {
     Printer,
     ExternalLink,
     FileText,
-    RotateCcw
+    RotateCcw,
+    Scale
 } from 'lucide-react';
+import OverweightAdjustmentModal from '@/components/orders/OverweightAdjustmentModal';
 import { normalizeAddress } from '@/lib/orderDuplicates';
 
 export default function OrderDetailPage() {
@@ -43,6 +45,7 @@ export default function OrderDetailPage() {
     const [duplicateSiblings, setDuplicateSiblings] = useState<any[]>([]);
     const [resolvedParentOrder, setResolvedParentOrder] = useState<{ id: string; sequence_id: number; delivery_date?: string } | null>(null);
     const [resolvedChildOrders, setResolvedChildOrders] = useState<Array<{ id: string; sequence_id: number; delivery_date?: string }>>([]);
+    const [showOverweightModal, setShowOverweightModal] = useState(false);
 
     interface Order {
         id: string;
@@ -1111,6 +1114,31 @@ export default function OrderDetailPage() {
                             )}
 
                             {!isEditing && (
+                                <button
+                                    id="btn-order-overweight"
+                                    onClick={() => setShowOverweightModal(true)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        border: '1.5px solid #A7F3D0',
+                                        borderRadius: '10px',
+                                        padding: '8px 14px',
+                                        fontWeight: '800',
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(16, 185, 129, 0.12)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    title="Registrar kilos o peso adicional de báscula y ajustar a factura final"
+                                >
+                                    <Scale size={14} color="#059669" strokeWidth={2.2} /> Peso de Más (Báscula)
+                                </button>
+                            )}
+
+                            {!isEditing && (
                                 <Link
                                     href={`/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`}
                                     target="_blank"
@@ -1719,20 +1747,22 @@ export default function OrderDetailPage() {
                 }} onClick={() => setSelectedProductForModal(null)}>
 
                     <div
-                        style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '16px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center' }}
+                        style={{ backgroundColor: 'white', padding: '1.25rem 1.5rem', borderRadius: '16px', width: '90%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center' }}
+                        className="premium-scrollbar"
                         onClick={e => e.stopPropagation()}
                     >
                         {selectedProductForModal.image_url && (
                              <img
                                  src={selectedProductForModal.image_url}
                                  alt={selectedProductForModal.name}
-                                 style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', marginBottom: '1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
+                                 style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', marginBottom: '0.5rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}
                              />
                         )}
-                        <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '0.5rem' }}>{selectedProductForModal.name}</h3>
-                        <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Personaliza tu producto:</p>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: '800', marginBottom: '0.25rem' }}>{selectedProductForModal.name}</h3>
+                        <p style={{ color: '#6B7280', fontSize: '0.8rem', marginBottom: '0.75rem', fontWeight: '600' }}>Personaliza tu producto:</p>
 
                         {/* RENDER OPTIONS */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.65rem', marginBottom: '0.65rem' }}>
                         {selectedProductForModal.options_config && selectedProductForModal.options_config
                             .map((opt: any) => {
                                 const isRipeness = (opt.name || '').toLowerCase().includes('maduraci');
@@ -1763,7 +1793,9 @@ export default function OrderDetailPage() {
                             </div>
                         ))}
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', margin: '2rem 0' }}>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', margin: '0.75rem 0' }}>
                             <button
                                 onClick={() => setModalQuantity(Math.max(1, modalQuantity - 1))}
                                 style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #D1D5DB', backgroundColor: 'white', fontSize: '1.2rem', cursor: 'pointer' }}
@@ -1794,6 +1826,19 @@ export default function OrderDetailPage() {
                     </div>
                 </div>
             )}
+
+            {/* Overweight Adjustment Modal */}
+            <OverweightAdjustmentModal
+                isOpen={showOverweightModal}
+                onClose={() => setShowOverweightModal(false)}
+                orderId={order.id}
+                sequenceId={order.sequence_id}
+                items={items}
+                clientProfile={order.profile}
+                onSuccess={() => {
+                    fetchOrderDetails();
+                }}
+            />
         </main>
     );
 }

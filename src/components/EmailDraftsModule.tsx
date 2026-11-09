@@ -2818,7 +2818,13 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         setSelectedDraft(prev => {
           if (!prev) return null;
           const raw = prev.extracted_items || [];
-          const meta = (Array.isArray(raw) ? raw.find((it: any) => it.isMetadata) : {}) || {};
+          const meta = (
+            Array.isArray(raw)
+              ? raw.find((it: any) => it && it.isMetadata)
+              : raw && typeof raw === 'object'
+                ? { ...raw, isMetadata: true }
+                : {}
+          ) || { isMetadata: true };
           if (data.clientName) meta.clientInDocument = data.clientName;
           if (data.address) meta.address = data.address;
           if (data.nit) meta.nit = data.nit;
@@ -4415,6 +4421,22 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const fetchDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
+      // Sincronización directa en segundo plano del Canal 3 (copia.pedidos@frufresco.co -> Instrumento 4)
+      fetch('/api/orders/sync-hostinger', { method: 'POST' })
+        .then(res => res.json())
+        .then(async (syncData) => {
+          if (syncData && syncData.ingestedCount > 0) {
+            const { data: refreshed } = await supabase
+              .from('order_drafts')
+              .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
+              .in('status', ['pending', 'approved', 'rejected'])
+              .order('created_at', { ascending: false })
+              .limit(100);
+            if (refreshed) setDrafts(refreshed);
+          }
+        })
+        .catch(() => {});
+
       const { data, error } = await supabase
         .from('order_drafts')
         .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
@@ -5050,9 +5072,97 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
         return raw ? raw.replace(/^#/, '') : null;
       })(),
-      processedAt: meta?.processedAt || meta?.processed_at || meta?.attachments?.[0]?.processedAt || meta?.attachments?.[0]?.processed_at || draft.processed_at || draft.updated_at || null
+      processedAt: meta?.processedAt || meta?.processed_at || meta?.attachments?.[0]?.processedAt || meta?.attachments?.[0]?.processed_at || draft.processed_at || draft.updated_at || null,
+      ingestChannel: (meta?.ingestChannel || (draft.extracted_items && !Array.isArray(draft.extracted_items) ? draft.extracted_items.ingestChannel : null) || 'channel_1_2_legacy') as 'channel_3_co' | 'channel_1_2_legacy',
+      seenInChannels: (Array.isArray(meta?.seenInChannels) && meta.seenInChannels.length > 0
+        ? meta.seenInChannels
+        : draft.extracted_items && !Array.isArray(draft.extracted_items) && Array.isArray(draft.extracted_items.seenInChannels)
+          ? draft.extracted_items.seenInChannels
+          : [meta?.ingestChannel || 'channel_1_2_legacy']) as Array<'channel_3_co' | 'channel_1_2_legacy'>,
+      reconcilerLog: Array.isArray(meta?.reconcilerLog) ? meta.reconcilerLog : [],
+      reconcilerVerdict: meta?.reconcilerVerdict || null,
+      reconcilerFallback: Boolean(meta?.reconcilerFallback),
     };
   };
+
+  const [showChannelLaserTooltip, setShowChannelLaserTooltip] = useState(false);
+
+  // Telemetría de Emancipación de Canales (Escenario 397 — Barra Láser Horizontal de 3 Particiones en el Eje X)
+  const channelTransitionTelemetry = useMemo(() => {
+    const epochIso = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
+    const epochMs = new Date(epochIso).getTime();
+
+    // Filtrar borradores válidos en la ventana de transición (excluir rechazados y [RAW_WEBHOOK] en vuelo)
+    const activeWindowDrafts = drafts.filter((d: any) => {
+      if (!d || d.status === 'rejected') return false;
+      if (!Array.isArray(d.extracted_items)) return false; // Excluir [RAW_WEBHOOK] en vuelo (Grieta #2)
+      if (String(d.client_detected_name || '').startsWith('[RAW_WEBHOOK]')) return false;
+
+      const createdStr = d.created_at
+        ? new Date(d.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+        : '';
+      const createdMs = d.created_at ? new Date(d.created_at).getTime() : 0;
+
+      const isPostEpoch = !isNaN(epochMs) ? createdMs >= epochMs : true;
+      const isToday = createdStr === todayBogotaStr;
+      return isToday || isPostEpoch;
+    });
+
+    // Fallback si la ventana actual está vacía: usar borradores válidos no rechazados
+    const pool = activeWindowDrafts.length > 0
+      ? activeWindowDrafts
+      : drafts.filter((d: any) => d && d.status !== 'rejected' && Array.isArray(d.extracted_items) && !String(d.client_detected_name || '').startsWith('[RAW_WEBHOOK]'));
+
+    let countBlue = 0;   // Solo Canal 3 (@frufresco.co)
+    let countPurple = 0; // Ambos canales (1-2 y 3 conciliados)
+    let countRed = 0;    // Solo Canal 1-2 (@frufresco.com / puente Gmail)
+
+    for (const d of pool) {
+      const meta = getDraftMetadata(d);
+      const channels = Array.isArray(meta.seenInChannels) && meta.seenInChannels.length > 0
+        ? meta.seenInChannels
+        : [meta.ingestChannel || 'channel_1_2_legacy'];
+
+      const hasCh3 = channels.includes('channel_3_co');
+      const hasCh12 = channels.includes('channel_1_2_legacy');
+
+      if (hasCh3 && hasCh12) {
+        countPurple++;
+      } else if (hasCh3) {
+        countBlue++;
+      } else {
+        countRed++;
+      }
+    }
+
+    const total = countBlue + countPurple + countRed;
+    const pctBlue = total > 0 ? Math.round((countBlue / total) * 100) : 0;
+    const pctPurple = total > 0 ? Math.round((countPurple / total) * 100) : 0;
+    const pctRed = total > 0 ? Math.max(0, 100 - pctBlue - pctPurple) : 0;
+
+    // Estado de Hitos de Apagado Progresivo (Escenario 397 §4.3)
+    // Estado C: 100% Azul -> Apagar Instrumento 4
+    // Estado B: 0% Rojo (Azul + Violeta = 100%) -> Apagar Canales 1 y 2
+    // Estado A: En Transición (Rojo > 0%)
+    const milestoneState: 'STATE_A_TRANSITION' | 'STATE_B_SHUTDOWN_1_2' | 'STATE_C_SHUTDOWN_4' =
+      total > 0 && countBlue === total
+        ? 'STATE_C_SHUTDOWN_4'
+        : total > 0 && countRed === 0
+          ? 'STATE_B_SHUTDOWN_1_2'
+          : 'STATE_A_TRANSITION';
+
+    return {
+      countBlue,
+      countPurple,
+      countRed,
+      total,
+      pctBlue,
+      pctPurple,
+      pctRed,
+      milestoneState,
+      epochIso,
+    };
+  }, [drafts, todayBogotaStr]);
 
   const findMatchedProduct = useCallback((originalName: string) => {
     if (!originalName) return null;
@@ -6611,11 +6721,257 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           marginBottom: '0.5rem'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'nowrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'nowrap', minWidth: 0 }}>
+          <h1 style={{ fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
             <Mail size={18} style={{ color: THEME.colors.primary }} /> Pedidos por Procesar (Email Inbound)
           </h1>
+
+          {/* Barra Láser Horizontal de 3 Particiones en el Eje X (0px extra en Eje Y — Escenario 397) */}
+          <div
+            onMouseEnter={() => setShowChannelLaserTooltip(true)}
+            onMouseLeave={() => setShowChannelLaserTooltip(false)}
+            style={{
+              position: 'relative',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '3px 10px',
+              borderRadius: '999px',
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              cursor: 'pointer',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#2563EB', whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
+              .co {channelTransitionTelemetry.pctBlue}%
+            </span>
+
+            {/* Pista Láser de 3 Particiones + Línea de Objetivo */}
+            <div
+              style={{
+                position: 'relative',
+                width: '180px',
+                height: '6px',
+                backgroundColor: '#E2E8F0',
+                borderRadius: '999px',
+                overflow: 'visible',
+                display: 'flex',
+                 alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '999px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                }}
+              >
+                {/* Partición 1 — Azul (#2563EB): Solo Canal 3 (.co) */}
+                <div
+                  style={{
+                    width: `${channelTransitionTelemetry.pctBlue}%`,
+                    height: '100%',
+                    backgroundColor: '#2563EB',
+                    transition: 'width 0.35s ease',
+                  }}
+                />
+                {/* Partición 2 — Violeta (#8B5CF6): Ambos Canales (1-2 y 3 conciliados) */}
+                <div
+                  style={{
+                    width: `${channelTransitionTelemetry.pctPurple}%`,
+                    height: '100%',
+                    backgroundColor: '#8B5CF6',
+                    transition: 'width 0.35s ease',
+                  }}
+                />
+                {/* Partición 3 — Rojo (#EF4444): Solo Canal 1-2 (.com heredado) */}
+                <div
+                  style={{
+                    width: `${channelTransitionTelemetry.pctRed}%`,
+                    height: '100%',
+                    backgroundColor: '#EF4444',
+                    transition: 'width 0.35s ease',
+                  }}
+                />
+              </div>
+
+              {/* Línea de Objetivo (Goal Marker Line) en el extremo derecho (100%) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: '-3px',
+                  width: '3px',
+                  height: '12px',
+                  borderRadius: '2px',
+                  backgroundColor:
+                    channelTransitionTelemetry.milestoneState === 'STATE_C_SHUTDOWN_4'
+                      ? '#10B981'
+                      : channelTransitionTelemetry.milestoneState === 'STATE_B_SHUTDOWN_1_2'
+                        ? '#8B5CF6'
+                        : '#64748B',
+                  boxShadow:
+                    channelTransitionTelemetry.milestoneState === 'STATE_C_SHUTDOWN_4'
+                      ? '0 0 6px rgba(16, 185, 129, 0.7)'
+                      : channelTransitionTelemetry.milestoneState === 'STATE_B_SHUTDOWN_1_2'
+                        ? '0 0 6px rgba(139, 92, 246, 0.6)'
+                        : 'none',
+                }}
+              />
+            </div>
+
+            {channelTransitionTelemetry.pctPurple > 0 && (
+              <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#7C3AED', whiteSpace: 'nowrap' }}>
+                Ambos {channelTransitionTelemetry.pctPurple}%
+              </span>
+            )}
+
+            {/* Píldora compacta de Estado / Meta */}
+            {channelTransitionTelemetry.milestoneState === 'STATE_C_SHUTDOWN_4' ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '0.64rem',
+                  fontWeight: '800',
+                  color: '#047857',
+                  backgroundColor: '#D1FAE5',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <CheckCircle2 size={10} /> 100% .co: Apagar (4)
+              </span>
+            ) : channelTransitionTelemetry.milestoneState === 'STATE_B_SHUTDOWN_1_2' ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '0.64rem',
+                  fontWeight: '800',
+                  color: '#6D28D9',
+                  backgroundColor: '#EDE9FE',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Zap size={10} /> 0% Rojo: Apagar (1-2)
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.66rem', fontWeight: '700', color: '#DC2626', whiteSpace: 'nowrap' }}>
+                .com {channelTransitionTelemetry.pctRed}%
+              </span>
+            )}
+
+            {/* Tooltip Flotante Rico al pasar el cursor */}
+            {showChannelLaserTooltip && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  left: '0',
+                  width: '360px',
+                  backgroundColor: '#0F172A',
+                  color: '#F8FAFC',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  boxShadow: '0 14px 28px -4px rgba(15, 23, 42, 0.45)',
+                  border: '1px solid #334155',
+                  zIndex: 120,
+                  fontSize: '0.73rem',
+                  lineHeight: '1.45',
+                  cursor: 'default',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #1E293B', paddingBottom: '6px' }}>
+                  <span style={{ fontWeight: '800', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={13} color="#38BDF8" /> Termómetro de Emancipación (.co vs .com)
+                  </span>
+                  <span style={{ fontSize: '0.66rem', color: '#94A3B8', fontWeight: '700' }}>
+                    Total: {channelTransitionTelemetry.total} pedidos
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#93C5FD', fontWeight: '700' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
+                      Solo Canal 3 (@frufresco.co directo)
+                    </span>
+                    <span style={{ fontWeight: '800', color: '#FFFFFF' }}>
+                      {channelTransitionTelemetry.countBlue} ({channelTransitionTelemetry.pctBlue}%)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#C4B5FD', fontWeight: '700' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#8B5CF6', display: 'inline-block' }} />
+                      Ambos Canales (1-2 y 3 conciliados)
+                    </span>
+                    <span style={{ fontWeight: '800', color: '#FFFFFF' }}>
+                      {channelTransitionTelemetry.countPurple} ({channelTransitionTelemetry.pctPurple}%)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#FCA5A5', fontWeight: '700' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#EF4444', display: 'inline-block' }} />
+                      Solo Canal 1-2 (@frufresco.com heredado)
+                    </span>
+                    <span style={{ fontWeight: '800', color: '#FFFFFF' }}>
+                      {channelTransitionTelemetry.countRed} ({channelTransitionTelemetry.pctRed}%)
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: '#1E293B',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    borderLeft:
+                      channelTransitionTelemetry.milestoneState === 'STATE_C_SHUTDOWN_4'
+                        ? '3px solid #10B981'
+                        : channelTransitionTelemetry.milestoneState === 'STATE_B_SHUTDOWN_1_2'
+                          ? '3px solid #8B5CF6'
+                          : '3px solid #F59E0B',
+                  }}
+                >
+                  {channelTransitionTelemetry.milestoneState === 'STATE_C_SHUTDOWN_4' ? (
+                    <div style={{ color: '#A7F3D0', fontWeight: '700', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                      <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span>
+                        <strong>Hito 2 Alcanzado (100% Azul):</strong> El 100% de los pedidos viaja exclusivamente por @frufresco.co. Ya puedes apagar los vestigios (1), (2) y el Instrumento (4).
+                      </span>
+                    </div>
+                  ) : channelTransitionTelemetry.milestoneState === 'STATE_B_SHUTDOWN_1_2' ? (
+                    <div style={{ color: '#DDD6FE', fontWeight: '700', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                      <Zap size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span>
+                        <strong>Hito 1 Alcanzado (0% Rojo):</strong> Ningún pedido depende exclusivamente del canal viejo. Ya es seguro apagar los Canales (1) y (2); al hacerlo, la franja violeta pasará a 100% Azul y podrás apagar (4).
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ color: '#FDE68A', fontWeight: '600', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                      <Info size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span>
+                        <strong>En Transición Activa:</strong> Aún hay {channelTransitionTelemetry.countRed} pedido(s) entrando solo por el canal heredado (1-2). Mantener encendidos (1), (2) y el Instrumento (4) hasta que el segmento rojo llegue a 0%.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <button 
           onClick={() => fetchDrafts()}
@@ -6627,7 +6983,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             borderRadius: THEME.radius.md,
             fontWeight: '600',
             cursor: 'pointer',
-            fontSize: '0.78rem'
+            fontSize: '0.78rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.72rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
@@ -11882,12 +12240,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }}>
           <div style={{
             backgroundColor: 'white',
-            borderRadius: '16px',
+            borderRadius: '20px',
             width: '100%',
-            maxWidth: '820px',
+            maxWidth: '680px',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             position: 'relative',
-            padding: '2.5rem',
+            padding: '1.25rem 1.75rem',
             animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
             maxHeight: '90vh',
             overflowY: 'auto'
@@ -11896,50 +12254,51 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               onClick={closeVariantModal}
               style={{
                 position: 'absolute',
-                top: '1.5rem',
-                right: '1.5rem',
+                top: '1rem',
+                right: '1.25rem',
                 border: 'none',
                 background: '#F1F5F9',
-                width: '32px',
-                height: '32px',
+                width: '28px',
+                height: '28px',
                 borderRadius: '50%',
                 cursor: 'pointer',
                 color: '#64748B',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                zIndex: 10
               }}
             >
-              <X size={20} />
+              <X size={18} />
             </button>
 
             {/* Flex container for header */}
-            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.65rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                 {selectedProductForVariant.image_url ? (
                   <img 
                     src={selectedProductForVariant.image_url} 
                     alt={selectedProductForVariant.name}
-                    style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                    style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}
                   />
                 ) : (
                   <div style={{
-                    width: '80px',
-                    height: '80px',
-                    borderRadius: '16px',
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '10px',
                     backgroundColor: '#F3F4F6',
                     border: '1px solid #E5E7EB',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
                   }}>
-                    <Package size={32} color="#9CA3AF" />
+                    <Package size={22} color="#9CA3AF" />
                   </div>
                 )}
                 <div>
-                  <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>{selectedProductForVariant.name}</h3>
-                  <p style={{ color: THEME.colors.textSecondary, fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>{selectedProductForVariant.name}</h3>
+                  <p style={{ color: THEME.colors.textSecondary, fontSize: '0.8rem', margin: '2px 0 0 0', fontWeight: '600' }}>
                     Personaliza tu producto:
                   </p>
                 </div>
@@ -12054,6 +12413,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             </div>
 
             {/* Options Rendering */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
             {(() => {
               const rawEmailOpts: any[] = (selectedProductForVariant.options_config || [])
                 .filter((opt: any) => {
@@ -12133,7 +12493,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
 
                 return (
-                  <div key={opt.name} style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
+                  <div key={opt.name} style={{ marginBottom: '0.25rem', textAlign: 'left' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {opt.name}
                     </label>
@@ -12203,9 +12563,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 );
               });
             })()}
+            </div>
 
             {/* Quantity & Unit select grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '0.75rem 0', textAlign: 'left' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Cantidad
@@ -12981,10 +13342,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             <div
               style={{
                 backgroundColor: 'white',
-                padding: '2rem',
-                borderRadius: '24px',
+                padding: '1.25rem 1.75rem',
+                borderRadius: '20px',
                 width: '95%',
-                maxWidth: '820px',
+                maxWidth: '680px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
                 boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
                 textAlign: 'left',
                 position: 'relative'
@@ -12992,36 +13355,36 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               onClick={e => e.stopPropagation()}
             >
               {/* Horizontal flex container for header */}
-              <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.65rem', flexWrap: 'wrap' }}>
                 {/* Left side: Image and Title */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                   {product.image_url ? (
                     <img
                       src={product.image_url}
                       alt={product.name}
-                      style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                      style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}
                     />
                   ) : (
                     <div style={{
-                      width: '80px',
-                      height: '80px',
-                      borderRadius: '16px',
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '10px',
                       backgroundColor: '#F3F4F6',
                       border: '1px solid #E5E7EB',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
                     }}>
-                      <Package size={28} color="#9CA3AF" />
+                      <Package size={22} color="#9CA3AF" />
                     </div>
                   )}
                   <div>
-                    <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#111827', margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
                       {product.name}
                     </h3>
-                    <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
+                    <p style={{ color: '#6B7280', fontSize: '0.8rem', margin: '2px 0 0 0', fontWeight: '600' }}>
                       {product.options_config && product.options_config.length > 0
                         ? 'Personaliza tu producto:'
                         : 'Especifica la cantidad y unidad de medida:'}
@@ -13309,6 +13672,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               </div>
 
               {/* RENDER OPTIONS DYNAMICALLY */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
               {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => {
                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                 const isGram = opt.name.toLowerCase().includes('gramaje');
@@ -13336,7 +13700,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const selectVal = options[opt.name] !== undefined && options[opt.name] !== '' ? options[opt.name] : defaultVal;
 
                 return (
-                  <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
+                  <div key={opt.name} style={{ marginBottom: '0.25rem', textAlign: 'left' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {opt.name}
                     </label>
@@ -13465,8 +13829,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   </div>
                 );
               })}
+              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '0.75rem 0', textAlign: 'left' }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>

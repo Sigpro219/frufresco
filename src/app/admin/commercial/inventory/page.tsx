@@ -496,7 +496,7 @@ export default function InventoryAdminPage() {
         return new Date().toISOString().split('T')[0];
     });
     const [movementsFilterActiveOnly, setMovementsFilterActiveOnly] = useState(true);
-    const [movementsViewMode, setMovementsViewMode] = useState<'all' | 'returns'>('all');
+    const [movementsViewMode, setMovementsViewMode] = useState<'all' | 'returns' | 'stock'>('all');
     const [expandedKardexItems, setExpandedKardexItems] = useState<Record<string, boolean>>({});
     const [collapsedKardexParents, setCollapsedKardexParents] = useState<Record<string, boolean>>({});
     const [exportingExcel, setExportingExcel] = useState(false);
@@ -690,7 +690,7 @@ export default function InventoryAdminPage() {
             }
 
             // Cargar catálogo y existencias si estamos en stock, en políticas o si no se han cargado aún para movimientos
-            if (activeTab === 'stock' || activeTab === 'settings' || (activeTab === 'movements' && stocks.length === 0)) {
+            if (activeTab === 'stock' || activeTab === 'settings' || activeTab === 'movements') {
                 // Fetch from products to ensure ALL master items are visible
                 let allProducts: any[] = [];
                 let from = 0;
@@ -816,6 +816,7 @@ export default function InventoryAdminPage() {
                         notes, created_at, status_from, status_to, created_by, evidence_url, admin_decision,
                         products (id, name, sku, accounting_id, parent_id, category, inventory_group, buying_team, unit_of_measure, image_url, web_conversion_factor, weight_kg)
                     `)
+                    .not('reference_type', 'like', 'sandbox_%')
                     .gte('created_at', startDateIso)
                     .lte('created_at', endDateIso)
                     .order('created_at', { ascending: false });
@@ -825,7 +826,8 @@ export default function InventoryAdminPage() {
 
                 if (!isMounted.current) return;
                 if (error) throw error;
-                setMovements(data || []);
+                const cleanMovements = (data || []).filter((m: any) => !m.reference_type?.startsWith('sandbox_') && !m.notes?.includes('[SANDBOX]'));
+                setMovements(cleanMovements);
             } else if (activeTab === 'random_tasks') {
                 const { data, error } = await supabase
                     .from('inventory_random_tasks')
@@ -2354,12 +2356,6 @@ export default function InventoryAdminPage() {
                             icon={<BarChart3 size={15} strokeWidth={2} />} 
                         />
                         <TabButton 
-                            active={activeTab === 'stock'} 
-                            onClick={() => setActiveTab('stock')} 
-                            label="Consolidado" 
-                            icon={<Layers size={15} strokeWidth={2} />} 
-                        />
-                        <TabButton 
                             active={activeTab === 'daily_balance'} 
                             onClick={() => setActiveTab('daily_balance')} 
                             label="Balance Diario (24 Col)" 
@@ -2367,8 +2363,13 @@ export default function InventoryAdminPage() {
                         />
                         <TabButton 
                             active={activeTab === 'movements'} 
-                            onClick={() => setActiveTab('movements')} 
-                            label="Movimientos / Kardex" 
+                            onClick={() => {
+                                setActiveTab('movements');
+                                if (movementsViewMode !== 'all' && movementsViewMode !== 'stock') {
+                                    setMovementsViewMode('all');
+                                }
+                            }} 
+                            label="Kardex & Existencias" 
                             icon={<History size={15} strokeWidth={2} />} 
                         />
                         <TabButton 
@@ -2388,23 +2389,7 @@ export default function InventoryAdminPage() {
 
                     {/* Badge contextual de la vista activa */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                        {activeTab === 'dashboard' && (
-                            <div style={{ 
-                                fontSize: '0.78rem', 
-                                color: '#0D7A57', 
-                                fontWeight: '700',
-                                backgroundColor: '#ECFDF5',
-                                padding: '0.35rem 0.75rem',
-                                borderRadius: '8px',
-                                border: '1px solid #A7F3D0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}>
-                                <BarChart3 size={13} />
-                                <span>Control Financiero & Células Lean</span>
-                            </div>
-                        )}
+                        
                         {activeTab === 'stock' && (
                             <div style={{ 
                                 fontSize: '0.78rem', 
@@ -2469,7 +2454,8 @@ export default function InventoryAdminPage() {
                                 } else if (productId) {
                                     setSearchQuery(productId);
                                 }
-                                setActiveTab('stock');
+                                setActiveTab('movements');
+                                setMovementsViewMode('stock');
                             }} 
                         />
                     </div>
@@ -2491,26 +2477,40 @@ export default function InventoryAdminPage() {
                     <>
                         {/* KPIs contextuales dentro del contenido de la pestaña */}
                         {activeTab === 'movements' ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
-                                <KPICard 
-                                    title="Total Entradas (+)" 
-                                    value={`+${formatNumber(kardexKpis.totalEntries, 1)}`} 
-                                    color="#ECFDF5" 
-                                    subtitle={kardexKpis.totalEntriesKg > 0 
-                                        ? (kardexKpis.totalEntriesKg >= 1000 
-                                            ? `≈ ${(kardexKpis.totalEntriesKg / 1000).toFixed(2)} Ton recepciones` 
-                                            : `≈ ${formatNumber(kardexKpis.totalEntriesKg, 1)} kg recepciones`)
-                                        : (movementsDateRange === 'selected_day' ? "Recepciones del día" : "Recepciones en período")} 
-                                />
-                                <KPICard 
-                                    title="Total Salidas (-)" 
-                                    value={`-${formatNumber(kardexKpis.totalExits, 1)}`} 
-                                    color="#FEF2F2" 
-                                    subtitle={kardexKpis.totalExitsKg > 0 
-                                        ? (kardexKpis.totalExitsKg >= 1000 
-                                            ? `≈ ${(kardexKpis.totalExitsKg / 1000).toFixed(2)} Ton despachos` 
-                                            : `≈ ${formatNumber(kardexKpis.totalExitsKg, 1)} kg despachos`)
-                                        : (movementsDateRange === 'selected_day' ? "Despachos del día" : "Despachos a clientes")} 
+                            movementsViewMode === 'stock' ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                                    <HierarchyKPICard stats={hierarchyStats} />
+                                    <KPICard title="Alertas de Stock" value={formatNumber(stats.lowStock, 0)} color="#FEE2E2" subtitle="Bajo nivel mínimo" />
+                                    <KPICard 
+                                        title="Masa en Bodega" 
+                                        value={stats.totalWeightKg >= 1000 ? `${(stats.totalWeightKg / 1000).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton` : `${formatNumber(stats.totalWeightKg, 1)} Kg`} 
+                                        color="#E0F2FE" 
+                                        subtitle={`${formatNumber(stats.totalWeightKg, 0)} kg físicos`} 
+                                    />
+                                    <KPICard title="Valor en Libros" value={formatMoney(stats.totalValue)} color="#DCFCE7" subtitle="Costo base total" />
+                                    <KPICard title="Tareas Pendientes" value={formatNumber(stats.pendingTasks, 0)} color="#FEF3C7" subtitle="Auditoría de piso" />
+                                </div>
+                            ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                                    <KPICard 
+                                        title="Total Entradas (+)" 
+                                        value={`+${formatNumber(kardexKpis.totalEntries, 1)}`} 
+                                        color="#ECFDF5" 
+                                        subtitle={kardexKpis.totalEntriesKg > 0 
+                                            ? (kardexKpis.totalEntriesKg >= 1000 
+                                                ? `≈ ${(kardexKpis.totalEntriesKg / 1000).toFixed(2)} Ton recepciones` 
+                                                : `≈ ${formatNumber(kardexKpis.totalEntriesKg, 1)} kg recepciones`)
+                                            : (movementsDateRange === 'selected_day' ? "Recepciones del día" : "Recepciones en período")} 
+                                    />
+                                    <KPICard 
+                                        title="Total Salidas (-)" 
+                                        value={`-${formatNumber(kardexKpis.totalExits, 1)}`} 
+                                        color="#FEF2F2" 
+                                        subtitle={kardexKpis.totalExitsKg > 0 
+                                            ? (kardexKpis.totalExitsKg >= 1000 
+                                                ? `≈ ${(kardexKpis.totalExitsKg / 1000).toFixed(2)} Ton despachos` 
+                                                : `≈ ${formatNumber(kardexKpis.totalExitsKg, 1)} kg despachos`)
+                                            : (movementsDateRange === 'selected_day' ? "Despachos del día" : "Despachos a clientes")} 
                                 />
                                 <KPICard 
                                     title="Flujo Neto" 
@@ -2529,6 +2529,7 @@ export default function InventoryAdminPage() {
                                     subtitle={`${kardexKpis.totalMovements} transacciones`} 
                                 />
                             </div>
+                            )
                         ) : activeTab === 'stock' ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                                 <HierarchyKPICard stats={hierarchyStats} />
@@ -2661,7 +2662,7 @@ export default function InventoryAdminPage() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>
                                     {((activeTab === 'stock' && (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all')) || (activeTab === 'movements' && (searchQuery || movementsFilterActiveOnly))) ? <Search size={13} strokeWidth={2} /> : <Database size={13} strokeWidth={2} />}
                                     <span>
-                                        {activeTab === 'stock' ? (
+                                        {activeTab === 'stock' || (activeTab === 'movements' && movementsViewMode === 'stock') ? (
                                             (searchQuery || filterInventoryGroup !== 'all' || stockStatusFilter !== 'all') ? (
                                                 <>
                                                     <strong style={{ color: THEME.colors.primary, fontWeight: '700' }}>{formatNumber(filteredFamilies.length)}</strong>
@@ -2811,7 +2812,7 @@ export default function InventoryAdminPage() {
 
                     {/* 2. ZONA DERECHA: Controles Contextuales (Filtro Grupo Inv, Jerarquía, Stock, Orden) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                        {activeTab === 'stock' && (
+                        {(activeTab === 'stock' || (activeTab === 'movements' && movementsViewMode === 'stock')) && (
                             <>
                                 {/* Combobox de Grupo de Inventario */}
                                 <div ref={groupComboboxRef} style={{ position: 'relative' }}>
@@ -3155,165 +3156,7 @@ export default function InventoryAdminPage() {
 
                         {activeTab === 'movements' && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                                {/* 1. Rango de Fechas (Pill Segmentado) */}
-                                <div style={{ 
-                                    display: 'flex', 
-                                    backgroundColor: '#F1F5F9', 
-                                    padding: '3px', 
-                                    borderRadius: '8px', 
-                                    gap: '2px',
-                                    border: '1px solid #E2E8F0',
-                                    height: '35px',
-                                    alignItems: 'center',
-                                    boxSizing: 'border-box'
-                                }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMovementsDateRange('selected_day')}
-                                        style={{
-                                            padding: '0.35rem 0.75rem',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            fontSize: '0.74rem',
-                                            fontWeight: movementsDateRange === 'selected_day' ? '700' : '500',
-                                            backgroundColor: movementsDateRange === 'selected_day' ? '#FFFFFF' : 'transparent',
-                                            color: movementsDateRange === 'selected_day' ? '#0F172A' : '#64748B',
-                                            cursor: 'pointer',
-                                            boxShadow: movementsDateRange === 'selected_day' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title={`Ver Kardex del día de la Sábana (${sharedInventoryDate})`}
-                                    >
-                                        Día Sábana ({sharedInventoryDate ? sharedInventoryDate.split('-').slice(1).reverse().join('/') : 'Hoy'})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMovementsDateRange('8days')}
-                                        style={{
-                                            padding: '0.35rem 0.75rem',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            fontSize: '0.74rem',
-                                            fontWeight: movementsDateRange === '8days' ? '700' : '500',
-                                            backgroundColor: movementsDateRange === '8days' ? '#FFFFFF' : 'transparent',
-                                            color: movementsDateRange === '8days' ? '#0F172A' : '#64748B',
-                                            cursor: 'pointer',
-                                            boxShadow: movementsDateRange === '8days' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Movimientos de los últimos 8 días"
-                                    >
-                                        Últimos 8 días
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMovementsDateRange('today')}
-                                        style={{
-                                            padding: '0.35rem 0.75rem',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            fontSize: '0.74rem',
-                                            fontWeight: movementsDateRange === 'today' ? '700' : '500',
-                                            backgroundColor: movementsDateRange === 'today' ? '#FFFFFF' : 'transparent',
-                                            color: movementsDateRange === 'today' ? '#0F172A' : '#64748B',
-                                            cursor: 'pointer',
-                                            boxShadow: movementsDateRange === 'today' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Movimientos registrados hoy"
-                                    >
-                                        Hoy
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMovementsDateRange('custom')}
-                                        style={{
-                                            padding: '0.35rem 0.75rem',
-                                            borderRadius: '6px',
-                                            border: 'none',
-                                            fontSize: '0.74rem',
-                                            fontWeight: movementsDateRange === 'custom' ? '700' : '500',
-                                            backgroundColor: movementsDateRange === 'custom' ? '#FFFFFF' : 'transparent',
-                                            color: movementsDateRange === 'custom' ? '#0F172A' : '#64748B',
-                                            cursor: 'pointer',
-                                            boxShadow: movementsDateRange === 'custom' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Seleccionar rango de fechas personalizado"
-                                    >
-                                        Personalizado
-                                    </button>
-                                </div>
-
-                                {/* Selector de fecha única cuando está en Día Sábana */}
-                                {movementsDateRange === 'selected_day' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
-                                        <input 
-                                            type="date" 
-                                            value={sharedInventoryDate} 
-                                            onChange={(e) => {
-                                                if (e.target.value) {
-                                                    setSharedInventoryDate(e.target.value);
-                                                    setCustomStartDate(e.target.value);
-                                                    setCustomEndDate(e.target.value);
-                                                }
-                                            }} 
-                                            style={{
-                                                height: '35px',
-                                                padding: '0 0.5rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid #CBD5E1',
-                                                fontSize: '0.74rem',
-                                                color: '#334155',
-                                                backgroundColor: '#FFFFFF',
-                                                outline: 'none',
-                                                boxSizing: 'border-box'
-                                            }}
-                                            title="Cambiar fecha del día en Kardex (sincronizada con la Sábana Diaria)"
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Custom Date Range Inputs */}
-                                {movementsDateRange === 'custom' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
-                                        <input 
-                                            type="date" 
-                                            value={customStartDate} 
-                                            onChange={(e) => setCustomStartDate(e.target.value)} 
-                                            style={{
-                                                height: '35px',
-                                                padding: '0 0.5rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid #CBD5E1',
-                                                fontSize: '0.74rem',
-                                                color: '#334155',
-                                                backgroundColor: '#FFFFFF',
-                                                outline: 'none',
-                                                boxSizing: 'border-box'
-                                            }}
-                                        />
-                                        <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>a</span>
-                                        <input 
-                                            type="date" 
-                                            value={customEndDate} 
-                                            onChange={(e) => setCustomEndDate(e.target.value)} 
-                                            style={{
-                                                height: '35px',
-                                                padding: '0 0.5rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid #CBD5E1',
-                                                fontSize: '0.74rem',
-                                                color: '#334155',
-                                                backgroundColor: '#FFFFFF',
-                                                outline: 'none',
-                                                boxSizing: 'border-box'
-                                            }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* 2. Sub-view Switcher: Kardex General vs Novedades / Retornos */}
+                                {/* 1. Sub-view Switcher: Flujo & Kardex vs Existencias & Valor vs Novedades / Retornos */}
                                 <div style={{ 
                                     display: 'flex', 
                                     backgroundColor: '#F1F5F9', 
@@ -3345,7 +3188,29 @@ export default function InventoryAdminPage() {
                                         }}
                                     >
                                         <History size={13} strokeWidth={2} />
-                                        <span>Kardex General</span>
+                                        <span>Flujo & Kardex</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMovementsViewMode('stock')}
+                                        style={{
+                                            padding: '0.35rem 0.75rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            fontSize: '0.74rem',
+                                            fontWeight: movementsViewMode === 'stock' ? '700' : '500',
+                                            backgroundColor: movementsViewMode === 'stock' ? '#FFFFFF' : 'transparent',
+                                            color: movementsViewMode === 'stock' ? '#0D7A57' : '#64748B',
+                                            cursor: 'pointer',
+                                            boxShadow: movementsViewMode === 'stock' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        <Layers size={13} strokeWidth={2} />
+                                        <span>Existencias & Valor</span>
                                     </button>
                                     <button
                                         type="button"
@@ -3382,6 +3247,168 @@ export default function InventoryAdminPage() {
                                         )}
                                     </button>
                                 </div>
+
+                                {/* 2. Rango de Fechas (Solo para Flujo o Retornos) */}
+                                {movementsViewMode !== 'stock' && (
+                                    <>
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            backgroundColor: '#F1F5F9', 
+                                            padding: '3px', 
+                                            borderRadius: '8px', 
+                                            gap: '2px',
+                                            border: '1px solid #E2E8F0',
+                                            height: '35px',
+                                            alignItems: 'center',
+                                            boxSizing: 'border-box'
+                                        }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMovementsDateRange('selected_day')}
+                                                style={{
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: movementsDateRange === 'selected_day' ? '700' : '500',
+                                                    backgroundColor: movementsDateRange === 'selected_day' ? '#FFFFFF' : 'transparent',
+                                                    color: movementsDateRange === 'selected_day' ? '#0F172A' : '#64748B',
+                                                    cursor: 'pointer',
+                                                    boxShadow: movementsDateRange === 'selected_day' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title={`Ver Kardex del día de la Sábana (${sharedInventoryDate})`}
+                                            >
+                                                Día Sábana ({sharedInventoryDate ? sharedInventoryDate.split('-').slice(1).reverse().join('/') : 'Hoy'})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMovementsDateRange('8days')}
+                                                style={{
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: movementsDateRange === '8days' ? '700' : '500',
+                                                    backgroundColor: movementsDateRange === '8days' ? '#FFFFFF' : 'transparent',
+                                                    color: movementsDateRange === '8days' ? '#0F172A' : '#64748B',
+                                                    cursor: 'pointer',
+                                                    boxShadow: movementsDateRange === '8days' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title="Movimientos de los últimos 8 días"
+                                            >
+                                                Últimos 8 días
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMovementsDateRange('today')}
+                                                style={{
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: movementsDateRange === 'today' ? '700' : '500',
+                                                    backgroundColor: movementsDateRange === 'today' ? '#FFFFFF' : 'transparent',
+                                                    color: movementsDateRange === 'today' ? '#0F172A' : '#64748B',
+                                                    cursor: 'pointer',
+                                                    boxShadow: movementsDateRange === 'today' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title="Movimientos registrados hoy"
+                                            >
+                                                Hoy
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMovementsDateRange('custom')}
+                                                style={{
+                                                    padding: '0.35rem 0.75rem',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: movementsDateRange === 'custom' ? '700' : '500',
+                                                    backgroundColor: movementsDateRange === 'custom' ? '#FFFFFF' : 'transparent',
+                                                    color: movementsDateRange === 'custom' ? '#0F172A' : '#64748B',
+                                                    cursor: 'pointer',
+                                                    boxShadow: movementsDateRange === 'custom' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title="Seleccionar rango de fechas personalizado"
+                                            >
+                                                Personalizado
+                                            </button>
+                                        </div>
+
+                                        {/* Selector de fecha única cuando está en Día Sábana */}
+                                        {movementsDateRange === 'selected_day' && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
+                                                <input 
+                                                    type="date" 
+                                                    value={sharedInventoryDate} 
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            setSharedInventoryDate(e.target.value);
+                                                            setCustomStartDate(e.target.value);
+                                                            setCustomEndDate(e.target.value);
+                                                        }
+                                                    }} 
+                                                    style={{
+                                                        height: '35px',
+                                                        padding: '0 0.5rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #CBD5E1',
+                                                        fontSize: '0.74rem',
+                                                        color: '#334155',
+                                                        backgroundColor: '#FFFFFF',
+                                                        outline: 'none',
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                    title="Cambiar fecha del día en Kardex (sincronizada con la Sábana Diaria)"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Custom Date Range Inputs */}
+                                        {movementsDateRange === 'custom' && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '35px' }}>
+                                                <input 
+                                                    type="date" 
+                                                    value={customStartDate} 
+                                                    onChange={(e) => setCustomStartDate(e.target.value)} 
+                                                    style={{
+                                                        height: '35px',
+                                                        padding: '0 0.5rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #CBD5E1',
+                                                        fontSize: '0.74rem',
+                                                        color: '#334155',
+                                                        backgroundColor: '#FFFFFF',
+                                                        outline: 'none',
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                />
+                                                <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: '600' }}>a</span>
+                                                <input 
+                                                    type="date" 
+                                                    value={customEndDate} 
+                                                    onChange={(e) => setCustomEndDate(e.target.value)} 
+                                                    style={{
+                                                        height: '35px',
+                                                        padding: '0 0.5rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #CBD5E1',
+                                                        fontSize: '0.74rem',
+                                                        color: '#334155',
+                                                        backgroundColor: '#FFFFFF',
+                                                        outline: 'none',
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </>
+                                )}
 
                                 {/* 3. Toggle: Solo con rotación (Pill Ergonométrico) */}
                                 {movementsViewMode === 'all' && (
@@ -3552,7 +3579,7 @@ export default function InventoryAdminPage() {
                         </div>
                     ) : (
                         <>
-                            {activeTab === 'stock' && (
+                            {(activeTab === 'stock' || (activeTab === 'movements' && movementsViewMode === 'stock')) && (
                                 <div style={{ overflow: 'visible' }}>
                                     <table style={styles.table}>
                                         <thead style={dynamicHeaderStyle}>
@@ -4384,7 +4411,7 @@ export default function InventoryAdminPage() {
                                 </div>
                             )}
 
-                            {activeTab === 'movements' && (
+                            {activeTab === 'movements' && movementsViewMode !== 'stock' && (
                                 movementsViewMode === 'returns' ? (
                                     <div style={{ overflow: 'visible' }}>
                                         <table style={styles.table}>
@@ -6597,7 +6624,7 @@ export default function InventoryAdminPage() {
                                 gap: '5px'
                             }}>
                                 <Sparkles size={14} color="#0D7A57" />
-                                Modo Continuo 100%: Mostrando <strong>{activeTab === 'stock' ? sortedFamilies.length : kardexFamilies.length}</strong> familias en pantalla
+                                Modo Continuo 100%: Mostrando <strong>{activeTab === 'stock' || movementsViewMode === 'stock' ? sortedFamilies.length : kardexFamilies.length}</strong> familias en pantalla
                             </span>
                             <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>•</span>
                             <span style={{ fontSize: '0.75rem', color: '#64748B' }}>

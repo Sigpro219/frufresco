@@ -6717,7 +6717,7 @@ ${primaryAdminNotes}`.trim();
                                                                         setFocusedClientIndexB2C(-1);
                                                                     }
                                                                 }}
-                                                                style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                                style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                             />
                                                             <button 
                                                                 onClick={loadData}
@@ -6788,7 +6788,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="text"
                                                     placeholder="Ej: María Pérez"
                                                     value={guestInfo.name} onChange={e => setGuestInfo({ ...guestInfo, name: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                 />
                                             </div>
                                             
@@ -6798,7 +6798,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="text"
                                                     placeholder="Ej: 123456789"
                                                     value={guestInfo.nit} onChange={e => setGuestInfo({ ...guestInfo, nit: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                 />
                                             </div>
 
@@ -6808,7 +6808,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="text"
                                                     placeholder="Ej: 300 123 4567"
                                                     value={guestInfo.phone} onChange={e => setGuestInfo({ ...guestInfo, phone: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                 />
                                             </div>
 
@@ -6818,7 +6818,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="email"
                                                     placeholder="ejemplo@email.com"
                                                     value={guestInfo.email} onChange={e => setGuestInfo({ ...guestInfo, email: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                 />
                                             </div>
 
@@ -6827,7 +6827,7 @@ ${primaryAdminNotes}`.trim();
                                                 <select
                                                     value={guestInfo.city} 
                                                     onChange={e => setGuestInfo({ ...guestInfo, city: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                 >
                                                     <option value="Bogotá">Bogotá</option>
                                                     <option value="Medellín">Medellín</option>
@@ -6846,7 +6846,7 @@ ${primaryAdminNotes}`.trim();
                                                         type="text"
                                                         placeholder="Ej: Cra 15 # 85 - 10"
                                                         value={guestInfo.address} onChange={e => setGuestInfo({ ...guestInfo, address: e.target.value })}
-                                                        style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                        style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
                                                     />
                                                     <button
                                                         onClick={() => handleGeocode()}
@@ -7050,7 +7050,7 @@ ${primaryAdminNotes}`.trim();
                                                 />
                                                 {parsingFile ? (
                                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 0' }}>
-                                                        <Loader2 size={56} color="#3B82F6" style={{ animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
+                                                        <Loader2 size={56} color="#3B82F6" style={{ animation: 'spin 1s linear infinite', marginBottom: '0.75rem' }} />
                                                         <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#1E40AF', marginBottom: '0.5rem' }}>Procesando Documento...</h3>
                                                         <p style={{ color: '#64748B', fontSize: '0.95rem' }}>La IA está extrayendo productos y validando el cliente.</p>
                                                         <style>{`
@@ -7079,7 +7079,7 @@ ${primaryAdminNotes}`.trim();
                                         {/* MODO TEXTO: PEGAR MENSAJE WHATSAPP / CHAT */}
                                         {aiInputTab === 'text' && (
                                             <div style={{
-                                                padding: '2rem',
+                                                padding: '1.25rem 1.5rem',
                                                 border: parsingFile ? '3px solid #16A34A' : '2px solid #BBF7D0',
                                                 borderRadius: '24px',
                                                 backgroundColor: parsingFile ? '#F0FDF4' : '#F8FAFC',
@@ -7094,7 +7094,7 @@ ${primaryAdminNotes}`.trim();
                                                             <MessageSquare size={20} strokeWidth={2} />
                                                         </div>
                                                         <div>
-                                                            <h3 style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>
+                                                            <h3 style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0F172A', margin: 0 }}>
                                                                 Ingesta de Pedido desde WhatsApp / Chat
                                                             </h3>
                                                             <p style={{ fontSize: '0.8rem', color: '#64748B', margin: 0 }}>
@@ -8837,7 +8837,7 @@ ${primaryAdminNotes}`.trim();
                                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                                             <div style={{ textAlign: 'right', marginRight: '1rem' }}>
                                                 <div style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase' }}>Items / Total Estimado</div>
-                                                <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#1E293B', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                                                <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#1E293B', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                                                     <span>{stagedItems.length} productos</span>
                                                     {(() => {
                                                         const stagedTotalEstimated = stagedItems.reduce((acc, it) => {
@@ -9502,7 +9502,7 @@ ${primaryAdminNotes}`.trim();
                             })()}
 
                             {cart.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '2rem', backgroundColor: '#F9FAFB', borderRadius: '12px', color: '#9CA3AF', border: '2px dashed #E5E7EB' }}>
+                                <div style={{ textAlign: 'center', padding: '1.25rem 1.5rem', backgroundColor: '#F9FAFB', borderRadius: '12px', color: '#9CA3AF', border: '2px dashed #E5E7EB' }}>
                                     No hay productos agregados.
                                 </div>
                             ) : (
@@ -10918,23 +10918,21 @@ ${primaryAdminNotes}`.trim();
                     }} onClick={() => closeProductModal()}>
 
                         <div
-                            style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '24px', width: '95%', maxWidth: '820px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'left' }}
+                            style={{ backgroundColor: 'white', padding: '1.25rem 1.5rem', borderRadius: '24px', width: '95%', maxWidth: '820px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'left' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
                             {/* Horizontal flex container for header */}
-                            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.65rem', flexWrap: 'wrap' }}>
                                 {/* Left side: Image and Title */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                                     {selectedProductForModal.image_url ? (
                                         <img
                                             src={selectedProductForModal.image_url}
-                                            style={{ width: '80px', height: '80px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
+                                            style={{ width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}
                                         />
                                     ) : (
                                         <div style={{
-                                            width: '80px',
-                                            height: '80px',
-                                            borderRadius: '16px',
+                                            width: '48px', height: '48px', borderRadius: '10px',
                                             backgroundColor: '#F3F4F6',
                                             border: '1px solid #E5E7EB',
                                             display: 'flex',
@@ -10943,11 +10941,11 @@ ${primaryAdminNotes}`.trim();
                                             justifyContent: 'center',
                                             boxShadow: '0 4px 10px rgba(0,0,0,0.04)'
                                         }}>
-                                            <PackageX size={28} color="#9CA3AF" />
+                                            <PackageX size={20} color="#9CA3AF" />
                                         </div>
                                     )}
                                     <div>
-                                        <h3 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForModal.name}</h3>
+                                        <h3 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#111827', margin: 0 }}>{selectedProductForModal.name}</h3>
                                         <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '4px 0 0 0', fontWeight: '600' }}>
                                             {selectedProductForModal.options_config && selectedProductForModal.options_config.length > 0
                                                 ? 'Personaliza tu producto:'
@@ -11225,7 +11223,7 @@ ${primaryAdminNotes}`.trim();
                                 gap: '12px',
                                 fontSize: '0.75rem',
                                 color: '#9CA3AF',
-                                marginBottom: '1.5rem',
+                                marginBottom: '0.75rem',
                                 fontWeight: '700'
                             }}>
                                 <button
@@ -11272,6 +11270,7 @@ ${primaryAdminNotes}`.trim();
                             </div>
 
                             {/* RENDER OPTIONS DYNAMICALLY */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                             {normalizedOptionsConfig && normalizedOptionsConfig.map((opt: any, index: number) => {
                                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                                 const isGram = opt.name.toLowerCase().includes('gramaje');
@@ -11293,7 +11292,7 @@ ${primaryAdminNotes}`.trim();
                                 const selectVal = selectedOptions[opt.name] !== undefined && selectedOptions[opt.name] !== '' ? selectedOptions[opt.name] : defaultVal;
 
                                 return (
-                                <div key={opt.name} style={{ marginBottom: '1.2rem', textAlign: 'left' }}>
+                                <div key={opt.name} style={{ marginBottom: '0.65rem', textAlign: 'left' }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         {opt.name}
                                     </label>
@@ -11349,7 +11348,7 @@ ${primaryAdminNotes}`.trim();
                                         onKeyDown={(e) => handleSelectKeyDown(e, index, normalizedOptionsConfig.length)}
                                         style={{
                                             width: '100%',
-                                            padding: '0.8rem',
+                                            padding: '0.5rem 0.75rem',
                                             border: '2px solid #E2E8F0',
                                             borderRadius: '10px',
                                             fontSize: '1rem',
@@ -11381,8 +11380,9 @@ ${primaryAdminNotes}`.trim();
                                 </div>
                             );
                             })}
+                            </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0', textAlign: 'left' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: '0.75rem 0', textAlign: 'left' }}>
                                 <div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                                         <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
@@ -11442,11 +11442,11 @@ ${primaryAdminNotes}`.trim();
                                         }}
                                         style={{
                                             width: '100%',
-                                            padding: '0.7rem 0.8rem',
+                                            padding: '0.5rem 0.75rem',
                                             borderRadius: '10px',
                                             border: '2px solid #E2E8F0',
                                             fontWeight: '700',
-                                            fontSize: '1.1rem',
+                                            fontSize: '0.95rem',
                                             textAlign: 'center',
                                             outline: 'none',
                                             transition: 'all 0.2s ease-in-out'
@@ -11557,11 +11557,11 @@ ${primaryAdminNotes}`.trim();
                                             }}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.7rem 0.8rem',
+                                                padding: '0.5rem 0.75rem',
                                                 borderRadius: '10px',
                                                 border: '2px solid #E2E8F0',
                                                 fontWeight: '700',
-                                                fontSize: '1.1rem',
+                                                fontSize: '0.95rem',
                                                 backgroundColor: '#F9FAFB',
                                                 outline: 'none',
                                                 cursor: 'pointer',
@@ -11592,11 +11592,11 @@ ${primaryAdminNotes}`.trim();
                                             value={dynamicUnitLabel}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.7rem 0.8rem',
+                                                padding: '0.5rem 0.75rem',
                                                 borderRadius: '10px',
                                                 border: '2px solid #E2E8F0',
                                                 fontWeight: '700',
-                                                fontSize: '1.1rem',
+                                                fontSize: '0.95rem',
                                                 backgroundColor: '#F3F4F6',
                                                 color: '#1E293B',
                                                 textAlign: 'center',
@@ -11630,7 +11630,7 @@ ${primaryAdminNotes}`.trim();
                                     }}
                                     style={{
                                         width: '100%',
-                                        padding: '0.65rem 0.8rem',
+                                        padding: '0.45rem 0.75rem',
                                         borderRadius: '10px',
                                         border: '1.5px solid #CBD5E1',
                                         fontSize: '0.88rem',
@@ -11651,7 +11651,7 @@ ${primaryAdminNotes}`.trim();
                                 />
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
                                 <button
                                     type="button"
                                     tabIndex={-1}
@@ -11762,7 +11762,7 @@ ${primaryAdminNotes}`.trim();
                             style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '95%', maxWidth: '550px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', textAlign: 'center' }}
                             onClick={e => e.stopPropagation()} // Prevent close
                         >
-                            <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
+                            <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', alignItems: 'center' }}>
                                 <div style={{ textAlign: 'left' }}>
                                     <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '900', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <Scale size={20} color="#111827" /> Equivalencias y Conversiones
@@ -11780,7 +11780,7 @@ ${primaryAdminNotes}`.trim();
                             </header>
 
                             {/* SECCIÓN DE UNIDAD BASE */}
-                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #E2E8F0', textAlign: 'left' }}>
+                            <div style={{ backgroundColor: '#F8FAFC', padding: '1rem', borderRadius: '12px', marginBottom: '0.75rem', border: '1px solid #E2E8F0', textAlign: 'left' }}>
                                 <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Unidad de Inventario (Base)
                                 </label>
@@ -11805,7 +11805,7 @@ ${primaryAdminNotes}`.trim();
                             </div>
 
                             {/* EQUIVALENCIAS EXISTENTES */}
-                            <div style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                            <div style={{ textAlign: 'left', marginBottom: '0.75rem' }}>
                                 <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
                                     Equivalencias de Compra
                                 </h4>
@@ -11922,7 +11922,7 @@ ${primaryAdminNotes}`.trim();
 
                                 <button 
                                     onClick={handleAdd} 
-                                    style={{ width: '100%', marginTop: '1rem', padding: '0.8rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.15s' }}
+                                    style={{ width: '100%', marginTop: '1rem', padding: '0.5rem 0.75rem', borderRadius: '10px', border: 'none', backgroundColor: '#059669', color: 'white', fontWeight: '700', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.15s' }}
                                 >
                                     Vincular Unidades
                                 </button>
@@ -11964,7 +11964,7 @@ ${primaryAdminNotes}`.trim();
                 <div style={{
                     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
                     backgroundColor: 'rgba(15, 23, 42, 0.8)', zIndex: 9999, display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', padding: '2rem',
+                    alignItems: 'center', justifyContent: 'center', padding: '1.25rem 1.5rem',
                     backdropFilter: 'blur(8px)'
                 }}>
                     <div style={{
@@ -12262,7 +12262,7 @@ ${primaryAdminNotes}`.trim();
                     <div style={{
                         backgroundColor: 'white',
                         borderRadius: '20px',
-                        padding: '2rem',
+                        padding: '1.25rem 1.5rem',
                         width: '90%',
                         maxWidth: '400px',
                         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -12362,7 +12362,7 @@ ${primaryAdminNotes}`.trim();
                         <div style={{
                             backgroundColor: 'white',
                             borderRadius: '24px',
-                            padding: '2rem',
+                            padding: '1.25rem 1.5rem',
                             width: '90%',
                             maxWidth: '460px',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -12371,9 +12371,7 @@ ${primaryAdminNotes}`.trim();
                             {/* Product Image / Icon */}
                             {duplicateConfirm.product.image_url ? (
                                 <div style={{
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '16px',
+                                    width: '48px', height: '48px', borderRadius: '10px',
                                     overflow: 'hidden',
                                     margin: '0 auto 1rem',
                                     boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
@@ -12421,7 +12419,7 @@ ${primaryAdminNotes}`.trim();
                                 border: '1.5px solid #FCD34D',
                                 borderRadius: '14px',
                                 padding: '0.9rem 1.1rem',
-                                marginBottom: '1.5rem',
+                                marginBottom: '0.75rem',
                                 textAlign: 'left',
                                 fontSize: '0.84rem',
                                 color: '#92400E',
@@ -12700,12 +12698,12 @@ ${primaryAdminNotes}`.trim();
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subtotal (Neto)</span>
-                            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateSubtotal())}</span>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateSubtotal())}</span>
                         </div>
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IVA Estimado</span>
-                            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateTotalTax())}</span>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#475569' }}>{formatMoney(calculateTotalTax())}</span>
                         </div>
                         <div style={{ height: '24px', width: '1px', backgroundColor: '#CBD5E1' }} />
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -13197,14 +13195,14 @@ ${primaryAdminNotes}`.trim();
                         }}>
                             <CheckCircle2 size={36} strokeWidth={2.5} />
                         </div>
-                        <h2 style={{ fontSize: '1.6rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.5rem' }}>
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', marginBottom: '0.5rem' }}>
                             ¡2 Pedidos Creados Exitosamente!
                         </h2>
-                        <p style={{ fontSize: '0.92rem', color: '#64748B', marginBottom: '1.5rem' }}>
+                        <p style={{ fontSize: '0.92rem', color: '#64748B', marginBottom: '0.75rem' }}>
                             La Orden de Compra fue separada correctamente. Ambos pedidos quedaron registrados en el sistema, vinculados al documento original y programados para sus respectivas fechas de despacho.
                         </p>
 
-                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'left', border: '1px solid #E2E8F0' }}>
+                        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.25rem', marginBottom: '0.75rem', textAlign: 'left', border: '1px solid #E2E8F0' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid #E2E8F0' }}>
                                 <div>
                                     <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase' }}>Pedido 1 (Principal)</div>

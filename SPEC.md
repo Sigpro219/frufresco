@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.374 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..396 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
+> **Versión:** 1.9.375 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..397 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
 > **Fecha:** 9 de Noviembre, 2026  
 > **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..396) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **396 Escenarios Canónicos (1..396)** | **🟢 100%** |
+| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **397 Escenarios Canónicos (1..397)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
@@ -14990,8 +14990,8 @@ flowchart TD
   - **Acceso Webmail General:** `https://mail.hostinger.com` | App Móvil Oficial: *Titan: Correo para empresas*
 - **When** se provisiona el servicio de correo corporativo bajo la infraestructura de Hostinger / Titan Email:
 - **Then** se configuran, gobiernan y monitorean exactamente quince (15) buzones corporativos bajo el dominio `frufresco.co`:
-  1. 🟡 **`pedidos@frufresco.co`** *(Misión Crítica / Entrada Oficial)*: Receptor primario donde los clientes envían sus órdenes de compra. Cuenta con regla de reenvío automático (*Forwarder*) activa y verificada con copia retenida en buzón original (`keep_copy: true`) hacia `copia.pedidos@frufresco.co` y `frufrescodigital@gmail.com`.
-  2. 🪞 **`copia.pedidos@frufresco.co`** *(Buzón Espejo / Pipeline IDP-AI)*: Réplica espejo inmutable del tráfico de pedidos para ingesta automática de Gemini, auditoría forense y aislamiento de lectura sin interferencia de operadores humanos.
+  1. 🟡 **`pedidos@frufresco.co`** *(Misión Crítica / Entrada Oficial)*: Receptor primario donde los clientes envían sus órdenes de compra. Cuenta con regla de reenvío automático (*Forwarder*) activa y verificada con copia retenida en buzón original (`keep_copy: true`) exclusivamente hacia `copia.pedidos@frufresco.co` (sin pasar por `frufrescodigital@gmail.com`, garantizando desacoplamiento total respecto a los canales heredados 1 y 2).
+  2. 🪞 **`copia.pedidos@frufresco.co`** *(Buzón Espejo / Pipeline IDP-AI)*: Réplica espejo inmutable del tráfico de pedidos de `@frufresco.co` conectada directamente al pipeline de ingesta y al Instrumento 4 (`/api/orders/sync-hostinger` $\to$ `/api/orders/email-ingest`), para extracción automática de Gemini, auditoría forense y aislamiento de lectura sin interferencia de operadores humanos.
   3. `direccion.operaciones@frufresco.co`: Logística, flota, despacho y telemetría satelital (GPS Apps-360).
   4. `facturacion.electronica@frufresco.co`: Recepción y emisión de comprobantes fiscales DIAN y notas contables.
   5. `gestion.administrativa@frufresco.co`: Tesorería, compras administrativas y contratos de soporte.
@@ -15071,11 +15071,116 @@ flowchart TD
 
 ---
 
+### Escenario 397: Conexión Directa de Canal 3 (`copia.pedidos@frufresco.co`) hacia Instrumento 4 & Barra Láser Horizontal (0px Eje Y) de Telemetría Tripartita para Desconexión Progresiva de Canales (`1`, `2` y `4`) (SDD v1.9.375)
+
+#### 1. Contexto Operativo y Arquitectura de Desacoplamiento para Apagado Limpio
+- **Given** la meta arquitectónica de extinguir progresivamente los vestigios heredados sin interrumpir la operación:
+  - **Canal 1 (`pedidos@frufresco.com`):** Servidor heredado hostil (`82.180.136.155`) que alimenta por POP3/reenvío al Canal 2.
+  - **Canal 2 (`frufrescodigital@gmail.com`):** Puente transitorio con Google Apps Script (`scripts/google_apps_script_bridge.js`) que publica en `POST /api/orders/email-ingest`.
+  - **Canal 3 (`pedidos@frufresco.co` $\to$ `copia.pedidos@frufresco.co`):** Nuevo buzón soberano en Hostinger (`imap.hostinger.com:993`).
+  - **Instrumento 4 (`dualAgentReconciler.ts`):** Conciliador Dual-Agent (Gemini Maker + DeepSeek Checker) dentro de `/api/orders/email-ingest`.
+- **And** la regla innegociable de ingeniería de transición:
+  1. **Prohibición de Enrutar Canal 3 a través de Canal 2:** El Canal 3 (`copia.pedidos@frufresco.co`) **NUNCA** debe depender de `frufrescodigital@gmail.com` (Canal 2), pues cuando se apaguen los Canales 1 y 2, el Canal 3 debe quedar operando en línea directa.
+  2. **Secuencia de Apagado en Dos Hitos:**
+     - **Hito 1 (Apagado de Canales 1 y 2):** Cuando el $0\%$ de los pedidos llegue exclusivamente por el Canal 1-2 (`Rojo = 0%`), es decir, todos los pedidos lleguen ya por el Canal 3 (`Azul`) o simultáneamente por ambos (`Violeta`), se desconectan los Canales 1 y 2.
+     - **Hito 2 (Apagado del Instrumento 4):** Una vez desconectados 1 y 2, el tráfico simultáneo (`Violeta`) cae a $0\%$ y el $100\%$ del flujo queda en Canal 3 puro (`Azul = 100%`), momento en que se apaga el Instrumento 4 (`ENABLE_DUAL_AGENT_RECONCILER=false`).
+
+```mermaid
+flowchart LR
+    subgraph LEGACY["VESTIGIOS HEREDADOS (A APAGAR EN HITO 1)"]
+        C1["(1) pedidos@frufresco.com"] --> C2["(2) frufrescodigital@gmail.com<br/>(Apps Script Bridge)"]
+    end
+
+    subgraph SOVEREIGN["INFRAESTRUCTURA SOBERANA .CO (PERMANENTE)"]
+        C3_MAIN["pedidos@frufresco.co"] -->|Forwarder Hostinger| C3["(3) copia.pedidos@frufresco.co<br/>(IMAPS Directo TLS 993)"]
+    end
+
+    C2 -->|ingestChannel: channel_1_2_legacy| I4["(4) Instrumento 4<br/>/api/orders/email-ingest<br/>(Gemini Maker + DeepSeek Checker)"]
+    C3 -->|ingestChannel: channel_3_co<br/>/api/orders/sync-hostinger| I4
+
+    I4 --> DB[("public.order_drafts<br/>seenInChannels: [...]")]
+    DB --> LASER["Barra Láser Eje X (3 Particiones)<br/>Azul (.co) | Violeta (Ambos) | Rojo (1-2)"]
+```
+
+#### 2. Especificación Técnica del Conector Directo de Canal 3 (`/api/orders/sync-hostinger` & `src/lib/orders/hostingerImapSync.ts`)
+- **When** se invoca `POST /api/orders/sync-hostinger` (disparado automáticamente al cargar o refrescar la bandeja en `EmailDraftsModule.tsx`, en su ciclo de polling de 30s, o mediante cron/invocación directa):
+- **Then** el conector ejecuta la sincronización directa e idempotente desde Hostinger hacia `/api/orders/email-ingest` bajo las siguientes invariantes:
+  1. **Transporte Nativo Node.js TLS (`node:tls` — Compatible con Windows Local y Vercel Serverless Linux):**
+     - Queda prohibido depender de binarios externos del sistema operativo (como `curl.exe`) dentro del runtime de Next.js.
+     - El módulo `src/lib/orders/hostingerImapSync.ts` abre una conexión TLS directa (`tls.connect`) hacia `process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com'`, puerto `993`, autenticándose con `process.env.HOSTINGER_IMAP_USER || 'copia.pedidos@frufresco.co'` y `process.env.HOSTINGER_IMAP_PASS`.
+     - Si las credenciales no están configuradas en el entorno, el endpoint retorna `{ success: true, skipped: true, reason: 'Credentials not configured' }` sin arrojar error HTTP 500.
+  2. **Control de Estado Incremental por UID y Guardián Anti-Concurrencia (`public.app_settings`):**
+     - El puntero de sincronización se persiste en `public.app_settings` bajo `key = 'hostinger_imap_sync_state'` con estructura JSON `{ account: string, lastSyncedUid: number, lastRunAt: string, inFlightUntil?: string, transitionEpochAt: string, totalIngested: number }`. Si `transitionEpochAt` no existe al inicializar, se fija al timestamp ISO del primer encendido de Canal 3 (o se lee de `NEXT_PUBLIC_CHANNEL_3_EPOCH`).
+     - **Protección Anti-Tormenta / Lease Lock con Expiración:** El módulo mantiene un cerrojo en memoria (`inFlightHostingerSync` con liberación obligatoria en `finally`) **y** un lease lock distribuido en `app_settings` (`inFlightUntil = now + 55s`), además de un cooldown de `20 segundos` desde `lastRunAt` (salvo `?force=true` cuando no hay `inFlightUntil` vigente). Todo socket TLS IMAP DEBE tener un `socket.setTimeout(15000)` por comando y cierre garantizado (`LOGOUT` + `socket.destroy()`) en el bloque `finally`.
+     - **Presupuesto de Tiempo Serverless (Anti-504 Timeout):** En cada invocación se procesan máximo **`3` mensajes nuevos por lote** (o hasta consumir un presupuesto máximo de ejecución de `40 segundos` de reloj). En la primera ejecución (cuando `lastSyncedUid === 0`), si existen correos en el buzón, solo se sincronizan los mensajes de las últimas 24 horas (máximo los últimos 3 UIDs recientes) y se adelanta `lastSyncedUid` para no inundar a Gemini con históricos viejos.
+  3. **Parser MIME RFC822 En-Memoria e Inyección Directa en `/api/orders/email-ingest`:**
+     - Para cada correo `.eml` nuevo descargado por UID, el parser nativo extrae:
+       - Cabeceras (`Subject`, `From`, `To`, `Cc`, `Delivered-To`, `Message-ID`, `Date`, desplegando cabeceras plegadas RFC 2047 `=?UTF-8?B?...?=` y `=?UTF-8?Q?...?=`).
+       - Cuerpo `text/plain` y `text/html` (decodificando `base64` y `quoted-printable`).
+       - Archivos adjuntos (`application/pdf`, hojas de cálculo `.xlsx`/`.xls`/`.csv`, imágenes) codificados en `base64` con `{ filename, file_name, content_type, content, size }`.
+     - **Cierre de Socket Antes de Invocar IA:** El conector IMAP descarga los `.eml` pendientes en memoria y **cierra inmediatamente la sesión TLS IMAP** antes de invocar `/api/orders/email-ingest`, evitando que Hostinger corte el socket por inactividad mientras Gemini y DeepSeek procesan.
+     - Construye el payload canónico marcando explícitamente **`ingestChannel: 'channel_3_co'`**, `hostingerUid: uid`, y asegurando que `envelope.to` sea `'copia.pedidos@frufresco.co'` (incluso si el cliente puso a `pedidos@frufresco.co` en `Cc:`). Invoca directamente la función `POST` exportada de `/api/orders/email-ingest/route.ts` construyendo un `Request` interno con `?secret=${process.env.WEBHOOK_SECRET || ''}`.
+     - Actualiza incrementalmente `lastSyncedUid = uid` en `public.app_settings` **inmediatamente después de cada correo individual procesado**, de modo que si el lote se detiene por presupuesto de tiempo (`40s`), los UIDs ya procesados no se repitan.
+
+#### 3. Clasificación Determinista de Canal y Fusión de `seenInChannels` en Todas las Compuertas (`src/app/api/orders/email-ingest/route.ts`)
+- **When** `POST /api/orders/email-ingest` recibe un correo entrante:
+- **Then** determina su canal de entrada (`incomingChannel: 'channel_3_co' | 'channel_1_2_legacy'`) mediante la función canónica `resolveIngestChannel(payload, recipientEmail)`:
+  1. Es **`'channel_3_co'`** únicamente si `payload.ingestChannel === 'channel_3_co'`, o si `payload.hostingerUid` está presente, o si las cabeceras de entrega física del servidor (`headers['delivered-to']`, `headers['Delivered-To']`, `headers['x-original-to']`) contienen `@frufresco.co` (dado que `scripts/google_apps_script_bridge.js` solo envía `{ subject, from, to, date }` y nunca inyecta `Delivered-To: ...@frufresco.co`). Nunca se debe inferir `'channel_3_co'` solo por `headers.to`, pues un correo recibido en Canal 2 con `To: pedidos@frufresco.co, pedidos@frufresco.com` proviene físicamente del puente heredado.
+  2. En cualquier otro caso (incluyendo todo tráfico de `scripts/google_apps_script_bridge.js` o `payload.ingestChannel === 'channel_1_2_legacy'`), se clasifica estrictamente como **`'channel_1_2_legacy'`**.
+  3. **Resolución Multi-Destinatario (`To` + `Cc` + `Delivered-To`):** Al evaluar `recipientEmail` e `isOrdersRecipient` en `route.ts`, el motor inspecciona todos los correos presentes en `headers.to`, `headers.cc`, `headers['delivered-to']` y `envelope.to`, priorizando cualquier dirección que coincida con los buzones oficiales de pedidos (`pedidos@frufresco.co`, `copia.pedidos@frufresco.co`, `pedidos@frufresco.com`, `frufrescodigital@gmail.com`, `e.copia@frufresco.com`).
+  4. **Sello Desde el Placeholder Inicial (`[RAW_WEBHOOK]`):** Al insertar el registro inicial `[RAW_WEBHOOK]` en `public.order_drafts`, se guarda desde el segundo cero `extracted_items: { debug_payload: payload, ingestChannel: incomingChannel, seenInChannels: [incomingChannel] }`.
+- **And** para evitar que las compuertas sintácticas tempranas (de 15 minutos y 5 minutos) oculten cuando un mismo pedido viaja por ambos canales:
+  1. **Fusión Polimórfica Segura en Compuertas de 15 Minutos y 5 Minutos (Soporte Array + Objeto `[RAW_WEBHOOK]` + Multi-Borrador):**
+     - Si las compuertas de 15m o 5m detectan duplicado sintáctico, recolectan **todos** los borradores recientes que empaten con ese correo (`matchedDrafts`, cubriendo el caso de correos con múltiples adjuntos que generaron varios borradores) y para cada `matchedDraft` ejecutan la función helper `appendChannelToDraftRecord(supabaseAdmin, matchedDraft, incomingChannel, 'SYNTACTIC_DUPLICATE_ABSORBED')`:
+       * **Caso A (`Array.isArray(matchedDraft.extracted_items)`):** Localiza el elemento metadata (`x.isMetadata`), une `seenInChannels = Array.from(new Set([...(meta.seenInChannels || [meta.ingestChannel].filter(Boolean)), incomingChannel]))`, anexa la entrada en `reconcilerLog` y ejecuta `.update({ extracted_items })`.
+       * **Caso B (`matchedDraft.extracted_items` es un Objeto `[RAW_WEBHOOK]` en vuelo):** Actualiza `extracted_items.seenInChannels = Array.from(new Set([...(extracted_items.seenInChannels || []), incomingChannel]))` en la BD.
+       * **Re-lectura Pre-Upsert en `processMailAsync` (Anti-Lost-Update):** Justo antes de construir `draftsToInsert` / ejecutar `.upsert(draftsToInsert)` al final de `processMailAsync`, el hilo principal consulta el registro `mailId` actual en `public.order_drafts` para rescatar cualquier canal adicional que haya sido inyectado en `seenInChannels` mientras Gemini procesaba, propagando esa unión a **todos** los elementos de `draftsToInsert`.
+  2. **Fusión en Instrumento 4 (DeepSeek Checker):**
+     - Cuando DeepSeek dictamina `IGNORE_DUPLICATE` o `UPDATE_DELTA` sobre `target_draft_id`, une explícitamente `prevMeta.seenInChannels` (o `[prevMeta.ingestChannel]`) con `draftMeta.seenInChannels` (`[incomingChannel]`) tanto si actualiza `targetRecord` (`status === 'pending'`) como si inserta un nuevo borrador delta (`status === 'approved'`).
+     - Cuando el borrador se inserta por primera vez (`INSERT_NEW` o Fast-Path), su objeto metadata `extracted_items[0]` registra `ingestChannel: incomingChannel` y `seenInChannels: [incomingChannel]` (unido con cualquier canal capturado durante el vuelo de `mailId`).
+  3. **Preservación en `getDraftMetadata` y `reparse-draft`:**
+     - `getDraftMetadata(draft)` en `EmailDraftsModule.tsx` DEBE exponer explícitamente `ingestChannel`, `seenInChannels` y `reconcilerLog` para consumo directo de la UI, y `/api/orders/reparse-draft` debe preservar intactos dichos campos en `metadata`.
+
+#### 4. Especificación de la Barra Láser Horizontal de 3 Particiones en el Eje X (`src/components/EmailDraftsModule.tsx`)
+- **Given** la restricción ergonómica de `EmailDraftsModule.tsx`, donde la altura vertical (`bannerHeight` en el Eje Y) del banner sticky (`ref={bannerRef}`) desplaza hacia abajo el `theadTop` de la tabla de pedidos:
+- **When** se renderiza la cabecera sticky de **`Pedidos por Procesar (Email Inbound)`**:
+- **Then** se incorpora el **Indicador Láser de Transición de Dominio** consumiendo **exactamente `0px` adicionales en el Eje Y** (alojado horizontalmente en el Eje X dentro de la fila `flex` existente entre el título `<h1>` y el botón `Actualizar Bandeja (Alt+A)`, con `flexWrap: 'nowrap'`, `whiteSpace: 'nowrap'` y `flexShrink: 0` para impedir saltos de línea en pantallas de 1280px+):
+  1. **Universo de Cómputo (`validTransactionalDrafts`):**
+     - Evalúa los borradores transaccionales de la ventana activa de transición que cumplan simultáneamente:
+       1. `status === 'pending' || status === 'approved'` (excluyendo `status === 'rejected'`).
+       2. **Exclusión de `[RAW_WEBHOOK]` en vuelo:** `!(draft.email_subject || '').startsWith('[RAW_WEBHOOK]') && Array.isArray(draft.extracted_items)`.
+       3. **Ventana de Transición Activa (Anti-Bloqueo por Histórico Pre-Canal 3):** Evalúa los borradores del turno/día operativo en curso (`created_at >= startOfTodayBogota`, o si hoy aún no hay pedidos, los posteriores al encendido de Canal 3 `transitionEpochAt` / últimas 24h), garantizando que los borradores históricos de días anteriores al encendido de `@frufresco.co` no contaminen ni bloqueen perpetuamente el indicador `Rojo = 0%`.
+     - Sea $N_{\text{total}} = |\text{validTransactionalDrafts}|$.
+  2. **Las 3 Particiones Mutuamente Excluyentes ($N_{\text{total}} = N_{\text{azul}} + N_{\text{violeta}} + N_{\text{rojo}}$):**
+     - Para cada borrador $d$, se resuelve su conjunto de canales $S(d)$ leyendo `meta.seenInChannels` (con fallback retrocompatible a `meta.ingestChannel`, `meta.reconcilerLog` y `debug_payload` para borradores previos):
+       1. **Partición 1 — Azul (`only_3_co` — `#2563EB`):** $S(d) = \{\text{'channel\_3\_co'}\}$. Pedidos que viajaron **exclusivamente** por el nuevo Canal 3 (`@frufresco.co`).
+       2. **Partición 2 — Violeta (`both_channels` — `#8B5CF6`):** $\{\text{'channel\_3\_co'}, \text{'channel\_1\_2\_legacy'}\} \subseteq S(d)$. Pedidos que viajaron por **ambos canales** y fueron conciliados/absorbidos sin duplicar.
+       3. **Partición 3 — Roja (`only_1_2_legacy` — `#EF4444`):** $S(d) = \{\text{'channel\_1\_2\_legacy'}\}$ (o sin rastro de Canal 3). Pedidos que entraron **únicamente** por el canal heredado (`.com` / Gmail) y se perderían si se apagan hoy los canales 1 y 2.
+  3. **Geometría en el Eje X y Línea de Objetivo (`100%`):**
+     - Barra horizontal fina (`height: '6px'`, `width: '190px'`, `borderRadius: '999px'`, `backgroundColor: '#F1F5F9'`) dividida internamente en tres segmentos proporcionales (`width: ${pctAzul}%`, `width: ${pctVioleta}%`, `width: ${pctRojo}%`) de izquierda a derecha: **Azul $\to$ Violeta $\to$ Rojo**.
+     - En el extremo derecho (`100%`) se sitúa la **Línea de Objetivo Vertical** (`width: '2px', height: '14px'`) acompañada de una etiqueta compacta e icono vectorial de `lucide-react` (cero emojis unicode) que evoluciona en **3 estados deterministas**:
+       - **Estado A — En Transición ($N_{\text{rojo}} > 0$):**
+         * Línea de objetivo en gris/ámbar (`#94A3B8`) + micro-badge: `Cobertura .co: ${Math.round(pctAzul + pctVioleta)}%` y alerta de pendientes en rojo (`${N_rojo} en 1-2`).
+       - **Estado B — Hito 1 Alcanzado: Listo para Apagar Canales 1 y 2 ($N_{\text{total}} > 0 \land N_{\text{rojo}} = 0 \land N_{\text{violeta}} > 0$):**
+         * Línea de objetivo iluminada en **Violeta/Azul (`#7C3AED`)** con icono `<Flag size={12} />` y badge: **`Meta Fase 1 (0% Rojo) — Apagar Canales 1 y 2`**.
+       - **Estado C — Hito 2 Alcanzado: 100% Nativo .co, Listo para Apagar Instrumento 4 ($N_{\text{total}} > 0 \land N_{\text{rojo}} = 0 \land N_{\text{violeta}} = 0 \land N_{\text{azul}} = N_{\text{total}}$):**
+         * Línea de objetivo iluminada en **Verde Esmeralda (`#10B981`)** con icono `<CheckCircle2 size={13} />` y badge: **`Meta 100% .co — Apagar 1, 2 y 4`**.
+  4. **Tooltip Rico al Pasar el Cursor (Hover Popover):**
+     - Al posicionar el cursor sobre la barra fina o su marcador de objetivo, se despliega un tooltip flotante (`position: 'absolute', top: 'calc(100% + 8px)', zIndex: 9999`) sin desplazar el layout, detallando:
+       - Desglose exacto de las 3 particiones:
+         * **Solo Canal 3 (`@frufresco.co` — Azul):** `N_azul` pedidos (`pctAzul%`)
+         * **Ambos Canales (`1-2 + 3` Conciliados — Violeta):** `N_violeta` pedidos (`pctVioleta%`)
+         * **Solo Canal 1-2 Heredado (`.com` / Gmail — Rojo):** `N_rojo` pedidos (`pctRojo%`)
+       - Estado de la Línea de Objetivo y recomendación operativa exacta para saber cuándo desconectar `(1 y 2)` y cuándo desconectar `(4)`.
+       - Indicador de sincronización directa con Hostinger (`copia.pedidos@frufresco.co`).
+
+---
+
 # 🚀 PARTE II: CONTRATO DE EXPANSIÓN `onFRU v2.0` (FASE II — ROADMAP COMERCIAL FACTURABLE POST-CIERRE v1.x)
 
 > [!IMPORTANT]
 > **CLÁUSULA DE FRONTERA CONTRACTUAL Y FINANCIERA (INDEPENDENCIA FASE I vs FASE II):**
-> 1. **Cierre Inmutable de Fase I (`onFRU v1.9.x` — Escenarios 1 al 394):** Los diez (10) dominios operativos, las setenta y seis (76) pantallas certificadas y la Sábana Oficial de Balance Diario de Inventarios (Columnas A–X) conforman el alcance 100% cumplido y cerrado de la Fase I.
+> 1. **Cierre Inmutable de Fase I (`onFRU v1.9.x` — Escenarios 1 al 397):** Los diez (10) dominios operativos, las setenta y seis (76) pantallas certificadas y la Sábana Oficial de Balance Diario de Inventarios (Columnas A–X) conforman el alcance 100% cumplido y cerrado de la Fase I.
 > 2. **Naturaleza de `onFRU v2.0` (Escenarios Serie 400+):** Todos los capítulos, módulos de software, integraciones IoT y escenarios numerados a partir del **Escenario 400** pertenecen exclusivamente a la **Segunda Fase Evolutiva (`onFRU v2.0`)**.
 > 3. **Cotización y Ejecución Independiente:** El desarrollo, suministro de hardware y puesta en marcha de los módulos de `onFRU v2.0` se cotizan, contratan y facturan de manera independiente con posterioridad a la liquidación de la Fase I, sin condicionar ni postergar las actas de entrega del ecosistema base.
 
@@ -15750,3 +15855,114 @@ Para blindar a la empresa contra cualquier desconexión abrupta antes de la tran
      - Esto garantiza inmunidad total ante recargas de página (`F5`), cierres de sesión o conmutaciones de pestañas.
   4. **Feedback de Telemetría Preciso:**
      - Despliega un mensaje de éxito indicando la cantidad exacta de productos cruzados y actualizados en el catálogo, con cero pérdida de datos.
+
+---
+
+### Escenario 416: Control Segmentado Dual Poka-Yoke (Con Pedido vs. Todas con Ceros) y Filtrado Inteligente en Planillas Excel (SDD v1.9.240)
+- **Given** el módulo de procesamiento e ingesta de borradores de pedidos por correo (`EmailDraftsModule.tsx`),
+- **When** se visualiza un borrador con archivo adjunto de hoja de cálculo (`.xlsx`, `.xls`, `.ods`, `.csv`) que contiene cientos de líneas con cantidades en cero (ej. planillas institucionales tipo Colsubsidio con 137 filas y solo 33 con pedido),
+- **Then** el sistema garantiza el cumplimiento estricto de las siguientes 4 directrices operativas:
+  1. **Filtrado Activo por Defecto (Default ON):**
+     - Al cargar cualquier documento Excel, el estado `excelFilterOnlyWithQty` se inicializa activado (`true`) por defecto para evitar que el operador tenga que desplazarse por filas vacías.
+  2. **Control Segmentado Dual de Preponderancia Gráfica (Con Pedido vs. Todas las Filas con Ceros):**
+     - El selector opera mediante un control segmentado ergonómico de 2 pestañas fijas claramente diferenciadas:
+       a) **`[Con Pedido (33)]`**: Fondo verde esmeralda industrial (`#059669`), activado por defecto, aislando únicamente los ítems con cantidad > 0.
+       b) **`[Todas las Filas (con ceros) (137)]`**: Fondo azul royal (`#2563EB`) al seleccionarse, mostrando el 100% de las filas del documento Excel original (incluyendo filas en cero) para auditoría exhaustiva.
+     - La dualidad garantiza que el operador alterne instantáneamente entre velocidad de despacho y revisión completa del documento fuente con 1 solo clic.
+  3. **Aislamiento Bidireccional de SKUs Pendientes de Mapear:**
+     - En el panel de trabajo de la derecha, el badge de progreso (`31/33 SKUs listos`), el botón de cabecera (`Solo Sin Match`) y el aviso rojo inferior (`Debe mapear todos los productos`) permiten aislar instantáneamente las filas no emparejadas para resolverlas en segundos sin scroll a ciegas.
+  4. **Cero Emojis y Cero Errores de Tipado:**
+     - Iconografía 100% vectorial con componentes `lucide-react` (`Filter`, `FileText`, `AlertTriangle`).
+     - Verificación estricta en TypeScript (`tsc --noEmit` con 0 errores).
+
+---
+
+### Escenario 417: Poka-Yoke de Visibilidad e Inclusión de Productos en Edición de Pedidos Existentes (Loading / Control Tower) (SDD v1.9.241)
+- **Given** la pantalla de alistamiento y edición de pedidos existentes (`/admin/orders/loading` y `loading/page.tsx`),
+- **When** el operador abre el modal *"Personaliza tu producto"* para incluir un nuevo producto o modificar uno existente con múltiples variantes (Presentación, Gramaje, Maduración, Tamaño, Nota de Alistamiento),
+- **Then** el sistema garantiza el cumplimiento estricto de las siguientes 4 directrices ergonómicas e industriales:
+  1. **Blindaje de Altura y Scroll Visible (`maxHeight: 90vh` & `overflowY: auto`):**
+     - El contenedor del modal no puede quedar desbordado ni cortado en pantallas con resolución estándar, laptops o con zoom del navegador.
+     - Aplica scroll interno suave con la clase industrial `premium-scrollbar`.
+  2. **Botonera Flotante Fija (`position: sticky; bottom: -2rem`):**
+     - Los botones de confirmación (`[Agregar]` / `[Guardar Cambios]` y `[Cancelar]`) quedan anclados de forma fija e inmóvil al pie del modal sobre un fondo blanco con línea divisoria superior.
+     - El operador siempre tiene a la vista el botón verde de acción para confirmar la inclusión del producto sin tener que desplazarse hacia abajo.
+  3. **Persistencia Transaccional Idempotente (`handleUpdateOrder` & `addOrUpdateItemInState`):**
+     - Al presionar `[Agregar]`, el producto se incorpora a la orden activa en memoria (`orderItems`) con su precio pactado y variantes.
+     - Al presionar `[Guardar]` en la cabecera del pedido, se persisten los ítems creados vía API con registro de auditoría.
+  4. **Cero Emojis y Cero Errores de Tipado:**
+     - Iconografía 100% vectorial con componentes `lucide-react`.
+     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
+
+---
+
+### Escenario 418: Estandarización Universal del Modal de Personalización de Producto Slim Y-Axis en Módulo de Pedidos (SDD v1.9.242)
+- **Given** las cuatro (4) pantallas transaccionales del módulo de pedidos:
+  1. Alistamiento y Edición de Pedidos Existentes (`/admin/orders/loading` y `loading/page.tsx`),
+  2. Creación Manual de Pedidos y Cotizaciones B2B (`/admin/orders/create` y `create/page.tsx`),
+  3. Borradores Inteligentes e Ingesta de Correo (`EmailDraftsModule.tsx`),
+  4. Detalle Individual de Pedido (`/admin/orders/[id]` y `orders/[id]/page.tsx`),
+- **When** el operador abre el modal *"Personaliza tu producto"* para especificar variantes, gramajes, equivalencias y notas de alistamiento,
+- **Then** el sistema garantiza una experiencia visual 100% homogénea, compacta en el eje Y y sin alterar en absoluto la lógica operativa:
+  1. **Grid Responsivo de Opciones en Doble Columna (`display: grid`, `gridTemplateColumns: repeat(auto-fit, minmax(220px, 1fr))`):**
+     - Los atributos (`Presentación`, `Gramaje`, `Maduración`, `Tamaño`) se disponen en pares paralelos con espaciado ergonómico (`gap: 0.75rem`), reduciendo la altura vertical del bloque de opciones en un 50%.
+  2. **Cabecera Slim Ergonómica (`48px × 48px` & `fontSize: 1.25rem`):**
+     - La miniatura del producto se ajusta a 48px con bordes suaves de 10px y sombra sutil. El título se renderiza en 1.25rem de alto contraste, eliminando más de 50px de altura muerta.
+  3. **Campos de Entrada y Selectores de Alta Densidad (`padding: 0.5rem`):**
+     - Los controles de selección y los campos de cantidad se ajustan a una altura densa industrial, optimizando el recorrido visual sin sacrificar ergonomía táctil ni accesibilidad.
+  4. **Botonera Fija con Visibilidad Inmóvil (`position: sticky; bottom: -1.25rem`):**
+     - Los botones de acción (`[Cancelar]` y `[Agregar / Guardar]`) permanecen fijos al pie del contenedor con línea divisoria superior, impidiendo que queden fuera del viewport en pantallas de laptops o tablets.
+  5. **Preservación Estricta de la Lógica Operativa & Cero Emojis:**
+     - Se conservan sin alteración todas las rutinas de cálculo (`buildDualUnitMetadata`, equivalencias de conversión, filtros condicionales de gramaje para unidades no-Kg, notas de bodega y persistencia transaccional).
+     - Iconografía 100% vectorial con `lucide-react` y verificación estricta de compilación con TypeScript (`tsc --noEmit` con 0 errores).
+
+---
+
+### Escenario 419: Registro Transaccional de Peso de Más / Sobrepeso y Ajuste a Factura Definitiva (SDD v1.9.243)
+- **Given** un pedido registrado en el expediente `/admin/orders/[id]` (`src/app/admin/orders/[id]/page.tsx`) o en navegación con el widget flotante PQR/Novedades (`src/components/PQRFloatingWidget.tsx`):
+  - El pedido cuenta con una canasta de `order_items` con cantidades pactadas (`quantity`), pesaje de báscula (`picked_quantity`), precio unitario (`unit_price`), `selected_options` y metadatos de producto (`products: { id, name, unit_of_measure, accounting_id, iva_rate }`).
+  - La orden posee estado `status`, `total`, `subtotal`, `tax` y banderas de facturación DIAN (`electronic_invoices` o `invoice_number`).
+- **When** se detecta en alistamiento, despacho o entrega que un ítem presenta un **peso de más** que debe ser registrado y liquidado en la factura final:
+  1. **Acceso Dual:**
+     - **Canal A (Expediente de Pedido `/admin/orders/[id]`):** Botón de acción en cabecera ejecutiva `<button id="btn-order-overweight"><Scale size={14} /> Registrar Peso de Más</button>`.
+     - **Canal B (Widget Flotante PQR `src/components/PQRFloatingWidget.tsx`):** Chip rápido en sección *"¿Qué sucedió?"*:
+       - `id: 'client_sobrepeso'`, `label: 'Peso de más / Sobrepeso'`, `icon: Scale`, `category: 'facturacion'`, `defaultType: 'peticion'`.
+- **Then** el sistema ejecuta el protocolo hermético de ajuste a factura y kardex de conservación de masa, sellando los puntos ciegos auditados por Goldfish:
+  1. **Componente Canónico Dedicado (`src/components/orders/OverweightAdjustmentModal.tsx`):**
+     - Selector de ítem del pedido renderizado con `#ID` (`accounting_id`), nombre completo de producto y unidad pactada (Prohibición estricta de mostrar o rotular el término `SKU` bajo Regla 4 de FruFresco).
+     - Radio de acción o toggle claro:
+       - Opción A: Ingresar **Delta de Sobrepeso** (`delta_qty > 0`, ej. `+2.40 kg` o `+5 und`).
+       - Opción B: Ingresar **Nuevo Peso / Cantidad Total Real** (`target_qty > current_base_qty`).
+     - Cálculo en tiempo real del nuevo subtotal, IVA estimado (según `iva_rate` del producto) y nuevo total proyectado de la orden.
+     - Campo de notas obligatorias: Operario/Báscula, motivo de sobrepeso y trazabilidad.
+  2. **Reglas de Normalización de Unidades & Límite Físico:**
+     - Para productos con unidad `Kg`: `delta_qty` en kg con política de 2 decimales (`Number(delta.toFixed(2))`).
+     - Para productos con unidad `Lb`: Se respeta la equivalencia canónica innegociable de FruFresco (`1 Lb = 0.5 kg / 500 gr`). El delta se ingresa en Libras o en Kg y se normaliza matemáticamente sin factores divergentes.
+     - Para productos discretos (`Unidad`, `Atado`, `Bulto`, `Paquete 250 gramos`, `Paquete 500 gramos`): Si el sobrepeso es en unidades completas adicionales, se añade en su unidad base; si es tolerancia de masa sobre un producto indivisible (ej. papaya, patilla), el modal avisa que dicho sobrepeso debe arbitrarse como tolerancia/pesada (Col P / `waste_weighing`) a menos que el cliente acepte el cobro proporcional.
+  3. **Persistencia e Idempotencia en Base de Datos:**
+     - **Base de Cálculo:** Si el ítem ya tenía un pesaje en báscula registrado (`picked_quantity !== null && picked_quantity > 0`), la nueva cantidad es `new_picked_qty = picked_quantity + delta_qty`. Si `picked_quantity` era nulo o 0, `new_picked_qty = quantity + delta_qty`.
+     - **Estampado de Arbitraje de Facturación:** En `order_items.selected_options` se almacena:
+       ```json
+       {
+         "_charge_overweight": true,
+         "_overweight_delta": delta_qty,
+         "_overweight_adjusted_at": "ISO_TIMESTAMP",
+         "_overweight_adjusted_by": "USER_ID_OR_NAME"
+       }
+       ```
+       Esto garantiza compatibilidad 100% con `OverweightBillingArbitrationModal.tsx` sin colisiones ni sobreescrituras en el módulo de facturación masiva (`/admin/commercial/billing`).
+     - **Idempotencia en `inventory_movements`:**
+       - Elimina cualquier movimiento previo para ese `order_item.id` con `reference_type IN ('additional_sale', 'waste_weighing')` antes de insertar.
+       - Resuelve dinámicamente `warehouse_id` (bodega principal activa del pedido o acopio general).
+       - Inserta el movimiento oficial de salida por venta adicional:
+         `reference_id = item.id`, `reference_type = 'additional_sale'`, `type = 'exit'`, `quantity = delta_qty`, `unit_price = item.unit_price`.
+     - **Recálculo de la Cabecera `orders`:**
+       - Se recalcula `orders.total_weight_kg = current_weight + delta_in_kg`.
+       - Se recalcula `orders.subtotal = SUM(order_items.unit_price * effective_qty)`.
+       - Se recalcula `orders.tax = SUM(item_subtotal * iva_rate)`.
+       - Se actualiza `orders.total = subtotal + tax`.
+       - Si la orden tenía integración con ERP, se estampa `logistics_data = { ...logistics_data, sync_world_office_status: 'pending_update' }`.
+  4. **Poka-Yoke & Bloqueo de Facturación DIAN:**
+     - El ajuste queda estrictamente **BLOQUEADO** si la orden se encuentra en estado `invoiced`, o si posee `invoice_number` no nulo, o si cuenta con factura electrónica emitida en `electronic_invoices` con estado `DIAN_ACCEPTED` / `AUTHORIZED`. En tal caso, el sistema exige emitir nota de ajuste formal o nueva remisión complementaria.
+     - Cero emojis unicode en toda la interfaz (100% iconos de `lucide-react`: `Scale`, `CheckCircle2`, `AlertTriangle`, `FileText`, `X`).
+     - Verificación mecánica con TypeScript estricto (`tsc --noEmit` con 0 errores).

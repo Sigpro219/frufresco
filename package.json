@@ -12,6 +12,7 @@
     "test": "npx tsx --test tests/**/*.test.ts",
     "test:commercial": "npx tsx --test tests/commercial/*.test.ts",
     "test:commercial:e2e": "node scripts/test_commercial_agreements_e2e.js",
+    "backup:imap": "node scripts/daily_imap_backup.js",
     "publish": "git push origin main && git push origin main:liard"
   },
   "dependencies": {

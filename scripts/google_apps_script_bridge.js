@@ -15,6 +15,7 @@
 
 // URL oficial de producción de FruFresco en Vercel
 const FRUFRESCO_WEBHOOK_URL = 'https://frufresco-liard.vercel.app/api/orders/email-ingest';
+const WEBHOOK_SECRET = ''; // Opcional: configurar si se define WEBHOOK_SECRET en Vercel
 
 // Etiqueta para marcar los correos ya tramitados en Gmail
 const LABEL_PROCESSED = 'PROCESADO_FRUFRESCO';
@@ -121,7 +122,8 @@ function procesarPedidosEntrantes() {
         muteHttpExceptions: true
       };
 
-      const response = UrlFetchApp.fetch(FRUFRESCO_WEBHOOK_URL, options);
+      const targetUrl = WEBHOOK_SECRET ? (FRUFRESCO_WEBHOOK_URL + '?secret=' + encodeURIComponent(WEBHOOK_SECRET)) : FRUFRESCO_WEBHOOK_URL;
+      const response = UrlFetchApp.fetch(targetUrl, options);
       const statusCode = response.getResponseCode();
       const responseText = response.getContentText();
 
@@ -154,8 +156,8 @@ function instalarDisparadorAutomatico() {
   // Crear disparador que corre cada 1 minuto
   ScriptApp.newTrigger('procesarPedidosEntrantes')
     .timeBased()
-    .everyMinutes(1)
+    .everyMinutes(3)
     .create();
 
-  console.log('✅ Disparador automático instalado: revisará correos cada 1 minuto.');
+  console.log('✅ Disparador automático instalado: revisará correos cada 3 minutos.');
 }

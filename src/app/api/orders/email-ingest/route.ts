@@ -13,6 +13,15 @@ const getSupabaseAdmin = () => {
 };
 
 import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
+import {
+  extractDraftSummary,
+  filterCandidateDraftsForClient,
+  evaluateDraftWithDeepSeekReconciler,
+  resolveIngestChannel,
+  resolvePrimaryRecipientEmail,
+  mergeSeenChannels,
+  appendChannelToDraftRecord,
+} from '@/lib/orders/dualAgentReconciler';
 
 async function fetchGemini(apiKey: string, prompt: string, base64Image?: string, mimeType?: string): Promise<string> {
   try {
@@ -72,6 +81,7 @@ export async function POST(req: Request) {
     try {
       rawPayloadStr = await req.text();
       const payload = JSON.parse(rawPayloadStr);
+      const incomingChannel = resolveIngestChannel(payload);
 
       const headers = payload.headers || {};
       const envelope = payload.envelope || {};
@@ -104,8 +114,8 @@ export async function POST(req: Request) {
         forwardedOriginalEmail = deMatch[2].trim().toLowerCase();
       }
 
-      const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
-      if ((corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com')) && forwardedOriginalEmail && !corporateEmails.includes(forwardedOriginalEmail)) {
+      const corporateEmails = ['frufrescodigital@gmail.com', 'adminfrufrescodigital@gmail.com', 'pedidos@frufresco.com', 'pedidos@frufresco.co', 'copia.pedidos@frufresco.co', 'e.copia@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
+      if ((corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co')) && forwardedOriginalEmail && !corporateEmails.includes(forwardedOriginalEmail)) {
         senderEmail = forwardedOriginalEmail;
       }
 
@@ -128,7 +138,7 @@ export async function POST(req: Request) {
         .gte('created_at', fifteenMinutesAgo);
 
       if (recentDrafts && recentDrafts.length > 0) {
-        const isDuplicate = recentDrafts.some((d: any) => {
+        const matched15mDrafts = recentDrafts.filter((d: any) => {
           const dSubject = d.email_subject || '';
           const dSource = (d.source_email || '').toLowerCase();
           const sameSender = dSource === senderEmail ||
@@ -148,36 +158,40 @@ export async function POST(req: Request) {
             return true;
           }
 
-          // 2. Verificación por número de Orden de Compra explícita en asunto (OC / OCC)
-          if (ocNumber) {
-            if (dSubject.includes(ocNumber)) {
-              console.log(`[Email Inbound] Deduplicación: Misma OC (${ocNumber}) ya registrada para ${senderEmail}.`);
-              return true;
-            }
-          }
-
-          // 3. Verificación inteligente por archivos adjuntos
-          let dAttNames: string[] = [];
-          if (Array.isArray(d.extracted_items)) {
+          // 2 & 3. Verificación inteligente por archivos adjuntos (nombre + tamaño en bytes) y cuerpo de texto (Anti-Cortocircuito de Deltas)
+          let dAtts: Array<{ name: string; size: number }> = [];
+          if (dDebugPayload?.attachments && Array.isArray(dDebugPayload.attachments)) {
+            dAtts = dDebugPayload.attachments.map((a: any) => ({
+              name: (a.filename || a.file_name || '').toLowerCase().trim(),
+              size: a.content ? a.content.length : (a.size || 0)
+            })).filter((a: any) => a.name);
+          } else if (Array.isArray(d.extracted_items)) {
             const meta = d.extracted_items.find((x: any) => x && x.isMetadata);
             if (meta?.attachments && Array.isArray(meta.attachments)) {
-              dAttNames = meta.attachments.map((a: any) => (a.name || a.filename || '').toLowerCase().trim()).filter(Boolean);
+              dAtts = meta.attachments.map((a: any) => ({
+                name: (a.name || a.filename || '').toLowerCase().trim(),
+                size: a.size || 0
+              })).filter((a: any) => a.name);
             } else if (meta?.attachmentName) {
-              dAttNames = [meta.attachmentName.toLowerCase().trim()];
+              dAtts = [{ name: meta.attachmentName.toLowerCase().trim(), size: 0 }];
             }
-          } else if (dDebugPayload?.attachments && Array.isArray(dDebugPayload.attachments)) {
-            dAttNames = dDebugPayload.attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
           }
+          const dAttNames = dAtts.map((a) => a.name);
+          const prevBody300 = (d.email_body || dDebugPayload?.plain || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+          const currBody300 = (plainText || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+          const sameBody300 = prevBody300 === currBody300;
 
           // Si AMBOS correos tienen adjuntos:
-          if (incomingAtts.length > 0 && dAttNames.length > 0) {
-            // Solo si tienen exactamente los mismos adjuntos
-            const hasSameAttachments = incomingAtts.every((att: any) => dAttNames.includes(att.name));
-            if (hasSameAttachments) {
-              console.log(`[Email Inbound] Deduplicación: Adjuntos idénticos (${dAttNames.join(', ')}) detectados para ${senderEmail}.`);
+          if (incomingAtts.length > 0 && dAtts.length > 0) {
+            const hasSameAttachmentsAndSizes =
+              incomingAtts.length === dAtts.length &&
+              incomingAtts.every((att: any) =>
+                dAtts.some((da) => da.name === att.name && (da.size === 0 || att.size === 0 || da.size === att.size))
+              );
+            if (hasSameAttachmentsAndSizes && sameBody300) {
+              console.log(`[Email Inbound] Deduplicación: Adjuntos y cuerpo idénticos (${dAttNames.join(', ')}) detectados para ${senderEmail}.`);
               return true;
             }
-            // Si traen archivos con nombres distintos (ej. 1_010OCC17309_.pdf vs 1_010OCC17310_.pdf), SON PEDIDOS DISTINTOS
             return false;
           }
 
@@ -212,21 +226,34 @@ export async function POST(req: Request) {
           return false;
         });
 
-        if (isDuplicate) {
-          console.log(`[Email Inbound] Deduplicación inmediata: Se detectó correo duplicado reciente (OC: ${ocNumber || 'N/A'}, Asunto: "${cleanSubject}", Remitente: ${senderEmail}). Abortando sin crear borrador.`);
-          return NextResponse.json({ success: true, message: 'Duplicate email ignored' }, { status: 200 });
+        if (matched15mDrafts.length > 0) {
+          for (const md of matched15mDrafts) {
+            await appendChannelToDraftRecord(
+              supabaseAdmin,
+              md,
+              incomingChannel,
+              'SYNTACTIC_DUPLICATE_ABSORBED',
+              senderEmail
+            );
+          }
+          console.log(`[Email Inbound] Deduplicación inmediata (15m): Se detectó correo duplicado reciente (OC: ${ocNumber || 'N/A'}, Asunto: "${cleanSubject}", Canal: ${incomingChannel}). Canal fusionado en ${matched15mDrafts.length} borrador(es).`);
+          return NextResponse.json({ success: true, message: 'Duplicate email ignored', channelMerged: incomingChannel }, { status: 200 });
         }
       }
 
       // Save email immediately to the 'order_drafts' table to ensure we have a record
-      // Using extracted_items JSONB column to store the raw payload for debugging
+      // Using extracted_items JSONB column to store the raw payload for debugging + channel seal
       const { data: mailRecord, error: mailErr } = await supabaseAdmin
         .from('order_drafts')
         .insert([{
           email_subject: '[RAW_WEBHOOK] ' + (payload.headers?.subject || payload.headers?.Subject || 'Sin Asunto'),
           source_email: payload.headers?.from || payload.headers?.From || payload.envelope?.from || 'desconocido',
           status: 'pending',
-          extracted_items: { debug_payload: payload }
+          extracted_items: {
+            debug_payload: payload,
+            ingestChannel: incomingChannel,
+            seenInChannels: [incomingChannel],
+          }
         }])
         .select()
         .single();
@@ -427,7 +454,7 @@ export async function POST(req: Request) {
           }
           senderEmail = senderEmail.trim().toLowerCase();
 
-          const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
+          const corporateEmails = ['frufrescodigital@gmail.com', 'adminfrufrescodigital@gmail.com', 'pedidos@frufresco.com', 'pedidos@frufresco.co', 'copia.pedidos@frufresco.co', 'e.copia@frufresco.com', 'admin@frufresco.com', 'investcortes@gmail.com', 'contacto@investmentscortes.com'];
           let isCorporateSender = corporateEmails.includes(senderEmail) || senderEmail.endsWith('@frufresco.com') || senderEmail.endsWith('@frufresco.co') || senderEmail.includes('vercel') || senderEmail.includes('supabase');
 
           // If sender is corporate/internal (or forwarded email), override senderEmail with extracted original email if available
@@ -482,29 +509,43 @@ export async function POST(req: Request) {
           if (existingRecentDrafts && existingRecentDrafts.length > 0) {
             const currentAttNames = attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
 
-            const isDuplicate = existingRecentDrafts.some((d: any) => {
-              // 1. Verificación por número de Orden de Compra explícita
-              if (ocNumber && (d.email_subject || '').includes(ocNumber)) {
-                return true;
-              }
+            const currentAttsWithSize = attachments.map((a: any) => ({
+              name: (a.filename || a.file_name || '').toLowerCase().trim(),
+              size: a.content ? a.content.length : (a.size || 0)
+            })).filter((a: any) => a.name);
 
-              // 2. Comprobar adjuntos
-              let dAttNames: string[] = [];
-              if (Array.isArray(d.extracted_items)) {
+            const matched5mDrafts = existingRecentDrafts.filter((d: any) => {
+              // Comprobar adjuntos (nombre + tamaño en bytes) y cuerpo limpio (300 chars)
+              let dAtts: Array<{ name: string; size: number }> = [];
+              if (d.extracted_items?.debug_payload?.attachments && Array.isArray(d.extracted_items.debug_payload.attachments)) {
+                dAtts = d.extracted_items.debug_payload.attachments.map((a: any) => ({
+                  name: (a.filename || a.file_name || '').toLowerCase().trim(),
+                  size: a.content ? a.content.length : (a.size || 0)
+                })).filter((a: any) => a.name);
+              } else if (Array.isArray(d.extracted_items)) {
                 const meta = d.extracted_items.find((x: any) => x && x.isMetadata);
                 if (meta?.attachments && Array.isArray(meta.attachments)) {
-                  dAttNames = meta.attachments.map((a: any) => (a.name || a.filename || '').toLowerCase().trim()).filter(Boolean);
+                  dAtts = meta.attachments.map((a: any) => ({
+                    name: (a.name || a.filename || '').toLowerCase().trim(),
+                    size: a.size || 0
+                  })).filter((a: any) => a.name);
                 } else if (meta?.attachmentName) {
-                  dAttNames = [meta.attachmentName.toLowerCase().trim()];
+                  dAtts = [{ name: meta.attachmentName.toLowerCase().trim(), size: 0 }];
                 }
-              } else if (d.extracted_items?.debug_payload?.attachments) {
-                dAttNames = d.extracted_items.debug_payload.attachments.map((a: any) => (a.filename || a.file_name || '').toLowerCase().trim()).filter(Boolean);
               }
+              const dAttNames = dAtts.map((a) => a.name);
+              const prevBody300 = (d.email_body || d.extracted_items?.debug_payload?.plain || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+              const currBody300 = (plainText || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+              const sameBody300 = prevBody300 === currBody300;
 
               // Si ambos tienen adjuntos:
-              if (currentAttNames.length > 0 && dAttNames.length > 0) {
-                // Solo si traen exactamente los mismos archivos
-                return currentAttNames.every((name: string) => dAttNames.includes(name));
+              if (currentAttNames.length > 0 && dAtts.length > 0) {
+                const sameAtts =
+                  currentAttsWithSize.length === dAtts.length &&
+                  currentAttsWithSize.every((att: any) =>
+                    dAtts.some((da) => da.name === att.name && (da.size === 0 || att.size === 0 || da.size === att.size))
+                  );
+                return sameAtts && sameBody300;
               }
 
               // Si uno tiene y otro no, no es duplicado
@@ -533,22 +574,23 @@ export async function POST(req: Request) {
               return false;
             });
 
-            if (isDuplicate) {
-              console.log(`[Email Inbound] Deduplicación: Se detectó correo duplicado reciente de ${senderEmail} con asunto "${cleanSubjectForDedupe}". Abortando creación.`);
+            if (matched5mDrafts.length > 0) {
+              for (const md of matched5mDrafts) {
+                await appendChannelToDraftRecord(
+                  supabaseAdmin,
+                  md,
+                  incomingChannel,
+                  'SYNTACTIC_DUPLICATE_ABSORBED',
+                  senderEmail
+                );
+              }
+              console.log(`[Email Inbound] Deduplicación (5m): Se detectó correo duplicado reciente de ${senderEmail} con asunto "${cleanSubjectForDedupe}" (Canal: ${incomingChannel}). Canal fusionado y abortando duplicado.`);
               if (mailId) {
                 await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
               }
               return;
             }
           }
-
-          // Determine if the email was sent to our corporate email address (which is normal for orders)
-          let recipientEmail = toField;
-          const matchTo = toField.match(/<([^>]+)>/);
-          if (matchTo) {
-            recipientEmail = matchTo[1];
-          }
-          recipientEmail = recipientEmail.trim().toLowerCase();
 
           // --- INICIO ENRUTAMIENTO DINÁMICO ---
           let inboxOrders = 'pedidos@frufresco.com';
@@ -569,11 +611,22 @@ export async function POST(req: Request) {
             console.error('[Email Inbound] Error querying app_settings for routing:', err.message);
           }
 
+          // Determine if the email was sent to our corporate email address (inspecting To, Cc, Delivered-To, X-Original-To)
+          let recipientEmail = resolvePrimaryRecipientEmail(headers, envelope, inboxOrders);
+          if (!recipientEmail) {
+            recipientEmail = toField;
+            const matchTo = toField.match(/<([^>]+)>/);
+            if (matchTo) {
+              recipientEmail = matchTo[1];
+            }
+            recipientEmail = recipientEmail.trim().toLowerCase();
+          }
+
           const cleanInboxOrders = inboxOrders.toLowerCase().trim();
           const cleanInboxCommercial = inboxCommercial.toLowerCase().trim();
 
           // Check if matches Commercial Inbox address (investcortes@gmail.com)
-          const isCommercialRecipient = recipientEmail === cleanInboxCommercial || recipientEmail === 'investcortes@gmail.com' || cleanInboxCommercial.includes(recipientEmail);
+          const isCommercialRecipient = recipientEmail === cleanInboxCommercial || recipientEmail === 'investcortes@gmail.com' || recipientEmail === 'adminfrufrescodigital@gmail.com' || recipientEmail === 'gestion.comercial@frufresco.com' || recipientEmail === 'facturacion.electronica@frufresco.com' || cleanInboxCommercial.includes(recipientEmail);
           if (isCommercialRecipient) {
             console.log(`[Email Inbound] Route: COMMERCIAL inbox (${recipientEmail}). Processing attachments and saving to mail table.`);
             
@@ -649,7 +702,8 @@ export async function POST(req: Request) {
           }
 
           // Check if matches Orders Inbox address
-          if (recipientEmail === cleanInboxOrders) {
+          const isOrdersRecipient = recipientEmail === cleanInboxOrders || recipientEmail === 'frufrescodigital@gmail.com' || recipientEmail === 'pedidos@frufresco.com' || recipientEmail === 'pedidos@frufresco.co' || recipientEmail === 'copia.pedidos@frufresco.co' || recipientEmail === 'e.copia@frufresco.com';
+          if (isOrdersRecipient) {
             console.log(`[Email Inbound] Route: ORDERS inbox (${recipientEmail}). Running AI extraction.`);
             if (mailId) {
               await supabaseAdmin
@@ -1673,6 +1727,262 @@ export async function POST(req: Request) {
         ],
         status: hasValid ? 'pending' : 'rejected'
       });
+    }
+
+    // =========================================================================
+    // ESCENARIO 397 (GRIETA #1 ANTI-LOST-UPDATE): RE-LECTURA DE `mailId` EN VUELO
+    // Rescata cualquier canal (`seenInChannels`) o log inyectado en el placeholder `[RAW_WEBHOOK]`
+    // por las compuertas de 15m/5m mientras Gemini procesaba este correo.
+    // =========================================================================
+    let inFlightSeenChannels = mergeSeenChannels(incomingChannel);
+    let inFlightLogs: any[] = [];
+    if (mailId) {
+      try {
+        const { data: livePlaceholder } = await supabaseAdmin
+          .from('order_drafts')
+          .select('extracted_items')
+          .eq('id', mailId)
+          .single();
+        const rawLive = livePlaceholder?.extracted_items;
+        if (rawLive && typeof rawLive === 'object' && !Array.isArray(rawLive)) {
+          inFlightSeenChannels = mergeSeenChannels(
+            incomingChannel,
+            rawLive.seenInChannels,
+            rawLive.ingestChannel
+          );
+          if (Array.isArray(rawLive.reconcilerLog)) {
+            inFlightLogs = [...rawLive.reconcilerLog];
+          }
+        }
+      } catch (_) {}
+    }
+
+    for (const d of draftsToInsert) {
+      if (Array.isArray(d.extracted_items)) {
+        const m = d.extracted_items.find((x: any) => x && x.isMetadata);
+        if (m) {
+          m.ingestChannel = incomingChannel;
+          m.seenInChannels = [...inFlightSeenChannels];
+          if (inFlightLogs.length > 0) {
+            m.reconcilerLog = [...(Array.isArray(m.reconcilerLog) ? m.reconcilerLog : []), ...inFlightLogs];
+          }
+        }
+      }
+    }
+
+    // =========================================================================
+    // INSTRUMENTO 4: CONCILIADOR DUAL-AGENT (GEMINI MAKER + DEEPSEEK CHECKER)
+    // Especificación Canónica: SPEC.md Escenarios 396 y 397 (SDD v1.9.375)
+    // =========================================================================
+    const isReconcilerEnabled = process.env.ENABLE_DUAL_AGENT_RECONCILER !== 'false';
+    const pendingDraftsForReconcile = draftsToInsert.filter((d) => d.status === 'pending');
+
+    if (isReconcilerEnabled && pendingDraftsForReconcile.length > 0) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: recent24hDrafts } = await supabaseAdmin
+        .from('order_drafts')
+        .select('id, profile_id, client_detected_name, source_email, email_subject, status, created_at, extracted_items')
+        .gte('created_at', twentyFourHoursAgo)
+        .neq('status', 'rejected');
+
+      const finalDraftsToUpsert: any[] = [];
+      let mailIdUsedInUpsert = false;
+
+      for (const draft of draftsToInsert) {
+        if (draft.status !== 'pending') {
+          finalDraftsToUpsert.push(draft);
+          if (mailId && draft.id === mailId) mailIdUsedInUpsert = true;
+          continue;
+        }
+
+        const candidateSummaries = filterCandidateDraftsForClient(
+          draft,
+          recent24hDrafts || [],
+          mailId
+        );
+
+        const incomingSummary = extractDraftSummary(draft);
+        const reconcileResult = await evaluateDraftWithDeepSeekReconciler(
+          {
+            client_detected_name: incomingSummary.client_detected_name,
+            source_email: draft.source_email || senderEmail,
+            purchase_order: incomingSummary.purchase_order,
+            delivery_date: incomingSummary.delivery_date,
+            address: incomingSummary.address,
+            email_subject: incomingSummary.email_subject,
+            items: incomingSummary.items,
+          },
+          candidateSummaries
+        );
+
+        const metaObj = Array.isArray(draft.extracted_items)
+          ? draft.extracted_items.find((x: any) => x && x.isMetadata)
+          : null;
+
+        if (reconcileResult.fallbackUsed) {
+          console.warn(`[Instrumento 4 - DeepSeek Fallback] ${reconcileResult.reason}`);
+          if (!draft.email_subject.includes('[REVISIÓN CENTINELA PENDIENTE]')) {
+            draft.email_subject = `[REVISIÓN CENTINELA PENDIENTE] ${draft.email_subject}`;
+          }
+          if (metaObj) {
+            metaObj.reconcilerFallback = true;
+            metaObj.reconcilerReason = reconcileResult.reason;
+            metaObj.ingestChannel = metaObj.ingestChannel || incomingChannel;
+            metaObj.seenInChannels = mergeSeenChannels(metaObj.seenInChannels, inFlightSeenChannels, incomingChannel);
+          }
+          finalDraftsToUpsert.push(draft);
+          if (mailId && draft.id === mailId) mailIdUsedInUpsert = true;
+          continue;
+        }
+
+        if (reconcileResult.verdict === 'IGNORE_DUPLICATE') {
+          console.log(`[Instrumento 4 - DeepSeek Checker] IGNORE_DUPLICATE para ${draft.client_detected_name} (Target: ${reconcileResult.target_draft_id}). Razón: ${reconcileResult.reason}`);
+          // Registrar en bitácora del borrador original superviviente y fusionar seenInChannels
+          if (reconcileResult.target_draft_id) {
+            const targetRecord = (recent24hDrafts || []).find((r: any) => r.id === reconcileResult.target_draft_id);
+            if (targetRecord && Array.isArray(targetRecord.extracted_items)) {
+              const updatedItems = [...targetRecord.extracted_items];
+              const targetMetaIdx = updatedItems.findIndex((x: any) => x && x.isMetadata);
+              if (targetMetaIdx >= 0) {
+                const prevTargetMeta = updatedItems[targetMetaIdx] || {};
+                const prevLogs = Array.isArray(prevTargetMeta.reconcilerLog)
+                  ? prevTargetMeta.reconcilerLog
+                  : [];
+                const mergedChannels = mergeSeenChannels(
+                  prevTargetMeta.seenInChannels,
+                  prevTargetMeta.ingestChannel,
+                  inFlightSeenChannels,
+                  incomingChannel
+                );
+                updatedItems[targetMetaIdx] = {
+                  ...prevTargetMeta,
+                  ingestChannel: prevTargetMeta.ingestChannel || mergedChannels[0] || incomingChannel,
+                  seenInChannels: mergedChannels,
+                  reconcilerLog: [
+                    ...prevLogs,
+                    ...inFlightLogs,
+                    {
+                      timestamp: new Date().toISOString(),
+                      action: 'IGNORE_DUPLICATE',
+                      channel: incomingChannel,
+                      absorbed_from: recipientEmail,
+                      reason: reconcileResult.reason,
+                    },
+                  ],
+                };
+                await supabaseAdmin
+                  .from('order_drafts')
+                  .update({ extracted_items: updatedItems })
+                  .eq('id', reconcileResult.target_draft_id);
+              }
+            }
+          }
+          continue;
+        }
+
+        if (reconcileResult.verdict === 'UPDATE_DELTA') {
+          console.log(`[Instrumento 4 - DeepSeek Checker] UPDATE_DELTA para ${draft.client_detected_name} (Target: ${reconcileResult.target_draft_id}). Razón: ${reconcileResult.reason}`);
+          const targetRecord = reconcileResult.target_draft_id
+            ? (recent24hDrafts || []).find((r: any) => r.id === reconcileResult.target_draft_id)
+            : null;
+
+          const prevMeta = targetRecord && Array.isArray(targetRecord.extracted_items)
+            ? targetRecord.extracted_items.find((x: any) => x && x.isMetadata) || {}
+            : {};
+          const mergedDeltaChannels = mergeSeenChannels(
+            prevMeta.seenInChannels,
+            prevMeta.ingestChannel,
+            metaObj?.seenInChannels,
+            inFlightSeenChannels,
+            incomingChannel
+          );
+
+          if (targetRecord && targetRecord.status === 'pending') {
+            const prevItems = Array.isArray(targetRecord.extracted_items)
+              ? targetRecord.extracted_items.filter((x: any) => x && !x.isMetadata)
+              : [];
+            const prevLogs = Array.isArray(prevMeta.reconcilerLog) ? prevMeta.reconcilerLog : [];
+
+            if (metaObj) {
+              metaObj.ingestChannel = prevMeta.ingestChannel || incomingChannel;
+              metaObj.seenInChannels = mergedDeltaChannels;
+              metaObj.reconcilerVerdict = 'UPDATE_DELTA';
+              metaObj.reconcilerLog = [
+                ...prevLogs,
+                ...inFlightLogs,
+                {
+                  timestamp: new Date().toISOString(),
+                  action: 'UPDATE_DELTA',
+                  channel: incomingChannel,
+                  absorbed_from: recipientEmail,
+                  reason: reconcileResult.reason,
+                  previous_items: prevItems,
+                },
+              ];
+            }
+
+            const baseSubj = (targetRecord.email_subject || draft.email_subject).replace(/^\[DELTA DETECTADO POR CENTINELA\]\s*/i, '');
+            const updatedSubject = `[DELTA DETECTADO POR CENTINELA] ${baseSubj}`;
+
+            await supabaseAdmin
+              .from('order_drafts')
+              .update({
+                email_subject: updatedSubject,
+                email_body: draft.email_body,
+                extracted_items: draft.extracted_items,
+              })
+              .eq('id', targetRecord.id);
+
+            if (mailId && targetRecord.id === mailId) {
+              mailIdUsedInUpsert = true;
+            }
+            continue;
+          } else {
+            // Si el borrador objetivo ya fue aprobado o no es editable, se inserta como nuevo con etiqueta de Delta
+            if (!draft.email_subject.includes('[DELTA DETECTADO POR CENTINELA]')) {
+              draft.email_subject = `[DELTA DETECTADO POR CENTINELA] ${draft.email_subject}`;
+            }
+            if (metaObj) {
+              metaObj.ingestChannel = incomingChannel;
+              metaObj.seenInChannels = mergedDeltaChannels;
+              metaObj.reconcilerVerdict = 'UPDATE_DELTA';
+              metaObj.reconcilerDelta = {
+                target_draft_id: reconcileResult.target_draft_id,
+                reason: reconcileResult.reason,
+              };
+            }
+            finalDraftsToUpsert.push(draft);
+            if (mailId && draft.id === mailId) mailIdUsedInUpsert = true;
+            continue;
+          }
+        }
+
+        // Verdict === 'INSERT_NEW'
+        if (metaObj) {
+          metaObj.ingestChannel = metaObj.ingestChannel || incomingChannel;
+          metaObj.seenInChannels = mergeSeenChannels(metaObj.seenInChannels, inFlightSeenChannels, incomingChannel);
+          metaObj.reconcilerVerdict = 'INSERT_NEW';
+          metaObj.reconcilerFastPath = reconcileResult.fastPath;
+        }
+        finalDraftsToUpsert.push(draft);
+        if (mailId && draft.id === mailId) mailIdUsedInUpsert = true;
+      }
+
+      // Si ningún borrador reutilizó el placeholder mailId ([RAW_WEBHOOK]), eliminarlo físicamente para evitar huérfanos
+      if (mailId && !mailIdUsedInUpsert) {
+        await supabaseAdmin.from('order_drafts').delete().eq('id', mailId);
+      }
+
+      if (finalDraftsToUpsert.length === 0) {
+        console.log('[Instrumento 4] Todos los borradores entrantes fueron conciliados/absorbidos (IGNORE_DUPLICATE / UPDATE_DELTA). Finalizando limpiamente.');
+        if (mailId) {
+          await supabaseAdmin.from('mail').update({ status: 'success' }).eq('id', mailId);
+        }
+        return;
+      }
+
+      draftsToInsert.length = 0;
+      draftsToInsert.push(...finalDraftsToUpsert);
     }
 
     const { data: insertedDrafts, error: draftError } = await supabaseAdmin
