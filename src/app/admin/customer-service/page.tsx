@@ -592,6 +592,33 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                         <button
                             type="button"
+                            onClick={() => {
+                                setLeanSubTab('daily_report');
+                                setMainView('lean_dashboard');
+                            }}
+                            title="Ver e imprimir Informe Diario de Cierre Operativo (Acta PDF & Excel)"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 14px',
+                                fontSize: '0.75rem',
+                                fontWeight: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '800' : '700',
+                                color: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#FFFFFF' : '#047857',
+                                backgroundColor: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#0D7A57' : '#ECFDF5',
+                                border: '1px solid #A7F3D0',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.15)',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <FileSpreadsheet size={14} style={{ color: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#FFFFFF' : '#0D7A57' }} />
+                            <span>Informe Diario de Cierre (PDF)</span>
+                        </button>
+
+                        <button
+                            type="button"
                             onClick={() => setShowTaxonomyModal(true)}
                             style={{
                                 display: 'inline-flex',
@@ -668,6 +695,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         customTaxonomy={customTaxonomy}
                         onRefresh={fetchData}
                         showToast={showToast}
+                        initialSubTab={leanSubTab}
                     />
                 ) : mainView === 'missing_orders' ? (
                     <MissingOrdersGallery

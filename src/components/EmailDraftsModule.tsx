@@ -4421,7 +4421,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const fetchDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // Sincronización directa en segundo plano del Canal 3 (copia.pedidos@frufresco.co -> Instrumento 4)
+      // Sincronización directa en segundo plano del Canal 3 (pedidos@frufresco.co -> Instrumento 4)
       fetch('/api/orders/sync-hostinger', { method: 'POST' })
         .then(res => res.json())
         .then(async (syncData) => {

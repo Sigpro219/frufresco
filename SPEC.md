@@ -12080,21 +12080,22 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 
 ---
 
-### Escenario 296: Informe Consolidado de Cierre Operativo Diario (PQR & Calidad), Bitácora de Novedades y Generación de Acta Golden Print (Gemba Hallazgo #8) (SDD v1.9.273)
-- **Given** la necesidad de la mesa operativa, jefatura de despachos y gerencia de auditar y certificar el cierre diario de la operación con el consolidado formal de reclamaciones,
-- **When** el analista de calidad o comercial accede a la subpestaña **"Informe Diario de Cierre Operativo"** dentro de **Dashboard Lean & Pareto** (o mediante el acceso directo en la barra de herramientas de la Consola de Casos),
-- **Then** el sistema presenta una bitácora operativa diaria de alta precisión con las siguientes capacidades canónicas:
-  1. **Selector Cronológico Diario y Telemetría:** Permite auditar cualquier jornada mediante botones rápidos (`[Hoy]`, `[Ayer]`) o selector de fecha (`YYYY-MM-DD`), proyectando el consolidado reactivo del día: *Total Casos / PQRs*, *Clientes y Sedes Afectadas*, *Productos con Novedad* y *Costo de Calidad Liquidado (\$ COP)*.
-  2. **Matriz Operativa de Cierre de Jornada:** Proyecta la tabla integral con el desglose exacto solicitado:
+### Escenario 296-B: Informe Consolidado de Cierre Operativo Diario (PQR & Calidad), Bitácora de Novedades y Generación de Acta Golden Print (Gemba Hallazgo #8) (SDD v1.9.273)
+- **Given** la necesidad de la mesa operativa, jefatura de despachos, control interno y gerencia de auditar y certificar el cierre diario de la operación con el consolidado formal de errores, novedades y relación con colaboradores,
+- **When** el analista de calidad o comercial accede mediante el botón de acceso directo **`[Informe Diario de Cierre (PDF)]`** en la barra superior de la Consola SAC (`src/app/admin/customer-service/page.tsx`), o a través de la subpestaña *"Informe Diario de Cierre Operativo"* en el Dashboard Lean & Pareto (`PqrDailyShiftReport.tsx` en `PqrLeanDashboard.tsx`),
+- **Then** el sistema presenta una bitácora operativa diaria de alta precisión y permite generar el reporte con las siguientes capacidades canónicas innegociables:
+  1. **Acceso Directo Universal en Consola:** Botón destacado en la cabecera principal junto a *Taxonomía RCA* que conmuta inmediatamente a la vista de cierre diario (`mainView = 'lean_dashboard'`, `leanSubTab = 'daily_report'`).
+  2. **Selector Cronológico Diario y Telemetría:** Permite auditar cualquier jornada mediante botones rápidos (`[Hoy]`, `[Ayer]`) o selector de fecha (`YYYY-MM-DD`), proyectando el consolidado reactivo del día: *Total Casos / PQRs*, *Clientes y Sedes Afectadas*, *Productos con Novedad* y *Costo de Calidad Liquidado (\$ COP)*.
+  3. **Matriz Operativa de Cierre de Jornada:** Proyecta la tabla integral con el desglose exacto solicitado:
      - **Hora & Folio:** Identificador único (`SAC-XXXX`), hora local Bogotá y pedido asociado (`#Folio`).
      - **Cliente & Sucursal:** Razón social de la sede operativa y matriz.
      - **Productos Afectados:** Lista de ítems devueltos o faltantes con sus cantidades, unidades de medida y causales operativas (*Avería / Calidad*, *Faltante en Báscula*, *Sin Cargue*, *Error Digitación*, *No Solicitado*).
      - **Área y Causa Raíz RCA:** Diagnóstico técnico (*Planta*, *Transporte*, *Alistamiento*, *Comercial*).
-     - **Responsables Imputados:** Colaboradores o clientes responsables con el valor exacto (\$ COP) transferido a nómina o cartera.
+     - **Responsables Imputados (Relación con Colaboradores):** Nombres de colaboradores, cédulas, roles y valor exacto (\$ COP) imputado/deducido o exonerado conforme al dictamen de auditoría.
      - **Solución Contable:** Mecanismo aplicado (*Ajuste de Factura*, *Nota Crédito*, *Reposición*, *Exonerado*).
      - **Estado de Cierre:** Indicador visual de estado (*Resuelto* o *Pendiente*).
-  3. **Exportación Nativa a Excel (.xlsx):** Descarga directa de archivo Excel `.xlsx` estructurado mediante SheetJS (`xlsx`) con auto-ajuste de anchos de columna (`!cols`) y tipado de datos para apertura nativa e inmediata en Microsoft Excel, erradicando archivos de texto plano o conversiones manuales de CSV.
-  4. **Acta Oficial Golden Print (PDF / Impresión Estandarizada):** Ejecuta la tecnología estándar `printViaNewWindow` en orientación apaisada (`letter landscape`), renderizando el membrete corporativo oficial de FruFresco, resumen ejecutivo, tabla formal con bordes y líneas cebras, y los tres bloques solemnes de firmas y custodia: *Auditor de Calidad (SAC)*, *Jefe de Operaciones & Despachos* y *Líder de Cartera / Facturación*.
+  4. **Exportación Nativa a Excel (.xlsx):** Descarga directa de archivo Excel `.xlsx` estructurado mediante SheetJS (`xlsx`) con auto-ajuste de anchos de columna (`!cols`) y tipado de datos para apertura nativa e inmediata en Microsoft Excel.
+  5. **Acta Oficial Golden Print (PDF / Impresión Estandarizada):** Ejecuta la tecnología estándar `printViaNewWindow` en orientación apaisada (`letter landscape`), renderizando el membrete corporativo oficial de FruFresco, resumen ejecutivo, tabla formal con bordes y líneas cebras, y los tres bloques solemnes de firmas y custodia: *Auditor de Calidad (SAC)*, *Jefe de Operaciones & Despachos* y *Líder de Cartera / Facturación*.
 
 ---
 
@@ -15071,16 +15072,16 @@ flowchart TD
 
 ---
 
-### Escenario 397: Conexión Directa de Canal 3 (`copia.pedidos@frufresco.co`) hacia Instrumento 4 & Barra Láser Horizontal (0px Eje Y) de Telemetría Tripartita para Desconexión Progresiva de Canales (`1`, `2` y `4`) (SDD v1.9.375)
+### Escenario 397: Conexión Directa de Canal 3 (`pedidos@frufresco.co`) hacia Instrumento 4 & Barra Láser Horizontal (0px Eje Y) de Telemetría Tripartita para Desconexión Progresiva de Canales (`1`, `2` y `4`) (SDD v1.9.375)
 
 #### 1. Contexto Operativo y Arquitectura de Desacoplamiento para Apagado Limpio
 - **Given** la meta arquitectónica de extinguir progresivamente los vestigios heredados sin interrumpir la operación:
   - **Canal 1 (`pedidos@frufresco.com`):** Servidor heredado hostil (`82.180.136.155`) que alimenta por POP3/reenvío al Canal 2.
   - **Canal 2 (`frufrescodigital@gmail.com`):** Puente transitorio con Google Apps Script (`scripts/google_apps_script_bridge.js`) que publica en `POST /api/orders/email-ingest`.
-  - **Canal 3 (`pedidos@frufresco.co` $\to$ `copia.pedidos@frufresco.co`):** Nuevo buzón soberano en Hostinger (`imap.hostinger.com:993`).
+  - **Canal 3 (`pedidos@frufresco.co`):** Nuevo buzón soberano principal en Hostinger (`imap.hostinger.com:993`) conectado directamente al pipeline de ingesta en modo no destructivo (`BODY.PEEK[]`).
   - **Instrumento 4 (`dualAgentReconciler.ts`):** Conciliador Dual-Agent (Gemini Maker + DeepSeek Checker) dentro de `/api/orders/email-ingest`.
 - **And** la regla innegociable de ingeniería de transición:
-  1. **Prohibición de Enrutar Canal 3 a través de Canal 2:** El Canal 3 (`copia.pedidos@frufresco.co`) **NUNCA** debe depender de `frufrescodigital@gmail.com` (Canal 2), pues cuando se apaguen los Canales 1 y 2, el Canal 3 debe quedar operando en línea directa.
+  1. **Prohibición de Enrutar Canal 3 a través de Canal 2:** El Canal 3 (`pedidos@frufresco.co`) **NUNCA** debe depender de `frufrescodigital@gmail.com` (Canal 2), pues cuando se apaguen los Canales 1 y 2, el Canal 3 debe quedar operando en línea directa.
   2. **Secuencia de Apagado en Dos Hitos:**
      - **Hito 1 (Apagado de Canales 1 y 2):** Cuando el $0\%$ de los pedidos llegue exclusivamente por el Canal 1-2 (`Rojo = 0%`), es decir, todos los pedidos lleguen ya por el Canal 3 (`Azul`) o simultáneamente por ambos (`Violeta`), se desconectan los Canales 1 y 2.
      - **Hito 2 (Apagado del Instrumento 4):** Una vez desconectados 1 y 2, el tráfico simultáneo (`Violeta`) cae a $0\%$ y el $100\%$ del flujo queda en Canal 3 puro (`Azul = 100%`), momento en que se apaga el Instrumento 4 (`ENABLE_DUAL_AGENT_RECONCILER=false`).
@@ -15092,7 +15093,7 @@ flowchart LR
     end
 
     subgraph SOVEREIGN["INFRAESTRUCTURA SOBERANA .CO (PERMANENTE)"]
-        C3_MAIN["pedidos@frufresco.co"] -->|Forwarder Hostinger| C3["(3) copia.pedidos@frufresco.co<br/>(IMAPS Directo TLS 993)"]
+        C3["(3) pedidos@frufresco.co<br/>(IMAPS Directo TLS 993)"]
     end
 
     C2 -->|ingestChannel: channel_1_2_legacy| I4["(4) Instrumento 4<br/>/api/orders/email-ingest<br/>(Gemini Maker + DeepSeek Checker)"]
@@ -15107,7 +15108,7 @@ flowchart LR
 - **Then** el conector ejecuta la sincronización directa e idempotente desde Hostinger hacia `/api/orders/email-ingest` bajo las siguientes invariantes:
   1. **Transporte Nativo Node.js TLS (`node:tls` — Compatible con Windows Local y Vercel Serverless Linux):**
      - Queda prohibido depender de binarios externos del sistema operativo (como `curl.exe`) dentro del runtime de Next.js.
-     - El módulo `src/lib/orders/hostingerImapSync.ts` abre una conexión TLS directa (`tls.connect`) hacia `process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com'`, puerto `993`, autenticándose con `process.env.HOSTINGER_IMAP_USER || 'copia.pedidos@frufresco.co'` y `process.env.HOSTINGER_IMAP_PASS`.
+     - El módulo `src/lib/orders/hostingerImapSync.ts` abre una conexión TLS directa (`tls.connect`) hacia `process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com'`, puerto `993`, autenticándose con `process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co'` y `process.env.HOSTINGER_IMAP_PASS`.
      - Si las credenciales no están configuradas en el entorno, el endpoint retorna `{ success: true, skipped: true, reason: 'Credentials not configured' }` sin arrojar error HTTP 500.
   2. **Control de Estado Incremental por UID y Guardián Anti-Concurrencia (`public.app_settings`):**
      - El puntero de sincronización se persiste en `public.app_settings` bajo `key = 'hostinger_imap_sync_state'` con estructura JSON `{ account: string, lastSyncedUid: number, lastRunAt: string, inFlightUntil?: string, transitionEpochAt: string, totalIngested: number }`. Si `transitionEpochAt` no existe al inicializar, se fija al timestamp ISO del primer encendido de Canal 3 (o se lee de `NEXT_PUBLIC_CHANNEL_3_EPOCH`).
@@ -15119,7 +15120,7 @@ flowchart LR
        - Cuerpo `text/plain` y `text/html` (decodificando `base64` y `quoted-printable`).
        - Archivos adjuntos (`application/pdf`, hojas de cálculo `.xlsx`/`.xls`/`.csv`, imágenes) codificados en `base64` con `{ filename, file_name, content_type, content, size }`.
      - **Cierre de Socket Antes de Invocar IA:** El conector IMAP descarga los `.eml` pendientes en memoria y **cierra inmediatamente la sesión TLS IMAP** antes de invocar `/api/orders/email-ingest`, evitando que Hostinger corte el socket por inactividad mientras Gemini y DeepSeek procesan.
-     - Construye el payload canónico marcando explícitamente **`ingestChannel: 'channel_3_co'`**, `hostingerUid: uid`, y asegurando que `envelope.to` sea `'copia.pedidos@frufresco.co'` (incluso si el cliente puso a `pedidos@frufresco.co` en `Cc:`). Invoca directamente la función `POST` exportada de `/api/orders/email-ingest/route.ts` construyendo un `Request` interno con `?secret=${process.env.WEBHOOK_SECRET || ''}`.
+     - Construye el payload canónico marcando explícitamente **`ingestChannel: 'channel_3_co'`**, `hostingerUid: uid`, y asegurando que `envelope.to` sea `'pedidos@frufresco.co'` (incluso si el cliente puso a `pedidos@frufresco.co` en `Cc:`). Invoca directamente la función `POST` exportada de `/api/orders/email-ingest/route.ts` construyendo un `Request` interno con `?secret=${process.env.WEBHOOK_SECRET || ''}`.
      - Actualiza incrementalmente `lastSyncedUid = uid` en `public.app_settings` **inmediatamente después de cada correo individual procesado**, de modo que si el lote se detiene por presupuesto de tiempo (`40s`), los UIDs ya procesados no se repitan.
 
 #### 3. Clasificación Determinista de Canal y Fusión de `seenInChannels` en Todas las Compuertas (`src/app/api/orders/email-ingest/route.ts`)
@@ -15172,7 +15173,7 @@ flowchart LR
          * **Ambos Canales (`1-2 + 3` Conciliados — Violeta):** `N_violeta` pedidos (`pctVioleta%`)
          * **Solo Canal 1-2 Heredado (`.com` / Gmail — Rojo):** `N_rojo` pedidos (`pctRojo%`)
        - Estado de la Línea de Objetivo y recomendación operativa exacta para saber cuándo desconectar `(1 y 2)` y cuándo desconectar `(4)`.
-       - Indicador de sincronización directa con Hostinger (`copia.pedidos@frufresco.co`).
+       - Indicador de sincronización directa con Hostinger (`pedidos@frufresco.co`).
 
 ---
 
@@ -16081,7 +16082,178 @@ Para blindar a la empresa contra cualquier desconexión abrupta antes de la tran
      - Preservación en borrador local (`localStorage`) con auto-guardado reactivo (debounce 400ms) y restauración exacta al reabrir el caso.
   4. **Fidelidad en Acta RNC Imprimible:**
      - En la vista de impresión Carta SGC Golden Print (`/rnc/[id]/print`), la tabla de productos no conformes renderiza bajo la causal el hallazgo de afectación específico por producto en tipografía técnica (`• Hallazgo/Afectación: ...`).
-  5. **Reglas de Calidad y Estándares Visuales:**
-     - Cero emojis unicode (100% componentes vectoriales SVG de `lucide-react`: `AlertTriangle`, `Trash2`, `Sparkles`, `PackageMinus`, `PackageX`, `Check`).
-     - Prevalencia absoluta de ID Contable (`#ID`).
-     - Verificación mecánica estricta en TypeScript (`tsc --noEmit` con 0 errores).
+### Escenario 423: Protocolo Quirúrgico y Matriz de Desensamble de `orders/create/page.tsx` (SDD v1.9.378)
+- **Given** el componente monolítico de Creación Manual y Cotización de Pedidos (`src/app/admin/orders/create/page.tsx`), auditado forensemente por `/cartografo` con un peso de 13.264 líneas de código, 125 variables de estado (`useState`), 6 submodales embebidos y 10 Estrellas Rojas (`RED-01` a `RED-10` en `SYSTEM_ATLAS.md`):
+- **When** se programa su desmantelamiento modular en frío sin alterar la operación ni provocar regresiones en las 76 pantallas de la plataforma:
+- **Then** el sistema prescribe la ejecución secuencial de la lista de chequeo (Burndown Checklist) dividida en 4 Olas de menor a mayor complejidad:
+  1. **Ola 1: Riesgo Cero (Poda de Grasa y Formateadores Puros):**
+     - Extrae estilos, constantes e IDs canónicos a `src/lib/orders/orderConstants.ts`.
+     - Extrae funciones utilitarias puras (`normalizeDocUnit`, `getAccountingIdDisplay`, `formatWeightKg`, `evaluateMathExpression`) a `src/lib/orders/orderFormatters.ts`.
+     - Erradica la doble declaración redundante de `formatT`.
+     - Reemplaza los 6 llamados a `window.confirm()` por diálogos modales no bloqueantes.
+  2. **Ola 2: Riesgo Bajo (Extracción de 6 Submodales Autónomos):**
+     - Extrae el Visor Flotante de Soporte a `FloatingDocumentViewerModal.tsx` (~195 L).
+     - Extrae la Gestión de Conversiones y Empaques (Alt+E) a `PackagingConversionsModal.tsx` (~240 L).
+     - Extrae la Configuración Rápida de Variantes (Alt+V) a `ProductVariantsConfigModal.tsx` (~28 L).
+     - Extrae el Selector de Google Maps y Geocerca a `GoogleMapsPickerModal.tsx` (~660 L).
+     - Extrae la Partición de Pedido Multi-Entrega a `MultiOrderSplitModal.tsx` (~293 L).
+     - Extrae la Configuración de Producto, Opciones y Equivalencias a `ProductConfigModal.tsx` (~1.005 L).
+  3. **Ola 3: Riesgo Medio (Desacople de Hooks Headless Compartidos):**
+     - Canonicaliza el motor de precios en `useOrderPricingResolver.ts`, unificando `create`, `EmailDraftsModule` y `loading` (erradicando `RED-05`).
+     - Desacopla reglas de entrega y festivos en `useDeliverySchedule.ts`.
+     - Desacopla cálculo de georreferenciación en `useGeolocationGeofence.ts`.
+     - Desacopla la lógica del carrito en `useOrderCart.ts`.
+     - Desacopla la mesa de auditoría e ingesta IA en `useStagedOrderAudit.ts`.
+  4. **Ola 4: Cierre Hermético Thin UI & Endpoint Transaccional Atómico:**
+     - Inyecta validación de permisos RBAC con `useAuth()` (erradicando `RED-01`).
+     - Reemplaza las escrituras directas desde el navegador a 16 tablas por el endpoint backend transaccional `POST /api/orders/create` con atomicidad real `BEGIN ... COMMIT` (erradicando `RED-02`, `RED-03`, `RED-04` y `RED-10`).
+     - Reduce `page.tsx` a un orquestador visual declarativo de menos de 800 líneas.
+  5. **Invariantes Innegociables:**
+     - 0 errores en `npx.cmd tsc --noEmit` al culminar cada uno de los pasos.
+     - Cero emojis unicode (100% iconos vectoriales de `lucide-react`).
+     - Prevalencia absoluta de `#ID` contable (`accounting_id`).
+
+### Escenario 424: Catálogo Canónico de 6 Recursos Unificados Transversales del Ecosistema de Pedidos & Matriz de Eliminación de Duplicados (SDD v1.9.379)
+- **Given** los cuatro módulos core de captura, liquidación y alistamiento de pedidos:
+  1. Mesa de Creación Manual y Cotización (`src/app/admin/orders/create/page.tsx` - 13.264 L).
+  2. Mesa de Auditoría de Borradores IA/OCR (`src/components/EmailDraftsModule.tsx` - 14.456 L).
+  3. Mesa de Despacho y Alistamiento (`src/app/admin/orders/loading/page.tsx` - 8.890 L).
+  4. Detalle y Edición de Pedido Individual (`src/app/admin/orders/[id]/page.tsx` - 1.845 L).
+  - Donde `/cartografo` certifica la coexistencia de **5.223 líneas duplicadas** distribuidas en 6 recursos críticos:
+- **When** se planifica la ventana de mantenimiento y refactorización desacoplada sin alterar la operación ni provocar regresiones en las 76 pantallas de la plataforma:
+- **Then** el sistema consagra formalmente las siguientes interfaces y contratos canónicos obligatorios:
+
+  1. **Recurso Canónico 1: `ProductVariantCustomizerModal` (`src/components/admin/orders/ProductVariantCustomizerModal.tsx`):**
+     - **Líneas Duplicadas Actuales:** `create:10689-11693` (1.005 L), `drafts:12000-12919/13450-14290` (920 L), `loading:6786-7315` (530 L), `[id]:1742-1825` (84 L).
+     - **Reglas de Negocio Unificadas:** Inspección reactiva de `options_config` del SKU; renderizado de la Tríada de Excepciones del Cliente (Sustitución Ámbar, Variación Estructurada Índigo, Nota de Alistamiento Esmeralda); validación Poka-Yoke de cantidad mínima permitida (`minSaleLimitKg` y `formatWeightKg`); cálculo de peso nominal y atajos de teclado (Alt+E, Alt+V, ESC, Enter).
+     - **Interfaz TypeScript Canónica:**
+       ```typescript
+       export interface VariantCustomizerResult {
+         product: ProductCatalogItem;
+         quantity: number;
+         unit: string;
+         conversionFactor: number;
+         selectedOptions: Record<string, string>;
+         variantLabel: string;
+         customNotes?: string;
+         substitutedFrom?: ProductCatalogItem | null;
+       }
+
+       export interface ProductVariantCustomizerModalProps {
+         isOpen: boolean;
+         product: ProductCatalogItem | null;
+         stagedItem?: StagedOrderItem | null;
+         clientExceptions?: ClientProductException[];
+         conversions?: ProductConversionRule[];
+         initialQuantity?: string | number;
+         initialOptions?: Record<string, string>;
+         initialUnit?: string;
+         onClose: () => void;
+         onConfirm: (payload: VariantCustomizerResult) => void;
+         onOpenConversions?: (product: ProductCatalogItem) => void;
+         onOpenVariantConfig?: (product: ProductCatalogItem) => void;
+       }
+       ```
+     - **Criterio de Aceptación:** Componente 100% puro y controlado; cero dependencias de estado mutable del padre; consumo idéntico en los 4 módulos con 0 errores en `tsc`.
+
+  2. **Recurso Canónico 2: `ProductConversionsModal` (`src/components/admin/orders/ProductConversionsModal.tsx`):**
+     - **Líneas Duplicadas Actuales:** `create:11694-11961` (268 L), `drafts:12920-13180` (261 L), `loading:824, 6688-6720` (110 L).
+     - **Reglas de Negocio Unificadas:** Consulta y visualización de la unidad base oficial del producto (`unit_of_measure`); grilla de factores de conversión vigentes; formulario para alta de equivalencia (`from_unit` -> factor numérico -> `to_unit`); validación anti-división por cero y factores <= 0; persistencia atómica en Supabase `product_conversions`.
+     - **Interfaz TypeScript Canónica:**
+       ```typescript
+       export interface ProductConversionsModalProps {
+         isOpen: boolean;
+         product: ProductCatalogItem | null;
+         conversions: ProductConversionRule[];
+         onClose: () => void;
+         onConversionCreated?: (newConversion: ProductConversionRule) => void;
+         onConversionDeleted?: (conversionId: string) => void;
+       }
+       ```
+     - **Criterio de Aceptación:** Estado local de formulario encapsulado; mutación en base de datos con actualización reactiva en el arreglo padre de equivalencias sin refrescar la página.
+
+  3. **Recurso Canónico 3: `evaluateMathExpression` (`src/lib/orders/orderFormatters.ts`):**
+     - **Líneas Duplicadas Actuales:** `create:281-305` (9 llamadas en UI), `drafts:271-290` (5 llamadas en UI), `PhysicalSheetStagingTable.tsx:55-80`.
+     - **Reglas de Negocio Unificadas:** Normalización decimal (soporte indistinto de comas `,` y puntos `.`); sanitización contra inyección mediante regex estricta `^[\d\s\+\-\*\/\.\(\)]+$`; evaluación aritmética segura (`+`, `-`, `*`, `/`) sin `eval()` inseguro; fallback garantizado a `0` ante NaN o sintaxis errónea.
+     - **Firma TypeScript Canónica:**
+       ```typescript
+       export function evaluateMathExpression(val: string | number | null | undefined): number;
+       ```
+     - **Criterio de Aceptación:** Cobertura de tests unitarios al 100% en expresiones mixtas (`"2.5 + 3,5"`, `"10/2*3"`, `null`, `"0"`, `"error"`); erradicación de implementaciones locales en componentes visuales.
+
+  4. **Recurso Canónico 4: `useDeliveryScheduleRules` (`src/hooks/orders/useDeliveryScheduleRules.ts`):**
+     - **Líneas Duplicadas Actuales:** `create:2939-2980, 3519-3545, 10159-10250` (320 L), `drafts:370-440, 1200-1280` (180 L), `loading:1150-1230` (160 L).
+     - **Reglas de Negocio Unificadas:** Validación de restricciones logísticas por cliente (`delivery_restrictions`, `logistics_data`); calendario de feriados oficiales de Colombia; verificación de hora de corte de pedidos (`cutoff_hour_admin`); cálculo determinista de fecha secundaria para ítems divididos (`calculateTargetDeliveryDate`); generación de payload y badges de advertencia logística.
+     - **Firma TypeScript Canónica:**
+       ```typescript
+       export interface DeliveryScheduleRulesOptions {
+         client: ClientProfile | null;
+         selectedDate: string;
+         cutoffHour?: number;
+       }
+
+       export interface DeliveryScheduleRulesResult {
+         isValid: boolean;
+         warningMessage: string | null;
+         suggestedDate: string;
+         isHoliday: boolean;
+         isPastCutoff: boolean;
+         availableSlots: string[];
+         calculateSplitDate: (baseDate: string, scheduleHint: string) => string;
+       }
+
+       export function useDeliveryScheduleRules(options: DeliveryScheduleRulesOptions): DeliveryScheduleRulesResult;
+       ```
+     - **Criterio de Aceptación:** Cero acceso a DOM dentro del hook; desacople total de festivos y cálculo de cortes en funciones puras auxiliares.
+
+  5. **Recurso Canónico 5: `useOrderPricingResolver` (`src/hooks/orders/useOrderPricingResolver.ts`):**
+     - **Líneas Duplicadas Actuales:** `create:1361-1450, 2000-2150` (340 L), `drafts:3465-3560, 4130-4210` (280 L), `loading:1348-1535` (190 L).
+     - **Reglas de Negocio Unificadas (Erradicación Definitiva de RED-05):** Jerarquía universal y determinista de precios: 1) Acuerdo Comercial Activo (`commercial_agreements`) con herencia matriz/sucursal (`parent_id`), 2) Matriz de Precios de Modelo (`pricing_models` / `pricing_model_prices`), 3) Precios de Campaña vigentes (`commercial_campaigns`), 4) Excepciones y Reglas B2B (`pricing_rules`), 5) Margen Piso Poka-Yoke (25% institucional / 0% especial) y 6) Precios de Colaborador ($0 COP en reposiciones o descuento nómina).
+     - **Firma TypeScript Canónica:**
+       ```typescript
+       export interface OrderPricingResolverOptions {
+         clientId?: string | null;
+         parentClientId?: string | null;
+         orderDate?: string;
+         deliveryDate?: string;
+         clientType?: 'B2B' | 'B2C' | 'collaborator';
+       }
+
+       export interface ResolvedPriceInfo {
+         unitPrice: number;
+         source: 'agreement' | 'campaign' | 'model' | 'rule' | 'base' | 'collaborator';
+         sourceId?: string;
+         isOffAgreement: boolean;
+         hasMinimumMarginAlert: boolean;
+       }
+
+       export interface OrderPricingResolverResult {
+         loading: boolean;
+         activeAgreement: CommercialAgreement | null;
+         pricingModel: PricingModel | null;
+         resolveItemPrice: (product: ProductCatalogItem, quantity?: number, unit?: string) => ResolvedPriceInfo;
+         isPriceOffAgreement: (productId: string, proposedPrice: number) => boolean;
+         refreshPricing: () => Promise<void>;
+       }
+
+       export function useOrderPricingResolver(options: OrderPricingResolverOptions): OrderPricingResolverResult;
+       ```
+     - **Criterio de Aceptación:** Paridad al centavo entre la resolución del hook y el endpoint `/api/orders/resolve-agreement-pricing`; eliminación completa de discrepancias de precio entre cotización, borrador y despacho.
+
+  6. **Recurso Canónico 6: `FloatingDocumentViewerModal` (`src/components/admin/orders/FloatingDocumentViewerModal.tsx`):**
+     - **Líneas Duplicadas Actuales:** `create:12674-12869` (195 L), `drafts:5800-5980` (180 L), `loading:8100-8190` (90 L).
+     - **Reglas de Negocio Unificadas:** Visor flotante estilo *Picture-in-Picture* (PIP) con canvas interactivo para PDFs multipágina (`PdfCanvasViewer`); soporte para imágenes JPG/PNG/WebP con rotación y zoom; estados de minimizado, maximizado y anclaje inferior derecho; barra sticky de resumen sincronizada con los totales de la orden.
+     - **Interfaz TypeScript Canónica:**
+       ```typescript
+       export interface FloatingDocumentViewerModalProps {
+         isOpen: boolean;
+         documentUrl: string | null;
+         documentName?: string;
+         fileType?: 'pdf' | 'image' | 'unknown';
+         summaryContent?: React.ReactNode;
+         onClose: () => void;
+         onToggleMaximize?: (isMax: boolean) => void;
+       }
+       ```
+     - **Criterio de Aceptación:** Comportamiento flotante no modal (no bloquea clics en la mesa de digitación ni en la canasta); soporte tanto para comprobantes de creación manual como para adjuntos en borradores OCR.
+

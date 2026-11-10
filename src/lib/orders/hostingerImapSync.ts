@@ -3,7 +3,7 @@
  * Especificación Canónica: SPEC.md Escenario 397 (SDD v1.9.375)
  *
  * Responsabilidad:
- * - Conectar directamente vía Node.js `node:tls` (puerto 993) a `copia.pedidos@frufresco.co` en `imap.hostinger.com`.
+ * - Conectar directamente vía Node.js `node:tls` (puerto 993) a `pedidos@frufresco.co` en `imap.hostinger.com`.
  * - Descargar incrementalmente correos nuevos (máximo 3 por corrida, presupuesto de 40s) en modo `BODY.PEEK[]`.
  * - Cerrar el socket TLS inmediatamente antes de invocar el pipeline de IA (`/api/orders/email-ingest`).
  * - Parsear MIME RFC822 en memoria (cabeceras RFC 2047, texto plano/HTML, adjuntos Base64).
@@ -462,7 +462,7 @@ async function fetchNewMessagesFromHostingerImap(params: {
       try {
         await sendCommand('A001', `LOGIN ${escapedUser} ${escapedPass}`);
       } catch (loginErr: any) {
-        const fallbackMailbox = process.env.HOSTINGER_IMAP_FALLBACK_USER || 'pedidos@frufresco.co';
+        const fallbackMailbox = process.env.HOSTINGER_IMAP_FALLBACK_USER || 'copia.pedidos@frufresco.co';
         if (
           String(loginErr?.message || '').includes('AUTHENTICATIONFAILED') &&
           user.toLowerCase() !== fallbackMailbox.toLowerCase()
@@ -565,7 +565,7 @@ async function fetchNewMessagesFromHostingerImap(params: {
 }
 
 /**
- * Ejecuta un ciclo de sincronización directa de Canal 3 (`copia.pedidos@frufresco.co`) hacia `/api/orders/email-ingest`.
+ * Ejecuta un ciclo de sincronización directa de Canal 3 (`pedidos@frufresco.co`) hacia `/api/orders/email-ingest`.
  */
 export async function syncHostingerChannel3Orders(options?: { force?: boolean }): Promise<{
   success: boolean;
@@ -577,7 +577,7 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
 }> {
   const host = process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com';
   const port = parseInt(process.env.HOSTINGER_IMAP_PORT || '993', 10);
-  const user = process.env.HOSTINGER_IMAP_USER || 'copia.pedidos@frufresco.co';
+  const user = process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co';
   const pass = process.env.HOSTINGER_IMAP_PASS || '';
   const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
 
