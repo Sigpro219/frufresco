@@ -60,6 +60,7 @@ import {
     ChevronUp,
     RotateCcw,
     Filter,
+    SlidersHorizontal,
     X,
     Printer,
     Zap,
@@ -466,6 +467,7 @@ function OrderLoadingContent() {
     const [filterGps, setFilterGps] = useState('');
     const [filterChannel, setFilterChannel] = useState('');
     const [filterClientType, setFilterClientType] = useState('');
+    const [showFiltersPopover, setShowFiltersPopover] = useState(false);
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -3267,7 +3269,7 @@ useEffect(() => {
                         zIndex: 45,
                         backgroundColor: '#F8FAFC',
                         padding: activeTab === 'orders' ? '0.5rem 0.8rem 0.6rem 0.8rem' : '0.35rem 0.8rem 0.35rem 0.8rem',
-                        marginBottom: activeTab === 'orders' ? '0.5rem' : '0',
+                        marginBottom: '0',
                         borderBottom: '1px solid #E2E8F0',
                         boxShadow: '0 4px 8px rgba(0, 0, 0, 0.04)'
                     }}
@@ -3398,7 +3400,102 @@ useEffect(() => {
                         </button>
                         </div>
 
-                        <WasteFormatPrintButton deliveryDate={selectedDate !== 'all' ? selectedDate : getTomorrowDateStr()} />
+                        {/* TARJETA SUPERIOR DE TANDA ACTIVA A 2 FILAS (SDD ESCENARIOS 426-427) */}
+                        {activeTab === 'orders' && (
+                            <div 
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '5px 12px',
+                                    borderRadius: '10px',
+                                    background: selectedDate === getTomorrowDateStr() 
+                                        ? 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)' 
+                                        : selectedDate === getTodayDateStr() 
+                                        ? 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)' 
+                                        : selectedDate === getYesterdayDateStr() 
+                                        ? 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)' 
+                                        : selectedDate === 'history15' 
+                                        ? 'linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)' 
+                                        : 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)',
+                                    border: `1.5px solid ${
+                                        selectedDate === getTomorrowDateStr() ? '#6EE7B7' :
+                                        selectedDate === getTodayDateStr() ? '#7DD3FC' :
+                                        selectedDate === getYesterdayDateStr() ? '#FCD34D' :
+                                        selectedDate === 'history15' ? '#D8B4FE' : '#CBD5E1'
+                                    }`,
+                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)'
+                                }}
+                            >
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#059669' :
+                                        selectedDate === getTodayDateStr() ? '#0284C7' :
+                                        selectedDate === getYesterdayDateStr() ? '#D97706' :
+                                        selectedDate === 'history15' ? '#7C3AED' : '#475569',
+                                    color: '#FFFFFF',
+                                    flexShrink: 0
+                                }}>
+                                    {selectedDate === getTomorrowDateStr() ? (
+                                        <Sparkles size={16} strokeWidth={2.5} />
+                                    ) : selectedDate === getTodayDateStr() ? (
+                                        <Truck size={16} strokeWidth={2.5} />
+                                    ) : selectedDate === getYesterdayDateStr() ? (
+                                        <History size={16} strokeWidth={2.5} />
+                                    ) : selectedDate === 'history15' ? (
+                                        <Clock size={16} strokeWidth={2.5} />
+                                    ) : (
+                                        <Calendar size={16} strokeWidth={2.5} />
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.25' }}>
+                                    <div style={{
+                                        fontSize: '0.78rem',
+                                        fontWeight: '900',
+                                        color: selectedDate === getTomorrowDateStr() ? '#065F46' :
+                                            selectedDate === getTodayDateStr() ? '#075985' :
+                                            selectedDate === getYesterdayDateStr() ? '#92400E' :
+                                            selectedDate === 'history15' ? '#5B21B6' : '#1E293B',
+                                        letterSpacing: '-0.01em'
+                                    }}>
+                                        {selectedDate === getTomorrowDateStr() 
+                                            ? `TANDA ACTIVA: ENTREGA MAÑANA (${getTomorrowDateStr()})`
+                                            : selectedDate === getTodayDateStr()
+                                            ? `DESPACHO DE HOY EN RUTA (${getTodayDateStr()})`
+                                            : selectedDate === getYesterdayDateStr()
+                                            ? `CONCILIACIÓN DE AYER (${getYesterdayDateStr()})`
+                                            : selectedDate === 'history15'
+                                            ? `HISTORIAL OPERATIVO (ÚLTIMOS 15 DÍAS)`
+                                            : `ENTREGA PROGRAMADA (${selectedDate})`}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '0.68rem',
+                                        fontWeight: '700',
+                                        color: selectedDate === getTomorrowDateStr() ? '#047857' :
+                                            selectedDate === getTodayDateStr() ? '#0369A1' :
+                                            selectedDate === getYesterdayDateStr() ? '#B45309' :
+                                            selectedDate === 'history15' ? '#6D28D9' : '#64748B'
+                                    }}>
+                                        {selectedDate === getTomorrowDateStr() 
+                                            ? (cutoffRulesActive ? `Corte de pedidos hoy a las ${cutoffHourState > 12 ? (cutoffHourState - 12) + ':00 PM' : cutoffHourState + ':00 AM'}` : 'Horario flexible')
+                                            : selectedDate === getTodayDateStr()
+                                            ? 'Seguimiento en vivo de entregas'
+                                            : selectedDate === getYesterdayDateStr()
+                                            ? 'Pedidos finalizados y entregados'
+                                            : selectedDate === 'history15'
+                                            ? 'Auditoría de despachos históricos'
+                                            : 'Consulta operativa'}
+                                        {' • '}
+                                        <span style={{ fontWeight: '800' }}>{filteredOrders.length} pedido(s) listos</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* COUNTDOWN WIDGET / TELEMETRÍA EN VIVO DE CORTE OPERATIVO */}
                         {(() => {
@@ -3738,6 +3835,35 @@ useEffect(() => {
 
                         </div>
 
+                        {/* ALERTA DE DUPLICADOS EN TOOLBAR */}
+                        {duplicateOrdersCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado')}
+                                style={{
+                                    backgroundColor: searchTerm === '@duplicado' ? '#991B1B' : '#DC2626',
+                                    color: '#FFFFFF',
+                                    border: '1px solid #B91C1C',
+                                    borderRadius: '8px',
+                                    padding: '0 10px',
+                                    height: '38px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '900',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+                                    transition: 'all 0.15s',
+                                    flexShrink: 0
+                                }}
+                                title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
+                            >
+                                <AlertTriangle size={14} color="#FFFFFF" strokeWidth={2.8} />
+                                <span>{duplicateOrdersCount} DUPLICADO(S)</span>
+                            </button>
+                        )}
+
                         {/* Superbuscador Omnibox Universal FruFresco (SDD Escenario 57 / EFE-1) */}
                         <GalleryOmnibox
                             value={searchTerm}
@@ -3805,6 +3931,231 @@ useEffect(() => {
                                         </div>
                                     </div>
                                 </div>
+                            )}
+                        </div>
+
+                        {/* Botón Unificado de Filtros FruFresco (SDD Escenario 427) */}
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowFiltersPopover(!showFiltersPopover)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '0 0.85rem',
+                                    height: '38px',
+                                    borderRadius: '8px',
+                                    border: (filterClientType || filterChannel || filterGps || filterStatus) ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                    backgroundColor: (filterClientType || filterChannel || filterGps || filterStatus) ? '#F0FDF4' : '#FFFFFF',
+                                    color: (filterClientType || filterChannel || filterGps || filterStatus) ? '#0D7A57' : '#475569',
+                                    fontWeight: '800',
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                    transition: 'all 0.15s',
+                                    flexShrink: 0
+                                }}
+                                title="Filtrar por tipo de cliente, canal de origen, GPS o estado"
+                            >
+                                <SlidersHorizontal size={14} strokeWidth={2.2} />
+                                <span>Filtros</span>
+                                {((filterClientType ? 1 : 0) + (filterChannel ? 1 : 0) + (filterGps ? 1 : 0) + (filterStatus ? 1 : 0)) > 0 && (
+                                    <span style={{
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        borderRadius: '10px',
+                                        padding: '1px 6px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: '900'
+                                    }}>
+                                        {(filterClientType ? 1 : 0) + (filterChannel ? 1 : 0) + (filterGps ? 1 : 0) + (filterStatus ? 1 : 0)}
+                                    </span>
+                                )}
+                            </button>
+
+                            {showFiltersPopover && (
+                                <>
+                                    <div 
+                                        onClick={() => setShowFiltersPopover(false)} 
+                                        style={{ position: 'fixed', inset: 0, zIndex: 110 }} 
+                                    />
+                                    <div 
+                                        style={{
+                                            position: 'absolute',
+                                            top: '44px',
+                                            right: 0,
+                                            zIndex: 120,
+                                            width: '320px',
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: '12px',
+                                            border: '1px solid #CBD5E1',
+                                            boxShadow: '0 12px 28px rgba(0, 0, 0, 0.15)',
+                                            padding: '1rem',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.75rem'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.5rem' }}>
+                                            <span style={{ fontWeight: '900', fontSize: '0.82rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <SlidersHorizontal size={14} color="#0D7A57" /> Filtros Operativos
+                                            </span>
+                                            {(filterClientType || filterChannel || filterGps || filterStatus) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFilterClientType('');
+                                                        setFilterChannel('');
+                                                        setSelectedChannel('');
+                                                        setFilterGps('');
+                                                        setFilterStatus('');
+                                                    }}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#EF4444',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        padding: 0
+                                                    }}
+                                                >
+                                                    Limpiar todo
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Filtro: Tipo de Cliente */}
+                                        <div>
+                                            <label style={{ fontSize: '0.70rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
+                                                Tipo de Cliente
+                                            </label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                                                {[
+                                                    { id: '', label: 'Todos' },
+                                                    { id: 'b2b', label: 'B2B' },
+                                                    { id: 'b2c', label: 'B2C' }
+                                                ].map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => setFilterClientType(item.id)}
+                                                        style={{
+                                                            padding: '5px 8px',
+                                                            borderRadius: '6px',
+                                                            border: filterClientType === item.id ? '1.5px solid #0D7A57' : '1px solid #E2E8F0',
+                                                            backgroundColor: filterClientType === item.id ? '#ECFDF5' : '#F8FAFC',
+                                                            color: filterClientType === item.id ? '#065F46' : '#475569',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {item.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Filtro: Canal de Origen */}
+                                        <div>
+                                            <label style={{ fontSize: '0.70rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
+                                                Canal de Origen
+                                            </label>
+                                            <select
+                                                value={filterChannel}
+                                                onChange={(e) => {
+                                                    setFilterChannel(e.target.value);
+                                                    setSelectedChannel(e.target.value);
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '6px 8px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: '700',
+                                                    color: '#0F172A',
+                                                    backgroundColor: '#FFFFFF',
+                                                    outline: 'none'
+                                                }}
+                                            >
+                                                <option value="">Todos los canales</option>
+                                                <option value="web_b2b">Web Institucional (B2B)</option>
+                                                <option value="web_b2c">Web Hogar (B2C)</option>
+                                                <option value="email">Correo Electrónico</option>
+                                                <option value="whatsapp">WhatsApp</option>
+                                                <option value="phone">Teléfono</option>
+                                                <option value="file_upload">Carga Masiva</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Filtro: GPS */}
+                                        <div>
+                                            <label style={{ fontSize: '0.70rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
+                                                Estado GPS
+                                            </label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                                                {[
+                                                    { id: '', label: 'Todos' },
+                                                    { id: 'ok', label: 'GPS OK' },
+                                                    { id: 'missing', label: 'Sin GPS' }
+                                                ].map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => setFilterGps(item.id)}
+                                                        style={{
+                                                            padding: '5px 8px',
+                                                            borderRadius: '6px',
+                                                            border: filterGps === item.id ? '1.5px solid #0D7A57' : '1px solid #E2E8F0',
+                                                            backgroundColor: filterGps === item.id ? '#ECFDF5' : '#F8FAFC',
+                                                            color: filterGps === item.id ? '#065F46' : '#475569',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: '800',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {item.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Filtro: Estado del Pedido */}
+                                        <div>
+                                            <label style={{ fontSize: '0.70rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
+                                                Estado del Pedido
+                                            </label>
+                                            <select
+                                                value={filterStatus}
+                                                onChange={(e) => setFilterStatus(e.target.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '6px 8px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #CBD5E1',
+                                                    fontSize: '0.76rem',
+                                                    fontWeight: '700',
+                                                    color: '#0F172A',
+                                                    backgroundColor: '#FFFFFF',
+                                                    outline: 'none'
+                                                }}
+                                            >
+                                                <option value="">Todos los estados</option>
+                                                <option value="para_compra">Compras / QA</option>
+                                                <option value="pending_approval">Por Aprobar</option>
+                                                <option value="approved">Aprobado</option>
+                                                <option value="picking">En Preparación</option>
+                                                <option value="shipped">Despachado</option>
+                                                <option value="delivered">Entregado</option>
+                                                <option value="cancelled">Cancelado</option>
+                                                <option value="cobrar_puerta">Cobrar en puerta</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
 
@@ -3881,72 +4232,6 @@ useEffect(() => {
                         </Link>
 
                     </div>
-                </div>
-
-
-
-                {/* Dynamic Context Storytelling */}
-                <div style={{
-                    marginTop: '0.35rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '0.72rem',
-                    fontWeight: '700',
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#F0FDF4' : selectedDate === getTodayDateStr() ? '#F0F9FF' : selectedDate === getYesterdayDateStr() ? '#FEF3C7' : selectedDate === 'history15' ? '#FAF5FF' : '#F8FAFC',
-                    border: `1px solid ${selectedDate === getTomorrowDateStr() ? '#BBF7D0' : selectedDate === getTodayDateStr() ? '#BAE6FD' : selectedDate === getYesterdayDateStr() ? '#FDE68A' : selectedDate === 'history15' ? '#E9D5FF' : '#E2E8F0'}`,
-                    color: selectedDate === getTomorrowDateStr() ? '#166534' : selectedDate === getTodayDateStr() ? '#0369A1' : selectedDate === getYesterdayDateStr() ? '#92400E' : selectedDate === 'history15' ? '#6B21A8' : '#475569'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {selectedDate === getTomorrowDateStr() ? (
-                            <><Sparkles size={13} style={{ color: '#10B981', flexShrink: 0 }} /> <span><strong>Tanda Activa:</strong> Pedidos para entregar <strong>MAÑANA ({getTomorrowDateStr()})</strong> · {cutoffRulesActive ? `Corte de Pedidos hoy a las ${cutoffHourState > 12 ? (cutoffHourState - 12) + ':00 PM' : cutoffHourState + ':00 AM'}` : 'Horario Flexible (Reglas de Corte Desactivadas)'}</span></>
-                        ) : selectedDate === getTodayDateStr() ? (
-                            <><Truck size={13} style={{ color: '#0284C7', flexShrink: 0 }} /> <span><strong>Despacho de Hoy (En Ruta):</strong> Seguimiento en vivo de entregas programadas para <strong>HOY ({getTodayDateStr()})</strong></span></>
-                        ) : selectedDate === getYesterdayDateStr() ? (
-                            <><History size={13} style={{ color: '#D97706', flexShrink: 0 }} /> <span><strong>Conciliación de Ayer:</strong> Pedidos entregados el día de ayer <strong>({getYesterdayDateStr()})</strong></span></>
-                        ) : selectedDate === 'history15' ? (
-                            <><Clock size={13} style={{ color: '#8B5CF6', flexShrink: 0 }} /> <span><strong>Historial Operativo (Últimos 15 Días):</strong> Consultando pedidos procesados y entregados en las últimas dos semanas</span></>
-                        ) : (
-                            <><Calendar size={13} style={{ color: '#64748B', flexShrink: 0 }} /> <span>Mostrando pedidos para entrega el <strong>{selectedDate}</strong></span></>
-                        )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {duplicateOrdersCount > 0 && (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado');
-                                }}
-                                style={{
-                                    backgroundColor: searchTerm === '@duplicado' ? '#991B1B' : '#DC2626',
-                                    color: '#FFFFFF',
-                                    border: '1px solid #B91C1C',
-                                    borderRadius: '6px',
-                                    padding: '3px 10px',
-                                    fontSize: '0.72rem',
-                                    fontWeight: '900',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.4)',
-                                    transition: 'all 0.15s'
-                                }}
-                                title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
-                            >
-                                <AlertTriangle size={13} color="#FFFFFF" strokeWidth={2.8} />
-                                <span>{duplicateOrdersCount} NOVEDAD(ES) DUPLICADAS · {searchTerm === '@duplicado' ? 'VER TODOS' : 'FILTRAR'}</span>
-                            </button>
-                        )}
-                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
-                            {filteredOrders.length} pedido(s) listos
-                        </div>
-                    </div>
-
-
                 </div>
                 </>
                 )}
@@ -4184,124 +4469,46 @@ useEffect(() => {
 
 
                                             <th style={{ padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                                                    <div 
-                                                        onClick={() => handleSort('id')}
-                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'id' ? THEME.colors.primary : '#0F172A' }}
-                                                        title="Ordenar por ID / Fecha"
-                                                    >
-                                                        <span>ID / TIPO</span>
-                                                        {sortField === 'id' ? (
-                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
-                                                        ) : (
-                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
-                                                        )}
-                                                    </div>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'type' ? null : 'type'); }}
-                                                        style={{ background: filterClientType ? THEME.colors.primary : '#E2E8F0', color: filterClientType ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                                        title="Filtrar por tipo de cliente"
-                                                    >
-                                                        <ChevronDown size={12} />
-                                                    </button>
+                                                <div 
+                                                    onClick={() => handleSort('id')}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'id' ? THEME.colors.primary : '#0F172A' }}
+                                                    title="Ordenar por ID / Fecha"
+                                                >
+                                                    <span>ID / TIPO</span>
+                                                    {sortField === 'id' ? (
+                                                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                    ) : (
+                                                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                    )}
                                                 </div>
-                                                {openHeaderDropdown === 'type' && (
-                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterClientType(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === '' ? 'bold' : 'normal', backgroundColor: filterClientType === '' ? '#F1F5F9' : 'transparent' }}>
-                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todos los tipos
-                                                        </div>
-                                                        <div onClick={() => { setFilterClientType('b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2b' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2b' ? '#EEF2FF' : 'transparent', color: filterClientType === 'b2b' ? '#4F46E5' : '#334155' }}>
-                                                            <Building2 size={13} style={{ color: THEME.colors.primary }} /> Institucional (B2B)
-                                                        </div>
-                                                        <div onClick={() => { setFilterClientType('b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterClientType === 'b2c' ? 'bold' : 'normal', backgroundColor: filterClientType === 'b2c' ? '#FCE7F3' : 'transparent', color: filterClientType === 'b2c' ? '#BE185D' : '#334155' }}>
-                                                            <Home size={13} style={{ color: '#EC4899' }} /> Hogar (B2C)
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </th>
                                             <th style={{ padding: '0.85rem 0.75rem', width: '31%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                                                    <div 
-                                                        onClick={() => handleSort('customer')}
-                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'customer' ? THEME.colors.primary : '#0F172A' }}
-                                                        title="Ordenar alfabéticamente por cliente"
-                                                    >
-                                                        <span>CLIENTE / SEDE & CANAL</span>
-                                                        {sortField === 'customer' ? (
-                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
-                                                        ) : (
-                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
-                                                        )}
-                                                    </div>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'channel' ? null : 'channel'); }}
-                                                        style={{ background: (filterChannel || selectedChannel) ? THEME.colors.primary : '#E2E8F0', color: (filterChannel || selectedChannel) ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                                        title="Filtrar por canal de origen"
-                                                    >
-                                                        <ChevronDown size={12} />
-                                                    </button>
+                                                <div 
+                                                    onClick={() => handleSort('customer')}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'customer' ? THEME.colors.primary : '#0F172A' }}
+                                                    title="Ordenar alfabéticamente por cliente"
+                                                >
+                                                    <span>CLIENTE / SEDE & CANAL</span>
+                                                    {sortField === 'customer' ? (
+                                                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                    ) : (
+                                                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                    )}
                                                 </div>
-                                                {openHeaderDropdown === 'channel' && (
-                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterChannel(''); setSelectedChannel(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Globe size={13} style={{ color: '#64748B' }} /> Todos los canales
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('web_b2c'); setSelectedChannel('web_b2c'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Home size={13} style={{ color: '#9D174D' }} /> Web Hogar
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('web_b2b'); setSelectedChannel('web_b2b'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Building2 size={13} style={{ color: '#0369A1' }} /> Web Institucional
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('email'); setSelectedChannel('email'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Mail size={13} style={{ color: '#6B21A8' }} /> Correo
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('whatsapp'); setSelectedChannel('whatsapp'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <MessageSquare size={13} style={{ color: '#15803D' }} /> WhatsApp
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('phone'); setSelectedChannel('phone'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Phone size={13} style={{ color: '#1D4ED8' }} /> Teléfono
-                                                        </div>
-                                                        <div onClick={() => { setFilterChannel('file_upload'); setSelectedChannel('file_upload'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <UploadCloud size={13} style={{ color: '#B45309' }} /> Carga Masiva
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </th>
                                             <th style={{ padding: '0.85rem 0.75rem', width: '27%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                                                    <div 
-                                                        onClick={() => handleSort('address')}
-                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'address' ? THEME.colors.primary : '#0F172A' }}
-                                                        title="Ordenar por dirección de entrega"
-                                                    >
-                                                        <span>DIRECCIÓN / GPS</span>
-                                                        {sortField === 'address' ? (
-                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
-                                                        ) : (
-                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
-                                                        )}
-                                                    </div>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'gps' ? null : 'gps'); }}
-                                                        style={{ background: filterGps ? THEME.colors.primary : '#E2E8F0', color: filterGps ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                                        title="Filtrar por GPS"
-                                                    >
-                                                        <ChevronDown size={12} />
-                                                    </button>
+                                                <div 
+                                                    onClick={() => handleSort('address')}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'address' ? THEME.colors.primary : '#0F172A' }}
+                                                    title="Ordenar por dirección de entrega"
+                                                >
+                                                    <span>DIRECCIÓN / GPS</span>
+                                                    {sortField === 'address' ? (
+                                                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                    ) : (
+                                                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                    )}
                                                 </div>
-                                                {openHeaderDropdown === 'gps' && (
-                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>
-                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
-                                                        </div>
-                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>
-                                                            <MapPin size={13} style={{ color: '#10B981' }} /> GPS OK
-                                                        </div>
-                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>
-                                                            <AlertTriangle size={13} style={{ color: '#F59E0B' }} /> SIN GPS
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </th>
                                             <th style={{ padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
                                                 <div 
@@ -4318,59 +4525,18 @@ useEffect(() => {
                                                 </div>
                                             </th>
                                             <th style={{ padding: '0.85rem 0.65rem', width: '15%', textAlign: 'right', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
-                                                    <div 
-                                                        onClick={() => handleSort('total')}
-                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'total' ? THEME.colors.primary : '#0F172A' }}
-                                                        title="Ordenar por monto total"
-                                                    >
-                                                        <span>VALOR & ESTADO</span>
-                                                        {sortField === 'total' ? (
-                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
-                                                        ) : (
-                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
-                                                        )}
-                                                    </div>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'status' ? null : 'status'); }}
-                                                        style={{ background: filterStatus ? THEME.colors.primary : '#E2E8F0', color: filterStatus ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                                        title="Filtrar por estado del pedido"
-                                                    >
-                                                        <ChevronDown size={12} />
-                                                    </button>
+                                                <div 
+                                                    onClick={() => handleSort('total')}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end', width: '100%', cursor: 'pointer', userSelect: 'none', color: sortField === 'total' ? THEME.colors.primary : '#0F172A' }}
+                                                    title="Ordenar por monto total"
+                                                >
+                                                    <span>VALOR & ESTADO</span>
+                                                    {sortField === 'total' ? (
+                                                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                    ) : (
+                                                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                    )}
                                                 </div>
-                                                {openHeaderDropdown === 'status' && (
-                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '180px', padding: '0.4rem', textAlign: 'left', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterStatus(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todos los estados
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('para_compra'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <CheckCircle2 size={13} style={{ color: '#10B981' }} /> COMPRAS / QA
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('pending_approval'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Clock size={13} style={{ color: '#F59E0B' }} /> POR APROBAR
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('approved'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <CheckCircle2 size={13} style={{ color: '#3B82F6' }} /> APROBADO
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('picking'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Package size={13} style={{ color: '#8B5CF6' }} /> EN PREPARACIÓN
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('shipped'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <Truck size={13} style={{ color: '#06B6D4' }} /> DESPACHADO
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('delivered'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <CheckCircle2 size={13} style={{ color: '#059669' }} /> ENTREGADO
-                                                        </div>
-                                                        <div onClick={() => { setFilterStatus('cancelled'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <AlertTriangle size={13} style={{ color: '#EF4444' }} /> CANCELADO
-                                                        </div>
-                                                        <div style={{ borderTop: '1px solid #E2E8F0', margin: '4px 0' }}></div>
-                                                        <div onClick={() => { setFilterStatus('cobrar_puerta'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', color: '#D97706', fontWeight: 'bold' }}>
-                                                            <Coins size={13} style={{ color: '#D97706' }} /> Cobrar en puerta
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </th>
                                             <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
                                                 {(() => {
@@ -5178,7 +5344,7 @@ useEffect(() => {
                             backgroundColor: '#FFFFFF',
                             borderRadius: '20px',
                             width: '100%',
-                            maxWidth: '580px',
+                            maxWidth: '760px',
                             padding: '1.75rem',
                             boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(15, 23, 42, 0.08)',
                             display: 'flex', flexDirection: 'column', gap: '1.25rem',
@@ -5204,11 +5370,11 @@ useEffect(() => {
                             </div>
 
                             <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
-                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora los <strong>dos documentos físicos obligatorios</strong> para los transportadores y canastillas:
+                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora la <strong>documentación física de despacho</strong> requerida para transportadores, canastillas y control de mermas:
                             </div>
 
                             {/* Document Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
                                 {/* Remisiones */}
                                 <a
                                     href={`/admin/orders/contingency-print?mode=remissions&orderIds=${lastLaunchedOrderIds.join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
@@ -5300,6 +5466,32 @@ useEffect(() => {
                                         <ExternalLink size={12} />
                                     </div>
                                 </a>
+
+                                {/* Formato Control de Mermas y Desperdicio (Q y R) */}
+                                <div
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #F59E0B',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <Printer size={16} /> Control Mermas
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Formato físico (Q y R) para pesaje de descarte, averías y limpieza en bodega.
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '0.5rem' }}>
+                                        <WasteFormatPrintButton deliveryDate={selectedDate !== 'all' ? selectedDate : getTomorrowDateStr()} />
+                                    </div>
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>

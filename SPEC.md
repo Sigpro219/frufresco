@@ -16301,3 +16301,61 @@ En pantallas operativas de alta densidad como `/admin/orders/loading` (Pedidos d
    - Si la columna dispone de segmentación o filtro rápido (ej. canal, tipo de cliente, GPS, estado), debe incluir un botón compacto con `ChevronDown` que destaque con `THEME.colors.primary` cuando el filtro esté activo.
 3. **Persistencia de Tokens en el Sistema de Diseño:**
    - Estandarizado en `THEME.colors.tableHeaderBg`, `THEME.colors.tableHeaderBorder`, `THEME.colors.tableHeaderText` y `THEME.typography.tableHeader` en `src/lib/adminTheme.ts`.
+
+---
+
+### Escenario 427: Ergonomía de Impresión de Mermas (Q y R), Traslado de Tanda Activa y Cabecera Pura Tri-Estado (SDD v1.9.382)
+
+#### 1. Contexto & Gemba Operativo
+En la consola operativa de `/admin/orders/loading` (Pedidos del Día), tres anomalías visuales e interactivas mermaban la velocidad del operador en bodega:
+1. **Contaminación de la Barra Superior:** El botón `[🖨 Formato Desperdicio / Basura (Q y R)]` (`WasteFormatPrintButton`) se renderizaba como un botón anaranjado suelto en la barra global de navegación, fuera del flujo natural donde el despachador prepara la documentación física de salida.
+2. **Obstrucción Sticky del Encabezado de Tabla:** La franja verde horizontal de estado (`Tanda Activa: Pedidos para entregar MAÑANA...`) se ubicaba intercalada entre la Toolbar de búsqueda y el `<thead>` de la tabla, consumiendo altura en scroll y provocando colisiones visuales con los encabezados congelados.
+3. **Saturación en Celdas `<th>` por Selectores Clunky:** Cada celda de encabezado (`ID/TIPO`, `CLIENTE/SEDE`, `DIRECCIÓN/GPS`, `VALOR & ESTADO`) alojaba botones cuadrados grises `[ ⌄ ]` que estrangulaban el ancho de las columnas y competían visualmente con los ordenadores tri-estado.
+
+#### 2. Reglas Canónicas del Módulo de Despacho
+1. **Traslado del Formato de Mermas y Desperdicio (Columnas Q y R):**
+   - El botón `WasteFormatPrintButton` queda erradicado de la cabecera global de la pantalla.
+   - Se reubica dentro del **Kit Físico de Planta** en `ManualDispatchWizardModal` (Paso 2 y Paso 4) y en el modal de confirmación post-lanzamiento (`showPostLaunchModal`), garantizando que las planillas físicas de pesaje y control de mermas se impriman de manera coordinada junto a Remisiones y Rótulos Térmicos.
+2. **Elevación y Rediseño de "Tanda Activa" a la Barra Superior:**
+   - La franja inferior se suprime por completo de encima de la tabla.
+   - En el espacio liberado de la barra superior (a la izquierda de `CIERRE DE OPERACIÓN`), se proyecta una **Tarjeta de Alto Impacto a 2 Filas**:
+     - *Fila 1:* `TANDA ACTIVA: ENTREGA [DÍA] ([FECHA])` (con icono semántico de pulso, texto extra-bold en `#065F46`).
+     - *Fila 2:* `Corte de pedidos [HORA] • [N] pedido(s) listos` (con telemetría reactiva en tiempo real).
+   - El `<thead>` de la tabla se acopla magnéticamente con tolerancia cero (0px gap) directamente a la Toolbar, erradicando solapamientos.
+3. **Poda de Botones Cuadrados en `<th>` & Cabecera Pura Tri-Estado:**
+   - Se eliminan los 4 botones cuadrados sueltos `[ ⌄ ]` de las celdas `<th>`.
+   - La celda `<th>` se consagra con **anatomía pura**: Título descriptivo + Ordenador Tri-Estado (`ArrowUpDown` / `ArrowUp` / `ArrowDown`), con clic interactivo en toda la superficie de la celda.
+   - El filtrado por canal, tipo de cliente, GPS y estado se centraliza en el **Superbuscador Omnibox** (`@whatsapp`, `@correo`, `@b2b`, `@gps`, `@estado`) y mediante un botón unificado en la Toolbar, manteniendo la tabla de datos 100% limpia y legible.
+
+#### 3. Enmiendas Ratificadas de Blindaje Forense (Dictamen Goldfish)
+1. **Preservación Innegociable de la Alarma de Duplicados (`duplicateOrdersCount`):**
+   - El botón reactivo `{duplicateOrdersCount > 0 && <button>... NOVEDAD(ES) DUPLICADAS · FILTRAR ...</button>}` se traslada a la Toolbar junto a los selectores de fecha para no desproteger el Gemba contra colisiones de pedidos.
+2. **Arquitectura Flexible de Tarjetas en el Wizard (`ManualDispatchWizardModal`):**
+   - En el Paso 2 (Compras & Recibo), la cuadrícula se expande responsivemente a `repeat(auto-fit, minmax(200px, 1fr))` para alojar la tarjeta oficial del Formato de Mermas y Desperdicio (Q y R).
+   - En `showPostLaunchModal`, la cuadrícula se amplía a 3 tarjetas (Remisiones, Rótulos Térmicos y Formato de Mermas Q y R) con texto actualizado a *"documentación física de despacho"*.
+3. **Botón Unificado de Filtros Avanzados en Toolbar (`<SlidersHorizontal /> Filtros (N)`):**
+   - Para no amputar el acceso a usuarios de mouse y touch, la Toolbar incluye un botón único con popover que agrupa Canal, Segmento, GPS y Estado.
+4. **Hermeticidad de Stacking (0px Gap):**
+   - Se fija `marginBottom: 0` en `dockRef` erradicando rendijas de 8px y sincronizando el `ResizeObserver` con el `<thead>`.
+
+---
+
+### Escenario 428: Sincronización Contextual de Badge en Bandeja de Entrada Email (Opción A — Cero Pérdida de Datos) (SDD v1.9.383)
+
+#### 1. Contexto & Gemba Operativo
+En la consola `/admin/orders/loading` (Pestaña `Bandeja de Entrada Email`), el operador experimentaba una discrepancia matemática confusa:
+- El badge de la pestaña superior marcaba `[32]` (suma global histórica de los últimos 30 días en base de datos).
+- La vista operativa ingresaba filtrada por `Hoy` (`selectedDate = today`), donde la píldora de estado indicaba `Pendientes: 10`, `Gestionados: 30` (Total Hoy: 40).
+- La falta de correspondencia entre el `[32]` del tab y los `[10]` reales visibles en pantalla generaba sensación de error de cómputo, ocultando el hecho de que 22 pedidos eran rezagos de fechas anteriores.
+
+#### 2. Reglas Canónicas de Telemetría y Cero Pérdida de Datos
+1. **Garantía Innegociable de Cero Pérdida (Zero Data Loss):**
+   - Absolutamente ningún registro de correo o borrador (`order_drafts`) es eliminado, depurado o modificado en base de datos.
+   - La persistencia ACID de todos los borradores permanece 100% intacta.
+2. **Sincronización Reactiva Contextual del Badge:**
+   - El callback `onDraftsChange` en `EmailDraftsModule` emite reactivamente el valor de `countPending` (correspondiente a la fecha activa seleccionada por el usuario):
+     - Si el usuario está en el filtro `Hoy`, el badge superior exhibe exactamente `[10]`, en concordancia matemática absoluta con la píldora `Pendientes: 10`.
+     - Si el usuario conmuta al filtro `Todas`, el badge superior y la píldora exhiben `[32]`.
+3. **Visibilidad Explícita de Rezagos Históricos:**
+   - En el botón de fecha `Todas`, se agrega el badge numérico con el acumulado total de la bandeja, permitiendo al operador verificar con un solo vistazo cuántos correos existen en el histórico completo sin importar la fecha.
+   - Cuando el usuario filtra por una fecha específica (ej. `Hoy`) y existen pendientes históricos en otras fechas (`totalHistoricPending > countPending`), se dispone de un aviso contextual no invasivo indicando la existencia de los correos en `Todas` para evitar olvidos o desatenciones.

@@ -3850,12 +3850,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     };
   }, []);
 
-  useEffect(() => {
-    if (onDraftsChange) {
-      const pendingCount = drafts.filter((d: any) => d.status === 'pending').length;
-      onDraftsChange(pendingCount);
-    }
-  }, [drafts, onDraftsChange]);
+  // Escenario 428: El conteo reactivo de borradores pendientes ahora se emite tras el cálculo contextual de countPending en línea 6835+
 
   useEffect(() => {
     // Refresh every 30s only when modal is not open to avoid any interruption
@@ -6833,6 +6828,17 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     };
   }, [drafts, searchQuery, selectedDate, selectedChannel, selectedStatus]);
 
+  // Escenario 428: Sincronización reactiva del badge de pestaña con el filtro contextual activo (Opción A)
+  const totalHistoricPending = useMemo(() => {
+    return drafts.filter((d: any) => d.status === 'pending').length;
+  }, [drafts]);
+
+  useEffect(() => {
+    if (onDraftsChange) {
+      onDraftsChange(countPending);
+    }
+  }, [countPending, onDraftsChange]);
+
   const STATUS_PRIORITY: Record<string, number> = {
     pending: 1,
     rejected: 2,
@@ -7356,6 +7362,18 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           >
             <Filter size={14} color={!selectedDate ? '#059669' : '#64748B'} />
             <span>Todas</span>
+            {drafts.length > 0 && (
+              <span style={{
+                backgroundColor: !selectedDate ? '#059669' : '#F1F5F9',
+                color: !selectedDate ? '#FFFFFF' : '#475569',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontSize: '0.7rem',
+                fontWeight: 800
+              }}>
+                {drafts.length}
+              </span>
+            )}
           </button>
 
           {/* Hoy (Bogota Today) */}
@@ -7487,6 +7505,33 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               }}
             />
           </div>
+
+          {/* Rezagos de fechas anteriores alerta contextual (Escenario 428) */}
+          {selectedDate && (totalHistoricPending - countPending) > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate('')}
+              style={{
+                height: '38px',
+                padding: '0 10px',
+                borderRadius: THEME.radius.md,
+                border: '1.5px dashed #F59E0B',
+                backgroundColor: '#FFFBEB',
+                color: '#B45309',
+                fontWeight: 800,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s'
+              }}
+              title={`Hay ${totalHistoricPending - countPending} pedido(s) pendientes de fechas anteriores. Haz clic para ver toda la bandeja.`}
+            >
+              <Clock size={13} color="#D97706" />
+              <span>+{totalHistoricPending - countPending} en Otras Fechas</span>
+            </button>
+          )}
         </div>
 
         {/* Search Input */}

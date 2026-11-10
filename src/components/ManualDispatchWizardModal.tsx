@@ -37,6 +37,7 @@ import { THEME } from '@/lib/adminTheme';
 import Link from 'next/link';
 import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { DirectPdfDocKey, saveRemotePrintUrlAsPdfDirect } from '@/components/print/savePdfDirect';
+import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -1202,7 +1203,7 @@ export default function ManualDispatchWizardModal({
                         </div>
 
                         {/* Tarjetas de Acción de Compras e Inventario */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                             {/* Card 2A: Planillas de Compra en Plaza (Corabastos) */}
                             <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #A7F3D0', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <div>
@@ -1350,6 +1351,24 @@ export default function ManualDispatchWizardModal({
                                     >
                                         <Printer size={12} /> Imprimir <ExternalLink size={9} />
                                     </Link>
+                                </div>
+                            </div>
+
+                            {/* Card 2E: Formato Control de Mermas y Desperdicio (Q y R) */}
+                            <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #FCD34D', borderRadius: '14px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.80rem' }}>
+                                        <Printer size={15} /> Control de Mermas
+                                    </div>
+                                    <div style={{ fontWeight: '900', fontSize: '0.88rem', color: '#0F172A', marginTop: '4px' }}>
+                                        Desperdicio & Basura (Q y R)
+                                    </div>
+                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px', lineHeight: '1.3' }}>
+                                        Formato físico para registro de pesaje en descarte, averías y limpieza en bodega.
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: '0.85rem' }}>
+                                    <WasteFormatPrintButton deliveryDate={deliveryDate} />
                                 </div>
                             </div>
                         </div>
