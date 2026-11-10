@@ -5092,26 +5092,25 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     const epochIso = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
     const epochMs = new Date(epochIso).getTime();
 
-    // Filtrar borradores válidos en la ventana de transición (excluir rechazados y [RAW_WEBHOOK] en vuelo)
-    const activeWindowDrafts = drafts.filter((d: any) => {
-      if (!d || d.status === 'rejected') return false;
-      if (!Array.isArray(d.extracted_items)) return false; // Excluir [RAW_WEBHOOK] en vuelo (Grieta #2)
+    // La telemetría responde reactivamente al selector de fecha activo del usuario:
+    // - Si el usuario seleccionó una fecha específica (ej. 'Hoy' o fecha de calendario): evalúa exactamente los borradores de ese día.
+    // - Si el usuario seleccionó 'Todas' (selectedDate === ''): evalúa el acumulado histórico global de la bandeja.
+    const activeDateFilter = selectedDate ? selectedDate.trim() : '';
+
+    const pool = drafts.filter((d: any) => {
+      if (!d) return false;
+      if (!Array.isArray(d.extracted_items)) return false; // Excluir [RAW_WEBHOOK] en vuelo
       if (String(d.client_detected_name || '').startsWith('[RAW_WEBHOOK]')) return false;
 
-      const createdStr = d.created_at
-        ? new Date(d.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
-        : '';
-      const createdMs = d.created_at ? new Date(d.created_at).getTime() : 0;
+      if (activeDateFilter) {
+        const createdStr = d.created_at
+          ? new Date(d.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+          : '';
+        return createdStr === activeDateFilter;
+      }
 
-      const isPostEpoch = !isNaN(epochMs) ? createdMs >= epochMs : true;
-      const isToday = createdStr === todayBogotaStr;
-      return isToday || isPostEpoch;
+      return true;
     });
-
-    // Fallback si la ventana actual está vacía: usar borradores válidos no rechazados
-    const pool = activeWindowDrafts.length > 0
-      ? activeWindowDrafts
-      : drafts.filter((d: any) => d && d.status !== 'rejected' && Array.isArray(d.extracted_items) && !String(d.client_detected_name || '').startsWith('[RAW_WEBHOOK]'));
 
     let countBlue = 0;   // Solo Canal 3 (@frufresco.co)
     let countPurple = 0; // Ambos canales (1-2 y 3 conciliados)
@@ -5162,7 +5161,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       milestoneState,
       epochIso,
     };
-  }, [drafts, todayBogotaStr]);
+  }, [drafts, selectedDate, todayBogotaStr]);
 
   const findMatchedProduct = useCallback((originalName: string) => {
     if (!originalName) return null;
@@ -7569,6 +7568,86 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       >
                         {rawSubject}
                       </span>
+
+                      {/* Micro-badge de Canal de Ingesta (.co vs .com) */}
+                      {(() => {
+                        const channels = Array.isArray(meta.seenInChannels) && meta.seenInChannels.length > 0
+                          ? meta.seenInChannels
+                          : [meta.ingestChannel || 'channel_1_2_legacy'];
+                        const hasCo = channels.includes('channel_3_co');
+                        const hasLegacy = channels.includes('channel_1_2_legacy');
+
+                        if (hasCo && hasLegacy) {
+                          return (
+                            <span 
+                              title="Pedido recibido por AMBOS canales (.co y .com) y conciliado sin duplicar"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '0.66rem',
+                                fontWeight: '800',
+                                padding: '1px 6px',
+                                borderRadius: '999px',
+                                backgroundColor: '#F3E8FF',
+                                color: '#7E22CE',
+                                border: '1px solid #D8B4FE',
+                                letterSpacing: '0.02em',
+                                lineHeight: '1.4'
+                              }}
+                            >
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#9333EA' }} />
+                              .co + .com
+                            </span>
+                          );
+                        } else if (hasCo) {
+                          return (
+                            <span 
+                              title="Pedido recibido a través del canal oficial soberano pedidos@frufresco.co"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '0.66rem',
+                                fontWeight: '800',
+                                padding: '1px 6px',
+                                borderRadius: '999px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1D4ED8',
+                                border: '1px solid #BFDBFE',
+                                letterSpacing: '0.02em',
+                                lineHeight: '1.4'
+                              }}
+                            >
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#2563EB' }} />
+                              .co
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span 
+                              title="Pedido recibido por el canal heredado pedidos@frufresco.com (pendiente de migrar)"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '0.66rem',
+                                fontWeight: '800',
+                                padding: '1px 6px',
+                                borderRadius: '999px',
+                                backgroundColor: '#FEF2F2',
+                                color: '#B91C1C',
+                                border: '1px solid #FECACA',
+                                letterSpacing: '0.02em',
+                                lineHeight: '1.4'
+                              }}
+                            >
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#DC2626' }} />
+                              .com
+                            </span>
+                          );
+                        }
+                      })()}
                     </div>
 
                     <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.74rem' }}>

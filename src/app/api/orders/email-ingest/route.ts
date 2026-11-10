@@ -1657,7 +1657,7 @@ export async function POST(req: Request) {
             },
             ...processedItems
           ],
-          status: hasValid ? 'pending' : 'rejected'
+          status: 'pending'
         });
       }
     } else {
@@ -1725,7 +1725,7 @@ export async function POST(req: Request) {
           },
           ...sourceItems
         ],
-        status: hasValid ? 'pending' : 'rejected'
+        status: 'pending'
       });
     }
 
