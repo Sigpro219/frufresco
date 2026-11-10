@@ -67,6 +67,9 @@ import {
     UserCheck,
     User,
     ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown,
     ShieldCheck,
     Star,
     History,
@@ -182,8 +185,48 @@ const getChannelBadge = (source: string, isB2B?: boolean) => {
         case 'customer_service_shortage_d1':
             return <span style={{ backgroundColor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><RotateCcw size={10} strokeWidth={2} /> Garantía SAC</span>;
         default: 
-            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
+            return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {activeSource || 'Web'}</span>;
     }
+};
+
+/**
+ * Descompone inteligentemente el nombre del cliente en:
+ * - mainName: Razón Social o Matriz principal (ej. ALDIMARK, WOK, COLSUBSIDIO)
+ * - branchName: Sede, Centro de Costos o Sucursal (ej. ALFAGRES, CDS CONDIMENTOS EL REY)
+ */
+const parseCustomerHierarchy = (rawName?: string) => {
+    if (!rawName) return { mainName: 'Cliente Sin Nombre', branchName: null };
+    const clean = rawName.trim();
+
+    // Caso común ALDIMARK: "SERVICIOS ALIMENTICIOS ALDIMARK SAS - ALDIMARK - CDS CONDIMENTOS..."
+    if (/ALDIMARK/i.test(clean)) {
+        // Extraer sedes tras el último o penúltimo guion
+        const parts = clean.split(/\s*-\s*/).map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+            // Eliminar menciones redundantes de "ALDIMARK" o "SERVICIOS ALIMENTICIOS..." en la sede
+            const lastPart = parts[parts.length - 1].replace(/^ALDIMARK\s*[-:]*\s*/i, '').trim();
+            return {
+                mainName: 'ALDIMARK',
+                branchName: lastPart || null
+            };
+        }
+        return { mainName: 'ALDIMARK', branchName: null };
+    }
+
+    // Caso con separador de sede explícito con guión " - "
+    if (clean.includes(' - ')) {
+        const parts = clean.split(/\s+-\s+/);
+        if (parts.length >= 2) {
+            let main = parts[0].trim();
+            // Limpiar sufijos corporativos pesados en la visualización
+            main = main.replace(/\s+(S\.A\.S\.|SAS|S\.A\.|LTDA|E\.U\.|BIC)\b/gi, '').trim();
+            const branch = parts.slice(1).join(' - ').trim();
+            return { mainName: main, branchName: branch };
+        }
+    }
+
+    // Nombre plano o sin guiones
+    return { mainName: clean, branchName: null };
 };
 
 function OrderLoadingContent() {
@@ -424,6 +467,22 @@ function OrderLoadingContent() {
     const [filterChannel, setFilterChannel] = useState('');
     const [filterClientType, setFilterClientType] = useState('');
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
+    const [sortField, setSortField] = useState<string | null>(null);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const handleSort = (field: string) => {
+        if (sortField === field) {
+            if (sortOrder === 'asc') {
+                setSortOrder('desc');
+            } else {
+                setSortField(null);
+                setSortOrder('asc');
+            }
+        } else {
+            setSortField(field);
+            setSortOrder('asc');
+        }
+    };
 
     const [aiHealth, setAiHealth] = useState<{ ok: boolean; status: string; message?: string; code?: string } | null>(null);
     const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
@@ -1943,7 +2002,49 @@ useEffect(() => {
             return true;
         });
 
-        // Ordenamiento Inteligente: Pedidos Express Same-Day Prioritarios y Novedades DE PRIMERO
+        // 1. Si el usuario activó ordenamiento tri-estado por columna:
+        if (sortField) {
+            return filtered.sort((a, b) => {
+                let comp = 0;
+                switch (sortField) {
+                    case 'id': {
+                        const idA = Number(a.sequence_id) || Number(a.order_number) || new Date(a.created_at || 0).getTime();
+                        const idB = Number(b.sequence_id) || Number(b.order_number) || new Date(b.created_at || 0).getTime();
+                        comp = idA - idB;
+                        break;
+                    }
+                    case 'customer': {
+                        const nameA = a.customer_name || '';
+                        const nameB = b.customer_name || '';
+                        comp = nameA.localeCompare(nameB, 'es', { sensitivity: 'base', numeric: true });
+                        break;
+                    }
+                    case 'address': {
+                        const addrA = a.shipping_address || '';
+                        const addrB = b.shipping_address || '';
+                        comp = addrA.localeCompare(addrB, 'es', { sensitivity: 'base', numeric: true });
+                        break;
+                    }
+                    case 'items': {
+                        const wA = Number(a.total_weight_kg) || 0;
+                        const wB = Number(b.total_weight_kg) || 0;
+                        comp = wA !== wB ? wA - wB : (Number(a.item_count) || 0) - (Number(b.item_count) || 0);
+                        break;
+                    }
+                    case 'total': {
+                        const tA = parseFloat(a.total || a.total_amount) || 0;
+                        const tB = parseFloat(b.total || b.total_amount) || 0;
+                        comp = tA - tB;
+                        break;
+                    }
+                    default:
+                        comp = 0;
+                }
+                return sortOrder === 'asc' ? comp : -comp;
+            });
+        }
+
+        // 2. Ordenamiento Natural Inteligente: Pedidos Express Same-Day Prioritarios y Novedades DE PRIMERO
         return filtered.sort((a, b) => {
             const aSameDayActive = (a.is_same_day || a.logistics_data?.is_same_day || a.admin_notes?.includes('SAME-DAY')) && !['delivered', 'cancelled'].includes(a.status);
             const bSameDayActive = (b.is_same_day || b.logistics_data?.is_same_day || b.admin_notes?.includes('SAME-DAY')) && !['delivered', 'cancelled'].includes(b.status);
@@ -1973,7 +2074,7 @@ useEffect(() => {
             const bTime = new Date(b.created_at || 0).getTime();
             return bTime - aTime;
         });
-    }, [orders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType]);
+    }, [orders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType, sortField, sortOrder]);
 
     const filteredMetrics = useMemo(() => {
         const count = filteredOrders.length;
@@ -4076,15 +4177,26 @@ useEffect(() => {
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F8FAFB' }}>
-                                        <tr style={{ backgroundColor: '#F8FAFB', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
+                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F1F5F9' }}>
+                                        <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
 
 
 
 
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '15%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>ID / TIPO</span>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                    <div 
+                                                        onClick={() => handleSort('id')}
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'id' ? THEME.colors.primary : '#0F172A' }}
+                                                        title="Ordenar por ID / Fecha"
+                                                    >
+                                                        <span>ID / TIPO</span>
+                                                        {sortField === 'id' ? (
+                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                        ) : (
+                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                        )}
+                                                    </div>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'type' ? null : 'type'); }}
                                                         style={{ background: filterClientType ? THEME.colors.primary : '#E2E8F0', color: filterClientType ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -4107,35 +4219,20 @@ useEffect(() => {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '23%', textAlign: 'left', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>CLIENTE</th>
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '22%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>DIRECCIÓN / GPS</span>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'gps' ? null : 'gps'); }}
-                                                        style={{ background: filterGps ? THEME.colors.primary : '#E2E8F0', color: filterGps ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                                        title="Filtrar por GPS"
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '31%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                    <div 
+                                                        onClick={() => handleSort('customer')}
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'customer' ? THEME.colors.primary : '#0F172A' }}
+                                                        title="Ordenar alfabéticamente por cliente"
                                                     >
-                                                        <ChevronDown size={12} />
-                                                    </button>
-                                                </div>
-                                                {openHeaderDropdown === 'gps' && (
-                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>
-                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
-                                                        </div>
-                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>
-                                                            <MapPin size={13} style={{ color: '#10B981' }} /> GPS OK
-                                                        </div>
-                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>
-                                                            <AlertTriangle size={13} style={{ color: '#F59E0B' }} /> SIN GPS
-                                                        </div>
+                                                        <span>CLIENTE / SEDE & CANAL</span>
+                                                        {sortField === 'customer' ? (
+                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                        ) : (
+                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                        )}
                                                     </div>
-                                                )}
-                                            </th>
-                                            <th style={{ padding: '1rem', width: '10%', textAlign: 'left', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>CANAL</span>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'channel' ? null : 'channel'); }}
                                                         style={{ background: (filterChannel || selectedChannel) ? THEME.colors.primary : '#E2E8F0', color: (filterChannel || selectedChannel) ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -4170,11 +4267,70 @@ useEffect(() => {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.65rem', width: '9%', textAlign: 'center', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>ITEMS / PESO</th>
-                                            <th style={{ padding: '0.85rem 0.65rem', width: '9%', textAlign: 'right', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>VALOR</th>
-                                            <th style={{ padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F8FAFB', ...THEME.typography?.tableHeader }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>ESTADO</span>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '27%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                                    <div 
+                                                        onClick={() => handleSort('address')}
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'address' ? THEME.colors.primary : '#0F172A' }}
+                                                        title="Ordenar por dirección de entrega"
+                                                    >
+                                                        <span>DIRECCIÓN / GPS</span>
+                                                        {sortField === 'address' ? (
+                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                        ) : (
+                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                        )}
+                                                    </div>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'gps' ? null : 'gps'); }}
+                                                        style={{ background: filterGps ? THEME.colors.primary : '#E2E8F0', color: filterGps ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="Filtrar por GPS"
+                                                    >
+                                                        <ChevronDown size={12} />
+                                                    </button>
+                                                </div>
+                                                {openHeaderDropdown === 'gps' && (
+                                                    <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '170px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
+                                                        <div onClick={() => { setFilterGps(''); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === '' ? 'bold' : 'normal', backgroundColor: filterGps === '' ? '#F1F5F9' : 'transparent' }}>
+                                                            <Filter size={13} style={{ color: '#64748B' }} /> Todas las ubicaciones
+                                                        </div>
+                                                        <div onClick={() => { setFilterGps('ok'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'ok' ? 'bold' : 'normal', backgroundColor: filterGps === 'ok' ? '#F1F5F9' : 'transparent' }}>
+                                                            <MapPin size={13} style={{ color: '#10B981' }} /> GPS OK
+                                                        </div>
+                                                        <div onClick={() => { setFilterGps('missing'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterGps === 'missing' ? 'bold' : 'normal', backgroundColor: filterGps === 'missing' ? '#F1F5F9' : 'transparent' }}>
+                                                            <AlertTriangle size={13} style={{ color: '#F59E0B' }} /> SIN GPS
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </th>
+                                            <th style={{ padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                                <div 
+                                                    onClick={() => handleSort('items')}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', width: '100%', color: sortField === 'items' ? THEME.colors.primary : '#0F172A' }}
+                                                    title="Ordenar por peso y productos"
+                                                >
+                                                    <span>ITEMS / PESO</span>
+                                                    {sortField === 'items' ? (
+                                                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                    ) : (
+                                                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                    )}
+                                                </div>
+                                            </th>
+                                            <th style={{ padding: '0.85rem 0.65rem', width: '15%', textAlign: 'right', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', width: '100%' }}>
+                                                    <div 
+                                                        onClick={() => handleSort('total')}
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'total' ? THEME.colors.primary : '#0F172A' }}
+                                                        title="Ordenar por monto total"
+                                                    >
+                                                        <span>VALOR & ESTADO</span>
+                                                        {sortField === 'total' ? (
+                                                            sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                                                        ) : (
+                                                            <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                                                        )}
+                                                    </div>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'status' ? null : 'status'); }}
                                                         style={{ background: filterStatus ? THEME.colors.primary : '#E2E8F0', color: filterStatus ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -4216,7 +4372,7 @@ useEffect(() => {
                                                     </div>
                                                 )}
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F8FAFB' }}>
+                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
                                                 {(() => {
                                                     const launchableOrders = filteredOrders.filter(o => o.isComplete && ['pending_approval', 'pending', 'recibido'].includes(o.status));
                                                     const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;
@@ -4334,16 +4490,119 @@ useEffect(() => {
                                                             )}
                                                         </div>
                                                     </td>
+                                                    {/* 2. CLIENTE / SEDE & CANAL */}
                                                     <td style={{ padding: '0.8rem 1rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#111827' }}>{order.customer_name}</span>
-                                                            <SpecialClientBadge state={order.special_attention} />
-                                                        </div>
-                                                        <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'inline-flex', alignItems: 'center', gap: '2px' }}><Phone size={10} strokeWidth={1.5} /> {order.customer_phone || 'Sin tel.'}</div>
+                                                        {(() => {
+                                                            const { mainName, branchName } = parseCustomerHierarchy(order.customer_name);
+                                                            return (
+                                                                <div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                        <span style={{ fontWeight: '800', fontSize: '0.92rem', color: '#0F172A', letterSpacing: '-0.01em' }}>
+                                                                            {mainName}
+                                                                        </span>
+                                                                        <SpecialClientBadge state={order.special_attention} />
+                                                                    </div>
+
+                                                                    {branchName && (
+                                                                        <div style={{ marginTop: '2px' }}>
+                                                                            <span style={{
+                                                                                fontSize: '0.72rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#4338CA',
+                                                                                backgroundColor: '#EEF2FF',
+                                                                                border: '1px solid #C7D2FE',
+                                                                                padding: '1px 6px',
+                                                                                borderRadius: '4px',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px'
+                                                                            }}>
+                                                                                <Building2 size={10} strokeWidth={2} style={{ color: '#4F46E5' }} />
+                                                                                <span>{branchName}</span>
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                        {getChannelBadge(order.origin_source, isB2B)}
+
+                                                                        {order.customer_phone && (
+                                                                            <span style={{ fontSize: '0.70rem', color: '#64748B', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                                <Phone size={10} strokeWidth={1.5} style={{ color: '#94A3B8' }} /> 
+                                                                                {order.customer_phone}
+                                                                            </span>
+                                                                        )}
+
+                                                                        {(() => {
+                                                                            const rep = getOrderReplacementInfo(order);
+                                                                            if (!rep.isReplacement && !rep.childReplacementSequenceId) return null;
+                                                                            if (rep.isReplacement) {
+                                                                                return (
+                                                                                    <Link
+                                                                                        href={rep.parentOrderId ? `/admin/orders/${rep.parentOrderId}` : '#'}
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        title={rep.parentSequenceId ? `Haga clic para ver el Pedido Padre #${rep.parentSequenceId}` : 'Reposición de Garantía ($0 COP)'}
+                                                                                        style={{
+                                                                                            backgroundColor: '#EEF2FF',
+                                                                                            color: '#4338CA',
+                                                                                            border: '1.2px solid #818CF8',
+                                                                                            borderRadius: '5px',
+                                                                                            padding: '1px 6px',
+                                                                                            fontSize: '0.64rem',
+                                                                                            fontWeight: '900',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px',
+                                                                                            textDecoration: 'none'
+                                                                                        }}
+                                                                                    >
+                                                                                        <RotateCcw size={9} strokeWidth={2.8} />
+                                                                                        <span>HIJO DE #{rep.parentSequenceId || ''}</span>
+                                                                                    </Link>
+                                                                                );
+                                                                            }
+                                                                            if (rep.childReplacementSequenceId) {
+                                                                                return (
+                                                                                    <Link
+                                                                                        href={rep.childReplacementOrderId ? `/admin/orders/${rep.childReplacementOrderId}` : '#'}
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        title={`Haga clic para ver el Pedido Hijo de Reposición #${rep.childReplacementSequenceId}`}
+                                                                                        style={{
+                                                                                            backgroundColor: '#ECFDF5',
+                                                                                            color: '#047857',
+                                                                                            border: '1.2px solid #6EE7B7',
+                                                                                            borderRadius: '5px',
+                                                                                            padding: '1px 6px',
+                                                                                            fontSize: '0.64rem',
+                                                                                            fontWeight: '900',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px',
+                                                                                            textDecoration: 'none'
+                                                                                        }}
+                                                                                    >
+                                                                                        <RotateCcw size={9} strokeWidth={2.8} />
+                                                                                        <span>TIENE HIJO #{rep.childReplacementSequenceId}</span>
+                                                                                    </Link>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
+
+                                                    {/* 3. DIRECCIÓN & GPS */}
                                                     <td style={{ padding: '0.8rem 1rem' }}>
-                                                        <div style={{ fontSize: '0.8rem', color: '#374151', fontWeight: '600' }}>{order.shipping_address?.slice(0, 35)}...</div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                                        <div 
+                                                            title={order.shipping_address || ''} 
+                                                            style={{ fontSize: '0.82rem', color: '#1E293B', fontWeight: '600', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                                        >
+                                                            {order.shipping_address || 'Sin dirección registrada'}
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
                                                             {hasGPS ? (
                                                                 <span style={{ fontSize: '0.65rem', color: '#059669', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                     <MapPin size={11} strokeWidth={2} /> GPS OK
@@ -4373,109 +4632,23 @@ useEffect(() => {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'left' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
-                                                            {getChannelBadge(order.origin_source, isB2B)}
-                                                            {(() => {
-                                                                const rep = getOrderReplacementInfo(order);
-                                                                if (!rep.isReplacement && !rep.childReplacementSequenceId) return null;
-                                                                if (rep.isReplacement) {
-                                                                    return (
-                                                                        <Link
-                                                                            href={rep.parentOrderId ? `/admin/orders/${rep.parentOrderId}` : '#'}
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            title={rep.parentSequenceId ? `Haga clic para ver el Pedido Padre #${rep.parentSequenceId}` : 'Reposición de Garantía ($0 COP)'}
-                                                                            style={{
-                                                                                backgroundColor: '#EEF2FF',
-                                                                                color: '#4338CA',
-                                                                                border: '1.2px solid #818CF8',
-                                                                                borderRadius: '5px',
-                                                                                padding: '1px 6px',
-                                                                                fontSize: '0.64rem',
-                                                                                fontWeight: '900',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                textDecoration: 'none',
-                                                                                boxShadow: '0 1px 2px rgba(67, 56, 202, 0.12)'
-                                                                            }}
-                                                                        >
-                                                                            <RotateCcw size={9} strokeWidth={2.8} />
-                                                                            <span>HIJO DE #{rep.parentSequenceId || ''}</span>
-                                                                        </Link>
-                                                                    );
-                                                                }
-                                                                if (rep.childReplacementSequenceId) {
-                                                                    return (
-                                                                        <Link
-                                                                            href={rep.childReplacementOrderId ? `/admin/orders/${rep.childReplacementOrderId}` : '#'}
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            title={`Haga clic para ver el Pedido Hijo de Reposición #${rep.childReplacementSequenceId}`}
-                                                                            style={{
-                                                                                backgroundColor: '#ECFDF5',
-                                                                                color: '#047857',
-                                                                                border: '1.2px solid #6EE7B7',
-                                                                                borderRadius: '5px',
-                                                                                padding: '1px 6px',
-                                                                                fontSize: '0.64rem',
-                                                                                fontWeight: '900',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                textDecoration: 'none',
-                                                                                boxShadow: '0 1px 2px rgba(4, 120, 87, 0.12)'
-                                                                            }}
-                                                                        >
-                                                                            <RotateCcw size={9} strokeWidth={2.8} />
-                                                                            <span>TIENE HIJO #{rep.childReplacementSequenceId}</span>
-                                                                        </Link>
-                                                                    );
-                                                                }
-                                                                return null;
-                                                            })()}
-                                                        </div>
-                                                    </td>
+
+                                                    {/* 4. ITEMS & PESO */}
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                                                        <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem' }}>
+                                                        <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.88rem' }}>
                                                             {formatNumber(order.total_weight_kg, 1)} kg
                                                         </div>
                                                         {order.item_count > 0 && (
-                                                            <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: '600' }}>
-                                                                {order.item_count} {order.item_count === 1 ? 'item' : 'items'}
+                                                            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '600', marginTop: '2px' }}>
+                                                                {order.item_count} {order.item_count === 1 ? 'prod' : 'prods'}
                                                             </div>
                                                         )}
                                                     </td>
+
+                                                    {/* 5. VALOR & ESTADO */}
                                                     <td style={{ padding: '0.8rem 1rem', textAlign: 'right' }}>
                                                         {(() => {
                                                             const rep = getOrderReplacementInfo(order);
-                                                            if (rep.isReplacement) {
-                                                                return (
-                                                                    <div>
-                                                                        <div style={{ fontWeight: '900', color: '#047857', fontSize: '0.95rem' }}>
-                                                                            $0 COP
-                                                                        </div>
-                                                                        <div 
-                                                                            title={`Reposición de Garantía por Calidad · Ampara Pedido #${rep.parentSequenceId || ''}`}
-                                                                            style={{
-                                                                                marginTop: '3px',
-                                                                                fontSize: '0.62rem',
-                                                                                fontWeight: '800',
-                                                                                color: '#065F46',
-                                                                                backgroundColor: '#D1FAE5',
-                                                                                border: '1px solid #A7F3D0',
-                                                                                padding: '1px 6px',
-                                                                                borderRadius: '4px',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            Garantía / Sin Cobro
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            }
                                                             const itemsList = Array.isArray(order.order_items) ? order.order_items : [];
                                                             const singleItem = itemsList.length === 1 ? itemsList[0] : null;
                                                             const singleItemName = `${singleItem?.products?.name || ''} ${singleItem?.nickname || ''}`.trim();
@@ -4485,77 +4658,25 @@ useEffect(() => {
                                                                     /\bobsequio\b/i.test(singleItemName)
                                                                 )
                                                             );
-                                                            if (isSingleSkuGift) {
-                                                                return (
-                                                                    <div>
-                                                                        <div style={{ fontWeight: '900', color: '#7C3AED', fontSize: '0.95rem' }}>
-                                                                            {formatMoney(order.total)}
-                                                                        </div>
-                                                                        <div 
-                                                                            title={`Pedido de un solo SKU: ${singleItem?.products?.name || singleItem?.nickname || 'Obsequio Corporativo'}`}
-                                                                            style={{
-                                                                                marginTop: '3px',
-                                                                                fontSize: '0.62rem',
-                                                                                fontWeight: '800',
-                                                                                color: '#6D28D9',
-                                                                                backgroundColor: '#F3E8FF',
-                                                                                border: '1px solid #DDD6FE',
-                                                                                padding: '1px 6px',
-                                                                                borderRadius: '4px',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            <Gift size={10} strokeWidth={2.5} />
-                                                                            <span>Obsequio</span>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            }
+
                                                             return (
-                                                                <>
-                                                                    <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem' }}>
-                                                                        {formatMoney(order.total)}
+                                                                <div>
+                                                                    <div style={{ fontWeight: '900', color: rep.isReplacement ? '#047857' : isSingleSkuGift ? '#7C3AED' : '#059669', fontSize: '0.94rem', fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-outfit), sans-serif' }}>
+                                                                        {rep.isReplacement ? '$0 COP' : formatMoney(order.total)}
                                                                     </div>
-                                                                    {isB2B ? (
-                                                                        <div 
-                                                                            title={order.profiles?.payment_days ? `Acuerdo Institucional de Precios Vigente · Cartera: ${order.profiles.payment_days} días` : 'Acuerdo Institucional de Precios Vigente'}
-                                                                            style={{
-                                                                                marginTop: '3px',
-                                                                                fontSize: '0.62rem',
-                                                                                fontWeight: '800',
-                                                                                color: '#4338CA',
-                                                                                backgroundColor: '#EEF2FF',
-                                                                                border: '1px solid #C7D2FE',
-                                                                                padding: '1px 6px',
-                                                                                borderRadius: '4px',
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                whiteSpace: 'nowrap'
-                                                                            }}
-                                                                        >
-                                                                            Acuerdo Institucional
+                                                                    <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'flex-end' }}>
+                                                                        <div style={{
+                                                                            padding: '2px 8px', borderRadius: '5px', fontSize: '0.65rem', fontWeight: '900',
+                                                                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : order.status === 'approved' ? '#DCFCE7' : order.status === 'delivered' ? '#ECFDF5' : '#F3F4F6',
+                                                                            color: order.status === 'pending_approval' ? '#92400E' : order.status === 'approved' ? '#15803D' : order.status === 'delivered' ? '#059669' : '#4B5563',
+                                                                            display: 'inline-block'
+                                                                        }}>
+                                                                            {getStatusLabel(order.status)}
                                                                         </div>
-                                                                    ) : (
-                                                                        <div style={{ marginTop: '3px', fontSize: '0.62rem', fontWeight: '800', color: '#BE185D', backgroundColor: '#FCE7F3', border: '1px solid #FBCFE8', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
-                                                                            B2C Estándar
-                                                                        </div>
-                                                                    )}
-                                                                </>
+                                                                    </div>
+                                                                </div>
                                                             );
                                                         })()}
-                                                    </td>
-                                                    <td style={{ padding: '0.8rem 1rem', textAlign: 'center' }}>
-                                                        <div style={{
-                                                            padding: '3px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: '900',
-                                                            backgroundColor: order.status === 'pending_approval' ? '#FEF3C7' : order.status === 'approved' ? '#DCFCE7' : order.status === 'delivered' ? '#ECFDF5' : '#F3F4F6',
-                                                            color: order.status === 'pending_approval' ? '#92400E' : order.status === 'approved' ? '#15803D' : order.status === 'delivered' ? '#059669' : '#4B5563'
-                                                        }}>
-                                                            {getStatusLabel(order.status)}
-                                                        </div>
                                                     </td>
 
 

@@ -54,15 +54,20 @@ Cuando se construya, refactorice o audite una galería o tabla operativa:
    ```
    *(En Tailwind: `className="w-full border-separate border-spacing-0 text-left"`)*
 
-2. **Sticky Directo en Cada Celda `<th>`:**
-   No basta con colocar `position: sticky` en el `<thead>`. Cada elemento `<th>` **debe declarar explícitamente su anclaje sticky, su coordenada `top` exacta y su fondo sólido**:
+2. **Sticky Directo en Cada Celda `<th>` y Estándar de Contraste Canónico (WCAG AAA):**
+   No basta con colocar `position: sticky` en el `<thead>`. Cada elemento `<th>` **debe declarar explícitamente su anclaje sticky, su coordenada `top` exacta, su fondo sólido Slate-100 (`#F1F5F9`) y su tipografía Slate-900 extra-bold (`#0F172A`)**:
    ```tsx
    <th style={{
      position: 'sticky',
      top: '169px', // Offset exacto calculado
      zIndex: 30,
-     backgroundColor: '#F8FAFC', // Fondo 100% sólido (prohibido transparente)
-     borderBottom: '2px solid #E2E8F0'
+     backgroundColor: '#F1F5F9', // Estándar oficial: Slate-100 sólido (WCAG AAA 9.8:1)
+     borderBottom: '2px solid #CBD5E1', // Borde delimitador inferior nítido (Slate-300)
+     color: '#0F172A', // Slate-900 extra-bold de máxima legibilidad
+     fontWeight: '800',
+     fontSize: '0.72rem',
+     letterSpacing: '0.04em',
+     textTransform: 'uppercase'
    }}>
      # Pedido
    </th>
@@ -219,27 +224,70 @@ $$\text{Neutral (Orden Natural)} \xrightarrow{\text{1er Clic}} \text{Ascendente 
 3. **Descendente (`'desc'`):** De mayor a menor ($Z \rightarrow A$, $9 \rightarrow 0$).
 4. **Tercer Clic:** Restablece `sortField` a `null` y `sortOrder` a `'asc'`, erradicando el bloqueo visual donde el usuario no podía regresar al orden predeterminado.
 
-### B. Anatomía Visual y Microinteracción en `<th>`
+### B. Anatomía Visual y Microinteracción en `<th>` (Coexistencia de Ordenador + Filtro Dropdown)
 1. **Cursor y Selección:** `cursor: 'pointer'`, `userSelect: 'none'`.
 2. **Distribución en Texto (Izquierda):**
    ```tsx
-   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: isSorted ? THEME.colors.primary : THEME.colors.textSecondary }}>
-     <span>{label}</span>
-     {isSorted ? (
-       sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
-     ) : (
-       <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+     <div 
+       onClick={() => handleSort('field_name')}
+       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: isSorted ? THEME.colors.primary : '#0F172A', cursor: 'pointer' }}
+     >
+       <span>{label}</span>
+       {isSorted ? (
+         sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} style={{ color: THEME.colors.primary }} /> : <ArrowDown size={12} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+       ) : (
+         <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+       )}
+     </div>
+
+     {/* Si la columna cuenta con segmentación o filtro rápido: */}
+     {hasFilter && (
+       <button
+         onClick={(e) => { e.stopPropagation(); toggleDropdown('field'); }}
+         style={{
+           background: isFilterActive ? THEME.colors.primary : '#E2E8F0',
+           color: isFilterActive ? 'white' : '#475569',
+           border: 'none',
+           borderRadius: '4px',
+           padding: '2px 4px',
+           cursor: 'pointer'
+         }}
+       >
+         <ChevronDown size={12} />
+       </button>
      )}
    </div>
    ```
 3. **Distribución en Valores Numéricos / Moneda / Porcentajes (Derecha):**
    ```tsx
-   <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%', color: isSorted ? THEME.colors.primary : THEME.colors.textSecondary }}>
-     <span>{label}</span>
-     {isSorted ? (
-       sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />
-     ) : (
-       <ArrowUpDown size={11} style={{ opacity: 0.35 }} />
+   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', width: '100%' }}>
+     <div 
+       onClick={() => handleSort('numeric_field')}
+       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: isSorted ? THEME.colors.primary : '#0F172A', cursor: 'pointer' }}
+     >
+       <span>{label}</span>
+       {isSorted ? (
+         sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} style={{ color: THEME.colors.primary }} /> : <ArrowDown size={12} strokeWidth={2.5} style={{ color: THEME.colors.primary }} />
+       ) : (
+         <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+       )}
+     </div>
+
+     {hasFilter && (
+       <button
+         onClick={(e) => { e.stopPropagation(); toggleDropdown('numeric'); }}
+         style={{
+           background: isFilterActive ? THEME.colors.primary : '#E2E8F0',
+           color: isFilterActive ? 'white' : '#475569',
+           border: 'none',
+           borderRadius: '4px',
+           padding: '2px 4px',
+           cursor: 'pointer'
+         }}
+       >
+         <ChevronDown size={12} />
+       </button>
      )}
    </div>
    ```

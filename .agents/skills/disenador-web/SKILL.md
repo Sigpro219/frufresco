@@ -113,8 +113,10 @@ Eres el **Diseñador Web Principal & Arquitecto UI/UX** en Google Antigravity. T
   - `border: '1px solid #E2E8F0'`
 - Esta barra aloja: botón primario de creación ("Nuevo..."), input de búsqueda en tiempo real con icono `Search`, toggles de vista (`List` / `Grid`) y selectores de filtros rápidos.
 
-#### D. Encabezados de Columna `<thead>` Sticky (cuando aplique)
-- Si una tabla requiere que sus columnas permanezcan visibles en scroll de ventana, la posición sticky de `<th>` debe referenciarse al offset acumulado del viewport (`top: 145px` o inferior a la barra de acciones), asegurando `borderCollapse: 'separate'` y `borderSpacing: 0`.
+#### D. Encabezados de Columna `<thead>` Sticky y Estándar de Contraste Canónico (WCAG AAA)
+- Las celdas `<th>` deben anclarse con `position: sticky` en el offset calculado acumulado asegurando `borderCollapse: 'separate'` y `borderSpacing: 0`.
+- **Paleta Canónica Obligatoria:** Fondo Slate-100 sólido (`#F1F5F9` / `bg-slate-100`), borde delimitador inferior Slate-300 (`#CBD5E1`, 2px), y texto Slate-900 extra-bold (`#0F172A`, 800 weight, 0.72rem / `text-xs`) con ratio de contraste $\ge$ 9.8:1 (WCAG AAA).
+- **Anatomía Completa:** Coexistencia de ordenadores tri-estado (`ArrowUpDown` neutral $\rightarrow$ `ArrowUp` asc $\rightarrow$ `ArrowDown` desc) junto con botones de filtro desplegable (`ChevronDown`).
 
 ### 8. Barra Superior Frosted Persistente (Skin 1 Standard)
 - **Altura fija y anclaje superior:** `h-14` (56px), `shrink-0`, `z-30`, `backdrop-blur-md` con borde inferior sutil (`border-slate-200` día / `border-white/10` noche).

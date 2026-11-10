@@ -12,7 +12,7 @@ import {
     ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock, FileSpreadsheet, Star,
     CalendarClock, Bell, BellOff
 } from 'lucide-react';
-import { playBlackberryPing, unlockAudioContext } from '@/lib/soundEffects';
+import { playInboundOrderPing, unlockAudioContext } from '@/lib/soundEffects';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import VariantModal from './VariantModal';
@@ -1885,7 +1885,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const mainDateInputRef = useRef<HTMLInputElement>(null);
   const deliveryDateInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados para notificación sonora tipo Ping BlackBerry
+  // Estados para notificación sonora al recibir nuevos pedidos
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem('email_drafts_sound_enabled');
@@ -3836,7 +3836,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             if (newId && !knownDraftIdsRef.current.has(newId)) {
               knownDraftIdsRef.current.add(newId);
               if (soundEnabled) {
-                playBlackberryPing();
+                playInboundOrderPing();
               }
             }
           }
@@ -7175,7 +7175,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {/* Sound Toggle (Ping BlackBerry) */}
+          {/* Sound Toggle (Alertas Sonoras) */}
           <button 
             type="button"
             onClick={() => {
@@ -7186,15 +7186,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 }
                 if (next) {
                   unlockAudioContext();
-                  playBlackberryPing(true);
-                  showToast('Notificaciones sonoras activadas (Ping BlackBerry).', 'success');
+                  playInboundOrderPing(true);
+                  showToast('Notificaciones sonoras activadas.', 'success');
                 } else {
                   showToast('Notificaciones sonoras silenciadas.', 'info');
                 }
                 return next;
               });
             }}
-            title={soundEnabled ? 'Notificación sonora activada (Ping BlackBerry al recibir pedido). Clic para silenciar.' : 'Sonido silenciado. Clic para activar Ping BlackBerry.'}
+            title={soundEnabled ? 'Notificación sonora activada al recibir pedido. Clic para silenciar.' : 'Sonido silenciado. Clic para activar alertas sonoras.'}
             style={{ 
               display: 'inline-flex', 
               alignItems: 'center', 

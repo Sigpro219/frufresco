@@ -16277,9 +16277,27 @@ En el centro de despacho y compras de FruFresco (`/admin/orders/loading` y `Emai
    - Queda erradicado el formato numérico anglosajón `MM/DD` o `11/09` que generaba confusión visual en el Gemba.
 3. **Ergonomía de Interfaz (Eje X Limpio para el Buscador Omnibox):**
    - El toggle Grilla/Lista y el icono modal de información quedan eliminados de la barra de filtros de pedidos; la vista se fija al 100% en formato Tabla de Densidad Industrial (*Swiss Precision*).
-   - Los controles utilitarios (`<Bell />` Sonido Ping BlackBerry, `<Keyboard />` Atajos de Teclado, y `<RefreshCw /> Actualizar (Alt+A)`) se consolidan en el extremo derecho del encabezado superior.
+   - Los controles utilitarios (`<Bell />` Sonido de Notificación, `<Keyboard />` Atajos de Teclado, y `<RefreshCw /> Actualizar (Alt+A)`) se consolidan en el extremo derecho del encabezado superior.
    - El input de búsqueda omnibox adquiere `flex: 1` completo, permitiendo visualizar sin recortes términos largos de búsqueda (NITs, nombres de clientes y direcciones).
-4. **Notificación Sonora Nativa (Ping BlackBerry Web Audio API):**
+4. **Notificación Sonora Nativa (Web Audio API):**
    - Cero archivos físicos `.mp3` o descargas de red. Se sintetiza mediante osciladores puros (`1046.5 Hz [C6] -> 1567.98 Hz [G6]` con curva de caída exponencial rápida).
    - Cooldown anti-ráfaga de 3.5 segundos para evitar saturación sonora ante lotes IMAP de múltiples pedidos.
    - Cumplimiento innegociable de la política de Autoplay de Google Chrome mediante control de activación manual en el header con persistencia en `localStorage`.
+
+---
+
+### Escenario 426: Estándar Canónico de Encabezados de Tabla (High-Contrast Slate WCAG AAA & Ordenadores Tri-Estado) (SDD v1.9.381)
+
+#### 1. Contexto & Gemba Operativo
+En pantallas operativas de alta densidad como `/admin/orders/loading` (Pedidos del Día), los encabezados de tabla previos utilizaban tonalidades pálidas (`#F8FAFC`, texto `#64748B` a 10px), alcanzando un contraste deficiente de 3.6:1 que violaba WCAG AA y generaba fatiga visual en monitores de bodega. Asimismo, las columnas carecían de interactividad determinista de ordenamiento tri-estado.
+
+#### 2. Reglas Canónicas del Estándar de Encabezados `<th>`
+1. **Paleta Estandarizada de Alto Contraste (WCAG AAA 9.8:1):**
+   - **Fondo de celda `<th>`:** `backgroundColor: '#F1F5F9'` (Slate-100 100% sólido, opacidad obligatoria para sticky anti-sangrado).
+   - **Borde Delimitador Inferior:** `borderBottom: '2px solid #CBD5E1'` (Slate-300 nítido de separación con filas del `tbody`).
+   - **Tipografía y Jerarquía:** `color: '#0F172A'` (Slate-900 extra-bold), `fontWeight: '800'`, `fontSize: '0.72rem'`, `letterSpacing: '0.04em'`, `textTransform: 'uppercase'`.
+2. **Anatomía Universal de Celda `<th>` (Coexistencia de Ordenador + Filtro Dropdown):**
+   - Toda celda `<th>` ordenable debe incorporar el ordenador tri-estado (`ArrowUpDown` neutral $\rightarrow$ `ArrowUp` asc $\rightarrow$ `ArrowDown` desc) con clic en texto o icono.
+   - Si la columna dispone de segmentación o filtro rápido (ej. canal, tipo de cliente, GPS, estado), debe incluir un botón compacto con `ChevronDown` que destaque con `THEME.colors.primary` cuando el filtro esté activo.
+3. **Persistencia de Tokens en el Sistema de Diseño:**
+   - Estandarizado en `THEME.colors.tableHeaderBg`, `THEME.colors.tableHeaderBorder`, `THEME.colors.tableHeaderText` y `THEME.typography.tableHeader` en `src/lib/adminTheme.ts`.

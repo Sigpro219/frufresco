@@ -43,10 +43,10 @@ export function unlockAudioContext(): boolean {
 }
 
 /**
- * Emite el sonido tipo 'Ping' característico de BlackBerry:
- * Dos tonos sinusoidales puros de alta frecuencia con caída exponencial rápida (decay)
+ * Emite un tono sutil y claro de notificación (doble tono armónico):
+ * Dos frecuencias sinusoidales puras con caída exponencial rápida (decay)
  */
-export function playBlackberryPing(force: boolean = false): boolean {
+export function playInboundOrderPing(force: boolean = false): boolean {
   if (typeof window === 'undefined') return false;
 
   const now = Date.now();

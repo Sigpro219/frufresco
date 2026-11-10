@@ -11,7 +11,10 @@ export const THEME = {
         textMain: '#1A231E',        // Carbón orgánico para títulos y lecturas principales
         textSecondary: '#64748B',   // Gris slate para textos secundarios y etiquetas
         border: '#E5E7EB',          // Gris claro para líneas divisorias y bordes sutiles
-        borderActive: '#D1D5DB'     // Gris medio para bordes con hover o interacción
+        borderActive: '#D1D5DB',    // Gris medio para bordes con hover o interacción
+        tableHeaderBg: '#F1F5F9',   // Slate-100 sólido estandarizado para TH sticky (WCAG AAA)
+        tableHeaderBorder: '#CBD5E1', // Slate-300 delimitador inferior de alta nitidez
+        tableHeaderText: '#0F172A'  // Slate-900 extra-bold para legibilidad industrial
     },
     radius: {
         sm: '6px',
@@ -28,11 +31,11 @@ export const THEME = {
         fontFamilyMain: 'var(--font-outfit), sans-serif',
         fontFamilySecondary: 'var(--font-inter), sans-serif',
         tableHeader: {
-            fontSize: '0.65rem',
-            letterSpacing: '0.05em',
+            fontSize: '0.72rem',
+            letterSpacing: '0.04em',
             textTransform: 'uppercase' as const,
-            color: '#64748B',
-            fontWeight: '600'
+            color: '#0F172A',
+            fontWeight: '800'
         }
     }
 };
