@@ -1866,12 +1866,6 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const todayBogotaStr = useMemo(() => getBogotaTodayStr(), []);
   const todayDraftsCount = useMemo(() => {
     return drafts.filter(d => {
-      // Leer metadata directamente para evitar TDZ con funciones declaradas más abajo
-      const raw = d.extracted_items || [];
-      const meta = Array.isArray(raw) ? raw.find((i: any) => i && i.isMetadata) : undefined;
-      if (meta?.targetOperationalDate) {
-        return meta.targetOperationalDate === todayBogotaStr;
-      }
       if (!d.created_at) return false;
       const dDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(d.created_at));
       return dDate === todayBogotaStr;
@@ -4545,7 +4539,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         updatedMeta = {
           ...rawItems[metaIdx],
           deliveryDate: reassignTargetDeliveryDate,
-          targetOperationalDate: opDateStr,
+          targetOperationalDate: null,
           dateReassignedAt: new Date().toISOString()
         };
         rawItems[metaIdx] = updatedMeta;
@@ -4553,7 +4547,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         updatedMeta = {
           isMetadata: true,
           deliveryDate: reassignTargetDeliveryDate,
-          targetOperationalDate: opDateStr,
+          targetOperationalDate: null,
           dateReassignedAt: new Date().toISOString()
         };
         rawItems.unshift(updatedMeta);
@@ -4583,7 +4577,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         setDeliveryDate(reassignTargetDeliveryDate);
       }
 
-      showToast(`Pedido reasignado para entrega el ${reassignTargetDeliveryDate} (Bandeja del ${opDateStr}).`, 'success');
+      showToast(`Fecha de entrega actualizada para el ${reassignTargetDeliveryDate}. Recuerda aprobar el pedido para dejarlo en firme.`, 'success');
       setReassignModalDraft(null);
     } catch (err: any) {
       console.error('Error reasignando fecha:', err);
@@ -6780,14 +6774,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       let matchesDate = true;
       if (selectedDate) {
-        const meta = getDraftMetadata(draft);
-        // Si el pedido tiene fecha operativa explícita (T-1 tras reasignación), se evalúa con prioridad
-        if (meta.targetOperationalDate) {
-          matchesDate = meta.targetOperationalDate === selectedDate;
-        } else {
-          const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
-          matchesDate = draftDate === selectedDate;
-        }
+        const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
+        matchesDate = draftDate === selectedDate;
       }
 
       let matchesChannel = true;
@@ -14956,7 +14944,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   </div>
                 </div>
 
-                {/* Aviso Gemba: Bandeja Operativa T-1 */}
+                {/* Aviso Gemba: Visibilidad Inmutable por Fecha de Recepción */}
                 <div style={{
                   padding: '0.85rem 1rem',
                   backgroundColor: '#EFF6FF',
@@ -14968,20 +14956,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 }}>
                   <Info size={18} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
                   <div style={{ fontSize: '0.78rem', color: '#1E40AF', lineHeight: '1.4' }}>
-                    <strong>Regla de Centro de Acopio (T-1):</strong><br />
-                    Si el pedido se entrega el <strong>{reassignTargetDeliveryDate || '...'}</strong>, el alistamiento y compras se gestionarán en la bandeja del:
-                    <div style={{
-                      marginTop: '4px',
-                      fontSize: '0.84rem',
-                      fontWeight: 800,
-                      color: '#1D4ED8',
-                      backgroundColor: '#DBEAFE',
-                      padding: '3px 8px',
-                      borderRadius: '6px',
-                      display: 'inline-block'
-                    }}>
-                      Bandeja Operativa: {opDateStr || '...'}
-                    </div>
+                    <strong>Inmutabilidad de Bandeja:</strong><br />
+                    El correo permanecerá visible en la bandeja del día en que ingresó hasta que lo apruebes. Al aprobarlo, el pedido quedará programado para entregarse el <strong>{reassignTargetDeliveryDate || '...'}</strong>.
                   </div>
                 </div>
               </div>

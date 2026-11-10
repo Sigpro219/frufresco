@@ -16359,3 +16359,6 @@ En la consola `/admin/orders/loading` (Pestaña `Bandeja de Entrada Email`), el 
 3. **Visibilidad Explícita de Rezagos Históricos:**
    - En el botón de fecha `Todas`, se agrega el badge numérico con el acumulado total de la bandeja, permitiendo al operador verificar con un solo vistazo cuántos correos existen en el histórico completo sin importar la fecha.
    - Cuando el usuario filtra por una fecha específica (ej. `Hoy`) y existen pendientes históricos en otras fechas (`totalHistoricPending > countPending`), se dispone de un aviso contextual no invasivo indicando la existencia de los correos en `Todas` para evitar olvidos o desatenciones.
+4. **Inmutabilidad Poka-Yoke de Visibilidad por Fecha de Recepción (`created_at`):**
+   - Queda terminantemente prohibido que el cambio de fecha de entrega (`deliveryDate` / `targetOperationalDate`) esconda o desplace un correo recibido hoy fuera del filtro `Hoy`.
+   - Todo filtro de fecha en `EmailDraftsModule` (`todayDraftsCount` y `draftsBeforeStatusFilter`) evalúa exclusivamente la fecha cronológica real de llegada del correo (`created_at` en zona horaria `America/Bogota`), garantizando coincidencia 1:1 con el Termómetro de Emancipación y asegurando que ningún correo con entrega futura quede oculto sin haber sido aprobado en firme.
