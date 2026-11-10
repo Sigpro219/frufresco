@@ -16257,3 +16257,29 @@ Para blindar a la empresa contra cualquier desconexión abrupta antes de la tran
        ```
      - **Criterio de Aceptación:** Comportamiento flotante no modal (no bloquea clics en la mesa de digitación ni en la canasta); soporte tanto para comprobantes de creación manual como para adjuntos en borradores OCR.
 
+
+
+---
+
+### Escenario 425: Ergonomía de Bandeja Inbound, Reasignación Logística (T-1) y Notificación Sonora Dual (SDD v1.9.380)
+
+#### 1. Contexto & Gemba Operativo
+En el centro de despacho y compras de FruFresco (`/admin/orders/loading` y `EmailDraftsModule`), los operadores gestionan decenas de pedidos simultáneos. Dos fricciones operativas requerían estandarización arquitectónica:
+1. **Disparidad de Fechas (Recepción vs Despacho T-1):** Los clientes institucionales (HORECA) envían órdenes de compra indicando su fecha de entrega (ej. "Entrega 11 de Noviembre"). Sin embargo, el aprovisionamiento, compras en Corabastos y alistamiento en bodega ocurre el día inmediatamente anterior ($T-1$, 10 de Noviembre).
+2. **Saturación Visual y Congestión del Superbuscador:** La barra de filtros contenía controles de vista (grilla/lista) e iconos informativos que estrangulaban el input de búsqueda omnibox.
+
+#### 2. Reglas Canónicas del Módulo de Borradores (`EmailDraftsModule`)
+1. **Regla de Operación de Despacho ($T-1$):**
+   - Todo borrador en `order_drafts` cuenta con metadatos explícitos: `deliveryDate` (fecha solicitada de entrega al cliente) y `targetOperationalDate` (fecha en la que el equipo de operaciones alista el pedido, calculada automáticamente como $T-1$).
+   - El selector de fecha de la bandeja y el filtro rápido `Hoy` evalúan con prioridad `targetOperationalDate` para que el borrador figure exactamente en la bandeja operativa correspondiente.
+2. **Estandarización Tipográfica y Visual de Fechas:**
+   - Ambas fechas en la fila del pedido se presentan unificadas bajo el formato en español abreviado estándar: `DD de MMM` (ej. `10 de nov • 16:32` para recepción y `Entrega: 11 de nov` para el botón de despacho).
+   - Queda erradicado el formato numérico anglosajón `MM/DD` o `11/09` que generaba confusión visual en el Gemba.
+3. **Ergonomía de Interfaz (Eje X Limpio para el Buscador Omnibox):**
+   - El toggle Grilla/Lista y el icono modal de información quedan eliminados de la barra de filtros de pedidos; la vista se fija al 100% en formato Tabla de Densidad Industrial (*Swiss Precision*).
+   - Los controles utilitarios (`<Bell />` Sonido Ping BlackBerry, `<Keyboard />` Atajos de Teclado, y `<RefreshCw /> Actualizar (Alt+A)`) se consolidan en el extremo derecho del encabezado superior.
+   - El input de búsqueda omnibox adquiere `flex: 1` completo, permitiendo visualizar sin recortes términos largos de búsqueda (NITs, nombres de clientes y direcciones).
+4. **Notificación Sonora Nativa (Ping BlackBerry Web Audio API):**
+   - Cero archivos físicos `.mp3` o descargas de red. Se sintetiza mediante osciladores puros (`1046.5 Hz [C6] -> 1567.98 Hz [G6]` con curva de caída exponencial rápida).
+   - Cooldown anti-ráfaga de 3.5 segundos para evitar saturación sonora ante lotes IMAP de múltiples pedidos.
+   - Cumplimiento innegociable de la política de Autoplay de Google Chrome mediante control de activación manual en el header con persistencia en `localStorage`.

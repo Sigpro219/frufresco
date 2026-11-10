@@ -9,8 +9,10 @@ import {
     Globe, Edit2, FileText, Send, Keyboard, Eraser, Paperclip, Download, Loader2, Maximize2, 
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
     Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
-    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock, FileSpreadsheet, Star
+    ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock, FileSpreadsheet, Star,
+    CalendarClock, Bell, BellOff
 } from 'lucide-react';
+import { playBlackberryPing, unlockAudioContext } from '@/lib/soundEffects';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import Link from 'next/link';
 import VariantModal from './VariantModal';
@@ -38,6 +40,29 @@ const getChannelBadge = (source: string) => {
         default: 
             return <span style={{ backgroundColor: '#F3F4F6', color: '#4B5563', padding: '2px 8px', borderRadius: '12px', fontSize: '0.65rem', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Globe size={10} strokeWidth={1.5} /> {source || 'Web'}</span>;
     }
+};
+
+/**
+ * Calcula la fecha operativa de bandeja (T-1) a partir de una fecha de entrega (YYYY-MM-DD)
+ */
+const getOperationalDateFromDelivery = (deliveryDateStr: string): string => {
+  if (!deliveryDateStr) return '';
+  const d = new Date(deliveryDateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return deliveryDateStr;
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+};
+
+/**
+ * Retorna una fecha futura de Bogotá en formato YYYY-MM-DD
+ */
+const getNextBogotaDateStr = (daysAhead: number = 1): string => {
+  const now = new Date();
+  const bogotaOffset = -5 * 60; // UTC-5
+  const localOffset = now.getTimezoneOffset();
+  const bogotaNow = new Date(now.getTime() + (localOffset - bogotaOffset) * 60000);
+  bogotaNow.setDate(bogotaNow.getDate() + daysAhead);
+  return bogotaNow.toISOString().split('T')[0];
 };
 
 const getSpanishStem = (word: string) => {
@@ -1841,6 +1866,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const todayBogotaStr = useMemo(() => getBogotaTodayStr(), []);
   const todayDraftsCount = useMemo(() => {
     return drafts.filter(d => {
+      // Leer metadata directamente para evitar TDZ con funciones declaradas más abajo
+      const raw = d.extracted_items || [];
+      const meta = Array.isArray(raw) ? raw.find((i: any) => i && i.isMetadata) : undefined;
+      if (meta?.targetOperationalDate) {
+        return meta.targetOperationalDate === todayBogotaStr;
+      }
       if (!d.created_at) return false;
       const dDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(d.created_at));
       return dDate === todayBogotaStr;
@@ -1853,6 +1884,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [profiles, setProfiles] = useState<any[]>([]);
   const mainDateInputRef = useRef<HTMLInputElement>(null);
   const deliveryDateInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para notificación sonora tipo Ping BlackBerry
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('email_drafts_sound_enabled');
+    return stored !== null ? stored === 'true' : true;
+  });
+  const knownDraftIdsRef = useRef<Set<string>>(new Set());
+
+  // Estados para Modal Liviano de Reasignación de Fecha
+  const [reassignModalDraft, setReassignModalDraft] = useState<any | null>(null);
+  const [reassignTargetDeliveryDate, setReassignTargetDeliveryDate] = useState<string>('');
+  const [isSavingReassignDate, setIsSavingReassignDate] = useState<boolean>(false);
 
   const matchedProfile = selectedDraft ? profiles.find(p => p.id === selectedDraft.profile_id) : null;
 
@@ -3626,12 +3670,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           }
         }
 
-        // Fallback to Clientes B2C if no model or if expired
+        // Fallback to Clientes Hogar (B2C) or General Institucional if no model or if expired
         if (!resolvedModel || expired) {
           b2cFallback = true;
-          const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
-          if (b2cModel) {
-            resolvedModel = b2cModel;
+          const defaultModel = pricingModels.find(m => m.name === 'General institucional dinámico') 
+            || pricingModels.find(m => m.name === 'Clientes Hogar')
+            || pricingModels.find(m => m.is_base_model);
+          if (defaultModel) {
+            resolvedModel = defaultModel;
             expired = false;
           }
         }
@@ -3643,6 +3689,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             loadedPrices = { ...pmPrices };
           }
         }
+
+        // Resiliencia y fallback universal: si algún producto no tiene tarifa en el modelo, rellenar con General Institucional y precio base
+        const genInst = pricingModels.find(m => m.name === 'General institucional dinámico' || m.name === 'General Institucional' || m.is_base_model);
+        const genPrices = genInst ? allModelPrices[genInst.id] : null;
+        products.forEach(p => {
+          if (loadedPrices[p.id] === undefined || loadedPrices[p.id] === null || loadedPrices[p.id] <= 0) {
+            if (genPrices && genPrices[p.id] !== undefined && genPrices[p.id] > 0) {
+              loadedPrices[p.id] = genPrices[p.id];
+            } else if (p.base_price && Number(p.base_price) > 0) {
+              loadedPrices[p.id] = Number(p.base_price);
+            }
+          }
+        });
       }
 
       setAgreementProductIds(agrProdIds);
@@ -3771,6 +3830,16 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         { event: '*', schema: 'public', table: 'order_drafts' },
         (payload) => {
           console.log('[Email Inbound] Realtime update received:', payload);
+          // Si es una inserción de un nuevo pedido, reproducir Ping sonoro si está habilitado
+          if (payload.eventType === 'INSERT') {
+            const newId = (payload.new as any)?.id;
+            if (newId && !knownDraftIdsRef.current.has(newId)) {
+              knownDraftIdsRef.current.add(newId);
+              if (soundEnabled) {
+                playBlackberryPing();
+              }
+            }
+          }
           fetchDrafts(true);
         }
       )
@@ -4001,32 +4070,50 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   const fetchPricingData = async () => {
     try {
-      const { data: models } = await supabase.from('pricing_models').select('*');
-      if (models) setPricingModels(models);
-
-      // Paginar pricing_model_prices para superar límite estricto de 1000 filas de PostgREST
-      let allPrices: any[] = [];
-      let pPage = 0;
-      const pPageSize = 1000;
-      while (true) {
-        const { data: chunk, error } = await supabase
-          .from('pricing_model_prices')
-          .select('model_id, product_id, price')
-          .range(pPage * pPageSize, (pPage + 1) * pPageSize - 1);
-        if (error || !chunk || chunk.length === 0) break;
-        allPrices = allPrices.concat(chunk);
-        if (chunk.length < pPageSize) break;
-        pPage++;
+      // 1. Cargar modelos y precios completos mediante endpoint administrativo (evita bloqueo RLS de Supabase)
+      let loadedFromApi = false;
+      try {
+        const res = await fetch('/api/orders/pricing-models');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.models && json.models.length > 0) setPricingModels(json.models);
+          if (json.modelPrices && Object.keys(json.modelPrices).length > 0) {
+            setAllModelPrices(json.modelPrices);
+            loadedFromApi = true;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('Fallback a consulta directa Supabase:', apiErr);
       }
 
-      const map: Record<string, Record<string, number>> = {};
-      allPrices.forEach((row: any) => {
-        if (!map[row.model_id]) {
-          map[row.model_id] = {};
+      if (!loadedFromApi) {
+        const { data: models } = await supabase.from('pricing_models').select('*');
+        if (models) setPricingModels(models);
+
+        // Paginar pricing_model_prices para superar límite estricto de 1000 filas de PostgREST
+        let allPrices: any[] = [];
+        let pPage = 0;
+        const pPageSize = 1000;
+        while (true) {
+          const { data: chunk, error } = await supabase
+            .from('pricing_model_prices')
+            .select('model_id, product_id, price')
+            .range(pPage * pPageSize, (pPage + 1) * pPageSize - 1);
+          if (error || !chunk || chunk.length === 0) break;
+          allPrices = allPrices.concat(chunk);
+          if (chunk.length < pPageSize) break;
+          pPage++;
         }
-        map[row.model_id][row.product_id] = row.price;
-      });
-      setAllModelPrices(map);
+
+        const map: Record<string, Record<string, number>> = {};
+        allPrices.forEach((row: any) => {
+          if (!map[row.model_id]) {
+            map[row.model_id] = {};
+          }
+          map[row.model_id][row.product_id] = row.price;
+        });
+        setAllModelPrices(map);
+      }
 
       // Fetch all active agreement quotes
       const { data: quotesData } = await supabase
@@ -4185,8 +4272,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
 
       if (!resolvedModelId || expiredModel) {
-        const b2cModel = pricingModels.find(m => m.name === 'Clientes B2C');
-        resolvedModelId = b2cModel?.id || null;
+        const defaultModel = pricingModels.find(m => m.name === 'General institucional dinámico') 
+          || pricingModels.find(m => m.name === 'Clientes Hogar')
+          || pricingModels.find(m => m.is_base_model);
+        resolvedModelId = defaultModel?.id || null;
       }
 
       if (resolvedModelId && allModelPrices[resolvedModelId]) {
@@ -4199,11 +4288,33 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
 
     if (!foundBase) {
-      const genInstModel = pricingModels.find(m => m.name === 'General Institucional');
-      if (genInstModel && allModelPrices[genInstModel.id]?.[productId] !== undefined) {
-        basePrice = allModelPrices[genInstModel.id][productId];
-      } else {
-        basePrice = 0;
+      const genInstModel = pricingModels.find(m => m.name === 'General institucional dinámico')
+        || pricingModels.find(m => m.name === 'General Institucional')
+        || pricingModels.find(m => m.is_base_model);
+      if (genInstModel && allModelPrices[genInstModel.id]?.[productId] !== undefined && Number(allModelPrices[genInstModel.id][productId]) > 0) {
+        basePrice = Number(allModelPrices[genInstModel.id][productId]);
+        foundBase = true;
+      }
+    }
+
+    if (!foundBase) {
+      // Fallback a cualquier otro modelo cargado que tenga precio para este producto
+      for (const mId in allModelPrices) {
+        const pr = allModelPrices[mId]?.[productId];
+        if (pr !== undefined && pr !== null && Number(pr) > 0) {
+          basePrice = Number(pr);
+          foundBase = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundBase) {
+      // Fallback final al precio base del catálogo de productos
+      const prod = products.find(p => p.id === productId);
+      if (prod?.base_price && Number(prod.base_price) > 0) {
+        basePrice = Number(prod.base_price);
+        foundBase = true;
       }
     }
 
@@ -4405,6 +4516,86 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         showToast('Productos eliminados de la lista (novedades pendientes de notificar).', 'success');
       }
     });
+  };
+
+  /**
+   * Abre el modal liviano para reasignar la fecha de entrega y la bandeja operativa de un borrador
+   */
+  const handleOpenReassignDateModal = (draft: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const meta = getDraftMetadata(draft);
+    // Tomar la fecha de entrega existente, o por defecto mañana
+    const currentDelivery = meta.deliveryDate || getNextBogotaDateStr(1);
+    setReassignModalDraft(draft);
+    setReassignTargetDeliveryDate(currentDelivery);
+  };
+
+  /**
+   * Confirma la reasignación de fecha en BD y actualiza el estado local
+   */
+  const handleConfirmReassignDate = async () => {
+    if (!reassignModalDraft || !reassignTargetDeliveryDate) return;
+    setIsSavingReassignDate(true);
+
+    try {
+      // 1. Calcular la fecha operativa de bandeja (T-1, día hábil anterior a la entrega)
+      const opDateStr = getOperationalDateFromDelivery(reassignTargetDeliveryDate);
+
+      // 2. Extraer o actualizar los metadatos en extracted_items
+      const rawItems = Array.isArray(reassignModalDraft.extracted_items) ? [...reassignModalDraft.extracted_items] : [];
+      let metaIdx = rawItems.findIndex((x: any) => x && x.isMetadata);
+
+      let updatedMeta: any;
+      if (metaIdx >= 0) {
+        updatedMeta = {
+          ...rawItems[metaIdx],
+          deliveryDate: reassignTargetDeliveryDate,
+          targetOperationalDate: opDateStr,
+          dateReassignedAt: new Date().toISOString()
+        };
+        rawItems[metaIdx] = updatedMeta;
+      } else {
+        updatedMeta = {
+          isMetadata: true,
+          deliveryDate: reassignTargetDeliveryDate,
+          targetOperationalDate: opDateStr,
+          dateReassignedAt: new Date().toISOString()
+        };
+        rawItems.unshift(updatedMeta);
+      }
+
+      // 3. Persistir en la tabla order_drafts en Supabase
+      const { error } = await supabase
+        .from('order_drafts')
+        .update({
+          extracted_items: rawItems
+        })
+        .eq('id', reassignModalDraft.id);
+
+      if (error) {
+        throw new Error('Error al actualizar fecha en base de datos: ' + error.message);
+      }
+
+      // 4. Actualizar estado en memoria
+      const updatedDraft = {
+        ...reassignModalDraft,
+        extracted_items: rawItems
+      };
+
+      setDrafts(prev => prev.map(d => d.id === reassignModalDraft.id ? updatedDraft : d));
+      if (selectedDraft?.id === reassignModalDraft.id) {
+        setSelectedDraft(updatedDraft);
+        setDeliveryDate(reassignTargetDeliveryDate);
+      }
+
+      showToast(`Pedido reasignado para entrega el ${reassignTargetDeliveryDate} (Bandeja del ${opDateStr}).`, 'success');
+      setReassignModalDraft(null);
+    } catch (err: any) {
+      console.error('Error reasignando fecha:', err);
+      showToast(err.message || 'Error al reasignar fecha', 'error');
+    } finally {
+      setIsSavingReassignDate(false);
+    }
   };
 
   const fetchAliases = async () => {
@@ -4898,7 +5089,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             const parentProfile = matchedProfile.parent_id ? profiles.find(p => p.id === matchedProfile.parent_id) : null;
             const resolvedModelId = matchedProfile.pricing_model_id || parentProfile?.pricing_model_id || null;
             const pm = resolvedModelId ? pricingModels.find(m => m.id === resolvedModelId) : null;
-            setPriceList(pm ? pm.name : 'Clientes B2C');
+            const defaultModel = pricingModels.find(m => m.name === 'General institucional dinámico') || pricingModels.find(m => m.name === 'Clientes Hogar');
+            setPriceList(pm ? pm.name : (defaultModel ? defaultModel.name : 'General institucional dinámico'));
           }
         } else {
           setPriceList('');
@@ -5049,6 +5241,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
       deliveryDate: meta?.deliveryDate || null,
+      targetOperationalDate: meta?.targetOperationalDate || null,
       attachmentUrl: meta?.attachmentUrl || meta?.attachments?.[0]?.url || null,
       attachmentName: meta?.attachmentName || meta?.attachments?.[0]?.name || null,
       attachments: meta?.attachments || (meta?.attachmentUrl ? [{ url: meta.attachmentUrl, name: meta.attachmentName || 'documento.pdf' }] : []),
@@ -6592,8 +6785,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       let matchesDate = true;
       if (selectedDate) {
-        const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
-        matchesDate = draftDate === selectedDate;
+        const meta = getDraftMetadata(draft);
+        // Si el pedido tiene fecha operativa explícita (T-1 tras reasignación), se evalúa con prioridad
+        if (meta.targetOperationalDate) {
+          matchesDate = meta.targetOperationalDate === selectedDate;
+        } else {
+          const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
+          matchesDate = draftDate === selectedDate;
+        }
       }
 
       let matchesChannel = true;
@@ -6662,7 +6861,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         if (!matchedProd && !item.matched_product_id && item.originalName) {
           matchedProd = findMatchedProduct(item.originalName);
         }
-        const resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+        let resolvedPrice = matchedProd ? getResolvedPriceForDraft(draft, matchedProd.id) : 0;
+        if (resolvedPrice === 0 && item.unit_price && Number(item.unit_price) > 0) {
+          resolvedPrice = Number(item.unit_price);
+        }
         estTotal += (resolvedPrice * (item.quantity || 0));
         const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
         const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
@@ -6972,23 +7174,97 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             )}
           </div>
         </div>
-        <button 
-          onClick={() => fetchDrafts()}
-          title="Alt+A"
-          style={{
-            padding: '0.35rem 0.8rem',
-            backgroundColor: 'white',
-            border: `1px solid ${THEME.colors.border}`,
-            borderRadius: THEME.radius.md,
-            fontWeight: '600',
-            cursor: 'pointer',
-            fontSize: '0.78rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
-          }}
-        >
-          Actualizar Bandeja <span style={{ opacity: 0.4, fontSize: '0.72rem', marginLeft: '0.3rem' }}>(Alt+A)</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {/* Sound Toggle (Ping BlackBerry) */}
+          <button 
+            type="button"
+            onClick={() => {
+              setSoundEnabled(prev => {
+                const next = !prev;
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('email_drafts_sound_enabled', String(next));
+                }
+                if (next) {
+                  unlockAudioContext();
+                  playBlackberryPing(true);
+                  showToast('Notificaciones sonoras activadas (Ping BlackBerry).', 'success');
+                } else {
+                  showToast('Notificaciones sonoras silenciadas.', 'info');
+                }
+                return next;
+              });
+            }}
+            title={soundEnabled ? 'Notificación sonora activada (Ping BlackBerry al recibir pedido). Clic para silenciar.' : 'Sonido silenciado. Clic para activar Ping BlackBerry.'}
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backgroundColor: soundEnabled ? '#ECFDF5' : '#F1F5F9', 
+              borderRadius: THEME.radius.md,
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              border: soundEnabled ? '1.5px solid #10B981' : '1px solid #CBD5E1',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = soundEnabled ? '#D1FAE5' : '#E2E8F0'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = soundEnabled ? '#ECFDF5' : '#F1F5F9'}
+          >
+            {soundEnabled ? (
+              <Bell size={16} color="#059669" strokeWidth={2.2} />
+            ) : (
+              <BellOff size={16} color="#64748B" strokeWidth={2} />
+            )}
+          </button>
+
+          {/* Shortcuts Icon */}
+          <button 
+            type="button"
+            onClick={() => setShowShortcuts(true)}
+            title="Manual de Atajos de Teclado (Shift + ?)"
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backgroundColor: THEME.colors.primaryLight, 
+              borderRadius: THEME.radius.md,
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              border: 'none',
+              transition: 'background-color 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
+          >
+            <Keyboard size={16} color={THEME.colors.primary} strokeWidth={2.3} />
+          </button>
+
+          {/* Actualizar Bandeja */}
+          <button 
+            onClick={() => fetchDrafts()}
+            title="Actualizar Bandeja (Alt+A)"
+            style={{
+              padding: '0.35rem 0.8rem',
+              backgroundColor: 'white',
+              border: `1px solid ${THEME.colors.border}`,
+              borderRadius: THEME.radius.md,
+              fontWeight: '700',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              height: '32px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.15s'
+            }}
+          >
+            <RefreshCw size={13} strokeWidth={2.2} style={{ color: THEME.colors.primary }} />
+            <span>Actualizar</span>
+            <span style={{ opacity: 0.5, fontSize: '0.70rem', fontWeight: 600 }}>(Alt+A)</span>
+          </button>
+        </div>
       </div>
 
       {/* AI Health Alert Banner */}
@@ -7404,91 +7680,6 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         </div>
         </>
         )}
-
-        {/* Shortcuts Icon */}
-        <div 
-          onClick={() => setShowShortcuts(true)}
-          title="Manual de Atajos de Teclado (Shift + ?)"
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            backgroundColor: THEME.colors.primaryLight, 
-            borderRadius: THEME.radius.md,
-            width: '38px',
-            height: '38px',
-            cursor: 'pointer',
-            transition: 'background-color 0.15s'
-          }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-        >
-          <Keyboard size={20} color={THEME.colors.primary} strokeWidth={2.5} />
-        </div>
-
-        {/* Info Icon */}
-        <div 
-          onClick={() => showToast('Este módulo muestra los correos electrónicos entrantes (inbound) procesados automáticamente por la IA. Aquí puedes revisar los borradores de pedidos, mapear productos con el inventario, validar la cobertura geográfica del cliente en Bogotá y aprobarlos para crear órdenes.', 'info')}
-          title="Ayuda del módulo"
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            backgroundColor: THEME.colors.primaryLight, 
-            borderRadius: THEME.radius.md,
-            width: '38px',
-            height: '38px',
-            cursor: 'pointer',
-            transition: 'background-color 0.15s'
-          }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(13, 122, 87, 0.15)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = THEME.colors.primaryLight}
-        >
-          <Info size={20} color={THEME.colors.primary} strokeWidth={3} />
-        </div>
-
-        {/* View Toggle */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          backgroundColor: THEME.colors.background, 
-          borderRadius: THEME.radius.md,
-          padding: '4px',
-          gap: '4px'
-        }}>
-          <div 
-            onClick={() => setViewMode('list')}
-            style={{ 
-              backgroundColor: viewMode === 'list' ? 'white' : 'transparent', 
-              borderRadius: '6px', 
-              padding: '4px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              cursor: 'pointer',
-              opacity: viewMode === 'list' ? 1 : 0.5
-            }}
-          >
-            <List size={16} color={viewMode === 'list' ? THEME.colors.textMain : THEME.colors.textSecondary} />
-          </div>
-          <div 
-            onClick={() => setViewMode('grid')}
-            style={{ 
-              backgroundColor: viewMode === 'grid' ? 'white' : 'transparent', 
-              borderRadius: '6px', 
-              padding: '4px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: viewMode === 'grid' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-              cursor: 'pointer',
-              opacity: viewMode === 'grid' ? 1 : 0.5
-            }}
-          >
-            <Grid size={16} color={viewMode === 'grid' ? THEME.colors.textMain : THEME.colors.textSecondary} />
-          </div>
-        </div>
       </div>
       </div>
 
@@ -7535,6 +7726,16 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const formattedTime = isNaN(draftDate.getTime())
                   ? '--:--'
                   : draftDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                // Formateo armónico para la fecha de entrega en español (ej: "11 de nov" o "17 de nov")
+                const formattedDeliveryLabel = (() => {
+                  if (!meta.deliveryDate) return null;
+                  const parts = meta.deliveryDate.split('-');
+                  if (parts.length !== 3) return meta.deliveryDate;
+                  const dObj = new Date(`${meta.deliveryDate}T12:00:00`);
+                  if (isNaN(dObj.getTime())) return meta.deliveryDate;
+                  return dObj.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }).replace('.', '');
+                })();
 
                 const rawSubject = cleanSubject(draft.email_subject) || 'Sin Asunto';
 
@@ -7704,6 +7905,40 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           #{meta.orderNumber.replace(/^#/, '')}
                         </span>
                       )}
+
+                      {/* Botón Rápido: Reasignar Fecha de Entrega / Bandeja */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenReassignDateModal(draft, e)}
+                        title={meta.deliveryDate ? `Entrega programada para: ${meta.deliveryDate}. Clic para cambiar fecha.` : 'Asignar o cambiar fecha de entrega de este pedido'}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.74rem',
+                          fontWeight: '800',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: formattedDeliveryLabel ? '#ECFDF5' : '#F8FAFC',
+                          color: formattedDeliveryLabel ? '#065F46' : '#64748B',
+                          border: formattedDeliveryLabel ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#D1FAE5';
+                          e.currentTarget.style.borderColor = '#6EE7B7';
+                          e.currentTarget.style.color = '#047857';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = formattedDeliveryLabel ? '#ECFDF5' : '#F8FAFC';
+                          e.currentTarget.style.borderColor = formattedDeliveryLabel ? '#A7F3D0' : '#CBD5E1';
+                          e.currentTarget.style.color = formattedDeliveryLabel ? '#065F46' : '#64748B';
+                        }}
+                      >
+                        <CalendarClock size={12} strokeWidth={2.3} style={{ color: formattedDeliveryLabel ? '#059669' : '#64748B' }} />
+                        <span>{formattedDeliveryLabel ? `Entrega: ${formattedDeliveryLabel}` : 'Asignar entrega'}</span>
+                      </button>
                     </div>
                   </td>
 
@@ -14523,6 +14758,246 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   }}
                 >
                   Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal Liviano: Reasignar Fecha de Entrega y Bandeja Operativa (T-1) */}
+      {reassignModalDraft && (() => {
+        const meta = getDraftMetadata(reassignModalDraft);
+        const opDateStr = getOperationalDateFromDelivery(reassignTargetDeliveryDate);
+        const subject = cleanSubject(reassignModalDraft.email_subject) || 'Pedido';
+        const client = reassignModalDraft.client_detected_name || 'Cliente';
+
+        return (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem'
+            }}
+            onClick={() => {
+              if (!isSavingReassignDate) setReassignModalDraft(null);
+            }}
+          >
+            <div 
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: '16px',
+                width: '100%',
+                maxWidth: '480px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+                border: '1px solid #E2E8F0',
+                overflow: 'hidden',
+                animation: 'fadeIn 0.15s ease-out'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{
+                padding: '1.25rem 1.5rem',
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    backgroundColor: '#ECFDF5',
+                    border: '1px solid #A7F3D0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <CalendarClock size={20} color="#059669" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>
+                      Reasignar Fecha de Entrega
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                      Programación logística del despacho
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isSavingReassignDate}
+                  onClick={() => setReassignModalDraft(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#94A3B8',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '6px'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '1.5rem' }}>
+                {/* Info Card del Borrador */}
+                <div style={{
+                  padding: '0.85rem 1rem',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  marginBottom: '1.25rem'
+                }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Pedido Seleccionado
+                  </div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F172A', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {subject}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#059669', fontWeight: 700, marginTop: '2px' }}>
+                    Cliente: {client}
+                  </div>
+                </div>
+
+                {/* Input de Fecha de Entrega */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#334155', marginBottom: '6px' }}>
+                    Fecha solicitada por el cliente para la entrega:
+                  </label>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    backgroundColor: '#FFFFFF',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '0.6rem 0.85rem'
+                  }}>
+                    <Calendar size={18} color="#0D7A57" />
+                    <input
+                      type="date"
+                      value={reassignTargetDeliveryDate}
+                      onChange={(e) => setReassignTargetDeliveryDate(e.target.value)}
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: '0.92rem',
+                        fontWeight: 700,
+                        color: '#0F172A',
+                        backgroundColor: 'transparent',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Aviso Gemba: Bandeja Operativa T-1 */}
+                <div style={{
+                  padding: '0.85rem 1rem',
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'flex-start'
+                }}>
+                  <Info size={18} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '0.78rem', color: '#1E40AF', lineHeight: '1.4' }}>
+                    <strong>Regla de Centro de Acopio (T-1):</strong><br />
+                    Si el pedido se entrega el <strong>{reassignTargetDeliveryDate || '...'}</strong>, el alistamiento y compras se gestionarán en la bandeja del:
+                    <div style={{
+                      marginTop: '4px',
+                      fontSize: '0.84rem',
+                      fontWeight: 800,
+                      color: '#1D4ED8',
+                      backgroundColor: '#DBEAFE',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      display: 'inline-block'
+                    }}>
+                      Bandeja Operativa: {opDateStr || '...'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                backgroundColor: '#F8FAFC',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: '10px'
+              }}>
+                <button
+                  type="button"
+                  disabled={isSavingReassignDate}
+                  onClick={() => setReassignModalDraft(null)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingReassignDate || !reassignTargetDeliveryDate}
+                  onClick={handleConfirmReassignDate}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: isSavingReassignDate ? '#94A3B8' : '#059669',
+                    color: '#FFFFFF',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    cursor: isSavingReassignDate ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)'
+                  }}
+                >
+                  {isSavingReassignDate ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} strokeWidth={2.5} />
+                      <span>Confirmar Traslado</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
