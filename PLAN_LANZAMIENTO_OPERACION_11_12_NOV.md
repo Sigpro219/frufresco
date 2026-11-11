@@ -49,8 +49,12 @@ flowchart LR
   - Prioridad 1 mandatoria para `#ID` contable en el motor de búsqueda (`order-parser-engine.ts`) con regex estricta anti-secuestro de kilos/cantidades.
   - En `/admin/orders/create`, el matcher prioriza restrictivamente los SKUs del convenio del cliente (`effectiveAgrIds`) evaluando nombre + observaciones (garantizando `#726 Mora Despitonada` sobre `#274 Mora`).
   - Poka-Yoke anti-tarifa cero en `/api/orders/resolve-agreement-pricing`: compras fuera de lista autorizadas (`allow_off_agreement_purchases = true`) liquidan automáticamente la tarifa vigente de **General Institucional** en vez de clavar `$0 COP`.
-- [ ] **0.3 Base Oficial de Inventario (`daily_inventory_closings`):** Confirmar que exista cierre oficial previo (`Columna U ➔ Columna E`) para que la ecuación `Compra Neta = max(0, Demanda + StockSeg - Inventario Base)` no parta de saldos flotantes.
-- [ ] **0.4 Hora de Corte y Consecutivos DIAN (`/admin/settings`):** Validar `cutoff_hour_admin` (`20:00`), prefijo `billing_invoice_prefix`, número de resolución `billing_resolution_number` y vigencia DIAN activa.
+- [x] **0.3 Purga y Sanitización de Base de Datos para el Go-Live (Hito de Transición en Blanco):**
+  - Se ejecutó la depuración forense en cascada de **1.079 pedidos legacy y pruebas de desarrollo** anteriores al ciclo de hoy (`sequence_id < 1538`).
+  - La tabla `orders` y `order_items` quedó en estado prístino, conteniendo **exclusivamente los pedidos vivos montados hoy para entrega del Jueves 12/Nov**.
+  - Cero interferencias en consolas, planillas de alistamiento y ruteo con pedidos residuales o históricos de meses previos.
+- [ ] **0.4 Base Oficial de Inventario (`daily_inventory_closings`):** Confirmar que exista cierre oficial previo (`Columna U ➔ Columna E`) para que la ecuación `Compra Neta = max(0, Demanda + StockSeg - Inventario Base)` no parta de saldos flotantes.
+- [ ] **0.5 Hora de Corte y Consecutivos DIAN (`/admin/settings`):** Validar `cutoff_hour_admin` (`20:00`), prefijo `billing_invoice_prefix`, número de resolución `billing_resolution_number` y vigencia DIAN activa.
 
 ---
 
