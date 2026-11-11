@@ -925,6 +925,7 @@ export default function CommercialAgreementsModule() {
         return productMap;
     };
 
+    // SPEC.md §7.2 & Escenario 429: Prioridad 1 y Mandatoria para accounting_id
     const findProductInMap = (productMap: Record<string, any>, rawId?: string, rawName?: string): any => {
         const idKey = String(rawId || '').trim();
         if (idKey) {
@@ -933,7 +934,8 @@ export default function CommercialAgreementsModule() {
             const normId = normalizeExcelText(idKey);
             if (normId && productMap[normId]) return productMap[normId];
         }
-        if (rawName) {
+        // Fallback secundario exclusivamente si NO vino rawId físico en el archivo/fila
+        if (!idKey && rawName) {
             const normName = normalizeExcelText(rawName);
             if (normName && productMap[normName]) return productMap[normName];
         }
@@ -3193,6 +3195,19 @@ export default function CommercialAgreementsModule() {
                         .single();
                          
                     if (insertQErr) throw insertQErr;
+
+                    // SPEC.md Escenario 429: Blindaje de Exclusividad Mutua.
+                    // Desvincular al cliente y sus sedes de listas masivas compartidas (Quincenal/Mensual) para evitar colisión de precios.
+                    try {
+                        const targetClientIds = [client.id];
+                        if (client.is_corporate_parent) {
+                            const { data: branches } = await supabase.from('profiles').select('id').eq('parent_id', client.id);
+                            if (branches) branches.forEach(b => targetClientIds.push(b.id));
+                        }
+                        await supabase.from('special_agreement_model_clients').delete().in('client_id', targetClientIds);
+                    } catch (exclErr) {
+                        console.warn('Advertencia desvinculando de listas masivas:', exclErr);
+                    }
 
                     // Persist discount % to client logistics_data for fast lookup & inheritance (Escenario 253)
                     const updatedLogistics = {

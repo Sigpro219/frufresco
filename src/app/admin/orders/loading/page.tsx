@@ -1333,8 +1333,6 @@ function OrderLoadingContent() {
                 quantity: item.quantity,
                 unit: item.unit || item.products?.unit_of_measure || 'UND',
                 unit_price: 0,
-                subtotal: 0,
-                total: 0,
                 nickname: item.nickname || item.products?.name || ''
             }));
 

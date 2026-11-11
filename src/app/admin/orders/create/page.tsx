@@ -3493,7 +3493,19 @@ function CreateOrderContent() {
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                const matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory);
+                // SPEC.md Escenario 429: Buscar primero en productos del acuerdo evaluando nombre + observaciones/variantes
+                const fullNameToMatch = [originalName, item.observations].filter(Boolean).join(' ').trim();
+                let matchResult = findBestProductMatchDetails(fullNameToMatch, candidateProductPool, learnedMemory);
+                if (!matchResult.product && fullNameToMatch !== originalName) {
+                    matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory);
+                }
+                if (effectiveAgrIds.size > 0 && candidateProductPool.length > effectiveAgrIds.size) {
+                    const agrProducts = products.filter(p => effectiveAgrIds.has(p.id));
+                    const agrMatch = findBestProductMatchDetails(fullNameToMatch, agrProducts, learnedMemory);
+                    if (agrMatch.product) {
+                        matchResult = agrMatch;
+                    }
+                }
                 const rawMatch = matchResult.product;
                 const rawExc = rawMatch ? clientExceptions.find(e => e.product_id === rawMatch.id) : null;
                 const subProduct = (rawExc && rawExc.substitution_product_id)
@@ -3977,11 +3989,15 @@ function CreateOrderContent() {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
                 const isOffAgreementItem = hasActiveB2BAgreement && !agreementProductIds.has(prodId);
-                const unitPrice = isOffAgreementItem
+                // SPEC.md Escenario 429: Si compra fuera de convenio pero está autorizado, liquidar precio de respaldo Institucional en vez de $0 COP
+                const fallbackPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                    ? contractPrices[prodId]
+                    : (item.price || 0);
+                const unitPrice = (isOffAgreementItem && !allowOffAgreementPurchases)
                     ? 0
-                    : ((clientType === 'B2B' && prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
-                        ? contractPrices[prodId]
-                        : (item.price || (prodId && contractPrices[prodId]) || 0));
+                    : ((clientType === 'B2B' && fallbackPrice > 0)
+                        ? fallbackPrice
+                        : (item.price || fallbackPrice || 0));
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;

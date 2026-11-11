@@ -66,9 +66,36 @@ export async function POST(req: Request) {
     // 2. Ejecutar inserción / actualización de ítems si existen
     if (Array.isArray(itemsToUpsert) && itemsToUpsert.length > 0) {
       console.log(`[Order Update API] Guardando ${itemsToUpsert.length} ítems en lote...`);
+
+      // Sanitizar ítems para enviar únicamente columnas físicas existentes en la tabla order_items
+      const validOrderItemColumns = new Set([
+        'id',
+        'order_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+        'picked_quantity',
+        'quality_status',
+        'unit',
+        'nickname',
+        'variant_label',
+        'selected_options',
+        'quality_notes'
+      ]);
+
+      const sanitizedItems = itemsToUpsert.map((item: any) => {
+        const clean: Record<string, any> = {};
+        for (const [k, v] of Object.entries(item)) {
+          if (validOrderItemColumns.has(k) && v !== undefined) {
+            clean[k] = v;
+          }
+        }
+        return clean;
+      });
+
       const { error: upsertErr } = await supabaseAdmin
         .from('order_items')
-        .upsert(itemsToUpsert);
+        .upsert(sanitizedItems);
 
       if (upsertErr) {
         console.error('[Order Update API] Error en upsert de ítems:', upsertErr);

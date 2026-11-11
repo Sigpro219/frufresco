@@ -23,7 +23,7 @@
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
-| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301, 306 (§7.1 - §7.20) | 🟢 100% |
+| **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301, 306, 429 (§7.1 - §7.20) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
@@ -433,6 +433,11 @@ En el canal minorista residencial (B2C Hogar) rigen los siguientes contratos de 
 >    - El `accounting_id` (ID contable numérico oficial de World Office, ej: #1138, #1701) es el **ÚNICO IDENTIFICADOR SOBERANO** del ecosistema para remisiones, báscula, facturación DIAN y alistamiento.
 >    - La columna `sku` (`VE-01701`) en Supabase se degrada a llave técnica muda (Silent Shadow Key) exclusivamente para no violar el constraint `NOT NULL UNIQUE` de PostgreSQL en Supabase.
 >    - Queda terminantemente vetado proyectar `sku` al usuario, ordenar tablas/catálogos por él, o basar filtros de negocio en dicho campo.
+> 3. **Soberanía y Mandatoriedad Absoluta de `accounting_id` en Pricing y Acuerdos (Doctrina Determinista de Homologación):**
+>    - En todo ejercicio de tarificación, carga masiva, edición de acuerdos comerciales (`CommercialAgreementsModule.tsx`, `SpecialAgreementsModule.tsx`) e ingesta/resolución de pedidos (`orders/create`, `EmailDraftsModule`, `order-parser-engine.ts`):
+>      $$\mathbf{accounting\_id \text{ (Mandatorio y Prioridad 1)}} \longrightarrow \mathbf{Nombre \text{ (Fallback Secundario solo ante ausencia física de ID)}}$$
+>    - **Cero Ambigüedad Semántica:** Si un archivo Excel o payload contiene el código `idProducto` / `accounting_id`, la resolución contra la base de datos se ejecuta de manera estricta y exclusiva por dicho código numérico (`products.accounting_id`). Queda prohibido sobreescribir o ignorar el `accounting_id` mediante comparaciones aproximadas de nombres de texto (ej. `#726 Mora Despitonada` jamás debe mutar a `#274 Mora`).
+>    - **Inmunidad en Pedidos con Acuerdo Activo:** Cuando un cliente cuente con un Acuerdo Comercial vigente, el buscador de ítems del pedido debe restringir su espacio de búsqueda prioritario a los `accounting_id` pactados en dicho acuerdo, concatenando nombre y observaciones/variantes para garantizar coincidencia exacta y preservar el precio pactado sin degradaciones a \$0 COP.
 
 > [!IMPORTANT]
 > **Deprecación y Obsolescencia de `products.base_price`:**  
@@ -696,7 +701,14 @@ Para garantizar la conciliación fiscal, contable y operativa con los clientes B
       \text{General Institucional} & \text{fallback por modelo de precios asignado en el perfil} 
       \end{cases}$$
 
-6. **Deprecación y Erradicación del Botón Legado "Modelo General (Plantilla Estática)":**
+6. **Protocolo Canónico de Ingesta, Edición y Cruce por `accounting_id` (Cero Ambigüedad):**
+   - **Mandatoriedad del ID Contable:** En la carga masiva mediante archivos Excel/ODS (`CommercialAgreementsModule.tsx`, `SpecialAgreementsModule.tsx`), el mapeo contra la base de datos se rige por:
+     $$\text{Enlace Principal} = \text{Fila.idProducto} \equiv \text{products.accounting\_id}$$
+     El nombre del producto en el archivo (`Fila.Producto`) actúa exclusivamente como metadato informativo o fallback secundario ante ausencia física de código numérico.
+   - **Exclusividad Mutua entre Acuerdo Individual y Lista Compartida:** Si un cliente cuenta con un Acuerdo Individual activo (`quotes.client_id = cliente.id`), dicho acuerdo prevalece de forma absoluta sobre cualquier Lista Maestra Compartida o Modelo Especial por Frecuencia (Quincenal / Mensual), quedando el cliente blindado de sobreescrituras automáticas involuntarias.
+   - **Deduplicación Estricta:** Queda prohibida la existencia de tuplas duplicadas `(quote_id, product_id)` en `quote_items`. Ante colisiones en la ingesta, prevalece deterministamente el registro con mayor fidelidad de `accounting_id`.
+
+7. **Deprecación y Erradicación del Botón Legado "Modelo General (Plantilla Estática)":**
    - **Contexto Histórico:** Previo a la arquitectura de Lista Maestra Viva en Cascada, existía en la barra de herramientas un botón auxiliar `[ ✨ Modelo General (N SKUs) ]` conectado a `/api/commercial/master-template`. Dicho botón permitía subir una plantilla estática en memoria que luego debía copiarse cliente por cliente (reproduciendo el modelo de clonación/fotocopias).
    - **Dictamen Canónico:** Queda **formalmente deprecado y retirado** dicho botón de la barra de herramientas. La creación y gobernanza de listas institucionales generales se canaliza exclusivamente a través del flujo unificado de **`[ + Nuevo Acuerdo ]` ➔ `[ Lista Maestra Compartida (Efecto Cascada) ]`**, garantizando entidad relacional viva en `quotes`, vigencia temporal unificada (`start_date`, `valid_until`) y vinculación directa de clientes/sucursales sin duplicidad de interfaces.
 
@@ -16362,3 +16374,30 @@ En la consola `/admin/orders/loading` (Pestaña `Bandeja de Entrada Email`), el 
 4. **Inmutabilidad Poka-Yoke de Visibilidad por Fecha de Recepción (`created_at`):**
    - Queda terminantemente prohibido que el cambio de fecha de entrega (`deliveryDate` / `targetOperationalDate`) esconda o desplace un correo recibido hoy fuera del filtro `Hoy`.
    - Todo filtro de fecha en `EmailDraftsModule` (`todayDraftsCount` y `draftsBeforeStatusFilter`) evalúa exclusivamente la fecha cronológica real de llegada del correo (`created_at` en zona horaria `America/Bogota`), garantizando coincidencia 1:1 con el Termómetro de Emancipación y asegurando que ningún correo con entrega futura quede oculto sin haber sido aprobado en firme.
+
+---
+
+### Escenario 429: Soberanía y Mandatoriedad Absoluta de `accounting_id` en Pricing, Acuerdos Comerciales y Resolución de Pedidos (Doctrina Determinista de Homologación) (SDD v1.9.384)
+
+#### 1. Contexto & Gemba Operativo
+En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *Aldimark*, *Colsubsidio*, *Club Puerto Peñalisa*), la existencia de variantes físicas de un mismo producto básico (ej. `#726 Mora Despitonada` vs `#274 Mora`, `#1259 Pimentón Rojo 4 Cascos` vs `#125 Pimentón`, `#1078 Arándano Pequeño` vs `#90 Arándano`) generaba distorsiones graves cuando los pedidos se procesaban mediante búsqueda aproximada por texto libre:
+- El cliente escribe en WhatsApp/Email: *"Mora: 10kg despitonada"*.
+- El motor de procesamiento textual separaba el término en nombre base (`"Mora"`) y observación (`"despitonada"`), emparejando por similitud semántica con el primer producto de catálogo: `#274 Mora`.
+- Al cruzar `#274` contra el Acuerdo Comercial del cliente (que solo contiene `#726 Mora Despitonada` a \$10.500/Kg), el sistema dictaminaba erróneamente que el producto estaba *"Fuera de Convenio"*, inyectando precio \$0 COP silencioso o distorsionando la tarifa facturada.
+- De forma análoga, en la importación masiva de archivos de acuerdos (`.xlsx` / `.ods`), la coincidencia por cadenas de texto introducía desvíos ante diferencias ortográficas (tildes, mayúsculas, plurales).
+
+#### 2. Mandato Canónico de Prevalencia e Inmunidad Determinista
+1. **Regla de Oro de Jerarquía de Enlace:**
+   En todo proceso de cotización, carga de acuerdos (`CommercialAgreementsModule.tsx`, `SpecialAgreementsModule.tsx`), tarificación (`pricingUtils.ts`) y resolución de pedidos manuales, WhatsApp o correo (`orders/create`, `EmailDraftsModule.tsx`, `order-parser-engine.ts`):
+   $$\mathbf{accounting\_id \text{ (Mandatorio y Prioridad 1)}} \longrightarrow \mathbf{Nombre \text{ (Fallback Secundario solo si no existe ID)}}$$
+2. **Determinismo en la Fuente de Verdad:**
+   - Si un archivo o registro contiene `idProducto` / `accounting_id`, la resolución contra la base de datos se efectúa **estrictamente por `products.accounting_id`**.
+   - Queda prohibido alterar el enlace del producto con base en el texto de la columna `Producto`. El nombre en el documento actúa únicamente como etiqueta informativa para validación humana.
+3. **Restricción de Espacio de Búsqueda para Clientes con Acuerdo Activo:**
+   - Cuando un pedido pertenezca a un cliente con Acuerdo Comercial vigente (`status = 'agreement'`), el motor de resolución de productos (`findBestProductMatchDetails`) debe restringir su universo inicial de búsqueda **exclusivamente a los `accounting_id` pactados en dicho acuerdo**.
+   - Al evaluar el texto de entrada, el algoritmo debe concatenar el nombre y las observaciones o variantes (ej. `"Mora despitonada"`), garantizando que empareje deterministamente con el `#726` y no con el `#274`.
+4. **Poka-Yoke Anti-Desaparición y Anti-Tarifa Cero ($0 COP):**
+   - Si el cliente cuenta con un acuerdo institucional exclusivo, queda blindado de colisiones con Listas Masivas Quincenal/Mensual. Su acuerdo individual prevalece con exclusividad mutua.
+   - Si un cliente solicita expresamente un producto no pactado en su acuerdo y posee autorización de compra abierta (`allow_off_agreement_purchases = true`), el sistema **NUNCA asignará \$0 COP**, sino que liquidará en tiempo real la tarifa vigente del modelo **General Institucional** de respaldo.
+5. **Deduplicación Estricta:**
+   - Queda prohibida la existencia de más de una fila para la misma tupla `(quote_id, product_id)` en `quote_items`. El sistema deduplica automáticamente en la ingesta, garantizando un solo precio firme por código contable.

@@ -332,6 +332,22 @@ export function findBestProductMatchDetails(
     .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
     .trim();
 
+  // Prioridad 0 (SPEC.md Escenario 429): Coincidencia Mandatoria por accounting_id si el texto incluye #ID o código numérico
+  const idMatch = cleanInput.match(/(?:#|id\s*|cod(?:igo)?\s*|^|\s)(\d{1,6})(?:\s|$|[-_\.])/i);
+  if (idMatch && idMatch[1]) {
+    const candidateAccId = Number(idMatch[1]);
+    const matchedByAcc = products.find(p => Number(p.accounting_id) === candidateAccId);
+    if (matchedByAcc) {
+      return {
+        product: matchedByAcc,
+        confidence: 'HIGH',
+        confidenceScore: 100,
+        matchSource: 'EXACT',
+        matchReason: `Identificador contable exacto (#${candidateAccId})`
+      };
+    }
+  }
+
   // Prioridad 1: Memoria Histórica Aprendida para este Cliente
   if (Array.isArray(learnedMemory) && learnedMemory.length > 0) {
     const memMatch = learnedMemory.find(m => {
