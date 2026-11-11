@@ -16438,3 +16438,22 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   5. **Blindaje de Esquema en Reposiciones en Garantía ($0 COP):**
      - En `src/app/admin/orders/loading/page.tsx`, la formalización de reposiciones a $0 COP elimina de `itemsToUpsert` las columnas calculadas `subtotal` y `total`.
      - En `src/app/api/orders/update/route.ts`, se aplica una lista blanca de sanitización estricta (`validOrderItemColumns`) que descarta cualquier propiedad que no pertenezca a las 12 columnas físicas de la tabla `order_items` de PostgreSQL, blindando el sistema contra errores de caché de esquema.
+
+### Escenario 431: Rediseño B2B Institucional de Remisiones, Normalización Contractual de Horarios y Tratamiento Condicional de OC
+- **Given** que FruFresco opera como un operador agro-logístico institucional B2B para clientes corporativos (e.g. *Aldimark*, *El Corral / IRCCS*, *Colsubsidio*, *Sodexo*),
+- **When** se genera el correo de confirmación de pedido o remisión oficial (`generateOrderConfirmationHtml` / `generateOrderConfirmationText`),
+- **Then** rige el estándar visual y de negocio industrial B2B:
+  1. **Erradicación del Tono Retail Minorista (B2C):**
+     - Se suprime cualquier saludo informal en cursiva decorativa (`¡Gracias por tu compra!, ...`).
+     - Se consagra el encabezado institucional sobrio: **`Confirmación Oficial de Despacho`** (o `Actualización Oficial de Remisión` si es rectificación).
+     - Se separa la jerarquía de Razón Social (en dorado institucional `#FDE68A`) y la Sede o Punto de Entrega (en verde esmeralda claro `#A7F3D0`).
+  2. **Tratamiento Condicional Estricto de la Orden de Compra (OC):**
+     - Si el pedido cuenta con una Orden de Compra válida (no vacía, diferente de `'N/A'`, `'No aplica'`, `'null'`), se renderiza un badge sobrio y visible: `OC Cliente: [NÚMERO]` junto a la fecha de despacho.
+     - Si el pedido **no cuenta con Orden de Compra** (o es N/A): **se omite completamente** de la interfaz y del documento. Queda terminantemente prohibido mostrar etiquetas de relleno como *"N/A"* o *"No aplica"*.
+  3. **Normalización Contractual de la Ventana de Entrega (Veto al Fallback Ciego `"AM"`):**
+     - Queda terminantemente prohibido imprimir la cadena cruda o técnica `"AM"` o `"PM"` en el documento de remisión.
+     - La fuente primaria de verdad es la ventana logística contractual del perfil (`profiles.delivery_restrictions` / `logistics_data`).
+     - En caso de valores genéricos sin restricción explícita, se normaliza formalmente a `Jornada Mañana (07:00 AM - 11:00 AM)` o `Jornada Tarde (01:00 PM - 05:00 PM)`, titulando el bloque como **`Ventana de Entrega Contractual`**.
+  4. **Persistencia Sincronizada en Base de Datos (`public.mail`):**
+     - Toda corrección de plantillas debe actualizar retroactivamente o regenerar las columnas `message.html`, `message.text` y `template.data` de los registros pendientes en la tabla `mail`, evitando discrepancias entre el código fuente y los visores modales de la interfaz de usuario.
+
