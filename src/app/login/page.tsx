@@ -1533,7 +1533,7 @@ export default function LoginPage() {
                                     >
                                         {loading ? 'Autenticando...' : (
                                             <>
-                                                {user ? 'Validado' : 'Ingresar'} <Rocket size={20} />
+                                                Ingresar <Rocket size={20} />
                                             </>
                                         )}
                                     </button>
