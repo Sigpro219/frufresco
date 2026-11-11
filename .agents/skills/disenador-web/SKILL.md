@@ -124,6 +124,7 @@ Eres el **Diseñador Web Principal & Arquitecto UI/UX** en Google Antigravity. T
 - Esta barra aloja: botón primario de creación ("Nuevo..."), input de búsqueda en tiempo real con icono `Search`, toggles de vista (`List` / `Grid`) y selectores de filtros rápidos.
 
 #### D. Encabezados de Columna `<thead>` y Estándar de Contraste Canónico (WCAG AAA)
+- **Anclaje Sticky Obligatorio en `<thead style={{ position: 'sticky', top: theadTop, zIndex: 35, backgroundColor: '#F1F5F9' }}>`:** En motores Chromium/React, `position: sticky` debe declararse **OBLIGATORIAMENTE en la etiqueta `<thead>`** (y en sus celdas `<th>`). Si se omite en `<thead>`, el navegador trata la cabecera como un contenedor estático de 40px y la tabla se desliza fuera de pantalla sin fijarse al hacer scroll vertical.
 - **Paleta Canónica Obligatoria:** Fondo Slate-100 sólido (`#F1F5F9` / `bg-slate-100`), borde delimitador inferior Slate-300 (`#CBD5E1`, 2px), y texto Slate-900 extra-bold (`#0F172A`, 800 weight, 0.72rem / `text-xs`) con ratio de contraste $\ge$ 9.8:1 (WCAG AAA).
 - **Chromium Table Safety:** Declarar siempre en la tabla `borderCollapse: 'separate'` y `borderSpacing: 0`.
 - **Anatomía Completa:** Coexistencia de ordenadores tri-estado (`ArrowUpDown` neutral $\rightarrow$ `ArrowUp` asc $\rightarrow$ `ArrowDown` desc) junto con botones de filtro desplegable (`ChevronDown`).
