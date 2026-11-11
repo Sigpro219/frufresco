@@ -16483,6 +16483,9 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
        * **`FAC-IMP`:** Fondo `#FEF2F2`, borde `#F87171`, texto `#B91C1C` (Alerta roja de factura previa obligatoria).
        * **`REM-$`:** Fondo `#EFF6FF`, borde `#93C5FD`, texto `#1D4ED8` (Azul corporativo de remisión con precio).
        * **`REM-S/S`:** Fondo `#F8FAFC`, borde `#CBD5E1`, texto `#475569` (Gris pizarra confidencial de remisión a ciegas).
+     - **Labels Claros en UI:** Para máxima legibilidad en piso, los badges se renderizan con texto completo: `Factura Impresa`, `Remisión con Precios`, `Remisión sin Precios`, `Facturación por Lotes`, `Remisión Obsequio`.
+  5. **Validación Exitosa en Producción (Hito 11-Nov-2026):**
+     - El archivo plano generado por el botón `Corte Tarde (FAC-IMP)` fue importado directamente en World Office Desktop con **0 errores**, validando al 100% la compatibilidad de columnas, NITs sin DV, consecutivos, códigos contables `#ID` e impuestos.
 
 
 ---
