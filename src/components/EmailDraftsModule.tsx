@@ -9723,11 +9723,18 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
               {/* Right Side: Products Table (Split-Screen Master Workspace) */}
               <div 
-                id="email-draft-scroll-container"
-                className="premium-scrollbar"
-                style={{ flex: 1, minWidth: '460px', padding: '0', overflowY: 'auto', maxHeight: 'calc(93vh - 150px)', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
+                style={{
+                  flex: 1,
+                  minWidth: '460px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: 'calc(93vh - 150px)',
+                  maxHeight: 'calc(93vh - 150px)',
+                  backgroundColor: '#FFFFFF',
+                  position: 'relative'
+                }}
               >
-                {/* Multi-Attachment Staging Segment Filter Bar */}
+                {/* Multi-Attachment Staging Segment Filter Bar (Si aplica) - Anclado en la cima del panel derecho */}
                 {metadata.attachments && metadata.attachments.filter((a: any) => !a.name?.match(/\.(png|jpg|jpeg|gif|webp)$/i) || a.items?.length > 0).length > 1 && (
                   <div style={{
                     padding: '8px 12px',
@@ -9737,9 +9744,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     alignItems: 'center',
                     gap: '6px',
                     flexWrap: 'wrap',
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 15
+                    flexShrink: 0,
+                    zIndex: 25
                   }}>
                     <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Paperclip size={11} /> Filtrar por Anexo:
@@ -9801,38 +9807,44 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   </div>
                 )}
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative' }}>
-                  <thead style={{ position: 'sticky', top: metadata.attachments && metadata.attachments.length > 1 ? '40px' : 0, backgroundColor: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #F1F5F9' }}>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>NOMBRE EN DOCUMENTO</span>
-                          <button
-                            type="button"
-                            onClick={() => setSortDraftAlpha(prev => !prev)}
-                            title={sortDraftAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '2px',
-                              fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.03em',
-                              padding: '2px 6px', borderRadius: '4px', cursor: 'pointer',
-                              border: sortDraftAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1',
-                              backgroundColor: sortDraftAlpha ? '#ECFDF5' : '#F8FAFC',
-                              color: sortDraftAlpha ? '#065F46' : '#64748B',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            A→Z
-                          </button>
-                        </div>
-                      </th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'left', width: '39%', fontSize: '0.74rem' }}>TU PRODUCTO (ID)</th>
-                      <th style={{ ...THEME.typography?.tableHeader, padding: '0.75rem 0.85rem', textAlign: 'center', width: '28%', fontSize: '0.74rem' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
-                          <span>CANT. / PRECIO</span>
-                          <div 
-                            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
-                            onMouseEnter={() => setShowFormulaTooltip(true)}
-                            onMouseLeave={() => setShowFormulaTooltip(false)}
+                {/* Scroll Container de la Galería de Productos */}
+                <div 
+                  id="email-draft-scroll-container"
+                  className="premium-scrollbar"
+                  style={{ flex: 1, padding: '0', overflowY: 'auto', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
+                >
+                  <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, position: 'relative' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 20, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <tr style={{ textAlign: 'left', borderBottom: '2px solid #E2E8F0', backgroundColor: '#FFFFFF' }}>
+                        <th style={{ ...THEME.typography?.tableHeader, position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#FFFFFF', padding: '0.75rem 1rem', textAlign: 'left', width: '33%', fontSize: '0.74rem', borderBottom: '2px solid #E2E8F0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>NOMBRE EN DOCUMENTO</span>
+                            <button
+                              type="button"
+                              onClick={() => setSortDraftAlpha(prev => !prev)}
+                              title={sortDraftAlpha ? 'Restaurar orden del documento original' : 'Ordenar alfabéticamente A→Z'}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '2px',
+                                fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.03em',
+                                padding: '2px 6px', borderRadius: '4px', cursor: 'pointer',
+                                border: sortDraftAlpha ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                backgroundColor: sortDraftAlpha ? '#ECFDF5' : '#F8FAFC',
+                                color: sortDraftAlpha ? '#065F46' : '#64748B',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              A→Z
+                            </button>
+                          </div>
+                        </th>
+                        <th style={{ ...THEME.typography?.tableHeader, position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#FFFFFF', padding: '0.75rem 0.85rem', textAlign: 'left', width: '39%', fontSize: '0.74rem', borderBottom: '2px solid #E2E8F0' }}>TU PRODUCTO (ID)</th>
+                        <th style={{ ...THEME.typography?.tableHeader, position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#FFFFFF', padding: '0.75rem 0.85rem', textAlign: 'center', width: '28%', fontSize: '0.74rem', borderBottom: '2px solid #E2E8F0' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'relative' }}>
+                            <span>CANT. / PRECIO</span>
+                            <div 
+                              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+                              onMouseEnter={() => setShowFormulaTooltip(true)}
+                              onMouseLeave={() => setShowFormulaTooltip(false)}
                             onClick={(e) => { e.stopPropagation(); setShowFormulaTooltip(prev => !prev); }}
                             title="Haz clic para ver cómo usar fórmulas matemáticas"
                           >
@@ -10589,11 +10601,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     </tbody>
                 </table>
 
-                {/* Bottom Spacer: Gives the scroll container guaranteed room to anchor any row to the top */}
-                <div style={{ height: '380px', pointerEvents: 'none' }} />
+                {/* Bottom Spacer: Separador sutil para terminar la tabla limpiamente */}
+                <div style={{ height: '30px', pointerEvents: 'none' }} />
 
                 {/* Bottom of Right Panel: Add Row & Actions */}
-                <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9' }}>
+                <div style={{ padding: '0.85rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', backgroundColor: '#FFFFFF' }}>
                   <button
                     type="button"
                     onClick={handleAddManualItem}
@@ -10670,7 +10682,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   )}
                 </div>
               </div>
-            </div> {/* Closes Split Canvas Body */}
+            </div> {/* Closes Right Side: Products Table Master Flex Container */}
+          </div> {/* Closes Split Canvas Body */}
 
           {/* Master Sticky Bottom Floating Ribbon (Exact Replica of Ingesta PDF - Imagen 3) */}
           <div style={{
