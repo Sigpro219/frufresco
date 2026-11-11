@@ -114,14 +114,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const bannerRef = useRef<HTMLDivElement>(null);
-  const [bannerHeight, setBannerHeight] = useState(64);
-
-  useEffect(() => {
-    if (bannerRef.current) {
-      setBannerHeight(bannerRef.current.offsetHeight);
-    }
-  }, [selectedIds.length, searchQuery, statusFilter, selectedDate]);
 
   const handleDeleteEmail = async () => {
     if (!deleteConfirm.emailId) return;
@@ -424,25 +416,17 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
     }
   };
 
-  const theadTop = `${topOffset + bannerHeight + 6}px`;
-
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%', padding: '0 0.25rem' }}>
       
-      {/* 1. Sticky Frosted Header Dock (Estandar /disenador-web & FruFresco Galerias) */}
+      {/* 1. Header Toolbar (Estandar /disenador-web & FruFresco Galerias) */}
       <div
-        ref={bannerRef}
         style={{
-          position: 'sticky',
-          top: `${topOffset}px`,
-          zIndex: 35,
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
+          backgroundColor: '#FFFFFF',
           padding: '0.65rem 1rem',
           borderRadius: '14px',
           border: '1px solid #E2E8F0',
-          boxShadow: '0 4px 16px -2px rgba(15, 23, 42, 0.05)',
+          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
           marginBottom: '0.65rem'
         }}
       >
@@ -913,9 +897,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                 }}>
                   {/* Master Checkbox Header */}
                   <th style={{
-                    position: 'sticky',
-                    top: theadTop,
-                    zIndex: 25,
                     backgroundColor: '#F1F5F9',
                     borderBottom: '2px solid #CBD5E1',
                     padding: '0.75rem 0.85rem',
@@ -936,9 +917,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                   <th
                     onClick={() => handleToggleSort('date')}
                     style={{
-                      position: 'sticky',
-                      top: theadTop,
-                      zIndex: 25,
                       backgroundColor: '#F1F5F9',
                       borderBottom: '2px solid #CBD5E1',
                       padding: '0.75rem 1rem',
@@ -968,9 +946,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                   <th
                     onClick={() => handleToggleSort('recipient')}
                     style={{
-                      position: 'sticky',
-                      top: theadTop,
-                      zIndex: 25,
                       backgroundColor: '#F1F5F9',
                       borderBottom: '2px solid #CBD5E1',
                       padding: '0.75rem 1rem',
@@ -999,9 +974,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                   <th
                     onClick={() => handleToggleSort('subject')}
                     style={{
-                      position: 'sticky',
-                      top: theadTop,
-                      zIndex: 25,
                       backgroundColor: '#F1F5F9',
                       borderBottom: '2px solid #CBD5E1',
                       padding: '0.75rem 1rem',
@@ -1029,9 +1001,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                   <th
                     onClick={() => handleToggleSort('status')}
                     style={{
-                      position: 'sticky',
-                      top: theadTop,
-                      zIndex: 25,
                       backgroundColor: '#F1F5F9',
                       borderBottom: '2px solid #CBD5E1',
                       padding: '0.75rem 1rem',
@@ -1059,9 +1028,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
 
                   {/* Columna Acciones */}
                   <th style={{
-                    position: 'sticky',
-                    top: theadTop,
-                    zIndex: 25,
                     backgroundColor: '#F1F5F9',
                     borderBottom: '2px solid #CBD5E1',
                     padding: '0.75rem 0.85rem',
