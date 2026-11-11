@@ -16401,3 +16401,11 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
    - Si un cliente solicita expresamente un producto no pactado en su acuerdo y posee autorización de compra abierta (`allow_off_agreement_purchases = true`), el sistema **NUNCA asignará \$0 COP**, sino que liquidará en tiempo real la tarifa vigente del modelo **General Institucional** de respaldo.
 5. **Deduplicación Estricta:**
    - Queda prohibida la existencia de más de una fila para la misma tupla `(quote_id, product_id)` en `quote_items`. El sistema deduplica automáticamente en la ingesta, garantizando un solo precio firme por código contable.
+
+#### 3. Sincronización y Conciliación Física con Carpeta Fuente de Verdad (`ACUERDOS VIGENTES`)
+1. **Reconciliación y Extensión de Vigencia a Cierre de Mes (Noviembre 2026):**
+   - El 100% de los acuerdos comerciales individuales y listas masivas activas fueron reconciliados contra los archivos maestros de la carpeta `ACUERDOS VIGENTES` (`SPG *.xlsx`), actualizando subtotales, eliminando duplicados históricos y extendiendo su vigencia contractual formal (`valid_until = '2026-11-30'`).
+2. **Blindaje de Detección de Código Contable:**
+   - En `order-parser-engine.ts`, la detección de `accounting_id` exige prefijos formales (`#`, `ID:`, `COD:`, `#ID`) o coincidencia de cadena exclusivamente numérica pura (`^\s*\d{1,6}\s*$`), impidiendo que cifras de cantidad, peso o calibres ("10 kg", "20 kilos", "4 cascos") secuestren la identidad del SKU.
+3. **Erradicación Definitiva de la Excepción Zombi de $0 COP:**
+   - En `/api/orders/resolve-agreement-pricing`, se derogó formalmente el bloqueo que impedía a clientes con acuerdo heredar precios de General Institucional para compras fuera de lista autorizadas (`allow_off_agreement_purchases = true`), garantizando que la facturación y remisión nazcan siempre con tarifa comercial válida.
