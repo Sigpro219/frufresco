@@ -913,7 +913,12 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
             fontSize: '0.85rem',
             textAlign: 'left'
           }}>
-            <thead>
+            <thead style={{
+              position: 'sticky',
+              top: theadTop,
+              zIndex: 35,
+              backgroundColor: '#F1F5F9'
+            }}>
               <tr style={{
                 backgroundColor: '#F1F5F9',
                 borderBottom: '2px solid #CBD5E1'
