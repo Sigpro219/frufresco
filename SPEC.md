@@ -16458,33 +16458,37 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - Toda corrección de plantillas debe actualizar retroactivamente o regenerar las columnas `message.html`, `message.text` y `template.data` de los registros pendientes en la tabla `mail`, evitando discrepancias entre el código fuente y los visores modales de la interfaz de usuario.
 
 
-### Escenario 432: Exclusión Mutua de Documentos Físicos de Despacho (FAC-IMP, REM-$, REM-S/S), Corte Pre-Despacho Asincrónico y Preservación del Ciclo de Vida Logístico (SDD v1.9.386)
+### Escenario 432: Exclusión Mutua de Documentos Físicos de Despacho (FAC-IMP, REM-$, REM-S/S), Micro-Cortes Pre-Despacho Escalonados y Preservación del Ciclo de Vida Logístico (SDD v1.9.388)
 - **Given** una tanda de pedidos B2B programada para despacho en muelle ($D$) donde coexisten clientes que exigen Factura Física en recepción (`document_type === 'invoice'`) y clientes operados bajo remisión estándar (`document_type === 'remission'`):
 - **When** el área contable ejecuta la facturación y el jefe de despacho genera la documentación física de ruta:
 - **Then** el sistema aplica las siguientes reglas canónicas de gobernanza y Poka-Yoke de piso:
   1. **Triada de Exclusión Mutua de Documentos Físicos de Despacho:**
      - Cada pedido viaja en el camión acompañado estrictamente por **EXACTAMENTE UNO** de los tres documentos físicos posibles, quedando terminantemente prohibido duplicar soportes en cabina:
-       * **`FAC-IMP` (Factura Electrónica Impresa):** Para clientes con `document_type === 'invoice'` (o `print_invoice === true`). Viaja con la Factura Física DIAN expedida desde World Office Desktop. **No se emite ni imprime remisión**.
-       * **`REM-$` (Remisión Valorizada):** Para clientes con `document_type !== 'invoice'` y `remission_with_prices !== false`. Viaja con Remisión Oficial en formato Carta Duplex con precios unitarios y totales.
-       * **`REM-S/S` (Remisión Ciega):** Para clientes con `remission_with_prices === false`. Viaja con Remisión Oficial en formato Carta Duplex a ciegas (ocultando 100% tarifas y totales; solo cantidades y unidades físicas).
+       * **`FAC-IMP` (Factura Impresa):** Para clientes con `document_type === 'invoice'`. Viaja con la Factura Física DIAN expedida desde World Office Desktop. **No se emite ni imprime remisión**.
+       * **`REM-$` (Remisión con Precios):** Para clientes con `document_type !== 'invoice'` y `remission_with_prices !== false`. Viaja con Remisión Oficial en formato Carta Duplex con precios unitarios y totales.
+       * **`REM-S/S` (Remisión sin Precios):** Para clientes con `remission_with_prices === false`. Viaja con Remisión Oficial en formato Carta Duplex a ciegas (ocultando 100% tarifas y totales; solo cantidades y unidades físicas).
   2. **Poka-Yoke en Motor de Impresiones (`/admin/orders/contingency-print?mode=remissions`):**
      - El generador de remisiones aplica un filtro atómico de exclusión que descarta los pedidos con `document_type === 'invoice'` (`FAC-IMP`), evitando la emisión accidental de remisiones para pedidos que ya viajan con factura física.
      - En el renderizado de la tabla de ítems, si `remission_with_prices === false`, se suprimen las columnas `VALOR/UM`, `TOTAL` y el bloque de liquidación financiera, emitiendo remisión limpia para recibo de cocina/bodega.
-  3. **Corte Pre-Despacho Asincrónico de la Tarde ($D-1$ Pre-Despacho en `/admin/commercial/billing`):**
-     - En la tarde previa ($D-1$, entre 5:00 PM y 7:30 PM), la mesa de facturación permite abrir el **Corte Pre-Despacho (`FAC-IMP`)** sobre la tanda activa ($D$).
-     - La consulta del corte filtra los pedidos con fecha de entrega $D$, que no posean corte asignado (`billing_cut_id.is.null`) y cumplan la condición `document_type === 'invoice'` (sin exigir que el pedido esté en estado `delivered`).
-     - Genera y descarga el archivo plano normalizado de 57 columnas de World Office exclusivamente para este subconjunto de pedidos.
-     - **Regla Sagrada de Integridad Logística:** Al emitir el corte, el sistema asigna `orders.billing_cut_id = cut.id` e inserta los registros correspondientes en `billing_invoices`, pero **MANTIENE EL `orders.status` OPERATIVO INTACTO** (`para_compra`, `approved`, etc.), blindando los pedidos para que permanezcan visibles en la Sábana de Alistamiento por Células, en la Planilla de Compras de Corabastos y en los Manifiestos de Carga.
-  4. **Corte Post-Entrega de la Mañana ($D$ Post-Entrega):**
-     - A la mañana siguiente ($D$), una vez cumplidas las entregas físicas y superada la ventana de gracia de 120 minutos, el **Corte de la Mañana** procesa los pedidos restantes (`REM-$` y `REM-S/S`).
+  3. **Micro-Cortes Escalonados de la Tarde (Heijunka / Small-Batch Flow en `/admin/commercial/billing`):**
+     - En la tarde previa ($D-1$, entre 3:00 PM y 7:45 PM), la mesa de facturación permite ejecutar **múltiples micro-cortes vespertinos sucesivos (`cut_slot = 'PM'`)** (hasta 3 o más tandas) para procesar los pedidos a medida que se aprueban, erradicando el cuello de botella de impresión física a las 8:00 PM.
+     - Cada micro-corte consulta exclusivamente pedidos con entrega $D$, no facturados previamente (`billing_cut_id.is.null`) y con `document_type === 'invoice'`.
+     - Genera y descarga el archivo plano normalizado de 57 columnas de World Office (`WorldOffice_Corte_PM_[cut_number].xlsx`) correspondiente únicamente al micro-lote procesado.
+     - **Relectura Atómica del Consecutivo DIAN:** Antes de confirmar el corte, el sistema consulta en caliente `app_settings.billing_invoice_next_number` para evitar colisiones de numeración causadas por desactualización de estado en pestañas de UI.
+     - **Regla Sagrada de Integridad Logística:** Al emitir el corte, el sistema asigna `orders.billing_cut_id = cut.id` e `orders.invoice_id = invoice.id`, pero **MANTIENE EL `orders.status` OPERATIVO INTACTO** (`para_compra`, `approved`, etc.), blindando los pedidos para que permanezcan visibles en la Sábana de Alistamiento por Células, en la Planilla de Compras de Corabastos y en los Manifiestos de Carga.
+     - **Inmutabilidad Post-Corte:** Todo pedido con `billing_cut_id IS NOT NULL` queda bloqueado contra alteraciones de cantidades o eliminación en la consola de pedidos para salvaguardar la concordancia física contra la factura ya impresa.
+  4. **Corte Post-Entrega de la Mañana ($D$ Post-Entrega & Desacoplamiento de Bloqueo):**
+     - A la mañana siguiente ($D$), una vez cumplidas las entregas físicas y superada la ventana de gracia de 120 minutos, el **Corte de la Mañana (`AM`)** procesa los pedidos restantes (`REM-$` y `REM-S/S`).
      - Al filtrar pedidos con `billing_cut_id.is.null`, los pedidos `FAC-IMP` facturados la tarde anterior quedan automáticamente excluidos, erradicando cualquier riesgo de doble facturación en World Office.
+     - **Poka-Yoke Anti-Bloqueo de UI (`isDateLockedByCutAM`):** El botón de `Corte AM` solo se bloquea si existe un corte con `cut_slot === 'AM'` cerrado/exportado. La existencia de micro-cortes vespertinos previos (`cut_slot === 'PM'`) jamás bloquea el Corte de la Mañana.
   5. **Señalización Cromática Semántica de Badges:**
      - En la Galería de Clientes (`/admin/commercial` / `ClientsModule.tsx`) y en la Consola de Cargue de Pedidos (`/admin/orders/loading` / `page.tsx` en la columna Cliente/Sede junto al teléfono), se renderizan badges de alto contraste con semántica unificada:
-       * **`FAC-IMP`:** Fondo `#FEF2F2`, borde `#F87171`, texto `#B91C1C` (Alerta roja de factura previa obligatoria).
-       * **`REM-$`:** Fondo `#EFF6FF`, borde `#93C5FD`, texto `#1D4ED8` (Azul corporativo de remisión con precio).
-       * **`REM-S/S`:** Fondo `#F8FAFC`, borde `#CBD5E1`, texto `#475569` (Gris pizarra confidencial de remisión a ciegas).
-     - **Labels Claros en UI:** Para máxima legibilidad en piso, los badges se renderizan con texto completo: `Factura Impresa`, `Remisión con Precios`, `Remisión sin Precios`, `Facturación por Lotes`, `Remisión Obsequio`.
-  5. **Validación Exitosa en Producción (Hito 11-Nov-2026):**
+       * **`Factura Impresa`:** Fondo `#FEF2F2`, borde `#F87171`, texto `#B91C1C` (Alerta roja de factura previa obligatoria).
+       * **`Remisión con Precios`:** Fondo `#EFF6FF`, borde `#93C5FD`, texto `#1D4ED8` (Azul corporativo de remisión con precio).
+       * **`Remisión sin Precios`:** Fondo `#F8FAFC`, borde `#CBD5E1`, texto `#475569` (Gris pizarra confidencial de remisión a ciegas).
+       * **`Facturación por Lotes`:** Fondo `#ECFDF5`, borde `#A7F3D0`, texto `#065F46`.
+       * **`Remisión Obsequio`:** Fondo `#FDF4FF`, borde `#F0ABFC`, texto `#A21CAF`.
+  6. **Validación Exitosa en Producción (Hito 11-Nov-2026):**
      - El archivo plano generado por el botón `Corte Tarde (FAC-IMP)` fue importado directamente en World Office Desktop con **0 errores**, validando al 100% la compatibilidad de columnas, NITs sin DV, consecutivos, códigos contables `#ID` e impuestos.
 
 

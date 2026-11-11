@@ -2054,14 +2054,25 @@ export default function BillingDashboard() {
         ));
     }, [cuts, billingSearchQuery]);
 
-    // COM-32: Poka-Yoke — fecha bloqueada si ya tiene corte cerrado/exportado
-    const isDateLockedByCut = useMemo(() => {
+    // COM-32: Poka-Yoke — fecha bloqueada para Corte AM si ya tiene corte AM cerrado/exportado (Goldfish Salvaguarda 1)
+    const isDateLockedByCutAM = useMemo(() => {
         if (selectedBillingDate === 'all') return false;
         return cuts.some(c =>
             c.scheduled_date === selectedBillingDate &&
+            c.cut_slot === 'AM' &&
             (c.status === 'closed' || c.status === 'exported')
         );
     }, [cuts, selectedBillingDate]);
+
+    // SDD Escenario 432: Conteo reactivo de pedidos con Factura Impresa pendientes por cortar en la tarde
+    const pendingFacImpOrdersCount = useMemo(() => {
+        return pendingOrders.filter(o => {
+            const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
+            const docType = o.document_type || prof.document_type;
+            const matchesDate = selectedBillingDate === 'all' || o.delivery_date === selectedBillingDate;
+            return docType === 'invoice' && !o.billing_cut_id && matchesDate && ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido'].includes(o.status);
+        }).length;
+    }, [pendingOrders, selectedBillingDate]);
 
 
     const filteredReturns = useMemo(() => {
@@ -2398,9 +2409,32 @@ export default function BillingDashboard() {
                 return (a.sequence_id || 0) - (b.sequence_id || 0);
             });
 
+            // Atomic Sequence Re-Read from app_settings (Goldfish Safeguard 2)
+            const { data: liveSettings } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .in('key', ['billing_invoice_next_number', 'billing_nc_next_number', 'billing_invoice_prefix', 'billing_nc_prefix']);
+            
+            let currentInvoiceNext = invoiceNextNumber;
+            let currentNcNext = ncNextNumber;
+            let currentInvPrefix = invoicePrefix;
+            let currentNcPref = ncPrefix;
+
+            liveSettings?.forEach(s => {
+                if (s.key === 'billing_invoice_next_number' && s.value) currentInvoiceNext = Number(s.value);
+                if (s.key === 'billing_nc_next_number' && s.value) currentNcNext = Number(s.value);
+                if (s.key === 'billing_invoice_prefix' && s.value) currentInvPrefix = s.value;
+                if (s.key === 'billing_nc_prefix' && s.value) currentNcPref = s.value;
+            });
+
+            setInvoiceNextNumber(currentInvoiceNext);
+            setNcNextNumber(currentNcNext);
+            setInvoicePrefix(currentInvPrefix);
+            setNcPrefix(currentNcPref);
+
             const isNcSlot = slot === 'ADJ';
-            const activePrefix = isNcSlot ? ncPrefix : invoicePrefix;
-            const startNumber = isNcSlot ? ncNextNumber : invoiceNextNumber;
+            const activePrefix = isNcSlot ? currentNcPref : currentInvPrefix;
+            const startNumber = isNcSlot ? currentNcNext : currentInvoiceNext;
 
             const mapped: CutPreviewOrder[] = sorted.map((o, idx) => {
                 const rets = returnsMap.get(o.id) || [];
@@ -2540,6 +2574,19 @@ export default function BillingDashboard() {
 
             if (updateOrdersErr) throw updateOrdersErr;
 
+            // Atomic Re-Read for execution (Goldfish Safeguard 2)
+            const { data: execSettings } = await supabase
+                .from('app_settings')
+                .select('key, value')
+                .in('key', ['billing_invoice_next_number', 'billing_nc_next_number']);
+            
+            let execInvoiceNext = invoiceNextNumber;
+            let execNcNext = ncNextNumber;
+            execSettings?.forEach(s => {
+                if (s.key === 'billing_invoice_next_number' && s.value) execInvoiceNext = Number(s.value);
+                if (s.key === 'billing_nc_next_number' && s.value) execNcNext = Number(s.value);
+            });
+
             // 3. Create billing_invoices records
             const invoicesToInsert = previewOrders.map((o, idx) => {
                 const isIva = o.profile?.iva_responsible || false;
@@ -2552,13 +2599,14 @@ export default function BillingDashboard() {
                 const dueDate = new Date();
                 dueDate.setDate(dueDate.getDate() + creditDays);
 
-                const numRaw = (isNcSlot ? ncNextNumber : invoiceNextNumber) + idx;
+                const numRaw = (isNcSlot ? execNcNext : execInvoiceNext) + idx;
                 const prefix = isNcSlot ? ncPrefix : invoicePrefix;
+                const formattedInvNum = `${prefix}-${numRaw}`;
 
                 return {
                     order_id: o.id,
                     cut_id: newCut.id,
-                    invoice_number: o.projectedInvoiceNumber,
+                    invoice_number: formattedInvNum,
                     invoice_prefix: prefix,
                     invoice_number_raw: numRaw,
                     total_base: totalBase,
@@ -2608,8 +2656,8 @@ export default function BillingDashboard() {
                 }
             }
 
-            // 5. Advance global sequence in app_settings (COM-29)
-            const newNextNumber = (isNcSlot ? ncNextNumber : invoiceNextNumber) + previewOrders.length;
+            // 5. Advance global sequence in app_settings (COM-29 - Goldfish Safeguard 2)
+            const newNextNumber = (isNcSlot ? execNcNext : execInvoiceNext) + previewOrders.length;
             const keyToUpdate = isNcSlot ? 'billing_nc_next_number' : 'billing_invoice_next_number';
 
             await supabase
@@ -4703,59 +4751,62 @@ export default function BillingDashboard() {
                                         <span>Excel Rápido WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
                                     </button>
 
-                                    {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) - SDD Escenario 432 */}
+                                    {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) - SDD Escenario 432 & Goldfish Salvaguarda 1 */}
                                     <button
                                         type="button"
                                         onClick={() => handleOpenCutPreview('PM')}
-                                        disabled={isProcessing}
-                                        title="Corte Pre-Despacho Tarde (FAC-IMP): Genera plano World Office exclusivamente para pedidos con Factura Electrónica Impresa obligatoria en muelle antes de la salida de ruta"
+                                        disabled={isProcessing || pendingFacImpOrdersCount === 0}
+                                        title={pendingFacImpOrdersCount === 0 
+                                            ? 'No hay pedidos pendientes con Factura Impresa para esta tanda' 
+                                            : 'Corte Pre-Despacho Tarde (FAC-IMP): Genera plano World Office exclusivamente para pedidos con Factura Electrónica Impresa obligatoria en muelle antes de la salida de ruta'}
                                         style={{
-                                            backgroundColor: '#DC2626',
-                                            color: 'white',
+                                            backgroundColor: pendingFacImpOrdersCount === 0 ? '#E2E8F0' : '#DC2626',
+                                            color: pendingFacImpOrdersCount === 0 ? '#94A3B8' : 'white',
                                             border: 'none',
                                             padding: '0.32rem 0.75rem',
                                             borderRadius: '6px',
                                             fontWeight: '800',
                                             fontSize: '0.71rem',
-                                            cursor: isProcessing ? 'not-allowed' : 'pointer',
+                                            cursor: (isProcessing || pendingFacImpOrdersCount === 0) ? 'not-allowed' : 'pointer',
+                                            opacity: pendingFacImpOrdersCount === 0 ? 0.65 : 1,
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '4px',
-                                            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)'
+                                            boxShadow: pendingFacImpOrdersCount === 0 ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.25)'
                                         }}
                                     >
                                         <Moon size={12} />
-                                        <span>Corte Tarde (Pre-Despacho FAC-IMP)</span>
+                                        <span>Corte Tarde (FAC-IMP) {pendingFacImpOrdersCount > 0 ? `(${pendingFacImpOrdersCount})` : '(0)'}</span>
                                     </button>
 
                                     {/* ☀️ Corte Mañana (Post-Entrega) */}
                                     <button
                                         type="button"
-                                        onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
-                                        disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCut}
-                                        title={isDateLockedByCut 
-                                            ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' 
+                                        onClick={() => isDateLockedByCutAM ? undefined : handleOpenCutPreview('AM')}
+                                        disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCutAM}
+                                        title={isDateLockedByCutAM 
+                                            ? 'Esta fecha ya tiene un corte AM cerrado. Modo Consulta activo' 
                                             : 'Corte Post-Entrega Mañana (AM): Formaliza facturación de pedidos entregados bajo remisión tras cumplirse el margen de gracia de 120m y novedades de báscula'}
                                         style={{
-                                            backgroundColor: isDateLockedByCut ? '#E2E8F0' : '#0D7A57',
-                                            color: isDateLockedByCut ? '#64748B' : 'white',
+                                            backgroundColor: isDateLockedByCutAM ? '#E2E8F0' : '#0D7A57',
+                                            color: isDateLockedByCutAM ? '#64748B' : 'white',
                                             border: 'none',
                                             padding: '0.32rem 0.80rem',
                                             borderRadius: '6px',
                                             fontWeight: '800',
                                             fontSize: '0.71rem',
-                                            cursor: (pendingOrdersCount === 0 || isDateLockedByCut) ? 'not-allowed' : 'pointer',
-                                            opacity: (pendingOrdersCount === 0 || isDateLockedByCut) ? 0.6 : 1,
+                                            cursor: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 'not-allowed' : 'pointer',
+                                            opacity: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 0.6 : 1,
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '4px',
-                                            boxShadow: isDateLockedByCut ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                            boxShadow: isDateLockedByCutAM ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
                                         }}
                                     >
-                                        {isDateLockedByCut ? <Lock size={12} /> : <Sun size={12} />}
+                                        {isDateLockedByCutAM ? <Lock size={12} /> : <Sun size={12} />}
                                         <span>
-                                            {isDateLockedByCut 
-                                                ? 'Corte Cerrado' 
+                                            {isDateLockedByCutAM 
+                                                ? 'Corte AM Cerrado' 
                                                 : `Corte Mañana (Post-Entrega) ${selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${pendingOrdersCount})`}`}
                                         </span>
                                     </button>
@@ -4814,25 +4865,25 @@ export default function BillingDashboard() {
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => isDateLockedByCut ? undefined : handleOpenCutPreview('AM')}
-                                                        disabled={isDateLockedByCut}
-                                                        title={isDateLockedByCut ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
+                                                        onClick={() => isDateLockedByCutAM ? undefined : handleOpenCutPreview('AM')}
+                                                        disabled={isDateLockedByCutAM}
+                                                        title={isDateLockedByCutAM ? 'Esta fecha ya tiene un corte cerrado. Modo Consulta activo' : 'Generar Corte AM'}
                                                         style={{
                                                             backgroundColor: '#F1F5F9',
-                                                            color: isDateLockedByCut ? '#94A3B8' : '#334155',
-                                                            border: isDateLockedByCut ? '1px solid #E2E8F0' : '1px solid #CBD5E1',
+                                                            color: isDateLockedByCutAM ? '#94A3B8' : '#334155',
+                                                            border: isDateLockedByCutAM ? '1px solid #E2E8F0' : '1px solid #CBD5E1',
                                                             padding: '0.48rem 1rem',
                                                             borderRadius: '8px',
                                                             fontWeight: '700',
                                                             fontSize: '0.78rem',
-                                                            cursor: isDateLockedByCut ? 'not-allowed' : 'pointer',
+                                                            cursor: isDateLockedByCutAM ? 'not-allowed' : 'pointer',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
                                                             gap: '6px',
-                                                            opacity: isDateLockedByCut ? 0.55 : 1
+                                                            opacity: isDateLockedByCutAM ? 0.55 : 1
                                                         }}
                                                     >
-                                                        {isDateLockedByCut ? <Lock size={14} /> : <Sun size={14} />} {isDateLockedByCut ? 'Corte Cerrado (Solo Consulta)' : 'Auditar y Generar Corte AM (' + pendingOrdersCount + ')'}
+                                                        {isDateLockedByCutAM ? <Lock size={14} /> : <Sun size={14} />} {isDateLockedByCutAM ? 'Corte AM Cerrado (Solo Consulta)' : 'Auditar y Generar Corte AM (' + pendingOrdersCount + ')'}
                                                     </button>
                                                 </div>
                                             )}

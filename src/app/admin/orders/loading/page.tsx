@@ -5917,6 +5917,13 @@ useEffect(() => {
                                     </div>
                                 </div>
 
+                                {selectedOrder.billing_cut_id && (
+                                    <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '6px 12px', borderRadius: '8px', fontSize: '0.74rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <AlertTriangle size={13} style={{ color: '#DC2626', flexShrink: 0 }} />
+                                        <span>AVISO DE INTEGRIDAD CONTABLE: Este pedido ya fue pre-facturado en Corte PM (World Office). Su factura física ya fue emitida. Cualquier modificación física de cantidades requerirá nota contable de ajuste.</span>
+                                    </div>
+                                )}
+
                                 {/* Header Tier 2: Client, Address, Meta & Reassignment */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.82rem' }}>

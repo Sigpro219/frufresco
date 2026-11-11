@@ -10,7 +10,7 @@ import {
     Minimize2, Scale, Zap, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, Pin, Tag, 
     Settings, Plus, Package, Filter, User, ExternalLink, Clock, ShoppingCart,
     ZoomIn, ZoomOut, RotateCw, RefreshCw, Calculator, Lock, Unlock, FileSpreadsheet, Star,
-    CalendarClock, Bell, BellOff
+    CalendarClock, Bell, BellOff, ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { playInboundOrderPing, unlockAudioContext } from '@/lib/soundEffects';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
@@ -1875,6 +1875,25 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // Estados para organizadores de ordenamiento en la tabla de bandeja (Protocolo Oficial de Galerías FruFresco)
+  const [sortField, setSortField] = useState<'date' | 'subject' | 'customer' | 'address' | 'items' | 'total' | 'status' | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: 'date' | 'subject' | 'customer' | 'address' | 'items' | 'total' | 'status') => {
+    if (sortField === field) {
+      const defaultOrder = (field === 'customer' || field === 'address' || field === 'subject') ? 'asc' : 'desc';
+      if (sortOrder === defaultOrder) {
+        setSortOrder(defaultOrder === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortField(null);
+        setSortOrder('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortOrder((field === 'customer' || field === 'address' || field === 'subject') ? 'asc' : 'desc');
+    }
+  };
   const [profiles, setProfiles] = useState<any[]>([]);
   const mainDateInputRef = useRef<HTMLInputElement>(null);
   const deliveryDateInputRef = useRef<HTMLInputElement>(null);
@@ -5254,6 +5273,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       address: meta?.address || draft.extracted_address || 'No detectado',
       phone: meta?.phone || draft.extracted_phone || 'No detectado',
       nit: meta?.nit || draft.extracted_nit || 'No detectado',
+      clientName: meta?.clientName || draft.client_detected_name || null,
       clientType: meta?.clientType || draft.profiles?.role || 'b2c_client',
       deliveryDate: meta?.deliveryDate || null,
       targetOperationalDate: meta?.targetOperationalDate || null,
@@ -6877,17 +6897,6 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     approved: 3
   };
 
-  const sortedFilteredDrafts = useMemo(() => {
-    return [...filteredDrafts].sort((a, b) => {
-      const priorityA = STATUS_PRIORITY[a.status] || 99;
-      const priorityB = STATUS_PRIORITY[b.status] || 99;
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [filteredDrafts]);
-
   const draftTotalsMap = useMemo(() => {
     const map = new Map<string, { total: number; weight: number; count: number }>();
     drafts.forEach(draft => {
@@ -6912,6 +6921,82 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     });
     return map;
   }, [drafts, products, aliases, agreements, agreementPrices, pricingModels, allModelPrices, profiles, deliveryDate]);
+
+  // Organizador Reactivo Tri-Estado (Protocolo Oficial de Galerías FruFresco)
+  const sortedFilteredDrafts = useMemo(() => {
+    // 1. Si el usuario activó un organizador de columna
+    if (sortField) {
+      return [...filteredDrafts].sort((a, b) => {
+        let comp = 0;
+        const metaA = getDraftMetadata(a);
+        const metaB = getDraftMetadata(b);
+
+        switch (sortField) {
+          case 'date': {
+            const timeA = new Date(a.created_at || 0).getTime();
+            const timeB = new Date(b.created_at || 0).getTime();
+            comp = timeA - timeB;
+            break;
+          }
+          case 'subject': {
+            const subA = (cleanSubject(a.email_subject || '') || '').toLowerCase();
+            const subB = (cleanSubject(b.email_subject || '') || '').toLowerCase();
+            comp = subA.localeCompare(subB, 'es', { sensitivity: 'base', numeric: true });
+            break;
+          }
+          case 'customer': {
+            const nameA = (a.client_detected_name || a.source_email || '').toLowerCase();
+            const nameB = (b.client_detected_name || b.source_email || '').toLowerCase();
+            comp = nameA.localeCompare(nameB, 'es', { sensitivity: 'base', numeric: true });
+            break;
+          }
+          case 'address': {
+            const addrA = (metaA.address || '').toLowerCase();
+            const addrB = (metaB.address || '').toLowerCase();
+            comp = addrA.localeCompare(addrB, 'es', { sensitivity: 'base', numeric: true });
+            break;
+          }
+          case 'items': {
+            const totA = draftTotalsMap.get(a.id) || { count: 0, weight: 0 };
+            const totB = draftTotalsMap.get(b.id) || { count: 0, weight: 0 };
+            comp = totA.count !== totB.count ? (totA.count - totB.count) : (totA.weight - totB.weight);
+            break;
+          }
+          case 'total': {
+            const tA = draftTotalsMap.get(a.id)?.total || 0;
+            const tB = draftTotalsMap.get(b.id)?.total || 0;
+            comp = tA - tB;
+            break;
+          }
+          case 'status': {
+            const prioA = STATUS_PRIORITY[a.status] || 99;
+            const prioB = STATUS_PRIORITY[b.status] || 99;
+            comp = prioA - prioB;
+            break;
+          }
+          default:
+            comp = 0;
+        }
+
+        if (comp !== 0) {
+          return sortOrder === 'asc' ? comp : -comp;
+        }
+
+        // Desempate natural por fecha más reciente
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
+    }
+
+    // 2. Ordenamiento Natural Canónico: Prioridad por Estado (Pendientes primero) y Fecha más reciente
+    return [...filteredDrafts].sort((a, b) => {
+      const priorityA = STATUS_PRIORITY[a.status] || 99;
+      const priorityB = STATUS_PRIORITY[b.status] || 99;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [filteredDrafts, sortField, sortOrder, draftTotalsMap]);
 
   const activeEditableTotals = useMemo(() => {
     const active = editableItems.filter(itm => !itm.isDeleted);
@@ -7776,16 +7861,262 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         <>
           <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}`, position: 'relative', overflow: 'visible' }}>
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.85rem 0.25rem', width: '12px', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', ...THEME.typography?.tableHeader }} />
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '38%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ASUNTO / FECHA & REMITENTE</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '20%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>CLIENTE / CANAL</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '17%', textAlign: 'left', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>DIRECCIÓN / GPS</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '9%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ITEMS / PESO</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '10%', textAlign: 'right', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>VALOR</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.85rem', width: '6%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}>ESTADO</th>
-                  <th style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: '#F8FAFB', padding: '0.75rem 0.5rem', width: '3%', textAlign: 'center', borderBottom: '2px solid #E2E8F0', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)', fontSize: '0.70rem', fontWeight: 800, color: '#475569', letterSpacing: '0.04em' }}></th>
+              <thead style={{ position: 'sticky', top: theadTop, zIndex: 30, backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9' }}>
+                <tr style={{ backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9', borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
+                  {/* 0. Indicador de estado */}
+                  <th style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 30,
+                    backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                    padding: '0.85rem 0.25rem',
+                    width: '14px',
+                    textAlign: 'center',
+                    borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                    borderTopLeftRadius: THEME.radius.lg,
+                    boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                    ...THEME.typography?.tableHeader
+                  }} />
+
+                  {/* 1. Asunto / Fecha & Remitente */}
+                  <th 
+                    onClick={() => handleSort('date')}
+                    title="Ordenar por fecha de recepción (clic) o por Asunto A→Z"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '38%',
+                      textAlign: 'left',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: (sortField === 'date' || sortField === 'subject') ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <span>ASUNTO / FECHA & REMITENTE</span>
+                        {sortField === 'date' ? (
+                          sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                        ) : sortField === 'subject' ? null : (
+                          <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSort('subject');
+                        }}
+                        title={sortField === 'subject' ? (sortOrder === 'asc' ? 'Orden alfabético A→Z activo. Clic para Z→A' : 'Orden alfabético Z→A activo. Clic para reiniciar') : 'Ordenar alfabéticamente por Asunto A→Z'}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '2px',
+                          fontSize: '0.62rem', fontWeight: '800', letterSpacing: '0.03em',
+                          padding: '1px 6px', borderRadius: '4px', cursor: 'pointer',
+                          border: sortField === 'subject' ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                          backgroundColor: sortField === 'subject' ? '#ECFDF5' : '#FFFFFF',
+                          color: sortField === 'subject' ? '#065F46' : '#64748B',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <span>A→Z</span>
+                        {sortField === 'subject' && (
+                          sortOrder === 'asc' ? <ArrowUp size={10} strokeWidth={2.8} /> : <ArrowDown size={10} strokeWidth={2.8} />
+                        )}
+                      </button>
+                    </div>
+                  </th>
+
+                  {/* 2. Cliente / Canal */}
+                  <th 
+                    onClick={() => handleSort('customer')}
+                    title="Ordenar alfabéticamente por cliente o razón social"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '20%',
+                      textAlign: 'left',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: sortField === 'customer' ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <span>CLIENTE / CANAL</span>
+                      {sortField === 'customer' ? (
+                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 3. Dirección / GPS */}
+                  <th 
+                    onClick={() => handleSort('address')}
+                    title="Ordenar por dirección de entrega"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '17%',
+                      textAlign: 'left',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: sortField === 'address' ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <span>DIRECCIÓN / GPS</span>
+                      {sortField === 'address' ? (
+                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 4. Items / Peso */}
+                  <th 
+                    onClick={() => handleSort('items')}
+                    title="Ordenar por cantidad de productos y peso total"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '9%',
+                      textAlign: 'center',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: sortField === 'items' ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', width: '100%' }}>
+                      <span>ITEMS / PESO</span>
+                      {sortField === 'items' ? (
+                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 5. Valor */}
+                  <th 
+                    onClick={() => handleSort('total')}
+                    title="Ordenar por monto total estimado"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '10%',
+                      textAlign: 'right',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: sortField === 'total' ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', width: '100%' }}>
+                      <span>VALOR</span>
+                      {sortField === 'total' ? (
+                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 6. Estado */}
+                  <th 
+                    onClick={() => handleSort('status')}
+                    title="Ordenar por estado operativo"
+                    style={{
+                      position: 'sticky',
+                      top: theadTop,
+                      zIndex: 30,
+                      backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                      padding: '0.75rem 0.85rem',
+                      width: '6%',
+                      textAlign: 'center',
+                      borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                      boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                      fontSize: '0.70rem',
+                      fontWeight: 800,
+                      color: sortField === 'status' ? THEME.colors.primary : (THEME.colors.tableHeaderText || '#0F172A'),
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', width: '100%' }}>
+                      <span>ESTADO</span>
+                      {sortField === 'status' ? (
+                        sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.8} /> : <ArrowDown size={12} strokeWidth={2.8} />
+                      ) : (
+                        <ArrowUpDown size={11} strokeWidth={2} style={{ color: '#94A3B8' }} />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 7. Columna final vacía */}
+                  <th style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 30,
+                    backgroundColor: THEME.colors.tableHeaderBg || '#F1F5F9',
+                    padding: '0.75rem 0.5rem',
+                    width: '3%',
+                    textAlign: 'center',
+                    borderBottom: `2px solid ${THEME.colors.tableHeaderBorder || '#CBD5E1'}`,
+                    borderTopRightRadius: THEME.radius.lg,
+                    boxShadow: '0 4px 6px -2px rgba(0,0,0,0.04)',
+                    fontSize: '0.70rem',
+                    fontWeight: 800,
+                    color: THEME.colors.tableHeaderText || '#0F172A',
+                    letterSpacing: '0.04em'
+                  }} />
                 </tr>
               </thead>
             <tbody>
