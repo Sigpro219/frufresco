@@ -16434,6 +16434,7 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   4. **Conmutación a Modo Producción (`email_notifications_mode = 'live'`):**
      - En `public.app_settings`, se actualiza el parámetro `email_notifications_mode` a `'live'`.
      - Los pedidos confirmados se entregan directamente al correo del cliente institucional (`to_email`), garantizando autenticación nativa SPF y DKIM de Hostinger.
+      - **Guardián Anti-Bucle Corporativo:** Si el destinatario pertenece al dominio corporativo (@frufresco.co o @frufresco.com), el despacho se marca como simulated-corporate-id para resguardar la bandeja operativa de saturaciones por auto-notificaciones.
   5. **Blindaje de Esquema en Reposiciones en Garantía ($0 COP):**
      - En `src/app/admin/orders/loading/page.tsx`, la formalización de reposiciones a $0 COP elimina de `itemsToUpsert` las columnas calculadas `subtotal` y `total`.
      - En `src/app/api/orders/update/route.ts`, se aplica una lista blanca de sanitización estricta (`validOrderItemColumns`) que descarta cualquier propiedad que no pertenezca a las 12 columnas físicas de la tabla `order_items` de PostgreSQL, blindando el sistema contra errores de caché de esquema.
