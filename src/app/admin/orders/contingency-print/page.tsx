@@ -1339,16 +1339,24 @@ function ContingencyPrintContent() {
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
                 {showRemissions && orders.flatMap((order, orderIdx) => {
+                    const rawDocType = (order.logistics_data as any)?.document_type_override || order.profiles?.document_type || order.profiles?.parent?.document_type || '';
+                    const isInvoiceRequired = rawDocType === 'invoice' || (order.profiles as any)?.print_invoice === true || (order.profiles?.parent as any)?.print_invoice === true || (order as any).document_type === 'invoice';
+
+                    // SPEC.md Escenario 432: Exclusión Mutua Poka-Yoke: Pedidos con Factura Impresa (FAC-IMP) viajan con factura DIAN física expedida en World Office, NO con remisión
+                    if (isInvoiceRequired) {
+                        return [];
+                    }
+
                     const b2cGift = extractB2CGiftDetails(order);
                     const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
                     const subtotal = order.subtotal || order.total || 0;
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
-                    const rawDocType = order.logistics_data?.document_type_override || order.profiles?.document_type || order.profiles?.parent?.document_type || '';
                     const isObsequio = !isReposicion && (b2cGift.isB2CGift || rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
                     const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || (order.admin_notes || '').includes('FUERA DE ACUERDO - DESPACHADO SIN PRECIO'));
                     const isUnpricedOffAgreement = isOffAgreementRemission && !Boolean(order.logistics_data?.off_agreement_priced) && Number(order.total || 0) === 0;
                     const isZeroCostDoc = isReposicion || isObsequio || isUnpricedOffAgreement;
+                    const withPrices = !isZeroCostDoc && (order.profiles?.remission_with_prices !== false && order.profiles?.parent?.remission_with_prices !== false);
                     const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
                         const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
                         const m = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) || notes.match(/#ped-(\d{3,})/i);
@@ -1388,7 +1396,7 @@ function ContingencyPrintContent() {
                             return (
                                 <Letterhead
                                     key={`remission-${order.id}-copy-${copyIdx}-page-${pageIdx}`}
-                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : isObsequio ? `REMISIÓN DE OBSEQUIO #${orderNum}` : `REMISIÓN #${orderNum}`}
+                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : isObsequio ? `REMISIÓN DE OBSEQUIO #${orderNum}` : !withPrices ? `REMISIÓN A CIEGAS #${orderNum}` : `REMISIÓN #${orderNum}`}
                                     subtitle={pageSubtitle}
                                     date={order.delivery_date}
                                     badge={copyInfo.copyType}
@@ -1518,14 +1526,18 @@ function ContingencyPrintContent() {
                                                 <thead>
                                                     <tr>
                                                         <th style={{ width: '3.5%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>#</th>
-                                                        <th style={{ width: '31%', fontSize: thFontSize, padding: thPad }}>DESCRIPCIÓN DEL PRODUCTO</th>
-                                                        <th style={{ width: '7.5%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>CANT.</th>
-                                                        <th style={{ width: '6%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>UM</th>
-                                                        <th style={{ width: '10%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>VALOR/UM</th>
-                                                        <th style={{ width: '10%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>IVA</th>
-                                                        <th style={{ width: '11%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>TOTAL</th>
-                                                        <th style={{ width: '14%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: thFontSize, padding: thPad }}>KG-UN RECIBE</th>
-                                                        <th style={{ width: '7%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>[]</th>
+                                                        <th style={{ width: withPrices ? '31%' : '52%', fontSize: thFontSize, padding: thPad }}>DESCRIPCIÓN DEL PRODUCTO</th>
+                                                        <th style={{ width: withPrices ? '7.5%' : '12%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>CANT.</th>
+                                                        <th style={{ width: withPrices ? '6%' : '9%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>UM</th>
+                                                        {withPrices && (
+                                                            <>
+                                                                <th style={{ width: '10%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>VALOR/UM</th>
+                                                                <th style={{ width: '10%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>IVA</th>
+                                                                <th style={{ width: '11%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>TOTAL</th>
+                                                            </>
+                                                        )}
+                                                        <th style={{ width: withPrices ? '14%' : '16%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: thFontSize, padding: thPad }}>KG-UN RECIBE</th>
+                                                        <th style={{ width: withPrices ? '7%' : '7.5%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>[]</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1576,15 +1588,19 @@ function ContingencyPrintContent() {
                                                                 <td style={{ textAlign: 'center', fontSize: smallFontSize, fontWeight: '600', color: '#334155', padding: rowPad, lineHeight: lineH }}>
                                                                     {displayUnit}
                                                                 </td>
-                                                                <td style={{ textAlign: 'right', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad, lineHeight: lineH }}>
-                                                                    {displayPrice > 0 ? formatMoney(displayPrice) : formatMoney(0)}
-                                                                </td>
-                                                                <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad, lineHeight: lineH }}>
-                                                                    {ivaPct > 0 ? `${ivaPct}%` : '0%'}
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad, lineHeight: lineH }}>
-                                                                    {lineTotal > 0 ? formatMoney(lineTotal) : formatMoney(0)}
-                                                                </td>
+                                                                {withPrices && (
+                                                                    <>
+                                                                        <td style={{ textAlign: 'right', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#334155', padding: rowPad, lineHeight: lineH }}>
+                                                                            {displayPrice > 0 ? formatMoney(displayPrice) : formatMoney(0)}
+                                                                        </td>
+                                                                        <td style={{ textAlign: 'center', fontSize: smallFontSize, fontVariantNumeric: 'tabular-nums', color: ivaPct > 0 ? '#0D7A57' : '#64748B', padding: rowPad, lineHeight: lineH }}>
+                                                                            {ivaPct > 0 ? `${ivaPct}%` : '0%'}
+                                                                        </td>
+                                                                        <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, fontVariantNumeric: 'tabular-nums', color: '#0F172A', padding: rowPad, lineHeight: lineH }}>
+                                                                            {lineTotal > 0 ? formatMoney(lineTotal) : formatMoney(0)}
+                                                                        </td>
+                                                                    </>
+                                                                )}
                                                                 <td style={{ textAlign: 'center', borderLeft: '1px solid #CBD5E1', borderRight: '1px solid #CBD5E1', fontWeight: 'bold', backgroundColor: '#FFFFFF', verticalAlign: 'middle', padding: isUltraDense ? '0.4px 3px' : '1px 3px', lineHeight: lineH }}>
                                                                     <div style={{ borderBottom: '1px dashed #94A3B8', height: receiveBoxH }}></div>
                                                                 </td>
@@ -1651,6 +1667,19 @@ function ContingencyPrintContent() {
                                                         const discountPct = Number(order.logistics_data?.agreement_discount_pct || order.profiles?.logistics_data?.agreement_discount_pct || 0);
                                                         const discountAmount = (!isZeroCostDoc && discountPct > 0) ? Math.round(subtotal * (discountPct / 100)) : 0;
                                                         const finalPrintTotal = isZeroCostDoc ? 0 : Math.max(0, subtotal - discountAmount + Number(order.tax || 0));
+
+                                                        if (!withPrices) {
+                                                            return (
+                                                                <div style={{ width: isUltraDense ? '195px' : isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isUltraDense ? '4px 6px' : isDense ? '6px 8px' : '8px 10px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isUltraDense ? '6pt' : isDense ? '6.4pt' : '6.8pt', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '3px' }}>
+                                                                    <div style={{ fontWeight: '900', color: '#0F172A', letterSpacing: '0.02em', fontSize: isUltraDense ? '6.5pt' : isDense ? '7pt' : '7.5pt' }}>
+                                                                        ENTREGA A CIEGAS (REM-S/S)
+                                                                    </div>
+                                                                    <div style={{ color: '#64748B', fontSize: isUltraDense ? '5.2pt' : isDense ? '5.6pt' : '6pt', lineHeight: 1.15 }}>
+                                                                        Cantidades físicas para control de recibo. Tarifas reservadas según acuerdo comercial.
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
 
                                                         return (
                                                             <div style={{ width: isUltraDense ? '195px' : isDense ? '205px' : '220px', backgroundColor: '#F8FAFC', padding: isUltraDense ? '2px 5px' : isDense ? '3px 6px' : '4px 8px', border: '1px solid #CBD5E1', borderRadius: '4px', fontSize: isUltraDense ? '6.2pt' : isDense ? '6.6pt' : '7pt' }}>

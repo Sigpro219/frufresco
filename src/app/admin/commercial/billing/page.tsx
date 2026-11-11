@@ -2317,7 +2317,7 @@ export default function BillingDashboard() {
                 ordersQuery = ordersQuery.in('id', adjOrderIds);
             } else {
                 ordersQuery = ordersQuery.is('billing_cut_id', null);
-                if (includeAllStatuses) {
+                if (slot === 'PM' || includeAllStatuses) {
                     ordersQuery = ordersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido']);
                 } else {
                     ordersQuery = ordersQuery.eq('status', 'delivered');
@@ -2331,7 +2331,16 @@ export default function BillingDashboard() {
             if (ordersError) throw ordersError;
 
             let targetOrders = rawOrders || [];
-            if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
+            if (slot === 'PM') {
+                // Escenario 432 / SDD v1.9.386: Corte Pre-Despacho Tarde (FAC-IMP).
+                // Filtra estrictamente los pedidos cuya configuración documental exige factura impresa en muelle (World Office)
+                targetOrders = targetOrders.filter(o => {
+                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
+                    const docType = o.document_type || prof.document_type;
+                    const printInv = prof.print_invoice === true || o.print_invoice === true;
+                    return docType === 'invoice' || printInv === true;
+                });
+            } else if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
                 targetOrders = targetOrders.filter(o => selectedOrderIds.includes(o.id));
             } else if (slot !== 'ADJ') {
                 // Escenario 121: En cortes oficiales de Facturación Masiva (FV), excluir automáticamente reposiciones de garantía de SAC a $0 COP
@@ -4655,6 +4664,30 @@ export default function BillingDashboard() {
                                         }}
                                     >
                                         {isDateLockedByCut ? <Lock size={12} /> : <Sun size={12} />} {isDateLockedByCut ? 'Corte Cerrado' : 'Corte AM ' + (selectedOrderIds.length > 0 ? '(' + selectedOrderIds.length + ')' : '(' + pendingOrdersCount + ')')}
+                                    </button>
+
+                                    {/* Botón Corte Tarde (FAC-IMP) - SDD Escenario 432 */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenCutPreview('PM')}
+                                        disabled={isProcessing}
+                                        title="Corte Pre-Despacho Tarde (FAC-IMP): Genera plano World Office exclusivamente para pedidos con Factura Electrónica Impresa obligatoria en muelle"
+                                        style={{
+                                            backgroundColor: '#DC2626',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '0.32rem 0.75rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '800',
+                                            fontSize: '0.72rem',
+                                            cursor: isProcessing ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)'
+                                        }}
+                                    >
+                                        <Moon size={12} /> Corte Tarde (FAC-IMP)
                                     </button>
 
                                     {/* Micro-icono HelpCircle con Tooltip */}

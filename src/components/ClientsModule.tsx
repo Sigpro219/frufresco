@@ -155,6 +155,52 @@ interface Profile {
     created_at: string;
 }
 
+export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: boolean) => {
+    if (docType === 'invoice') {
+        return {
+            label: 'FAC-IMP',
+            title: 'Factura Electrónica Impresa Obligatoria en Muelle (World Office)',
+            bg: '#FEF2F2',
+            color: '#B91C1C',
+            border: '#F87171'
+        };
+    }
+    if (docType === 'batch_remission') {
+        return {
+            label: 'REM-LOTE',
+            title: 'Facturación por Lotes / Remisiones Acumuladas',
+            bg: '#ECFDF5',
+            color: '#065F46',
+            border: '#A7F3D0'
+        };
+    }
+    if (docType === 'gift_remission') {
+        return {
+            label: 'REM-OBSEQUIO',
+            title: 'Remisión de Obsequio ($0 COP)',
+            bg: '#FDF4FF',
+            color: '#A21CAF',
+            border: '#F0ABFC'
+        };
+    }
+    if (remissionWithPrices === false) {
+        return {
+            label: 'REM-S/S',
+            title: 'Remisión Ciega Oficial (Sin Precios / Solo Kilos)',
+            bg: '#F8FAFC',
+            color: '#475569',
+            border: '#CBD5E1'
+        };
+    }
+    return {
+        label: 'REM-$',
+        title: 'Remisión Valorizada Oficial (Con Precios y Totales)',
+        bg: '#EFF6FF',
+        color: '#1D4ED8',
+        border: '#93C5FD'
+    };
+};
+
 interface Lead {
     id: string;
     company_name?: string;
@@ -4597,16 +4643,14 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                 }
                                 return null;
                             })()}
-                            {client.document_type === 'invoice' && (
-                                <span title="Factura Impresa Solicitada" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                    <FileText size={10} strokeWidth={1.5} /> FAC-IMP
-                                </span>
-                            )}
-                            {(client.document_type as string) === 'batch_remission' && (
-                                <span title="Facturación por Lotes / Remisiones Acumuladas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#065F46', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                    <FileText size={10} strokeWidth={1.5} /> REM-LOTE
-                                </span>
-                            )}
+                            {(() => {
+                                const docBadge = getDocumentBadgeStyle(client.document_type, client.remission_with_prices);
+                                return (
+                                    <span title={docBadge.title} style={{ fontSize: '0.62rem', backgroundColor: docBadge.bg, color: docBadge.color, padding: '2px 7px', borderRadius: '5px', fontWeight: '900', border: `1px solid ${docBadge.border}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                        <FileText size={10} strokeWidth={2} /> {docBadge.label}
+                                    </span>
+                                );
+                            })()}
                         </div>
                     </>
                 ) : (
@@ -4628,9 +4672,14 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                                 </span>
                             ) : null}
                             {client.needs_crates && <span title="Requiere Canastillas" style={{ fontSize: '0.6rem', backgroundColor: '#ECFDF5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', gap: '2px' }}><Package size={10} strokeWidth={1.5} /> SI</span>}
-                            <span title="Tipo de Documento" style={{ fontSize: '0.6rem', backgroundColor: '#F8FAFC', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                <FileText size={10} strokeWidth={1.5} /> {client.document_type === 'batch_remission' ? 'REM-LOTE' : (client.document_type === 'invoice' ? 'FAC-IMP' : (client.document_type === 'gift_remission' ? 'REM-OBSEQUIO' : (client.remission_with_prices ? 'REM-$' : 'REM-S/S')))}
-                            </span>
+                            {(() => {
+                                const docBadge = getDocumentBadgeStyle(client.document_type, client.remission_with_prices);
+                                return (
+                                    <span title={docBadge.title} style={{ fontSize: '0.62rem', backgroundColor: docBadge.bg, color: docBadge.color, padding: '2px 7px', borderRadius: '5px', fontWeight: '900', border: `1px solid ${docBadge.border}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                        <FileText size={10} strokeWidth={2} /> {docBadge.label}
+                                    </span>
+                                );
+                            })()}
                             {client.logistics_data?.billing_weight_unit === 'lb' && (
                                 <span title="Facturación en Libras (1 Kg = 2 Lb)" style={{ fontSize: '0.6rem', backgroundColor: '#F5F3FF', color: '#6D28D9', padding: '1px 6px', borderRadius: '4px', fontWeight: '900', border: '1px solid #DDD6FE', display: 'flex', alignItems: 'center', gap: '2px' }}>
                                     <Scale size={10} strokeWidth={1.5} /> LB

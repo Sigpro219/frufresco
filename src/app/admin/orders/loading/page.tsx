@@ -1614,7 +1614,7 @@ useEffect(() => {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions), order_items(id, product_id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
 
 
 
@@ -3730,7 +3730,7 @@ useEffect(() => {
                             >
                                 <Star size={13} fill="currentColor" />
                                 <span>Mañana</span>
-                                {dateCounts.tomorrow > 0 && (
+                                {((selectedDate === getTomorrowDateStr() ? orders.length : dateCounts.tomorrow) > 0) && (
                                     <span style={{
                                         padding: '1px 5px',
                                         borderRadius: '4px',
@@ -3739,7 +3739,7 @@ useEffect(() => {
                                         backgroundColor: selectedDate === getTomorrowDateStr() ? 'rgba(6, 95, 70, 0.2)' : '#E2E8F0',
                                         color: selectedDate === getTomorrowDateStr() ? '#065F46' : '#475569'
                                     }}>
-                                        {dateCounts.tomorrow}
+                                        {selectedDate === getTomorrowDateStr() ? orders.length : dateCounts.tomorrow}
                                     </span>
                                 )}
                             </button>
@@ -3767,7 +3767,7 @@ useEffect(() => {
                                 title="Ver pedidos programados para entregar HOY (Monitoreo en tiempo real)"
                             >
                                 <span>Hoy</span>
-                                {dateCounts.today > 0 && (
+                                {((selectedDate === getTodayDateStr() ? orders.length : dateCounts.today) > 0) && (
                                     <span style={{
                                         padding: '1px 5px',
                                         borderRadius: '4px',
@@ -3776,7 +3776,7 @@ useEffect(() => {
                                         backgroundColor: selectedDate === getTodayDateStr() ? '#0284C7' : '#DCFCE7',
                                         color: selectedDate === getTodayDateStr() ? '#FFFFFF' : '#166534'
                                     }}>
-                                        {dateCounts.today}
+                                        {selectedDate === getTodayDateStr() ? orders.length : dateCounts.today}
                                     </span>
                                 )}
                             </button>
@@ -4707,6 +4707,69 @@ useEffect(() => {
                                                                                 {order.customer_phone}
                                                                             </span>
                                                                         )}
+
+                                                                        {/* SPEC.md Escenario 432: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) */}
+                                                                        {(() => {
+                                                                            const prof = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || {});
+                                                                            const rawDoc = order.document_type || prof?.document_type;
+                                                                            const printInv = prof?.print_invoice === true || order.print_invoice === true;
+                                                                            const withPrices = (prof?.remission_with_prices !== false) && (order.remission_with_prices !== false);
+                                                                            
+                                                                            let label = 'REM-$';
+                                                                            let title = 'Remisión Valorizada Oficial (Con Precios y Totales)';
+                                                                            let bg = '#EFF6FF';
+                                                                            let color = '#1D4ED8';
+                                                                            let border = '#93C5FD';
+
+                                                                            if (rawDoc === 'invoice' || printInv === true) {
+                                                                                label = 'FAC-IMP';
+                                                                                title = 'Factura Electrónica Impresa Obligatoria en Muelle (World Office)';
+                                                                                bg = '#FEF2F2';
+                                                                                color = '#B91C1C';
+                                                                                border = '#F87171';
+                                                                            } else if (rawDoc === 'batch_remission') {
+                                                                                label = 'REM-LOTE';
+                                                                                title = 'Facturación por Lotes / Remisiones Acumuladas';
+                                                                                bg = '#ECFDF5';
+                                                                                color = '#065F46';
+                                                                                border = '#A7F3D0';
+                                                                            } else if (rawDoc === 'gift_remission') {
+                                                                                label = 'REM-OBSEQUIO';
+                                                                                title = 'Remisión de Obsequio ($0 COP)';
+                                                                                bg = '#FDF4FF';
+                                                                                color = '#A21CAF';
+                                                                                border = '#F0ABFC';
+                                                                            } else if (!withPrices) {
+                                                                                label = 'REM-S/S';
+                                                                                title = 'Remisión Ciega Oficial (Sin Precios / Solo Kilos)';
+                                                                                bg = '#F8FAFC';
+                                                                                color = '#475569';
+                                                                                border = '#CBD5E1';
+                                                                            }
+
+                                                                            return (
+                                                                                <span 
+                                                                                    title={title}
+                                                                                    style={{
+                                                                                        fontSize: '0.62rem',
+                                                                                        fontWeight: '900',
+                                                                                        backgroundColor: bg,
+                                                                                        color: color,
+                                                                                        border: `1px solid ${border}`,
+                                                                                        padding: '1px 6px',
+                                                                                        borderRadius: '4px',
+                                                                                        display: 'inline-flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px',
+                                                                                        letterSpacing: '0.02em',
+                                                                                        boxShadow: (rawDoc === 'invoice' || printInv === true) ? '0 1px 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                                                                    }}
+                                                                                >
+                                                                                    <FileText size={10} strokeWidth={2} />
+                                                                                    {label}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
 
                                                                         {(() => {
                                                                             const rep = getOrderReplacementInfo(order);
