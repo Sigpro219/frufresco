@@ -1340,7 +1340,7 @@ function ContingencyPrintContent() {
                 {/* ========================================================= */}
                 {showRemissions && orders.flatMap((order, orderIdx) => {
                     const rawDocType = (order.logistics_data as any)?.document_type_override || order.profiles?.document_type || order.profiles?.parent?.document_type || '';
-                    const isInvoiceRequired = rawDocType === 'invoice' || (order.profiles as any)?.print_invoice === true || (order.profiles?.parent as any)?.print_invoice === true || (order as any).document_type === 'invoice';
+                    const isInvoiceRequired = rawDocType === 'invoice' || (order as any).document_type === 'invoice';
 
                     // SPEC.md Escenario 432: Exclusión Mutua Poka-Yoke: Pedidos con Factura Impresa (FAC-IMP) viajan con factura DIAN física expedida en World Office, NO con remisión
                     if (isInvoiceRequired) {

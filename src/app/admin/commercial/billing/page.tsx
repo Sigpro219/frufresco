@@ -2337,8 +2337,7 @@ export default function BillingDashboard() {
                 targetOrders = targetOrders.filter(o => {
                     const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
                     const docType = o.document_type || prof.document_type;
-                    const printInv = prof.print_invoice === true || o.print_invoice === true;
-                    return docType === 'invoice' || printInv === true;
+                    return docType === 'invoice';
                 });
             } else if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
                 targetOrders = targetOrders.filter(o => selectedOrderIds.includes(o.id));

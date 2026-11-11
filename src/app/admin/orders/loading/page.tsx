@@ -15,6 +15,7 @@ import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
 import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
+import { getDocumentBadgeStyle } from '@/components/ClientsModule';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
 import { 
@@ -4711,62 +4712,30 @@ useEffect(() => {
                                                                         {/* SPEC.md Escenario 432: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) */}
                                                                         {(() => {
                                                                             const prof = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || {});
-                                                                            const rawDoc = order.document_type || prof?.document_type;
-                                                                            const printInv = prof?.print_invoice === true || order.print_invoice === true;
+                                                                            const rawDoc = order.document_type || prof?.document_type || 'remission';
                                                                             const withPrices = (prof?.remission_with_prices !== false) && (order.remission_with_prices !== false);
-                                                                            
-                                                                            let label = 'REM-$';
-                                                                            let title = 'Remisión Valorizada Oficial (Con Precios y Totales)';
-                                                                            let bg = '#EFF6FF';
-                                                                            let color = '#1D4ED8';
-                                                                            let border = '#93C5FD';
-
-                                                                            if (rawDoc === 'invoice' || printInv === true) {
-                                                                                label = 'FAC-IMP';
-                                                                                title = 'Factura Electrónica Impresa Obligatoria en Muelle (World Office)';
-                                                                                bg = '#FEF2F2';
-                                                                                color = '#B91C1C';
-                                                                                border = '#F87171';
-                                                                            } else if (rawDoc === 'batch_remission') {
-                                                                                label = 'REM-LOTE';
-                                                                                title = 'Facturación por Lotes / Remisiones Acumuladas';
-                                                                                bg = '#ECFDF5';
-                                                                                color = '#065F46';
-                                                                                border = '#A7F3D0';
-                                                                            } else if (rawDoc === 'gift_remission') {
-                                                                                label = 'REM-OBSEQUIO';
-                                                                                title = 'Remisión de Obsequio ($0 COP)';
-                                                                                bg = '#FDF4FF';
-                                                                                color = '#A21CAF';
-                                                                                border = '#F0ABFC';
-                                                                            } else if (!withPrices) {
-                                                                                label = 'REM-S/S';
-                                                                                title = 'Remisión Ciega Oficial (Sin Precios / Solo Kilos)';
-                                                                                bg = '#F8FAFC';
-                                                                                color = '#475569';
-                                                                                border = '#CBD5E1';
-                                                                            }
+                                                                            const docBadge = getDocumentBadgeStyle(rawDoc, withPrices);
 
                                                                             return (
                                                                                 <span 
-                                                                                    title={title}
+                                                                                    title={docBadge.title}
                                                                                     style={{
                                                                                         fontSize: '0.62rem',
                                                                                         fontWeight: '900',
-                                                                                        backgroundColor: bg,
-                                                                                        color: color,
-                                                                                        border: `1px solid ${border}`,
+                                                                                        backgroundColor: docBadge.bg,
+                                                                                        color: docBadge.color,
+                                                                                        border: `1px solid ${docBadge.border}`,
                                                                                         padding: '1px 6px',
                                                                                         borderRadius: '4px',
                                                                                         display: 'inline-flex',
                                                                                         alignItems: 'center',
                                                                                         gap: '3px',
                                                                                         letterSpacing: '0.02em',
-                                                                                        boxShadow: (rawDoc === 'invoice' || printInv === true) ? '0 1px 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                                                                        boxShadow: rawDoc === 'invoice' ? '0 1px 2px rgba(239, 68, 68, 0.2)' : 'none'
                                                                                     }}
                                                                                 >
                                                                                     <FileText size={10} strokeWidth={2} />
-                                                                                    {label}
+                                                                                    {docBadge.label}
                                                                                 </span>
                                                                             );
                                                                         })()}
