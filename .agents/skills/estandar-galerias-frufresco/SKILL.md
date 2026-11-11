@@ -36,9 +36,13 @@ Cuando se construya, refactorice o audite una galería o tabla operativa:
      ```
    - *¿Cómo redondear esquinas sin `overflow: hidden`?* Aplica los radios directamente al primer y último elemento hijo (ej. `borderTopLeftRadius: '14px'`, `borderTopRightRadius: '14px'` en la cabecera o primer `th`/`td`).
 
-2. **PROHIBIDO `overflowX: auto` en Wrappers Directos de Tabla con Sticky de Ventana:**
-   - En Chromium, `overflowX: auto` fuerza al navegador a tratar el eje Y como dependiente del contenedor interno, rompiendo el `top: '[offset]'` respecto a `window.scrollY`.
-   - En la resolución estándar de escritorio (1600px), la tabla debe tener `width: '100%'` y `overflow: 'visible'`.
+2. **PROHIBIDO `overflowX: auto` en Wrappers Directos de Tabla con Sticky de Ventana (Bug del Encabezado Desplazado):**
+   - En Chromium y estándares CSS W3C, `overflowX: auto` fuerza al navegador a tratar el eje vertical Y como dependiente del contenedor interno.
+   - **El Síntoma Crítico:** Si el desarrollador o agente define `position: sticky; top: [Xpx]` en las celdas `<th>` dentro de un contenedor con `overflowX: auto` (o `overflow: hidden`), el navegador aplica ese offset *desde la cima del contenedor*. Al estar el scroll interno en 0, **el encabezado es empujado X píxeles hacia abajo dentro de la tabla**, quedando suspendido encima de las filas 2, 3 o 4.
+   - **Regla Inmutable:**
+     - En **módulos, pestañas o consolas embebidas** (ej. `EmailOutboxModule`, `EmailDraftsModule`, tablas de auditoría): el encabezado `<thead>` debe permanecer **en su flujo natural en la fila 0 de la tabla** (sin `position: sticky` con offsets arbitrarios en píxeles).
+     - Si la tabla requiere `overflowX: auto` para dispositivos móviles o pantallas estrechas, las celdas `<th>` NUNCA deben llevar `top: [valor > 0]`.
+     - En **tablas maestras de pantalla completa** con sticky acoplado a la ventana, el contenedor DEBE ser `overflow: visible` y la tabla tener `width: '100%'`.
 
 ---
 

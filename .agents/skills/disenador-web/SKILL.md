@@ -94,15 +94,25 @@ Eres el **Diseñador Web Principal & Arquitecto UI/UX** en Google Antigravity. T
 
 ### 7. Estándar Oficial de Comportamiento Sticky & Galerías/Tablas (ClientsModule Standard)
 
-#### A. Anti-patrón Prohibido: Scrollbox Rígido Interno
+#### A. Anti-patrón Mortal: La Trampa de `overflowX: 'auto'` + `position: sticky; top: [offset]` (Error del Encabezado que se Baja a la 3ª Fila)
+- **EL ERROR CLÁSICO:** Colocar `position: sticky; top: theadTop` (donde `theadTop` es un valor en píxeles como 140px, 185px o 220px) en celdas `<th>` o `<thead>` de una tabla que tiene un contenedor ancestro con `overflowX: 'auto'`, `overflowY: 'auto'` o `overflow: 'hidden'`.
+- **POR QUÉ SE BAJA EL ENCABEZADO:** En la especificación CSS W3C, cualquier contenedor con `overflow` distinto de `visible` se convierte en el *Scroll Container* local del elemento sticky. Al estar el scroll interno del contenedor en 0, el navegador interpreta `top: 185px` como una orden obligatoria de **desplazar el encabezado 185 píxeles hacia abajo desde el inicio de la tabla**, dejándolo flotando en medio de las filas de datos.
+- **REGLA DE ORO INMUTABLE:**
+  1. **En Módulos con Toolbar Propio o Vistas de Pestañas (ej. Outbox, Drafts, Modales):**
+     - El encabezado `<thead>` debe permanecer **en su flujo natural en la cima exacta de la tabla** (fila 0), con fondo sólido Slate-100 (`#F1F5F9`), borde inferior Slate-300 (`#CBD5E1`, 2px) y texto Slate-900 extra-bold (`#0F172A`).
+     - **PROHIBIDO** inyectar `position: 'sticky'` con offsets calculados en píxeles (`top: theadTop`) que provoquen desplazamientos erráticos o crucen filas de datos.
+     - Si la tabla lleva `overflowX: 'auto'` para salvaguardar pantallas estrechas, el `th` o `thead` NUNCA debe llevar `top: [valor > 0]`.
+  2. **En Tablas Maestras de Pantalla Completa con Sticky Acoplado a Navbar:**
+     - Si la tabla requiere obligatoriamente congelar su cabecera contra `window.scrollY`:
+     - El contenedor maestro debe tener estrictamente `overflow: 'visible'` (PROHIBIDO `overflow-hidden`, `overflow-clip` y `overflowX: auto` en el ancestro directo).
+     - Si se necesita redondeo de esquinas, aplicar `rounded-tl` y `rounded-tr` directamente al primer y último `<th>`.
+
+#### B. Anti-patrón Prohibido: Scrollbox Rígido Interno
 - **NUNCA** encerrar tablas o listados principales en contenedores con `maxHeight: calc(...)` y `overflowY: 'auto'` en vistas de página completa.
 - **Motivo:** Causa *Scroll Trapping*, barras de desplazamiento dobles y una experiencia rígida e incómoda donde el scroll de la página compite con el scroll del componente.
 
-#### B. Scroll Unificado de Ventana (Window Scroll)
-- El contenedor de la tabla o galería debe permitir que el documento fluya naturalmente con el scroll de la ventana (`window.scrollY`), usando únicamente `overflowX: 'auto'` para salvaguardar el ancho horizontal responsive.
-
 #### C. Barra Flotante Sticky de Acciones, Búsqueda y Filtros (*Frosted Floating Toolbar*)
-- Todos los módulos con listados, tablas o catálogos deben incorporar la barra de control flotante sticky:
+- En vistas principales que usen barra de herramientas flotante:
   - `position: 'sticky'`
   - `top: '85px'` (vistas de primer nivel con Navbar) o `top: '142px'` (vistas con subpestañas operativas intermedias).
   - `zIndex: 70` (o `80`, siempre por debajo del Navbar con `zIndex: 100`).
@@ -113,9 +123,9 @@ Eres el **Diseñador Web Principal & Arquitecto UI/UX** en Google Antigravity. T
   - `border: '1px solid #E2E8F0'`
 - Esta barra aloja: botón primario de creación ("Nuevo..."), input de búsqueda en tiempo real con icono `Search`, toggles de vista (`List` / `Grid`) y selectores de filtros rápidos.
 
-#### D. Encabezados de Columna `<thead>` Sticky y Estándar de Contraste Canónico (WCAG AAA)
-- Las celdas `<th>` deben anclarse con `position: sticky` en el offset calculado acumulado asegurando `borderCollapse: 'separate'` y `borderSpacing: 0`.
+#### D. Encabezados de Columna `<thead>` y Estándar de Contraste Canónico (WCAG AAA)
 - **Paleta Canónica Obligatoria:** Fondo Slate-100 sólido (`#F1F5F9` / `bg-slate-100`), borde delimitador inferior Slate-300 (`#CBD5E1`, 2px), y texto Slate-900 extra-bold (`#0F172A`, 800 weight, 0.72rem / `text-xs`) con ratio de contraste $\ge$ 9.8:1 (WCAG AAA).
+- **Chromium Table Safety:** Declarar siempre en la tabla `borderCollapse: 'separate'` y `borderSpacing: 0`.
 - **Anatomía Completa:** Coexistencia de ordenadores tri-estado (`ArrowUpDown` neutral $\rightarrow$ `ArrowUp` asc $\rightarrow$ `ArrowDown` desc) junto con botones de filtro desplegable (`ChevronDown`).
 
 ### 8. Barra Superior Frosted Persistente (Skin 1 Standard)
