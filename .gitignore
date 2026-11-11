@@ -63,6 +63,7 @@ backups/
 .env.*
 *.env
 gcp-service-account.json
+CREDENCIALES_CORREOS_FRUFRESCO_CO.txt
 node_modules/
 .next/
 

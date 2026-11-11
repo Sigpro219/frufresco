@@ -575,17 +575,40 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
   lastSyncedUid: number;
   transitionEpochAt: string;
 }> {
-  const host = process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com';
-  const port = parseInt(process.env.HOSTINGER_IMAP_PORT || '993', 10);
-  const user = process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co';
-  const pass = process.env.HOSTINGER_IMAP_PASS || '';
+  const supabaseAdmin = getSupabaseAdmin();
+  let host = process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com';
+  let port = parseInt(process.env.HOSTINGER_IMAP_PORT || '993', 10);
+  let user = process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co';
+  let pass = process.env.HOSTINGER_IMAP_PASS || '';
   const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
+
+  // Fallback de Resiliencia Absoluta: Si no existen en process.env (ej. Vercel Preview / Prod sin env vars locales),
+  // se consultan de forma segura desde public.app_settings gobernado por Supabase Admin (Zero-Failure Architecture)
+  if (!pass) {
+    try {
+      const { data: dbCreds } = await supabaseAdmin
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'hostinger_imap_credentials')
+        .single();
+
+      if (dbCreds?.value) {
+        const parsed = typeof dbCreds.value === 'string' ? JSON.parse(dbCreds.value) : dbCreds.value;
+        if (parsed.pass) pass = parsed.pass;
+        if (parsed.user) user = parsed.user;
+        if (parsed.host) host = parsed.host;
+        if (parsed.port) port = parseInt(parsed.port, 10);
+      }
+    } catch (err: any) {
+      console.warn('[Hostinger IMAP] Fallback app_settings lookup failed:', err?.message || err);
+    }
+  }
 
   if (!pass) {
     return {
       success: true,
       skipped: true,
-      reason: 'Credentials not configured (HOSTINGER_IMAP_PASS missing)',
+      reason: 'Credentials not configured (HOSTINGER_IMAP_PASS missing and not found in app_settings)',
       ingestedCount: 0,
       lastSyncedUid: 0,
       transitionEpochAt: defaultEpoch,
@@ -605,7 +628,6 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
 
   inFlightHostingerSync = true;
   const startTime = Date.now();
-  const supabaseAdmin = getSupabaseAdmin();
 
   let state: HostingerSyncState = {
     account: user,

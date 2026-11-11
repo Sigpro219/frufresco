@@ -1370,6 +1370,37 @@ export async function POST(req: Request) {
       }
     }
 
+    const scoreProfileMatch = (detName: string, prof: any, detectedAddress?: string): number => {
+      let score = 0;
+      if (prof.is_active === false) score -= 10000; // Despriorizar fuertemente perfiles inactivos
+
+      const profName = (prof.company_name || prof.contact_name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const normDet = (detName || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+      if (normDet && profName) {
+        if (profName === normDet) score += 5000;
+        else if (profName.includes(normDet) || normDet.includes(profName)) score += 3000;
+
+        const wordsDet = normDet.split(/\s+/).filter(w => w.length > 2);
+        const wordsProf = profName.split(/\s+/).filter(w => w.length > 2);
+        const commonWords = wordsDet.filter(w => wordsProf.includes(w));
+        score += commonWords.length * 500;
+      }
+
+      // Reconciliación por dirección física si está disponible
+      if (detectedAddress && prof.address) {
+        const normDetAddr = detectedAddress.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\W+/g, " ").trim();
+        const normProfAddr = prof.address.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\W+/g, " ").trim();
+        const addrWordsDet = normDetAddr.split(/\s+/).filter(w => w.length > 2);
+        const addrWordsProf = normProfAddr.split(/\s+/).filter(w => w.length > 2);
+        const commonAddr = addrWordsDet.filter(w => addrWordsProf.includes(w));
+        score += commonAddr.length * 300;
+      }
+
+      if (prof.role === 'b2b_client') score += 100;
+      return score;
+    };
+
     const namesMatch = (detName: string, profName: string): boolean => {
       if (!detName || !profName) return false;
       const norm1 = detName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -1402,9 +1433,12 @@ export async function POST(req: Request) {
         .select('id, company_name, contact_name, role, is_active, address, phone, nit');
       
       if (!allProfilesError && allProfiles) {
-        const matched = allProfiles.filter(p => 
-          namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
-        );
+        // Excluir inactivos y filtrar candidatos con coincidencia
+        const matched = allProfiles
+          .filter(p => p.is_active !== false)
+          .filter(p => 
+            namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
+          );
 
         if (matched.length > 0) {
           console.log(`[Email Ingest] Found ${matched.length} profiles via global fuzzy name search.`);
@@ -1419,36 +1453,18 @@ export async function POST(req: Request) {
         detectedName = String(detectedName);
       }
 
-      if (candidateProfiles.length === 1) {
-        const candidate = candidateProfiles[0];
-        if (candidate.role === 'b2b_client') {
-          profile = candidate;
-        } else {
-          if (!detectedName || namesMatch(detectedName, candidate.contact_name || '') || namesMatch(detectedName, candidate.company_name || '')) {
-            profile = candidate;
-          }
-        }
-      } else {
-        // Multiple profiles found (e.g. sharing testing email higuera200@gmail.com)
-        // We MUST find the one that matches the client name extracted from the email/document
-        const exactOrSimilarMatch = candidateProfiles.find(p => 
-          namesMatch(detectedName, p.contact_name || '') || namesMatch(detectedName, p.company_name || '')
-        );
-        if (exactOrSimilarMatch) {
-          profile = exactOrSimilarMatch;
-          console.log(`[Email Ingest] Matched specific profile by name: "${profile.company_name}"`);
-        } else {
-          // If no names match, fall back to a B2B client candidate
-          const b2bCandidate = candidateProfiles.find(p => p.role === 'b2b_client');
-          if (b2bCandidate) {
-            profile = b2bCandidate;
-            console.log(`[Email Ingest] No name matched detected "${detectedName}". Falling back to B2B candidate: "${profile.company_name}"`);
-          } else {
-            // Fallback to the first one
-            profile = candidateProfiles[0];
-            console.log(`[Email Ingest] No B2B candidate. Falling back to first candidate: "${profile.company_name}"`);
-          }
-        }
+      // Ordenar candidatos por puntuación inteligente (activo + palabras en común + dirección)
+      const sortedCandidates = [...candidateProfiles].sort((a, b) => {
+        const scoreA = scoreProfileMatch(detectedName, a, extractedData.address);
+        const scoreB = scoreProfileMatch(detectedName, b, extractedData.address);
+        return scoreB - scoreA;
+      });
+
+      if (sortedCandidates.length > 0 && scoreProfileMatch(detectedName, sortedCandidates[0], extractedData.address) > -5000) {
+        profile = sortedCandidates[0];
+        console.log(`[Email Ingest] Selected best matching profile: "${profile.company_name}" (is_active: ${profile.is_active})`);
+      } else if (candidateProfiles.length === 1) {
+        profile = candidateProfiles[0];
       }
     }
 
