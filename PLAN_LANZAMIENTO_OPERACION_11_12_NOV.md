@@ -41,8 +41,14 @@ flowchart LR
 ## 3. Lista de Chequeo Operativa (Checklist de Compuertas Poka-Yoke)
 
 ### BLOQUE 0 — Compuerta Pre-Vuelo (Hoy Miércoles antes de Cierre Comercial)
-- [ ] **0.1 Consistencia de Acuerdos Comerciales (`/admin/commercial`):** Verificar que ningún cliente con acuerdo individual vigente (ej. *El Carnal*, *Aldimark*, *Colsubsidio*) tenga SKUs duplicados en `quote_items` ni colisión con listas masivas ni fechas corridas por UTC post-7:00 p.m.
-- [ ] **0.2 Cero Precios en `$0` Involuntarios:** Confirmar que en `/admin/orders/create` el matcher priorice los SKUs del convenio del cliente (ej. `#726 Mora despitonada` sobre `#274 Mora`).
+- [x] **0.1 Consistencia y Reconciliación de Acuerdos Comerciales (`/admin/commercial`):**
+  - Reconciliación al 100% contra la carpeta Fuente de Verdad `ACUERDOS VIGENTES` (`SPG *.xlsx`).
+  - Precios actualizados al centavo en base de datos (`quotes` y `quote_items`), tuplas duplicadas eliminadas y vigencias extendidas formalmente hasta el **30/nov/2026** (El Carnal, Aldimark, Colsubsidio, Peñalisa, San Jorge, Carnicolas, CESAP, CESNE, Termocity, Nutresa/Corral, Hotel Capital, San Gregorio, Tequendama Catering y Listas Quincenal/Mensual).
+  - Exclusividad mutua activada: clientes con acuerdo individual desvinculados de listas masivas para evitar colisión de precios.
+- [x] **0.2 Cero Precios en `$0` Involuntarios & Soberanía de `accounting_id` (Escenario 429):**
+  - Prioridad 1 mandatoria para `#ID` contable en el motor de búsqueda (`order-parser-engine.ts`) con regex estricta anti-secuestro de kilos/cantidades.
+  - En `/admin/orders/create`, el matcher prioriza restrictivamente los SKUs del convenio del cliente (`effectiveAgrIds`) evaluando nombre + observaciones (garantizando `#726 Mora Despitonada` sobre `#274 Mora`).
+  - Poka-Yoke anti-tarifa cero en `/api/orders/resolve-agreement-pricing`: compras fuera de lista autorizadas (`allow_off_agreement_purchases = true`) liquidan automáticamente la tarifa vigente de **General Institucional** en vez de clavar `$0 COP`.
 - [ ] **0.3 Base Oficial de Inventario (`daily_inventory_closings`):** Confirmar que exista cierre oficial previo (`Columna U ➔ Columna E`) para que la ecuación `Compra Neta = max(0, Demanda + StockSeg - Inventario Base)` no parta de saldos flotantes.
 - [ ] **0.4 Hora de Corte y Consecutivos DIAN (`/admin/settings`):** Validar `cutoff_hour_admin` (`20:00`), prefijo `billing_invoice_prefix`, número de resolución `billing_resolution_number` y vigencia DIAN activa.
 
