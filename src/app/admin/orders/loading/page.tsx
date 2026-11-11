@@ -8840,7 +8840,7 @@ useEffect(() => {
                     </div>
                 ) : (
                     <div style={{ marginTop: '0.35rem' }}>
-                        <EmailOutboxModule onOutboxChange={(count) => setSentEmailCount(count)} />
+                        <EmailOutboxModule onOutboxChange={(count) => setSentEmailCount(count)} topOffset={85 + dockHeight} />
                     </div>
                 )}
             </div>
