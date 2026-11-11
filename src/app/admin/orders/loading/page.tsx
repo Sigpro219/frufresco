@@ -1842,6 +1842,8 @@ useEffect(() => {
         const pollInterval = setInterval(() => {
             if (typeof document !== 'undefined' && document.hidden) return;
             fetchOrders(false);
+            // SPEC.md Escenario 430: Drenar la cola de correos salientes cuyo buffer de 2 min haya vencido
+            fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
         }, 25000);
 
         return () => {

@@ -79,22 +79,79 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
     const effectiveToEmail = isSandbox ? sandboxRecipient : (to_email || '').toLowerCase().trim();
     const effectiveSubject = isSandbox ? `[PRUEBAS - Para: ${to_email}] ${subject || 'Confirmación de Pedido FruFresco'}` : (subject || 'Confirmación de Compra - Investments Cortés');
 
-    // 5. Send the email via Resend or SMTP
+    // 5. Send the email via Hostinger SMTP (Primary Sovereign Transport) or Resend / Custom SMTP
     const resendApiKey = process.env.RESEND_API_KEY;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+    let hostingerUser = process.env.HOSTINGER_IMAP_USER || process.env.SMTP_USER || 'pedidos@frufresco.co';
+    let hostingerPass = process.env.HOSTINGER_IMAP_PASS || process.env.SMTP_PASS || '';
+    let hostingerHost = process.env.HOSTINGER_SMTP_HOST || 'smtp.hostinger.com';
+    let hostingerPort = parseInt(process.env.HOSTINGER_SMTP_PORT || '465', 10);
+
+    // Fallback de Resiliencia Absoluta (Zero-Failure): Si no están en process.env (ej. Vercel), consultar app_settings
+    if (!hostingerPass) {
+      try {
+        const { data: dbCreds } = await supabaseAdmin
+          .from('app_settings')
+          .select('key, value')
+          .in('key', ['hostinger_smtp_credentials', 'hostinger_imap_credentials']);
+
+        if (dbCreds && dbCreds.length > 0) {
+          const smtpRow = dbCreds.find((r: any) => r.key === 'hostinger_smtp_credentials') || dbCreds[0];
+          const rawVal = smtpRow?.value;
+          const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+          if (parsed?.pass) hostingerPass = parsed.pass;
+          if (parsed?.user) hostingerUser = parsed.user;
+          if (parsed?.host && !parsed.host.startsWith('imap')) hostingerHost = parsed.host;
+        }
+      } catch (err: any) {
+        console.warn('[Mail Queue Processor] Fallback app_settings lookup failed:', err?.message || err);
+      }
+    }
+
     let messageId = 'simulated-id';
 
-    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com'];
+    const corporateEmails = ['frufrescodigital@gmail.com', 'pedidos@frufresco.com', 'compras@frufresco.com', 'ventas@frufresco.com', 'pedidos@frufresco.co'];
     const isCorporate = corporateEmails.includes(effectiveToEmail) || effectiveToEmail.endsWith('@frufresco.com') || effectiveToEmail.endsWith('@frufresco.co');
 
     if (isCorporate && !isSandbox) {
       console.log('[Mail Queue Processor] Corporate/admin email recipient detected. Simulating mail send to avoid spamming inbox.', effectiveToEmail);
       messageId = 'simulated-corporate-id';
+    } else if (hostingerPass) {
+      console.log(`[Mail Queue Processor] Sending via Hostinger SMTP (${isSandbox ? 'SANDBOX' : 'LIVE'})... to: ${effectiveToEmail} (host: ${hostingerHost}:${hostingerPort})`);
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: hostingerHost,
+          port: hostingerPort,
+          secure: hostingerPort === 465,
+          auth: {
+            user: hostingerUser,
+            pass: hostingerPass,
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+
+        const mailOptions = {
+          from: `"Investments Cortés (Pedidos)" <${hostingerUser}>`,
+          replyTo: hostingerUser,
+          to: effectiveToEmail,
+          subject: effectiveSubject,
+          html: htmlContent,
+          text: textContent
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        messageId = info.messageId || `hostinger-smtp-${Date.now()}`;
+        console.log('[Mail Queue Processor] Hostinger SMTP email sent successfully:', messageId);
+      } catch (smtpErr: any) {
+        console.error('[Mail Queue Processor] Hostinger SMTP Send failed:', smtpErr.message);
+        throw smtpErr;
+      }
     } else if (resendApiKey) {
       console.log(`[Mail Queue Processor] Sending via Resend API (${isSandbox ? 'SANDBOX' : 'LIVE'})... to: ${effectiveToEmail}`);
       const emailPayload = {
-        from: 'Investments Cortés (Pedidos) <pedidos@frufresco.com>',
+        from: 'Investments Cortés (Pedidos) <pedidos@frufresco.co>',
         to: [effectiveToEmail],
         subject: effectiveSubject,
         html: htmlContent,
@@ -118,34 +175,6 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
       const resData = await res.json();
       messageId = resData.id;
       console.log('[Mail Queue Processor] Resend response:', resData);
-
-    } else if (smtpUser && smtpPass) {
-      console.log(`[Mail Queue Processor] Sending via SMTP (Nodemailer) (${isSandbox ? 'SANDBOX' : 'LIVE'})... to: ${effectiveToEmail}`);
-      try {
-        const nodemailer = require('nodemailer');
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: smtpUser,
-            pass: smtpPass,
-          },
-        });
-
-        const mailOptions = {
-          from: `"Investments Cortés (Pedidos)" <${smtpUser}>`,
-          to: effectiveToEmail,
-          subject: effectiveSubject,
-          html: htmlContent,
-          text: textContent
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        messageId = info.messageId || 'smtp-id';
-        console.log('[Mail Queue Processor] SMTP email sent successfully:', messageId);
-      } catch (smtpErr: any) {
-        console.error('[Mail Queue Processor] SMTP Send failed:', smtpErr.message);
-        throw smtpErr;
-      }
     } else {
       console.warn(`[Mail Queue Processor] No email credentials found. Simulating send in development (${isSandbox ? 'SANDBOX' : 'LIVE'}).`);
       messageId = `simulated-${Date.now()}`;

@@ -3852,6 +3852,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     const interval = setInterval(() => {
       fetchDrafts(true);
+      // SPEC.md Escenario 430: Drenar la cola de correos salientes cuyo buffer de 2 min haya vencido
+      fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
     }, 30000);
 
     return () => clearInterval(interval);

@@ -181,7 +181,7 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
             Operador Agro-Logístico • FruFresco Institucional
           </div>
           <div style="font-size: 10px; color: #64748B; margin-top: 1px;">
-            Gestión Pedidos: 301 542 1761 • pedidos@frufresco.com
+            Gestión Pedidos: 301 542 1761 • pedidos@frufresco.co
           </div>
         </td>
       </tr>
@@ -294,7 +294,7 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
           <td>
             <strong>¿Novedades o cambios antes del cierre operativo?</strong><br>
             Comunícate directamente con la mesa operativa de FruFresco: 
-            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> o responde a <a href="mailto:pedidos@frufresco.com" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.com</a>.
+            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> o responde a <a href="mailto:pedidos@frufresco.co" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.co</a>.
           </td>
         </tr>
       </table>
@@ -306,7 +306,7 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
         Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común
       </p>
       <p style="margin: 0; color: #0D7A57; font-weight: 700;">
-        Gestión Pedidos: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com
+        Gestión Pedidos: 301 542 1761 • pedidos@frufresco.co • www.frufresco.com
       </p>
       <p style="margin: 6px 0 0 0; font-size: 9.5px; color: #94A3B8;">
         Documento Oficial de Operación y Control Logístico • Sistema Integrado FruFresco
@@ -353,7 +353,7 @@ ${itemsList}
 
 Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común
 Operador Agro-Logístico • FruFresco Institucional
-Gestión Pedidos: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com`;
+Gestión Pedidos: 301 542 1761 • pedidos@frufresco.co • www.frufresco.com`;
 }
 
 export interface AgreementEmailItem {
@@ -562,7 +562,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
             Operador Agro-Logístico • FruFresco Institucional
           </div>
           <div style="font-size: 10px; color: #64748B; margin-top: 1px;">
-            Gestión Comercial: 301 542 1761 • pedidos@frufresco.com
+            Gestión Comercial: 301 542 1761 • pedidos@frufresco.co
           </div>
         </td>
       </tr>
@@ -672,7 +672,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
           <td>
             <strong>¿Preguntas sobre este acuerdo o necesitas radicar un pedido especial?</strong><br>
             Comunícate directamente con la mesa comercial de FruFresco: 
-            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> o responde a <a href="mailto:pedidos@frufresco.com" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.com</a>.
+            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> o responde a <a href="mailto:pedidos@frufresco.co" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.co</a>.
           </td>
         </tr>
       </table>
@@ -684,7 +684,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
         Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común
       </p>
       <p style="margin: 0; color: #0D7A57; font-weight: 700;">
-        Gestión Comercial: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com
+        Gestión Comercial: 301 542 1761 • pedidos@frufresco.co • www.frufresco.com
       </p>
       <p style="margin: 6px 0 0 0; font-size: 9.5px; color: #94A3B8;">
         Documento Oficial de Condiciones Comerciales • FruFresco Institucional
@@ -747,7 +747,7 @@ ${itemsList}
 
 Investments Cortés S.A.S. • NIT 901.393.217-5 • Régimen Común
 Operador Agro-Logístico • FruFresco Institucional
-Gestión Comercial: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com`;
+Gestión Comercial: 301 542 1761 • pedidos@frufresco.co • www.frufresco.com`;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -935,7 +935,7 @@ export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEma
             Operador Agro-Logístico • FruFresco Institucional
           </div>
           <div style="font-size: 10px; color: #64748B; margin-top: 1px;">
-            Mesa Comercial: 301 542 1761 • pedidos@frufresco.com
+            Mesa Comercial: 301 542 1761 • pedidos@frufresco.co
           </div>
         </td>
       </tr>
@@ -1042,7 +1042,7 @@ export function generateWeeklyHarvestBulletinHtml(data: WeeklyHarvestBulletinEma
           <td>
             <strong>¿Deseas adaptar los insumos de tu menú semanal o programar pedidos con estas alternativas?</strong><br>
             Comunícate con tu asesor comercial asignado o escríbenos a: 
-            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> • <a href="mailto:pedidos@frufresco.com" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.com</a>.
+            <strong class="text-dark" style="color: #0F172A;">301 542 1761</strong> • <a href="mailto:pedidos@frufresco.co" style="color: #0D7A57; font-weight: 700; text-decoration: none;">pedidos@frufresco.co</a>.
           </td>
         </tr>
       </table>
@@ -1096,7 +1096,7 @@ ${scarcityText || 'Abastecimiento en plaza 100% normalizado.'}
 
 Para pedidos o ajustes de programación:
 Investments Cortés S.A.S. • NIT 901.393.217-5
-Mesa Comercial: 301 542 1761 • pedidos@frufresco.com • www.frufresco.com`;
+Mesa Comercial: 301 542 1761 • pedidos@frufresco.co • www.frufresco.com`;
 }
 
 

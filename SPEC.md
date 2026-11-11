@@ -26,7 +26,7 @@
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301, 306, 429 (§7.1 - §7.20) | 🟢 100% |
 | **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
-| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258 (§42.1 - §42.7) | 🟢 100% |
+| **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258, 430 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
 | **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **397 Escenarios Canónicos (1..397)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
@@ -16409,3 +16409,31 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
    - En `order-parser-engine.ts`, la detección de `accounting_id` exige prefijos formales (`#`, `ID:`, `COD:`, `#ID`) o coincidencia de cadena exclusivamente numérica pura (`^\s*\d{1,6}\s*$`), impidiendo que cifras de cantidad, peso o calibres ("10 kg", "20 kilos", "4 cascos") secuestren la identidad del SKU.
 3. **Erradicación Definitiva de la Excepción Zombi de $0 COP:**
    - En `/api/orders/resolve-agreement-pricing`, se derogó formalmente el bloqueo que impedía a clientes con acuerdo heredar precios de General Institucional para compras fuera de lista autorizadas (`allow_off_agreement_purchases = true`), garantizando que la facturación y remisión nazcan siempre con tarifa comercial válida.
+
+---
+
+### Escenario 430: Soberanía de Salida Hostinger SMTP (`pedidos@frufresco.co`), Descongelamiento de Cola con Buffer de Gracia y Modo Producción Live (SDD v1.9.385)
+
+#### 1. Contexto & Gemba Operativo
+- **Given** la culminación de la migración de infraestructura desde el servidor heredado (`.com`) hacia el buzón oficial soberano en Hostinger (`.co`) formalizado en el Escenario 397:
+- **When** se aprueba un pedido en la Mesa de Trabajo (`EmailDraftsModule.tsx` o `orders/create`) y el sistema emite la **Remisión Oficial de Entrega**:
+- **Then** rige la soberanía absoluta de comunicaciones en el canal saliente de FruFresco:
+  1. **Erradicación del Dominio Heredado en Plantillas (`src/lib/emailTemplates.ts`):**
+     - Todas las menciones a `pedidos@frufresco.com` en membretes, recuadros de atención operativa («¿Novedades o cambios antes del cierre operativo?») y pies de página legales se sustituyen por **`pedidos@frufresco.co`**.
+     - La URL del portal comercial institucional se preserva como `www.frufresco.com`.
+  2. **Transporte Saliente Hostinger SMTP SSL (`smtp.hostinger.com:465`):**
+     - En `src/app/api/mail/process/route.ts`, se deroga el transporte legado hardcoded `service: 'gmail'`.
+     - El envío se canaliza mediante conexión SMTP segura TLS (`node:tls` / `nodemailer`) contra `smtp.hostinger.com:465` (`secure: true`), autenticándose con `pedidos@frufresco.co` y su respectiva clave.
+     - **Fallback de Alta Disponibilidad (Zero-Failure):** Si las variables no existen en `process.env`, el worker consulta de forma segura las credenciales desde `public.app_settings` (`hostinger_imap_credentials` / `hostinger_smtp_credentials`) mediante el cliente administrativo de Supabase.
+     - Cabeceras RFC 822:
+       * `from: '"Investments Cortés (Pedidos)" <pedidos@frufresco.co>'`
+       * `replyTo: 'pedidos@frufresco.co'`
+  3. **Descongelamiento de Cola y Respeto del Buffer de Gracia (2 Minutos):**
+     - Al aprobar un pedido, el registro en `mail` se programa con `next_retry_at = now() + interval '2 minutes'` para permitir rectificaciones inmediatas del operador.
+     - Para evitar que los correos queden atrapados en `pending` una vez transcurridos los 2 minutos, la Torre de Control (`EmailDraftsModule.tsx`) incorpora un sondeo de drenaje periódico en segundo plano que invoca `POST /api/mail/process` cada 30 segundos, asegurando el despacho automático de toda remisión cuyo buffer haya vencido.
+  4. **Conmutación a Modo Producción (`email_notifications_mode = 'live'`):**
+     - En `public.app_settings`, se actualiza el parámetro `email_notifications_mode` a `'live'`.
+     - Los pedidos confirmados se entregan directamente al correo del cliente institucional (`to_email`), garantizando autenticación nativa SPF y DKIM de Hostinger.
+  5. **Blindaje de Esquema en Reposiciones en Garantía ($0 COP):**
+     - En `src/app/admin/orders/loading/page.tsx`, la formalización de reposiciones a $0 COP elimina de `itemsToUpsert` las columnas calculadas `subtotal` y `total`.
+     - En `src/app/api/orders/update/route.ts`, se aplica una lista blanca de sanitización estricta (`validOrderItemColumns`) que descarta cualquier propiedad que no pertenezca a las 12 columnas físicas de la tabla `order_items` de PostgreSQL, blindando el sistema contra errores de caché de esquema.
