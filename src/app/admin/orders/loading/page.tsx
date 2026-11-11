@@ -3175,14 +3175,12 @@ useEffect(() => {
     const incompleteCount = orders.filter(o => !o.isComplete).length;
     const approvalRate = totalOrders > 0 ? (approvedCount / totalOrders) * 100 : 0;
 
-    const deliveryDateSubtitle = useMemo(() => {
-        if (selectedDate === getTomorrowDateStr()) return 'Para entrega mañana';
-        if (selectedDate === getTodayDateStr()) return 'Para entrega hoy';
-        if (selectedDate === getYesterdayDateStr()) return 'Para entrega ayer';
-        if (selectedDate === 'history15') return 'Últimos 15 días';
-        if (selectedDate && selectedDate !== 'all') return `Para entrega ${selectedDate}`;
-        return 'Todos los registros';
-    }, [selectedDate]);
+    let deliveryDateSubtitle = 'Todos los registros';
+    if (selectedDate === getTomorrowDateStr()) deliveryDateSubtitle = 'Para entrega mañana';
+    else if (selectedDate === getTodayDateStr()) deliveryDateSubtitle = 'Para entrega hoy';
+    else if (selectedDate === getYesterdayDateStr()) deliveryDateSubtitle = 'Para entrega ayer';
+    else if (selectedDate === 'history15') deliveryDateSubtitle = 'Últimos 15 días';
+    else if (selectedDate && selectedDate !== 'all') deliveryDateSubtitle = `Para entrega ${selectedDate}`;
 
 
     return (
