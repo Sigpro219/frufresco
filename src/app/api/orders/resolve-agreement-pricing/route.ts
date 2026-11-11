@@ -428,7 +428,8 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         // cualquier SKU fuera del acuerdo entra a $0 COP para despacharse como Remision Fuera de Acuerdo (Tarifa Pendiente).
         // Queda ESTRICTAMENTE PROHIBIDO heredar precios automaticos de General Institucional ($3.400) para clientes con acuerdo.
         const hasAssignedAgreement = Boolean(activeAgreement || candidateAgreement);
-        if (isB2B && !hasAssignedAgreement) {
+        // SPEC.md §7.2 & Escenario 429: con acuerdo + allowOff, los SKUs fuera de convenio liquidan General Institucional (nunca $0 COP)
+        if (isB2B && (!hasAssignedAgreement || allowOff)) {
             const castedGenPrices = (genPricesMap || {}) as Record<string, number>;
             for (const [prodId, gPrice] of Object.entries(castedGenPrices)) {
                 const numericPrice = Number(gPrice);

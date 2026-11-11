@@ -3090,7 +3090,7 @@ export default function CommercialAgreementsModule() {
                 if (insertQErr) throw insertQErr;
 
                 if (itemsTemplate.length > 0) {
-                    const finalItemsToInsert = itemsTemplate.map(item => ({
+                    const finalItemsToInsert = Array.from(new Map(itemsTemplate.map(it => [it.product_id, it])).values()).map(item => ({
                         ...item,
                         quote_id: newQuote.id
                     }));
@@ -3227,7 +3227,7 @@ export default function CommercialAgreementsModule() {
                     }
                     
                     if (itemsTemplate.length > 0) {
-                        const finalItemsToInsert = itemsTemplate.map(item => ({
+                        const finalItemsToInsert = Array.from(new Map(itemsTemplate.map(it => [it.product_id, it])).values()).map(item => ({
                             ...item,
                             quote_id: newQuote.id
                         }));
@@ -3537,7 +3537,7 @@ export default function CommercialAgreementsModule() {
                 if (itemsToInsert.length > 0) {
                     const { error: itemsErr } = await supabase
                         .from('quote_items')
-                        .insert(itemsToInsert);
+                        .insert(Array.from(new Map(itemsToInsert.map(it => [it.product_id, it])).values()));
                     if (itemsErr) throw itemsErr;
                     
                     // Update header totals in quotes table to match the new item totals

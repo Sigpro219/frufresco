@@ -333,7 +333,8 @@ export function findBestProductMatchDetails(
     .trim();
 
   // Prioridad 0 (SPEC.md Escenario 429): Coincidencia Mandatoria por accounting_id si el texto incluye #ID o código numérico
-  const idMatch = cleanInput.match(/(?:#|id\s*|cod(?:igo)?\s*|^|\s)(\d{1,6})(?:\s|$|[-_\.])/i);
+  const idMatch = rawName.match(/(?:#|\b(?:id|cod|codigo|código|idproducto)\s*[:#]?\s*)(\d{1,6})\b/i)
+    || rawName.match(/^\s*(\d{1,6})\s*$/);
   if (idMatch && idMatch[1]) {
     const candidateAccId = Number(idMatch[1]);
     const matchedByAcc = products.find(p => Number(p.accounting_id) === candidateAccId);
