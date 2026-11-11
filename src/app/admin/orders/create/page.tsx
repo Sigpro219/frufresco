@@ -5322,14 +5322,16 @@ ${primaryAdminNotes}`.trim();
                     };
                 });
 
+                const friendlyOrderNumber = order.sequence_id ? `#${order.sequence_id}` : order.id.slice(0, 6).toUpperCase();
+
                 await supabase.from('mail').insert({
                     to_email: customerEmail,
-                    subject: `¡Confirmación de Pedido FruFresco N° ${order.id.slice(0, 6).toUpperCase()}!`,
+                    subject: `¡Confirmación de Pedido FruFresco N° ${friendlyOrderNumber}!`,
                     template: {
                         name: 'order_confirmation',
                         data: {
                             client: customerName,
-                            order_number: order.id.slice(0, 6).toUpperCase(),
+                            order_number: friendlyOrderNumber,
                             total_amount: formatNumber(primaryFin.total),
                             items: formattedItems
                         }
@@ -5337,6 +5339,8 @@ ${primaryAdminNotes}`.trim();
                     status: 'pending',
                     next_retry_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
                 });
+
+                fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
             }
 
             if (hasOffAgreementItems) {

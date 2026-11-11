@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -353,38 +353,37 @@ function OrderLoadingContent() {
 
     const [dateCounts, setDateCounts] = useState<{ yesterday: number; today: number; tomorrow: number }>({ yesterday: 0, today: 0, tomorrow: 0 });
 
-    useEffect(() => {
-        let isMounted = true;
-        const fetchDateCounts = async () => {
-            try {
-                const yesterdayStr = getYesterdayDateStr();
-                const todayStr = getTodayDateStr();
-                const tomorrowStr = getTomorrowDateStr();
-                const { data } = await supabase
-                    .from('orders')
-                    .select('delivery_date')
-                    .in('delivery_date', [yesterdayStr, todayStr, tomorrowStr])
-                    .neq('status', 'cancelled');
-                if (data && isMounted) {
-                    let y = 0, t = 0, tm = 0;
-                    data.forEach((o: any) => {
-                        if (o.delivery_date === yesterdayStr) y++;
-                        else if (o.delivery_date === todayStr) t++;
-                        else if (o.delivery_date === tomorrowStr) tm++;
-                    });
-                    setDateCounts({ yesterday: y, today: t, tomorrow: tm });
-                    // Si no vino parámetro explícito en URL y mañana no tiene pedidos pero hoy sí tiene pedidos activos, auto-seleccionar hoy
-                    if (!dateQueryParam && tm === 0 && t > 0) {
-                        setSelectedDate(todayStr);
-                    }
+    const fetchDateCounts = useCallback(async () => {
+        try {
+            const yesterdayStr = getYesterdayDateStr();
+            const todayStr = getTodayDateStr();
+            const tomorrowStr = getTomorrowDateStr();
+            const { data } = await supabase
+                .from('orders')
+                .select('delivery_date')
+                .in('delivery_date', [yesterdayStr, todayStr, tomorrowStr])
+                .neq('status', 'cancelled');
+            if (data) {
+                let y = 0, t = 0, tm = 0;
+                data.forEach((o: any) => {
+                    if (o.delivery_date === yesterdayStr) y++;
+                    else if (o.delivery_date === todayStr) t++;
+                    else if (o.delivery_date === tomorrowStr) tm++;
+                });
+                setDateCounts({ yesterday: y, today: t, tomorrow: tm });
+                // Si no vino parámetro explícito en URL y mañana no tiene pedidos pero hoy sí tiene pedidos activos, auto-seleccionar hoy
+                if (!dateQueryParam && tm === 0 && t > 0) {
+                    setSelectedDate(todayStr);
                 }
-            } catch (e) {
-                // Ignore silently
             }
-        };
+        } catch (e) {
+            // Ignore silently
+        }
+    }, [dateQueryParam]);
+
+    useEffect(() => {
         fetchDateCounts();
-        return () => { isMounted = false; };
-    }, [dateQueryParam, refreshTrigger]); 
+    }, [fetchDateCounts, refreshTrigger]); 
 
     const [searchTerm, setSearchTerm] = useState('');
     const [showHelpTooltip, setShowHelpTooltip] = useState(false);
@@ -1826,6 +1825,7 @@ useEffect(() => {
                 (payload) => {
                     console.log('[Realtime] Cambio detectado en pedidos:', payload.eventType);
                     fetchOrders(false);
+                    fetchDateCounts();
                 }
             )
             .on(
@@ -1834,6 +1834,7 @@ useEffect(() => {
                 (payload) => {
                     console.log('[Realtime] Cambio detectado en ítems:', payload.eventType);
                     fetchOrders(false);
+                    fetchDateCounts();
                 }
             )
             .subscribe();
@@ -1842,6 +1843,7 @@ useEffect(() => {
         const pollInterval = setInterval(() => {
             if (typeof document !== 'undefined' && document.hidden) return;
             fetchOrders(false);
+            fetchDateCounts();
             // SPEC.md Escenario 430: Drenar la cola de correos salientes cuyo buffer de 2 min haya vencido
             fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
         }, 25000);
@@ -1851,7 +1853,7 @@ useEffect(() => {
             clearInterval(pollInterval);
             supabase.removeChannel(ordersChannel);
         };
-    }, [selectedDate, refreshTrigger]);
+    }, [selectedDate, refreshTrigger, fetchDateCounts]);
 
 
 
@@ -3173,6 +3175,15 @@ useEffect(() => {
     const incompleteCount = orders.filter(o => !o.isComplete).length;
     const approvalRate = totalOrders > 0 ? (approvedCount / totalOrders) * 100 : 0;
 
+    const deliveryDateSubtitle = useMemo(() => {
+        if (selectedDate === getTomorrowDateStr()) return 'Para entrega mañana';
+        if (selectedDate === getTodayDateStr()) return 'Para entrega hoy';
+        if (selectedDate === getYesterdayDateStr()) return 'Para entrega ayer';
+        if (selectedDate === 'history15') return 'Últimos 15 días';
+        if (selectedDate && selectedDate !== 'all') return `Para entrega ${selectedDate}`;
+        return 'Todos los registros';
+    }, [selectedDate]);
+
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -3196,7 +3207,7 @@ useEffect(() => {
                     gap: '1.2rem', 
                     marginBottom: '1rem'
                 }}>
-                    <KPICard title="Total Pedidos" value={formatNumber(totalOrders)} icon={<Package size={18} strokeWidth={1.5} />} color="#6366F1" subtitle="Para entrega hoy" />
+                    <KPICard title="Total Pedidos" value={formatNumber(totalOrders)} icon={<Package size={18} strokeWidth={1.5} />} color="#6366F1" subtitle={deliveryDateSubtitle} />
                     <KPICard title="Valor Carga" value={formatMoney(totalSales)} icon={<Coins size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Monto bruto" />
                     <KPICard title="Peso Total" value={`${formatNumber(totalWeightTons, 2)} TON`} icon={<Truck size={18} strokeWidth={1.5} />} color="#FBBF24" subtitle="Logística" />
                     <KPICard title="Efectividad" value={`${formatNumber(approvalRate, 0)}%`} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0891B2" subtitle="Tasa de aprobación" />

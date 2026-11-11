@@ -6108,11 +6108,20 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
           const friendlyCode = order.sequence_id ? `#${order.sequence_id}` : getFriendlyOrderId(order);
 
+          const resolvedPoNumberAtt = order.purchase_order_number || selectedDraft.po_number || selectedDraft.client_po_number || undefined;
+          const contractualRestrictionsAtt = matchedProfile?.delivery_restrictions || getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
+          const resolvedDeliverySlotAtt = (isManualDelivery && manualDeliveryTime)
+            ? `${manualDeliveryTime} (±${manualDeliveryMargin || 30} min)`
+            : (contractualRestrictionsAtt
+                ? contractualRestrictionsAtt
+                : (editableDeliverySlot === 'PM' ? 'Jornada Tarde (01:00 PM - 05:00 PM)' : 'Jornada Mañana (07:00 AM - 11:00 AM)'));
+
           const attachmentEmailData = {
             client: clientName,
             order_number: friendlyCode,
+            client_po_number: resolvedPoNumberAtt,
             delivery_date: deliveryDate,
-            delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
+            delivery_slot: resolvedDeliverySlotAtt,
             delivery_address: editableAddress || matchedProfile?.address || 'Dirección de despacho registrada',
             total_amount: formatNumber(totalAmount),
             items: formattedAttachmentItems
@@ -6706,11 +6715,20 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
         const friendlyOrderNumber = order.sequence_id ? `#${order.sequence_id}` : getFriendlyOrderId(order);
 
+        const resolvedPoNumber = order.purchase_order_number || selectedDraft.po_number || selectedDraft.client_po_number || selectedDraft.purchase_order || (metadata as any)?.clientPo || undefined;
+        const contractualRestrictions = matchedProfile?.delivery_restrictions || getDeliverySlotFromLogistics(matchedProfile?.logistics_data);
+        const resolvedDeliverySlot = (isManualDelivery && manualDeliveryTime)
+          ? `${manualDeliveryTime} (±${manualDeliveryMargin || 30} min)`
+          : (contractualRestrictions
+              ? contractualRestrictions
+              : (editableDeliverySlot === 'PM' ? 'Jornada Tarde (01:00 PM - 05:00 PM)' : 'Jornada Mañana (07:00 AM - 11:00 AM)'));
+
         const orderEmailData = {
           client: selectedDraft.client_detected_name || matchedProfile?.company_name || matchedProfile?.contact_name || 'Cliente',
           order_number: friendlyOrderNumber,
+          client_po_number: resolvedPoNumber,
           delivery_date: deliveryDate,
-          delivery_slot: editableDeliverySlot || matchedProfile?.delivery_restrictions || '06:30 AM - 11:00 AM',
+          delivery_slot: resolvedDeliverySlot,
           delivery_address: editableAddress || matchedProfile?.address || getDraftMetadata(selectedDraft).address || 'Dirección de despacho registrada',
           total_amount: formatNumber(totalAmount),
           items: formattedOrderItems

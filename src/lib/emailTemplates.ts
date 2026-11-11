@@ -47,17 +47,38 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
   const clientName = data.client || 'Estimado Cliente';
   const orderNumber = (data.order_number || 'N/A').toString().toUpperCase().replace(/^#/, '');
   const deliveryDate = data.delivery_date || 'A programar';
-  const deliverySlot = data.delivery_slot || '06:30 AM - 11:00 AM';
+  
+  // Normalización inteligente de la ventana de entrega: no permitir AM/PM ciego
+  let deliverySlot = (data.delivery_slot || '').trim();
+  if (!deliverySlot || deliverySlot.toUpperCase() === 'AM') {
+    deliverySlot = 'Jornada Mañana (07:00 AM - 11:00 AM)';
+  } else if (deliverySlot.toUpperCase() === 'PM') {
+    deliverySlot = 'Jornada Tarde (01:00 PM - 05:00 PM)';
+  }
+
+  // Separación limpia de Razón Social y Sede
+  let mainClientName = clientName;
+  let clientBranch = '';
+  if (clientName.includes(' - ')) {
+    const parts = clientName.split(' - ');
+    mainClientName = parts[0].trim();
+    clientBranch = parts.slice(1).join(' - ').trim();
+  }
+
+  // Validación de Orden de Compra: omitir completamente si es N/A o no existe
+  const rawPo = (data.client_po_number || '').trim();
+  const hasValidPo = Boolean(rawPo && rawPo.toUpperCase() !== 'N/A' && rawPo.toUpperCase() !== 'NO APLICA' && rawPo !== 'null' && rawPo !== 'undefined');
+
   const deliveryAddress = data.delivery_address || 'Dirección de despacho registrada';
   const totalAmount = data.total_amount || '0';
   const subtotal = data.subtotal || totalAmount;
   const tax = data.tax || '0';
   const items = data.items || [];
   const isCorrection = Boolean(data.is_correction);
-  const clientPo = data.client_po_number ? ` • OC: ${data.client_po_number}` : '';
+  const poSuffix = hasValidPo ? ` • OC: ${rawPo}` : '';
   const preheaderText = isCorrection 
-    ? `Actualización de tu Remisión #${orderNumber} de FruFresco. Total ajustado: $${totalAmount} COP.`
-    : `Tu pedido #${orderNumber} ha sido confirmado con éxito. Entrega programada para el ${deliveryDate}. Total: $${totalAmount} COP.`;
+    ? `Actualización de tu Remisión #${orderNumber} de FruFresco${poSuffix}. Total ajustado: $${totalAmount} COP.`
+    : `Remisión #${orderNumber} confirmada${poSuffix}. Despacho: ${deliveryDate}. Total: $${totalAmount} COP.`;
 
   const itemsRowsHtml = items.map((item, idx) => {
     let rowBg = idx % 2 === 0 ? '#FFFFFF' : '#F8FAF9';
@@ -197,11 +218,26 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
                 ${isCorrection ? `${LUCIDE_ICONS.alert}REMISIÓN DE ENTREGA (RECTIFICADA / CORREGIDA)` : `${LUCIDE_ICONS.check}REMISIÓN OFICIAL DE ENTREGA • PEDIDO CONFIRMADO`}
               </span>
             </div>
-            <h1 style="font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 22px; font-weight: 900; margin: 0 0 4px 0; color: #FFFFFF; letter-spacing: -0.3px; line-height: 1.2;">
-              ${isCorrection ? 'Actualización de Pedido' : '¡Gracias por tu compra!'}, <span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; color: #fde68a;">${clientName}</span>
+            <h1 style="font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 900; margin: 0 0 6px 0; color: #FFFFFF; letter-spacing: -0.3px; line-height: 1.25;">
+              ${isCorrection ? 'Actualización Oficial de Remisión' : 'Confirmación Oficial de Despacho'}
             </h1>
-            <p style="margin: 0; font-size: 12.5px; color: #CBD5E1; font-weight: 500;">
-              Orden de Compra: <strong style="color: #FFFFFF; font-family: 'Outfit', sans-serif;">${data.client_po_number || 'N/A'}</strong> • Despacho: <strong style="color: #FFFFFF;">${deliveryDate}</strong>
+            <div style="font-family: 'Outfit', -apple-system, sans-serif; font-size: 15px; font-weight: 800; color: #FDE68A; margin-bottom: 2px; letter-spacing: 0.2px;">
+              ${mainClientName}
+            </div>
+            ${clientBranch ? `
+            <div style="font-size: 12px; font-weight: 600; color: #A7F3D0; margin-bottom: 6px;">
+              Sede / Punto de Entrega: <strong style="color: #FFFFFF;">${clientBranch}</strong>
+            </div>
+            ` : ''}
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #CBD5E1; font-weight: 500;">
+              ${hasValidPo ? `
+                <span style="display: inline-block; background-color: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.3); padding: 2px 8px; border-radius: 6px; font-family: 'Outfit', sans-serif; font-weight: 700; color: #FFFFFF; margin-right: 8px;">
+                  OC Cliente: ${rawPo}
+                </span>
+                Despacho: <strong style="color: #FFFFFF;">${deliveryDate}</strong>
+              ` : `
+                Despacho Programado: <strong style="color: #FFFFFF;">${deliveryDate}</strong>
+              `}
             </p>
           </td>
           <td style="vertical-align: top; text-align: right; width: 130px;">
@@ -237,7 +273,7 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
           </td>
           <td width="50%" style="padding: 4px 4px 8px 10px; vertical-align: top;">
             <span style="font-size: 10px; font-weight: 800; color: #15803D; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">
-              ${LUCIDE_ICONS.clock}Horario Estimado
+              ${LUCIDE_ICONS.clock}Ventana de Entrega Contractual
             </span>
             <strong class="text-dark" style="font-size: 13px; color: #0F172A; font-family: 'Outfit', sans-serif;">${deliverySlot}</strong>
           </td>
@@ -326,8 +362,19 @@ export function generateOrderConfirmationHtml(data: OrderConfirmationEmailData):
 
 export function generateOrderConfirmationText(data: OrderConfirmationEmailData): string {
   const clientName = data.client || 'Cliente';
-  const orderNumber = (data.order_number || 'N/A').toString().toUpperCase();
+  const orderNumber = (data.order_number || 'N/A').toString().toUpperCase().replace(/^#/, '');
   const deliveryDate = data.delivery_date || 'A programar';
+  
+  let deliverySlot = (data.delivery_slot || '').trim();
+  if (!deliverySlot || deliverySlot.toUpperCase() === 'AM') {
+    deliverySlot = 'Jornada Mañana (07:00 AM - 11:00 AM)';
+  } else if (deliverySlot.toUpperCase() === 'PM') {
+    deliverySlot = 'Jornada Tarde (01:00 PM - 05:00 PM)';
+  }
+
+  const rawPo = (data.client_po_number || '').trim();
+  const hasValidPo = Boolean(rawPo && rawPo.toUpperCase() !== 'N/A' && rawPo.toUpperCase() !== 'NO APLICA' && rawPo !== 'null' && rawPo !== 'undefined');
+
   const totalAmount = data.total_amount || '0';
   const items = data.items || [];
   const isCorrection = Boolean(data.is_correction);
@@ -340,12 +387,13 @@ export function generateOrderConfirmationText(data: OrderConfirmationEmailData):
     return `${prefix}${it.name} x ${it.quantity} = $${it.total || it.price}`;
   }).join('\n');
 
-  return `${isCorrection ? 'REMISIÓN RECTIFICADA / CORREGIDA' : 'REMISIÓN DE ENTREGA'} - FRUFRESCO
+  return `${isCorrection ? 'ACTUALIZACIÓN OFICIAL DE REMISIÓN' : 'CONFIRMACIÓN OFICIAL DE DESPACHO'} - FRUFRESCO
 
-Estimado(a) ${clientName},
-
-Tu orden N° ${orderNumber} ha sido ${isCorrection ? 'actualizada con éxito tras la modificación solicitada' : 'confirmada con éxito'}.
-Fecha de Entrega: ${deliveryDate}
+Cliente: ${clientName}
+Remisión N°: #${orderNumber}
+${hasValidPo ? `Orden de Compra: ${rawPo}\n` : ''}Fecha de Entrega: ${deliveryDate}
+Ventana de Entrega Contractual: ${deliverySlot}
+Dirección de Despacho: ${data.delivery_address || 'Dirección registrada'}
 Total Remisión: $${totalAmount} COP
 
 Detalle de Ítems:
