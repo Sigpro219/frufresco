@@ -4472,13 +4472,13 @@ useEffect(() => {
                         {viewMode === 'table' ? (
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, overflow: 'visible', boxShadow: THEME.shadow.sm, border: `1px solid ${THEME.colors.border}` }}>
                                 <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
-                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight - 1}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F1F5F9' }}>
+                                    <thead style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, backgroundColor: '#F1F5F9' }}>
                                         <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)' }}>
 
 
 
 
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopLeftRadius: THEME.radius.lg, ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('id')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'id' ? THEME.colors.primary : '#0F172A' }}
@@ -4548,7 +4548,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1' }}>
+                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopRightRadius: THEME.radius.lg }}>
                                                 {(() => {
                                                     const launchableOrders = filteredOrders.filter(o => o.isComplete && ['pending_approval', 'pending', 'recibido'].includes(o.status));
                                                     const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;
