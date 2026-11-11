@@ -158,7 +158,7 @@ interface Profile {
 export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: boolean) => {
     if (docType === 'invoice') {
         return {
-            label: 'FAC-IMP',
+            label: 'Factura Impresa',
             title: 'Factura Electrónica Impresa Obligatoria en Muelle (World Office)',
             bg: '#FEF2F2',
             color: '#B91C1C',
@@ -167,7 +167,7 @@ export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: bo
     }
     if (docType === 'batch_remission') {
         return {
-            label: 'REM-LOTE',
+            label: 'Facturación por Lotes',
             title: 'Facturación por Lotes / Remisiones Acumuladas',
             bg: '#ECFDF5',
             color: '#065F46',
@@ -176,7 +176,7 @@ export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: bo
     }
     if (docType === 'gift_remission') {
         return {
-            label: 'REM-OBSEQUIO',
+            label: 'Remisión Obsequio',
             title: 'Remisión de Obsequio ($0 COP)',
             bg: '#FDF4FF',
             color: '#A21CAF',
@@ -185,7 +185,7 @@ export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: bo
     }
     if (remissionWithPrices === false) {
         return {
-            label: 'REM-S/S',
+            label: 'Remisión sin Precios',
             title: 'Remisión Ciega Oficial (Sin Precios / Solo Kilos)',
             bg: '#F8FAFC',
             color: '#475569',
@@ -193,7 +193,7 @@ export const getDocumentBadgeStyle = (docType?: string, remissionWithPrices?: bo
         };
     }
     return {
-        label: 'REM-$',
+        label: 'Remisión con Precios',
         title: 'Remisión Valorizada Oficial (Con Precios y Totales)',
         bg: '#EFF6FF',
         color: '#1D4ED8',

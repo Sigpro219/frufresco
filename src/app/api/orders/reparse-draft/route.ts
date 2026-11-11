@@ -145,14 +145,33 @@ FORMATO DE RESPUESTA ESPERADO:
 CONTENIDO DEL ARCHIVO EXCEL EN FORMATO CSV:
 ${csvContent}`;
 
+          const { extractedItems: progItems } = parseSpreadsheetWorkbook(workbook, XLSX);
           const gJson = await fetchGeminiExtraction(apiKey, prompt);
-          if (gJson && Array.isArray(gJson.items) && gJson.items.length > 0) {
+
+          if (gJson) {
             if (!extractedData.clientName && gJson.clientName) extractedData.clientName = gJson.clientName;
             if (!extractedData.nit && gJson.nit) extractedData.nit = gJson.nit;
             if (!extractedData.address && gJson.address) extractedData.address = gJson.address;
             if (!extractedData.deliveryDate && gJson.deliveryDate) extractedData.deliveryDate = gJson.deliveryDate;
             if (!extractedData.purchaseOrder && gJson.purchaseOrder) extractedData.purchaseOrder = gJson.purchaseOrder;
+          }
 
+          // SOBERANÍA DEL MOTOR TABULAR DETERMINISTA (Escenario 433 SDD):
+          // Si el parser tabular matemático extrajo ítems con cantidad (> 0), esa es la fuente canónica e inmutable.
+          if (progItems && progItems.length > 0) {
+            progItems.forEach((it: any) => {
+              extractedData.items.push({
+                name: it.originalName,
+                quantity: it.quantity,
+                unit: it.unit || 'Kg',
+                observations: it.observations || '',
+                source_attachment_name: att.name,
+                purchase_order: gJson?.purchaseOrder || undefined,
+                attachment_index: attIdx
+              });
+              parsedSuccessfully = true;
+            });
+          } else if (gJson && Array.isArray(gJson.items) && gJson.items.length > 0) {
             gJson.items.forEach((it: any) => {
               if (it && it.name && !isNaN(Number(it.quantity)) && Number(it.quantity) > 0) {
                 extractedData.items.push({
@@ -167,24 +186,6 @@ ${csvContent}`;
                 parsedSuccessfully = true;
               }
             });
-          }
-
-          // Programmatic fallback if Gemini returned 0 items
-          if (!parsedSuccessfully || extractedData.items.length === 0) {
-            const { extractedItems: progItems } = parseSpreadsheetWorkbook(workbook, XLSX);
-            if (progItems && progItems.length > 0) {
-              progItems.forEach((it: any) => {
-                extractedData.items.push({
-                  name: it.originalName,
-                  quantity: it.quantity,
-                  unit: it.unit || 'Kg',
-                  observations: it.observations || '',
-                  source_attachment_name: att.name,
-                  attachment_index: attIdx
-                });
-                parsedSuccessfully = true;
-              });
-            }
           }
         } else if (ext === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
           const base64 = Buffer.from(fileBuf).toString('base64');

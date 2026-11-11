@@ -2342,7 +2342,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       newEdits[idx].selected_options = selectedOptions;
       newEdits[idx].isConfirmed = true;
       
-      const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 1);
+      const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 0) || 1;
       if (newEdits[idx].originalQuantity) {
         newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
       }
@@ -2448,7 +2448,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     newEdits[rowIndex].conversion_factor = conversionFactor;
     newEdits[rowIndex].unit = targetUnit;
-    const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 1);
+    const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 0);
     newEdits[rowIndex].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
     
     const autoSelectedOptions: Record<string, string> = {};
@@ -3366,7 +3366,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       rowIndex,
       product: freshProduct,
       originalText: item.originalName || item.name || freshProduct.name,
-      originalQuantity: item.originalQuantity || item.quantity || 1,
+      originalQuantity: item.originalQuantity !== undefined && item.originalQuantity !== null ? item.originalQuantity : (item.quantity || 0),
       originalUnit: item.originalUnit || item.unit || 'Kg',
       options: opts,
       quantity: initialQtyStr,
