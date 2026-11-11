@@ -114,6 +114,21 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(50);
+
+  useEffect(() => {
+    if (!toolbarRef.current) return;
+    const updateH = () => {
+      if (toolbarRef.current) {
+        setToolbarHeight(toolbarRef.current.offsetHeight);
+      }
+    };
+    updateH();
+    const obs = new ResizeObserver(updateH);
+    obs.observe(toolbarRef.current);
+    return () => obs.disconnect();
+  }, []);
 
   const handleDeleteEmail = async () => {
     if (!deleteConfirm.emailId) return;
@@ -416,18 +431,26 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
     }
   };
 
+  const theadTop = `${topOffset + toolbarHeight}px`;
+
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', width: '100%', padding: '0 0.25rem' }}>
       
-      {/* 1. Header Toolbar (Estandar /disenador-web & FruFresco Galerias) */}
+      {/* 1. Header Toolbar (Línea 2 Sticky - Acople Magnético) */}
       <div
+        ref={toolbarRef}
         style={{
-          backgroundColor: '#FFFFFF',
+          position: 'sticky',
+          top: `${topOffset}px`,
+          zIndex: 40,
+          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
           padding: '0.65rem 1rem',
           borderRadius: '14px',
           border: '1px solid #E2E8F0',
-          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
-          marginBottom: '0.65rem'
+          boxShadow: '0 4px 16px -2px rgba(15, 23, 42, 0.05)',
+          marginBottom: '0.5rem'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -880,168 +903,188 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
           borderRadius: '14px',
           border: '1px solid #E2E8F0',
           boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
-          overflow: 'hidden'
+          position: 'relative',
+          overflow: 'visible'
         }}>
-          <div style={{ overflowX: 'auto', width: '100%' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'separate',
-              borderSpacing: 0,
-              fontSize: '0.85rem',
-              textAlign: 'left'
-            }}>
-              <thead>
-                <tr style={{
+          <table style={{
+            width: '100%',
+            borderCollapse: 'separate',
+            borderSpacing: 0,
+            fontSize: '0.85rem',
+            textAlign: 'left'
+          }}>
+            <thead>
+              <tr style={{
+                backgroundColor: '#F1F5F9',
+                borderBottom: '2px solid #CBD5E1'
+              }}>
+                {/* Master Checkbox Header */}
+                <th style={{
+                  position: 'sticky',
+                  top: theadTop,
+                  zIndex: 35,
                   backgroundColor: '#F1F5F9',
-                  borderBottom: '2px solid #CBD5E1'
+                  borderBottom: '2px solid #CBD5E1',
+                  borderTopLeftRadius: '14px',
+                  padding: '0.75rem 0.85rem',
+                  width: '46px',
+                  textAlign: 'center',
+                  verticalAlign: 'middle'
                 }}>
-                  {/* Master Checkbox Header */}
-                  <th style={{
+                  <CustomCheckbox
+                    checked={isAllSelected}
+                    indeterminate={isSomeSelected}
+                    onChange={handleToggleSelectAll}
+                    title={isAllSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+                    ariaLabel="Seleccionar todos los correos"
+                  />
+                </th>
+
+                {/* Columna Fecha / Hora */}
+                <th
+                  onClick={() => handleToggleSort('date')}
+                  style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 35,
                     backgroundColor: '#F1F5F9',
                     borderBottom: '2px solid #CBD5E1',
-                    padding: '0.75rem 0.85rem',
-                    width: '46px',
-                    textAlign: 'center',
-                    verticalAlign: 'middle'
-                  }}>
-                    <CustomCheckbox
-                      checked={isAllSelected}
-                      indeterminate={isSomeSelected}
-                      onChange={handleToggleSelectAll}
-                      title={isAllSelected ? "Deseleccionar todos" : "Seleccionar todos"}
-                      ariaLabel="Seleccionar todos los correos"
-                    />
-                  </th>
+                    padding: '0.75rem 1rem',
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    width: '180px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Ordenar por fecha de emisión"
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span>FECHA / HORA</span>
+                    {sortField === 'date' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
+                    ) : (
+                      <ArrowUpDown size={12} color="#94A3B8" />
+                    )}
+                  </div>
+                </th>
 
-                  {/* Columna Fecha / Hora */}
-                  <th
-                    onClick={() => handleToggleSort('date')}
-                    style={{
-                      backgroundColor: '#F1F5F9',
-                      borderBottom: '2px solid #CBD5E1',
-                      padding: '0.75rem 1rem',
-                      fontWeight: 800,
-                      color: '#0F172A',
-                      width: '180px',
-                      fontSize: '0.72rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                      whiteSpace: 'nowrap'
-                    }}
-                    title="Ordenar por fecha de emisión"
-                  >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <span>FECHA / HORA</span>
-                      {sortField === 'date' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
-                      ) : (
-                        <ArrowUpDown size={12} color="#94A3B8" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Columna Destinatario */}
-                  <th
-                    onClick={() => handleToggleSort('recipient')}
-                    style={{
-                      backgroundColor: '#F1F5F9',
-                      borderBottom: '2px solid #CBD5E1',
-                      padding: '0.75rem 1rem',
-                      fontWeight: 800,
-                      color: '#0F172A',
-                      width: '280px',
-                      fontSize: '0.72rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                      userSelect: 'none'
-                    }}
-                    title="Ordenar por destinatario"
-                  >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <span>DESTINATARIO</span>
-                      {sortField === 'recipient' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
-                      ) : (
-                        <ArrowUpDown size={12} color="#94A3B8" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Columna Asunto */}
-                  <th
-                    onClick={() => handleToggleSort('subject')}
-                    style={{
-                      backgroundColor: '#F1F5F9',
-                      borderBottom: '2px solid #CBD5E1',
-                      padding: '0.75rem 1rem',
-                      fontWeight: 800,
-                      color: '#0F172A',
-                      fontSize: '0.72rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                      userSelect: 'none'
-                    }}
-                    title="Ordenar por asunto"
-                  >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <span>ASUNTO</span>
-                      {sortField === 'subject' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
-                      ) : (
-                        <ArrowUpDown size={12} color="#94A3B8" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Columna Estado */}
-                  <th
-                    onClick={() => handleToggleSort('status')}
-                    style={{
-                      backgroundColor: '#F1F5F9',
-                      borderBottom: '2px solid #CBD5E1',
-                      padding: '0.75rem 1rem',
-                      fontWeight: 800,
-                      color: '#0F172A',
-                      width: '150px',
-                      textAlign: 'center',
-                      fontSize: '0.72rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                      userSelect: 'none'
-                    }}
-                    title="Ordenar por estado"
-                  >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <span>ESTADO</span>
-                      {sortField === 'status' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
-                      ) : (
-                        <ArrowUpDown size={12} color="#94A3B8" />
-                      )}
-                    </div>
-                  </th>
-
-                  {/* Columna Acciones */}
-                  <th style={{
+                {/* Columna Destinatario */}
+                <th
+                  onClick={() => handleToggleSort('recipient')}
+                  style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 35,
                     backgroundColor: '#F1F5F9',
                     borderBottom: '2px solid #CBD5E1',
-                    padding: '0.75rem 0.85rem',
-                    width: '85px',
+                    padding: '0.75rem 1rem',
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    width: '280px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Ordenar por destinatario"
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span>DESTINATARIO</span>
+                    {sortField === 'recipient' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
+                    ) : (
+                      <ArrowUpDown size={12} color="#94A3B8" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Columna Asunto */}
+                <th
+                  onClick={() => handleToggleSort('subject')}
+                  style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 35,
+                    backgroundColor: '#F1F5F9',
+                    borderBottom: '2px solid #CBD5E1',
+                    padding: '0.75rem 1rem',
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Ordenar por asunto"
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span>ASUNTO</span>
+                    {sortField === 'subject' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
+                    ) : (
+                      <ArrowUpDown size={12} color="#94A3B8" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Columna Estado */}
+                <th
+                  onClick={() => handleToggleSort('status')}
+                  style={{
+                    position: 'sticky',
+                    top: theadTop,
+                    zIndex: 35,
+                    backgroundColor: '#F1F5F9',
+                    borderBottom: '2px solid #CBD5E1',
+                    padding: '0.75rem 1rem',
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    width: '150px',
                     textAlign: 'center',
                     fontSize: '0.72rem',
-                    fontWeight: 800,
                     letterSpacing: '0.05em',
-                    color: '#64748B'
-                  }}>
-                    ACCIONES
-                  </th>
-                </tr>
-              </thead>
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Ordenar por estado"
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <span>ESTADO</span>
+                    {sortField === 'status' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={13} color="#0D7A57" strokeWidth={2.5} /> : <ArrowDown size={13} color="#0D7A57" strokeWidth={2.5} />
+                    ) : (
+                      <ArrowUpDown size={12} color="#94A3B8" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Columna Acciones */}
+                <th style={{
+                  position: 'sticky',
+                  top: theadTop,
+                  zIndex: 35,
+                  backgroundColor: '#F1F5F9',
+                  borderBottom: '2px solid #CBD5E1',
+                  borderTopRightRadius: '14px',
+                  padding: '0.75rem 0.85rem',
+                  width: '85px',
+                  textAlign: 'center',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.05em',
+                  color: '#64748B'
+                }}>
+                  ACCIONES
+                </th>
+              </tr>
+            </thead>
 
               <tbody>
                 {filteredAndSortedEmails.map((email, idx) => {
@@ -1339,7 +1382,6 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                 })}
               </tbody>
             </table>
-          </div>
 
           {/* Table Footer Summary Bar */}
           <div style={{
