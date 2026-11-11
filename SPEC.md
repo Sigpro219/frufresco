@@ -16457,3 +16457,49 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   4. **Persistencia Sincronizada en Base de Datos (`public.mail`):**
      - Toda corrección de plantillas debe actualizar retroactivamente o regenerar las columnas `message.html`, `message.text` y `template.data` de los registros pendientes en la tabla `mail`, evitando discrepancias entre el código fuente y los visores modales de la interfaz de usuario.
 
+
+### Escenario 432: Exclusión Mutua de Documentos Físicos de Despacho (FAC-IMP, REM-$, REM-S/S), Corte Pre-Despacho Asincrónico y Preservación del Ciclo de Vida Logístico (SDD v1.9.386)
+- **Given** una tanda de pedidos B2B programada para despacho en muelle ($D$) donde coexisten clientes que exigen Factura Física en recepción (`document_type === 'invoice'`) y clientes operados bajo remisión estándar (`document_type === 'remission'`):
+- **When** el área contable ejecuta la facturación y el jefe de despacho genera la documentación física de ruta:
+- **Then** el sistema aplica las siguientes reglas canónicas de gobernanza y Poka-Yoke de piso:
+  1. **Triada de Exclusión Mutua de Documentos Físicos de Despacho:**
+     - Cada pedido viaja en el camión acompañado estrictamente por **EXACTAMENTE UNO** de los tres documentos físicos posibles, quedando terminantemente prohibido duplicar soportes en cabina:
+       * **`FAC-IMP` (Factura Electrónica Impresa):** Para clientes con `document_type === 'invoice'` (o `print_invoice === true`). Viaja con la Factura Física DIAN expedida desde World Office Desktop. **No se emite ni imprime remisión**.
+       * **`REM-$` (Remisión Valorizada):** Para clientes con `document_type !== 'invoice'` y `remission_with_prices !== false`. Viaja con Remisión Oficial en formato Carta Duplex con precios unitarios y totales.
+       * **`REM-S/S` (Remisión Ciega):** Para clientes con `remission_with_prices === false`. Viaja con Remisión Oficial en formato Carta Duplex a ciegas (ocultando 100% tarifas y totales; solo cantidades y unidades físicas).
+  2. **Poka-Yoke en Motor de Impresiones (`/admin/orders/contingency-print?mode=remissions`):**
+     - El generador de remisiones aplica un filtro atómico de exclusión que descarta los pedidos con `document_type === 'invoice'` (`FAC-IMP`), evitando la emisión accidental de remisiones para pedidos que ya viajan con factura física.
+     - En el renderizado de la tabla de ítems, si `remission_with_prices === false`, se suprimen las columnas `VALOR/UM`, `TOTAL` y el bloque de liquidación financiera, emitiendo remisión limpia para recibo de cocina/bodega.
+  3. **Corte Pre-Despacho Asincrónico de la Tarde ($D-1$ Pre-Despacho en `/admin/commercial/billing`):**
+     - En la tarde previa ($D-1$, entre 5:00 PM y 7:30 PM), la mesa de facturación permite abrir el **Corte Pre-Despacho (`FAC-IMP`)** sobre la tanda activa ($D$).
+     - La consulta del corte filtra los pedidos con fecha de entrega $D$, que no posean corte asignado (`billing_cut_id.is.null`) y cumplan la condición `document_type === 'invoice'` (sin exigir que el pedido esté en estado `delivered`).
+     - Genera y descarga el archivo plano normalizado de 57 columnas de World Office exclusivamente para este subconjunto de pedidos.
+     - **Regla Sagrada de Integridad Logística:** Al emitir el corte, el sistema asigna `orders.billing_cut_id = cut.id` e inserta los registros correspondientes en `billing_invoices`, pero **MANTIENE EL `orders.status` OPERATIVO INTACTO** (`para_compra`, `approved`, etc.), blindando los pedidos para que permanezcan visibles en la Sábana de Alistamiento por Células, en la Planilla de Compras de Corabastos y en los Manifiestos de Carga.
+  4. **Corte Post-Entrega de la Mañana ($D$ Post-Entrega):**
+     - A la mañana siguiente ($D$), una vez cumplidas las entregas físicas y superada la ventana de gracia de 120 minutos, el **Corte de la Mañana** procesa los pedidos restantes (`REM-$` y `REM-S/S`).
+     - Al filtrar pedidos con `billing_cut_id.is.null`, los pedidos `FAC-IMP` facturados la tarde anterior quedan automáticamente excluidos, erradicando cualquier riesgo de doble facturación en World Office.
+  5. **Señalización Cromática Semántica de Badges:**
+     - En la Galería de Clientes (`/admin/commercial` / `ClientsModule.tsx`) y en la Consola de Cargue de Pedidos (`/admin/orders/loading` / `page.tsx` en la columna Cliente/Sede junto al teléfono), se renderizan badges de alto contraste con semántica unificada:
+       * **`FAC-IMP`:** Fondo `#FEF2F2`, borde `#F87171`, texto `#B91C1C` (Alerta roja de factura previa obligatoria).
+       * **`REM-$`:** Fondo `#EFF6FF`, borde `#93C5FD`, texto `#1D4ED8` (Azul corporativo de remisión con precio).
+       * **`REM-S/S`:** Fondo `#F8FAFC`, borde `#CBD5E1`, texto `#475569` (Gris pizarra confidencial de remisión a ciegas).
+
+
+---
+
+### Escenario 433: Soberanía del Motor Tabular Determinista, Erradicación del Fallback Ciego `quantity || 1` y Filtro Poka-Yoke Anti-Alucinación en Plantillas Excel (SDD v1.9.387)
+- **Given** un archivo adjunto de hoja de cálculo (`.xlsx`, `.xls`, `.ods`, `.csv`) con matrices institucionales de catálogo (ej. Colsubsidio `sp7900421372.xlsx` de 137 filas, donde solo 1 fila contiene pedido real y 136 filas están vacías o en cero):
+- **When** el sistema ingesta el correo en `src/app/api/orders/email-ingest/route.ts` o el operador abre el borrador en `src/components/EmailDraftsModule.tsx`:
+- **Then** rigen las siguientes reglas de blindaje transaccional y Poka-Yoke de datos:
+  1. **Prevalencia Incondicional del Motor Tabular Determinista:**
+     - Si el archivo es una hoja de cálculo estructurada y `parseSpreadsheetWorkbook` extrae ítems válidos con cantidad (`attProgrammaticExcelItems.length > 0`), dicha lista es la **FUENTE CANÓNICA DE VERDAD**.
+     - Gemini se reserva exclusivamente para la extracción de metadatos de cabecera (Cliente, NIT, OC/SOLPED, Dirección, Fechas de entrega). Queda terminantemente prohibido descartar el resultado celular matemático para sustituirlo por filas alucinadas de LLM.
+  2. **Filtro Poka-Yoke Anti-Ceros en Pipeline de Ingesta:**
+     - En `filterExcelItems` y `processItemsArray` de `email-ingest/route.ts`, es mandatorio validar `parseFloat(quantity) > 0`.
+     - Todo renglón con cantidad `0`, `null`, `undefined`, `""` o `NaN` queda descartado antes de persistirse en `order_drafts.extracted_items`.
+  3. **Erradicación Definitiva del Fallback `quantity || 1` en Mesa de Control:**
+     - En `src/components/EmailDraftsModule.tsx`, queda proscrita la asignación perezosa `parseFloat(item.quantity || 1)`.
+     - Si un ítem no tiene cantidad explícita mayor a cero, no debe ser renderizado en `editableItems`.
+     - Se prohibe expresamente la activación del escalamiento por mínimo de venta (`minSaleKg`) sobre ítems con cantidad cero o nula, eliminando la mutación artificial que convertía productos vacíos como Piña en 2 unidades.
+  4. **Cumplimiento Estricto del Escenario 416:**
+     - El visor de hojas de cálculo de `EmailDraftsModule.tsx` inicializa `excelFilterOnlyWithQty = true` por defecto, aislando únicamente los ítems con pedido y evitando la navegación innecesaria por matrices vacías.

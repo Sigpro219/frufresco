@@ -1391,7 +1391,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [attachmentHtml, setAttachmentHtml] = useState<string | null>(null);
   const [excelSheetsData, setExcelSheetsData] = useState<any[]>([]);
   const [selectedExcelSheetIndex, setSelectedExcelSheetIndex] = useState<number>(0);
-  const [excelFilterOnlyWithQty, setExcelFilterOnlyWithQty] = useState<boolean>(false);
+  const [excelFilterOnlyWithQty, setExcelFilterOnlyWithQty] = useState<boolean>(true);
   const [excelSearchTerm, setExcelSearchTerm] = useState<string>('');
   const [excelZoomLevel, setExcelZoomLevel] = useState<number>(100);
   const [loadingAttachment, setLoadingAttachment] = useState(false);
@@ -1492,7 +1492,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     setAttachmentHtml(null);
     setExcelSheetsData([]);
     setSelectedExcelSheetIndex(0);
-    setExcelFilterOnlyWithQty(false);
+    setExcelFilterOnlyWithQty(true);
     setExcelSearchTerm('');
     setExcelZoomLevel(100);
     setAttachmentError(null);
@@ -4778,8 +4778,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         triggerGeocoding(meta.address);
       }
       
-      // Initialize editable items with all products consolidated
-      const rawItems = getDraftItems(selectedDraft);
+      // Initialize editable items with all products consolidated (Poka-Yoke Escenario 433 SDD: purgar filas con cantidad <= 0 o vacías)
+      const rawItems = getDraftItems(selectedDraft).filter((it: any) => {
+        if (!it || it.isDeleted || it.isMetadata) return false;
+        const q = parseFloat(String(it.quantity !== undefined && it.quantity !== null && it.quantity !== '' ? it.quantity : (it.originalQuantity || 0)).replace(',', '.'));
+        return !isNaN(q) && q > 0;
+      });
       const initialEdits = rawItems.map((item: any) => {
         let cleanName = item.originalName || item.name || '';
         const rawOriginalName = cleanName;
@@ -4854,7 +4858,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           return prod ? getSmartFallbackUnit(prod.name, prod.unit_of_measure || 'Kg') : 'Unidad';
         })();
 
-        const initialQty = parseFloat(item.quantity || 1);
+        // Poka-Yoke Escenario 433 SDD: Erradicar fallback ciego item.quantity || 1
+        const rawItemQty = item.quantity !== undefined && item.quantity !== null && item.quantity !== ''
+          ? parseFloat(String(item.quantity).replace(',', '.'))
+          : 0;
+        const initialQty = isNaN(rawItemQty) ? 0 : rawItemQty;
         let conversionFactor = detectedUnit ? detectedUnit.factor : 1;
         let finalUnit = prod?.unit_of_measure || parsedUnit;
         let foundDbConversion = detectedUnit ? true : false;
@@ -4891,15 +4899,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           }
         }
 
-        const baseQty = item.originalQuantity !== undefined && item.originalQuantity !== null
-          ? Number(item.originalQuantity)
+        const rawOrigQty = item.originalQuantity !== undefined && item.originalQuantity !== null && item.originalQuantity !== ''
+          ? parseFloat(String(item.originalQuantity).replace(',', '.'))
+          : null;
+        const baseQty = rawOrigQty !== null && !isNaN(rawOrigQty)
+          ? rawOrigQty
           : initialQty;
 
         let finalQty = parseFloat((baseQty * conversionFactor).toFixed(3));
 
         const minSaleKg = getProductMinSaleKg(prod);
         let defaultDualPresVal: string | null = null;
-        if (prod && minSaleKg && minSaleKg >= 1.5 && finalQty < minSaleKg) {
+        // Poka-Yoke Escenario 433 SDD: Solo escalar por mínimo de venta si la cantidad es estrictamente > 0
+        if (prod && minSaleKg && minSaleKg >= 1.5 && finalQty > 0 && finalQty < minSaleKg) {
           const presOpt = (prod.options_config || []).find((opt: any) => 
             opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
           );
@@ -5159,18 +5171,30 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const getDraftItems = (draft: any) => {
     const raw = draft.extracted_items || [];
     if (!Array.isArray(raw)) return [];
+
+    // Poka-Yoke Escenario 433 SDD: descartar filas con cantidad <= 0 o vacías
+    const isValidItem = (i: any) => {
+      if (!i || i.isDeleted || i.isMetadata) return false;
+      const q = parseFloat(String(i.quantity !== undefined && i.quantity !== null && i.quantity !== '' ? i.quantity : (i.originalQuantity || 0)).replace(',', '.'));
+      return !isNaN(q) && q > 0;
+    };
+
     const directItems = raw.filter((i: any) => !i.isMetadata);
     if (directItems.length > 0) {
-      return directItems;
+      const validDirect = directItems.filter(isValidItem);
+      return validDirect.length > 0 ? validDirect : directItems;
     }
     const meta = raw.find((i: any) => i.isMetadata);
     if (meta?.attachments && Array.isArray(meta.attachments)) {
       if (typeof selectedAttachmentIndex === 'number' && meta.attachments[selectedAttachmentIndex]?.items?.length > 0) {
-        return meta.attachments[selectedAttachmentIndex].items;
+        const attItems = meta.attachments[selectedAttachmentIndex].items;
+        const validAtt = attItems.filter(isValidItem);
+        return validAtt.length > 0 ? validAtt : attItems;
       }
       const attWithItems = meta.attachments.find((att: any) => att?.items && Array.isArray(att.items) && att.items.length > 0);
       if (attWithItems) {
-        return attWithItems.items;
+        const validAtt = attWithItems.items.filter(isValidItem);
+        return validAtt.length > 0 ? validAtt : attWithItems.items;
       }
     }
     return [];
@@ -9927,7 +9951,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                             </div>
                             <div style={{ fontSize: '0.68rem', fontWeight: '600', color: '#64748B', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                               <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FBBF24', padding: '1px 5px', borderRadius: '5px', fontWeight: '900', fontSize: '0.65rem' }}>
-                                {formatDetectedUnit(item.originalQuantity || item.quantity || 1, item.originalUnit || item.unit)}
+                                {formatDetectedUnit(item.originalQuantity !== undefined && item.originalQuantity !== null ? item.originalQuantity : (item.quantity || 0), item.originalUnit || item.unit)}
                               </span>
                               {item.source_attachment_name && (
                                 <span style={{ backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }} title={`Anexo: ${item.source_attachment_name}`}>

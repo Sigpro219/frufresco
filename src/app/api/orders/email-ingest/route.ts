@@ -973,6 +973,7 @@ export async function POST(req: Request) {
           3. Extrae la lista completa de productos del Excel/CSV en la propiedad 'items':
              - "originalName": Nombre comercial del alimento en español limpio (ej. "AGUACATE", "AJO", "APIO", "BANANO CRIOLLO", "CEBOLLA CABEZONA BLANCA", "CILANTRO"). NUNCA uses columnas de códigos PLU, ID, CÓDIGO o números como el nombre del producto; extrae SIEMPRE la descripción o nombre del producto en español.
              - "quantity": Cantidad numérica solicitada mayor a cero. Si hay columnas para una sede o destino específico (ej. "JARDIN RICAURTE"), toma la cantidad indicada para ese destino.
+             - REGLA CRÍTICA DE CANTIDAD: IGNORA todos los productos cuya CANTIDAD PEDIDA sea 0 o esté vacía. EXTRAE ÚNICAMENTE productos con cantidad mayor a cero (> 0).
              - "unit": Unidad de medida o presentación exacta ("KG", "UND", "UNIDAD", "KILO", "BOLSA", etc.).
              - "observations": Código PLU, especificación de calidad o corte si existe.
           4. Identifica la franja u horario de entrega: "AM", "PM", "Cualquier hora", o null.
@@ -1001,7 +1002,10 @@ export async function POST(req: Request) {
               if (!items || items.length === 0) return [];
               const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
               return items.filter((itm: any) => {
-                if (itm.quantity > 50000) return false;
+                const numQty = parseFloat(String(itm.quantity || '').replace(',', '.'));
+                // Poka-Yoke Escenario 433 SDD: descartar rigurosamente cantidades <= 0, vacías, nulas o NaN
+                if (isNaN(numQty) || numQty <= 0) return false;
+                if (numQty > 50000) return false;
                 const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                 if (!cleanProd || cleanProd.length < 2) return false;
                 // Filtrar solo si el nombre del producto es EXACTAMENTE idéntico al nombre del cliente
@@ -1012,13 +1016,17 @@ export async function POST(req: Request) {
               });
             };
 
-            if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
-              attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
-            } else if (attProgrammaticExcelItems.length > 0) {
+            // SOBERANÍA DEL MOTOR TABULAR DETERMINISTA (Escenario 433 SDD):
+            // Si el parser tabular matemático extrajo ítems con cantidad válida (> 0), esa es la fuente canónica e inmutable.
+            if (attProgrammaticExcelItems.length > 0) {
+              console.log(`[Email Inbound] Soberanía Tabular activa: usando ${attProgrammaticExcelItems.length} ítems deterministas de parseSpreadsheetWorkbook para ${attFileName}.`);
               attExtractedData.items = filterExcelItems(attProgrammaticExcelItems, attExtractedData.clientInDocument || '');
+            } else if (Array.isArray(attExtractedData.items) && attExtractedData.items.length > 0) {
+              attExtractedData.items = filterExcelItems(attExtractedData.items, attExtractedData.clientInDocument || '');
             } else if (attExtractedData.items && !Array.isArray(attExtractedData.items)) {
               if (typeof attExtractedData.items === 'object') {
-                attExtractedData.items = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
+                const objItems = Object.keys(attExtractedData.items).map(key => ({ originalName: key, quantity: attExtractedData.items[key] }));
+                attExtractedData.items = filterExcelItems(objItems, attExtractedData.clientInDocument || '');
               } else {
                 attExtractedData.items = [];
               }
@@ -1032,7 +1040,9 @@ export async function POST(req: Request) {
                 if (!items || items.length === 0) return [];
                 const cleanClient = clientName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                 return items.filter((itm: any) => {
-                  if (itm.quantity > 50000) return false;
+                  const numQty = parseFloat(String(itm.quantity || '').replace(',', '.'));
+                  if (isNaN(numQty) || numQty <= 0) return false;
+                  if (numQty > 50000) return false;
                   const cleanProd = String(itm.originalName || itm.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                   if (!cleanProd || cleanProd.length < 2) return false;
                   if (cleanClient && cleanClient.length > 5 && cleanProd === cleanClient) return false;
@@ -1575,7 +1585,15 @@ export async function POST(req: Request) {
     const validAttachments = attachmentsWithItems.length > 0 ? attachmentsWithItems : parsedAttachments;
 
     const processItemsArray = (rawItems: any[], attIndex = 0, attName: string | null = null) => {
-      return (Array.isArray(rawItems) ? rawItems : []).map((itm: any) => {
+      return (Array.isArray(rawItems) ? rawItems : [])
+        .filter((itm: any) => {
+          if (!itm) return false;
+          if (itm.isMetadata) return true;
+          const numQty = parseFloat(String(itm.quantity || '').replace(',', '.'));
+          // Poka-Yoke Escenario 433 SDD: descartar rigurosamente ítems con cantidad <= 0, vacía o NaN
+          return !isNaN(numQty) && numQty > 0;
+        })
+        .map((itm: any) => {
         let originalName = String(itm.originalName || itm.name || '').trim();
         originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
         const nameLower = originalName.toLowerCase();
