@@ -79,32 +79,30 @@ async function sendMailRecord(supabaseAdmin: any, record: any): Promise<{ succes
     const effectiveToEmail = isSandbox ? sandboxRecipient : (to_email || '').toLowerCase().trim();
     const effectiveSubject = isSandbox ? `[PRUEBAS - Para: ${to_email}] ${subject || 'Confirmación de Pedido FruFresco'}` : (subject || 'Confirmación de Compra - Investments Cortés');
 
-    // 5. Send the email via Hostinger SMTP (Primary Sovereign Transport) or Resend / Custom SMTP
+    // 5. Send the email via Hostinger SMTP (Primary Sovereign Transport)
     const resendApiKey = process.env.RESEND_API_KEY;
-    let hostingerUser = process.env.HOSTINGER_IMAP_USER || process.env.SMTP_USER || 'pedidos@frufresco.co';
-    let hostingerPass = process.env.HOSTINGER_IMAP_PASS || process.env.SMTP_PASS || '';
+    let hostingerUser = process.env.HOSTINGER_SMTP_USER || process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co';
+    let hostingerPass = process.env.HOSTINGER_SMTP_PASS || process.env.HOSTINGER_IMAP_PASS || '';
     let hostingerHost = process.env.HOSTINGER_SMTP_HOST || 'smtp.hostinger.com';
     let hostingerPort = parseInt(process.env.HOSTINGER_SMTP_PORT || '465', 10);
 
-    // Fallback de Resiliencia Absoluta (Zero-Failure): Si no están en process.env (ej. Vercel), consultar app_settings
-    if (!hostingerPass) {
-      try {
-        const { data: dbCreds } = await supabaseAdmin
-          .from('app_settings')
-          .select('key, value')
-          .in('key', ['hostinger_smtp_credentials', 'hostinger_imap_credentials']);
+    // Fuente canónica de credenciales: app_settings (inmune a variables residuales SMTP_PASS en Vercel)
+    try {
+      const { data: dbCreds } = await supabaseAdmin
+        .from('app_settings')
+        .select('key, value')
+        .in('key', ['hostinger_smtp_credentials', 'hostinger_imap_credentials']);
 
-        if (dbCreds && dbCreds.length > 0) {
-          const smtpRow = dbCreds.find((r: any) => r.key === 'hostinger_smtp_credentials') || dbCreds[0];
-          const rawVal = smtpRow?.value;
-          const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
-          if (parsed?.pass) hostingerPass = parsed.pass;
-          if (parsed?.user) hostingerUser = parsed.user;
-          if (parsed?.host && !parsed.host.startsWith('imap')) hostingerHost = parsed.host;
-        }
-      } catch (err: any) {
-        console.warn('[Mail Queue Processor] Fallback app_settings lookup failed:', err?.message || err);
+      if (dbCreds && dbCreds.length > 0) {
+        const smtpRow = dbCreds.find((r: any) => r.key === 'hostinger_smtp_credentials') || dbCreds[0];
+        const rawVal = smtpRow?.value;
+        const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+        if (parsed?.pass) hostingerPass = parsed.pass;
+        if (parsed?.user) hostingerUser = parsed.user;
+        if (parsed?.host && !parsed.host.startsWith('imap')) hostingerHost = parsed.host;
       }
+    } catch (err: any) {
+      console.warn('[Mail Queue Processor] app_settings lookup failed:', err?.message || err);
     }
 
     let messageId = 'simulated-id';
