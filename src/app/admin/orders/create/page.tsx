@@ -4070,8 +4070,10 @@ function CreateOrderContent() {
             });
             const agreementItemsData = sortedItemsDataForInsert.filter(it => !it.is_off_agreement);
             const offAgreementItemsData = sortedItemsDataForInsert.filter(it => it.is_off_agreement);
-            const hasOffAgreement = hasActiveB2BAgreement && offAgreementItemsData.length > 0;
-            const isOnlyOffAgreementOrder = hasActiveB2BAgreement && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
+            // Escenario 440 SDD: Poka-Yoke Anti-Falso Positivo. Solo ítems con precio real en $0 COP se marcan como pendientes
+            const unpricedOffAgreementItems = offAgreementItemsData.filter(it => Number(it.unit_price || 0) === 0);
+            const hasOffAgreement = hasActiveB2BAgreement && unpricedOffAgreementItems.length > 0;
+            const isOnlyOffAgreementOrder = hasActiveB2BAgreement && agreementItemsData.length === 0 && unpricedOffAgreementItems.length > 0;
 
             // 4. Armar notas de orden y entrega logística
             const poTokens: string[] = [];
@@ -4087,7 +4089,7 @@ function CreateOrderContent() {
             }
             if (adminNotes) poTokens.push(adminNotes);
             const baseAdminNotes = poTokens.join(' | ');
-            const offAgreementNamesList = offAgreementItemsData.map(it => it.product_name).join(', ');
+            const offAgreementNamesList = unpricedOffAgreementItems.map(it => it.product_name).join(', ');
             const finalAdminNotes = hasOffAgreement
                 ? `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offAgreementNamesList}]${baseAdminNotes ? ` | ${baseAdminNotes}` : ''}`
                 : baseAdminNotes;

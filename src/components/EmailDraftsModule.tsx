@@ -6547,9 +6547,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const offAgreementItemsData = hasActiveAgreementSplit
         ? sortedItemsData.filter(itm => !agreementProductIds.has(itm.product_id))
         : [];
+      // Escenario 440 SDD: Solo ítems con tarifa final en $0 se consideran pendientes
+      const unpricedOffAgreementItems = offAgreementItemsData.filter(itm => Number(itm.unit_price || 0) === 0);
 
-      const hasOffAgreementItems = offAgreementItemsData.length > 0;
-      const isOnlyOffAgreement = hasActiveAgreementSplit && agreementItemsData.length === 0 && offAgreementItemsData.length > 0;
+      const hasOffAgreementItems = unpricedOffAgreementItems.length > 0;
+      const isOnlyOffAgreement = hasActiveAgreementSplit && agreementItemsData.length === 0 && unpricedOffAgreementItems.length > 0;
 
       const primaryItemsGroup = sortedItemsData;
       const primaryTotalAmount = isOnlyOffAgreement ? 0 : primaryItemsGroup.reduce((acc, itm) => acc + (Number(itm.unit_price || 0) * Number(itm.quantity || 0)), 0);
@@ -6557,7 +6559,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       let primaryAdminNotes = finalAdminNotes;
       if (hasOffAgreementItems) {
-        const offNames = offAgreementItemsData.map(u => u._prod_name).join(', ');
+        const offNames = unpricedOffAgreementItems.map(u => u._prod_name).join(', ');
         primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
       } else if (unpricedItems.length > 0 && allowZeroPriceDispatch) {
         const unpricedNames = unpricedItems.map(u => u.prod.name).join(', ');
