@@ -505,9 +505,11 @@ function resolveDeliverySlotInfo(order: OrderData): DeliverySlotResult {
  *   con su propio encabezado oficial, Pág X de Y, totales, firmas y pie de página legal.
  */
 function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
-    const SINGLE_PAGE_MAX = 46;       // Hasta 46 ítems caben en 1 sola hoja Carta con modo isUltraDense (4 niveles)
-    const INTERMEDIATE_PAGE_MAX = 48; // Página 1 sin bloque de firmas/totales aloja hasta 48 ítems sin dejar hueco blanco
-    const LAST_PAGE_MAX = 40;         // Última página con firmas y totales aloja hasta 40 ítems
+    const SINGLE_PAGE_MAX = 38;       // Si el pedido tiene hasta 38 ítems, cabe en 1 sola hoja Carta completa con totales y firmas
+    const FIRST_PAGE_MAX = 45;        // En la primera hoja de un pedido multi-página caben exactamente 45 ítems (filas 1 a 45)
+    const INTERMEDIATE_PAGE_MAX = 45; // Páginas intermedias: hasta 45 ítems
+    const LAST_PAGE_MAX = 38;         // Última página con firmas y totales: hasta 38 ítems
+    const MIN_RESIDUAL_ITEMS = 4;     // Evitar que la última página quede con menos de 4 ítems huérfanos
 
     if (!items || items.length === 0) return [[]];
     if (items.length <= SINGLE_PAGE_MAX) return [items];
@@ -516,23 +518,25 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
     let remaining = [...items];
 
     while (remaining.length > 0) {
+        if (pages.length === 0) {
+            // Primera página: ocupar al máximo hasta 45 ítems (filas 1 a 45)
+            // Si el pedido tiene >= 49 ítems, la primera hoja siempre alojará 45 ítems exactos
+            const countForPage1 = Math.min(FIRST_PAGE_MAX, Math.max(25, remaining.length - MIN_RESIDUAL_ITEMS));
+            pages.push(remaining.slice(0, countForPage1));
+            remaining = remaining.slice(countForPage1);
+            continue;
+        }
+
+        // Si lo que queda cabe en la última página junto con totales y firmas
         if (remaining.length <= LAST_PAGE_MAX) {
             pages.push(remaining);
             break;
         }
 
-        if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
-            // Distribución simétrica equilibrada (Balanced Split):
-            // La primera página absorbe ligeramente más ítems (+2 a +3) porque no lleva el bloque de firmas y totales al pie.
-            const half = Math.ceil(remaining.length / 2);
-            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(20, half + 2));
-            pages.push(remaining.slice(0, firstPageCount));
-            pages.push(remaining.slice(firstPageCount));
-            break;
-        }
-
-        pages.push(remaining.slice(0, INTERMEDIATE_PAGE_MAX));
-        remaining = remaining.slice(INTERMEDIATE_PAGE_MAX);
+        // Página intermedia
+        const count = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(25, remaining.length - MIN_RESIDUAL_ITEMS));
+        pages.push(remaining.slice(0, count));
+        remaining = remaining.slice(count);
     }
 
     return pages.length > 0 ? pages : [[]];
@@ -1658,7 +1662,7 @@ function ContingencyPrintContent() {
 
                                     {/* Subfooter de continuidad o bloque de totales y firmas al final */}
                                     {!isLastPage ? (
-                                        <div style={{ marginTop: 'auto', textAlign: 'right', fontSize: '7pt', fontWeight: '700', color: '#64748B', paddingTop: '6px' }}>
+                                        <div style={{ marginTop: '6px', textAlign: 'right', fontSize: '7pt', fontWeight: '700', color: '#64748B', paddingTop: '2px' }}>
                                             Continúa en la siguiente página... (Pág. {pageIdx + 1} de {remissionPages.length})
                                         </div>
                                     ) : (() => {
@@ -1668,7 +1672,7 @@ function ContingencyPrintContent() {
                                         const isUltraDense = effectiveCount >= 38;
                                         const isDense = effectiveCount >= 25;
                                         return (
-                                            <div style={{ marginTop: 'auto', paddingTop: isUltraDense ? '1.5px' : isDense ? '3px' : '6px' }}>
+                                            <div style={{ marginTop: '8px', paddingTop: isUltraDense ? '1.5px' : isDense ? '3px' : '6px' }}>
                                                 {/* Summary & Canastillas Control Compact */}
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', marginBottom: isUltraDense ? '2px' : isDense ? '3px' : '5px', gap: isUltraDense ? '6px' : '8px' }}>
                                                     <div style={{ flex: 1, fontSize: isUltraDense ? '6pt' : isDense ? '6.4pt' : '6.8pt', color: '#334155', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
