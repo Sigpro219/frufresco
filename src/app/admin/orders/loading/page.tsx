@@ -5906,6 +5906,30 @@ useEffect(() => {
 
                                     {/* Right Actions & Close */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                        <a
+                                            href={`/admin/orders/contingency-print?mode=remissions&orderIds=${selectedOrder.id}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{
+                                                backgroundColor: '#F0FDF4',
+                                                color: '#166534',
+                                                border: '1px solid #BBF7D0',
+                                                padding: '5px 10px',
+                                                borderRadius: '8px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: '800',
+                                                textDecoration: 'none',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 1px 2px rgba(16, 185, 129, 0.1)',
+                                                cursor: 'pointer'
+                                            }}
+                                            title="Abrir e imprimir el juego de Remisión Duplex (Cliente + Contabilidad) con QR de PQR para este pedido"
+                                        >
+                                            <Printer size={13} strokeWidth={2.2} style={{ color: '#059669' }} />
+                                            <span>Imprimir Remisión</span>
+                                        </a>
                                         {isOrderLocked() ? (
                                             <div style={{
                                                 display: 'inline-flex',
