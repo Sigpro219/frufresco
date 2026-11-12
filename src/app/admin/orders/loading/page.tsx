@@ -1523,10 +1523,12 @@ useEffect(() => {
             setEditSolped(proc.solpedNumber || '');
 
             const profileObj = selectedOrder.profiles;
-            const effectiveClientId = profileObj?.parent_id || profileObj?.id;
+            // Jerarquía Canónica (Escenario 452): Enviar siempre ID de sucursal primero para evaluar Nivel 1 (Sucursal > Matriz > Lista General)
+            const effectiveClientId = profileObj?.id || profileObj?.parent_id;
 
             // 0. Fetch B2B Commercial Agreement Prices for this client (Canonical Resolver)
             let agreeMap: Record<string, number> = {};
+            let apiResolvedPrices: Record<string, number> = {};
             const agreementProdIds = new Set<string>();
             let canOffAgreement = true;
             if (effectiveClientId) {
@@ -1536,11 +1538,19 @@ useEffect(() => {
                     const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${effectiveClientId}&order_date=${orderDateParam}&delivery_date=${checkDate}&client_type=B2B`);
                     if (res.ok) {
                         const json = await res.json();
-                        if (json.contractPrices) {
-                            agreeMap = json.contractPrices;
-                        }
                         if (Array.isArray(json.agreementProductIds)) {
                             json.agreementProductIds.forEach((id: string) => agreementProdIds.add(id));
+                        }
+                        if (json.contractPrices) {
+                            apiResolvedPrices = json.contractPrices;
+                            // Solo poblar agreementPricesMap con productos realmente pactados en el acuerdo (no con relleno de Lista General)
+                            if (json.activeAgreement && agreementProdIds.size > 0) {
+                                Object.entries(json.contractPrices).forEach(([pid, price]) => {
+                                    if (agreementProdIds.has(pid)) {
+                                        agreeMap[pid] = Number(price);
+                                    }
+                                });
+                            }
                         }
                         if (json.allowOffAgreementPurchases !== undefined && json.allowOffAgreementPurchases !== null) {
                             canOffAgreement = Boolean(json.allowOffAgreementPurchases);
@@ -1553,6 +1563,9 @@ useEffect(() => {
             setAgreementPricesMap(agreeMap);
             setAgreementProductIds(agreementProdIds);
             setAllowOffAgreement(canOffAgreement);
+            if (Object.keys(apiResolvedPrices).length > 0) {
+                setContractPrices(apiResolvedPrices);
+            }
 
             // 0.1 Determine allow_off_agreement_purchases restriction (fallback override)
             if (profileObj) {
@@ -1690,10 +1703,10 @@ useEffect(() => {
                     }
                 });
 
-                setContractPrices(map);
+                setContractPrices({ ...map, ...apiResolvedPrices });
                 setCustomPriceIds(customIds);
             } else {
-                setContractPrices({});
+                setContractPrices(apiResolvedPrices);
                 setCustomPriceIds(new Set());
             }
         }
@@ -2375,9 +2388,9 @@ useEffect(() => {
 
                 let finalProducts = data || [];
 
-                // SI EL CLIENTE TIENE RESTRICCIÓN SOLO A CONVENIO (allowOffAgreement === false), FILTRAR PRODUCTOS
-                if (!allowOffAgreement && (agreementProductIds.size > 0 || Object.keys(agreementPricesMap).length > 0)) {
-                    finalProducts = finalProducts.filter(p => agreementProductIds.has(p.id) || agreementPricesMap[p.id] !== undefined);
+                // SI EL CLIENTE TIENE RESTRICCIÓN SOLO A CONVENIO (allowOffAgreement === false), FILTRAR ESTRICTAMENTE POR ACUERDO
+                if (!allowOffAgreement && agreementProductIds.size > 0) {
+                    finalProducts = finalProducts.filter(p => agreementProductIds.has(p.id));
                 }
                 
                 console.log('Resultados encontrados en edición:', finalProducts.length);
@@ -6698,7 +6711,7 @@ useEffect(() => {
                                                     overflowY: 'auto'
                                                 }}>
                                                     {searchResults.map((prod, idx) => {
-                                                        const isAgreePrice = agreementPricesMap[prod.id] !== undefined && agreementPricesMap[prod.id] !== null;
+                                                        const isAgreePrice = agreementProductIds.has(prod.id) && agreementPricesMap[prod.id] !== undefined && agreementPricesMap[prod.id] !== null;
                                                         const resolvedPrice = isAgreePrice
                                                             ? Number(agreementPricesMap[prod.id])
                                                             : ((contractPrices[prod.id] !== undefined && contractPrices[prod.id] !== null)
@@ -6726,7 +6739,7 @@ useEffect(() => {
                                                                 <div>
                                                                     <div style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.85rem' }}>{prod.name}</div>
                                                                     <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                                                        SKU: {prod.accounting_id || 'Sin ID'} | {formatMoney(resolvedPrice)} / {prod.unit_of_measure}
+                                                                        ID: #{prod.accounting_id || 'Sin ID'} | {formatMoney(resolvedPrice)} / {prod.unit_of_measure}
                                                                     </div>
                                                                 </div>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
