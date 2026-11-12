@@ -802,7 +802,7 @@ export async function POST(req: Request) {
            - Si no hay información de horario, pon null.
            - El campo "deliverySlot" debe ser estrictamente uno de los siguientes valores: "AM", "PM", "Cualquier hora", o null.
         4. Clasifica el tipo de cliente en "clientType". Usa "b2b_client" si es una empresa, negocio, restaurante, hotel, cafetería (HORECA), distribuidora, o tiene NIT comercial. Usa "b2c_client" si es un cliente individual/hogar (persona natural que compra para su casa).
-        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia. Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo/documento, pon null.
+        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo/documento para encontrar indicaciones de fecha de ENTREGA o DESPACHO (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). REGLA CRÍTICA: NUNCA uses la "Fecha de Orden", "Fecha de Elaboración", "Fecha de Emisión" o fecha de impresión del documento como "deliveryDate". Si no se especifica explícitamente una fecha de entrega/despacho distinta, pon null.
         6. Identifica el NÚMERO DE ORDEN DE COMPRA (OC / OCC / PO / SOLPED / Pedido N° / O/C / Referencia de Pedido):
            - Busca en recuadros destacados de cabecera o esquinas con títulos como "Orden de Compra", "O/C", "PO Number", "No. Pedido", "No. Orden", "OCC", "Pedido" (ej. "OC00066351", "OCC 66351", "PO-9812", "SOLPED-4521").
            - Revisa también el ASUNTO DEL CORREO (ej. "FW: OCC 66351 EUROFARMA") o texto del cuerpo.
@@ -1141,7 +1141,7 @@ export async function POST(req: Request) {
            - Si el horario está en el rango de la tarde (ej. "1:00 pm a 5:00 pm", "tarde", "12:00pm a 6:00pm"), asume "PM".
            - Si el horario cubre tanto mañana como tarde (ej. "7:00 am a 4:00 pm", "todo el día", "cualquier hora"), asume "Cualquier hora".
            - Si se listan horarios por sede (ej. "Bosques de Athan: 7am a 4pm", "Clínica Roma: 7:30am a 11:50am"), intenta deducir cuál aplica basándote en el nombre o dirección del cliente. Si no se puede deducir o es el horario general (ej. "horario de recibo es de 7:00 a 11:00"), asume la jornada del horario general o la que corresponda (ej. "7:00 a 11:00 de la mañana" -> "AM").
-        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
+        5. Extrae la fecha de entrega general solicitada en "deliveryDate" en formato "YYYY-MM-DD". Revisa muy atentamente tanto el ASUNTO DEL CORREO como el cuerpo para encontrar indicaciones de fecha de ENTREGA o DESPACHO (ej. "Pedido para mañana", "Despacho 25/06/2026", "Entrega viernes", etc.). REGLA CRÍTICA: NUNCA uses la fecha de emisión/elaboración del documento como "deliveryDate". Usa la fecha actual del sistema como referencia (ej. si hoy es 24 de junio y dice "mañana", la fecha de entrega es 2026-06-25; si dice "para el viernes" y hoy es miércoles, calcula la fecha del próximo viernes). Si no se especifica ninguna fecha de entrega en el asunto ni en el cuerpo, pon null.
         6. Extrae todos los productos solicitados y su cantidad numérica.
            - Si el texto es un arreglo/JSON o tabla, la tercera columna (índice 2) contiene la CANTIDAD TOTAL del pedido. Ignora por completo las columnas posteriores (las que vienen después de la tercera columna), ya que son desgloses por sede y sumarlas causaría una duplicación.
            - NO confundas el código PLU (primera columna) con la cantidad.
@@ -1443,9 +1443,11 @@ export async function POST(req: Request) {
         .select('id, company_name, contact_name, role, is_active, address, phone, nit');
       
       if (!allProfilesError && allProfiles) {
-        // Excluir inactivos y filtrar candidatos con coincidencia
-        const matched = allProfiles
+        // Excluir inactivos y evitar auto-match con el NIT propio de FruFresco/Investments Cortes (901393217) salvo remitente interno
+        const isOwnVendorName = /investments\s*cortes|frufresco/i.test(detectedNameForFuzzy) && !/investments|cortes|frufresco/i.test(senderEmail || '');
+        const matched = isOwnVendorName ? [] : allProfiles
           .filter(p => p.is_active !== false)
+          .filter(p => String(p.nit || '').replace(/\D/g, '') !== '901393217')
           .filter(p => 
             namesMatch(detectedNameForFuzzy, p.contact_name || '') || namesMatch(detectedNameForFuzzy, p.company_name || '')
           );
@@ -1560,19 +1562,29 @@ export async function POST(req: Request) {
       }
     }
 
+    // Escenario 454 SDD: Sanitización D+1 en ingesta — descartar fechas <= HOY (ej. fecha de emisión OC) salvo petición explícita de entrega hoy
+    const todayBogotaStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    const explicitSameDayRequested = /\b(para hoy|entrega hoy|mismo d[ií]a|hoy mismo|despacho hoy)\b/i.test(`${subject || ''} ${currentPlainText || ''}`);
+    const sanitizeIngestedDeliveryDate = (rawDate: string | null | undefined): string | null => {
+      if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(rawDate).trim())) return null;
+      const cleanDate = String(rawDate).trim();
+      if (cleanDate <= todayBogotaStr && !explicitSameDayRequested) return null;
+      return cleanDate;
+    };
+
     // Extract date from subject or body if present as fallback/override
-    let targetDeliveryDate = extractedData.deliveryDate || null;
+    let targetDeliveryDate = sanitizeIngestedDeliveryDate(extractedData.deliveryDate);
     if (subject) {
       const dateMatchSlash = subject.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
       if (dateMatchSlash) {
         const day = dateMatchSlash[1];
         const month = dateMatchSlash[2];
         const year = dateMatchSlash[3];
-        targetDeliveryDate = `${year}-${month}-${day}`;
+        targetDeliveryDate = sanitizeIngestedDeliveryDate(`${year}-${month}-${day}`);
       } else {
         const dateMatchDash = subject.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
         if (dateMatchDash) {
-          targetDeliveryDate = `${dateMatchDash[1]}-${dateMatchDash[2]}-${dateMatchDash[3]}`;
+          targetDeliveryDate = sanitizeIngestedDeliveryDate(`${dateMatchDash[1]}-${dateMatchDash[2]}-${dateMatchDash[3]}`);
         }
       }
     }
@@ -1629,6 +1641,7 @@ export async function POST(req: Request) {
 
         return {
           ...itm,
+          deliveryDate: sanitizeIngestedDeliveryDate(itm.deliveryDate),
           originalName,
           unit: assignedUnit || 'Kg',
           matched_product_id: matchedProductId,
@@ -1679,7 +1692,7 @@ export async function POST(req: Request) {
               address: att.address || extractedData.address || null,
               addressDetected: addressDetected,
               deliverySlot: att.deliverySlot || finalDeliverySlot,
-              deliveryDate: att.deliveryDate || targetDeliveryDate || null,
+              deliveryDate: sanitizeIngestedDeliveryDate(att.deliveryDate) || targetDeliveryDate || null,
               phone: att.phone || extractedData.phone || null,
               nit: att.nit || extractedData.nit || null,
               clientType: att.clientType || clientType,
@@ -1747,7 +1760,7 @@ export async function POST(req: Request) {
             address: primarySource.address || extractedData.address || null,
             addressDetected: addressDetected,
             deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
-            deliveryDate: primarySource.deliveryDate || targetDeliveryDate || null,
+            deliveryDate: sanitizeIngestedDeliveryDate(primarySource.deliveryDate) || targetDeliveryDate || null,
             phone: primarySource.phone || extractedData.phone || null,
             nit: primarySource.nit || extractedData.nit || null,
             clientType: primarySource.clientType || clientType,

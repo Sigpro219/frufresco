@@ -16953,3 +16953,15 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   2. **Invariante Cero Cobro a Nómina:** Toda entidad cuyo `entityType` pertenezca a `isNonPayrollEntityType` (`'market_shortage' | 'company_policy' | 'provider' | 'client'`) nace y permanece bloqueada con `waiveDeduction: true` y `deductionAmount: 0`, conservando su `baseAmount` (COP) y `sharePercent` (%) para trazabilidad financiera, reporte PDF y cierre al `100%` de la matriz sin afectar el ajuste/nota crédito al cliente.
   3. **Blindaje en Nómina (`/admin/hr`):** `hr/page.tsx` excluye explícitamente todo registro de `imputedEntities` cuyo `entityType` sea no-laboral (`isNonPayrollEntityType`), impidiendo descuentos indebidos a colaboradores.
   4. **Taxonomía RCA:** `RCA_CATEGORIES_L1` (`comercial_cliente`) incorpora el subtipo `despacho_parcial_rechazado` (*"Escasez parcial / Rechazo por volumen incompleto"*).
+
+
+---
+
+### Escenario 454: Regla D+1 por Defecto en Ingesta de Correo (`email-ingest`) y Borradores (`EmailDraftsModule`), y Exclusión de NIT Propio (SDD v1.9.409)
+- **Given** un correo electrónico con o sin adjunto PDF de Orden de Compra procesado por `/api/orders/email-ingest` y posteriormente revisado en `EmailDraftsModule`:
+- **When** el documento PDF incluye la *Fecha de Elaboración / Orden / Emisión* del mismo día (`HOY`) pero no especifica una fecha de entrega futura explícita (o no indica explícitamente *"para hoy"* / *"mismo día"* en asunto o cuerpo):
+- **Then**:
+  1. **Prompts de Extracción (`email-ingest`):** Los prompts de IA prohíben explícitamente tomar la *Fecha de Orden / Emisión / Elaboración* como `deliveryDate`; si no hay fecha explícita de entrega/despacho, deben devolver `null`.
+  2. **Sanitización D+1 en Ingesta (`sanitizeIngestedDeliveryDate`):** Toda fecha extraída (`targetDeliveryDate`, `att.deliveryDate` e `itm.deliveryDate`) con valor `<= todayBogotaStr` se descarta (`null`) automáticamente salvo solicitud explícita de entrega el mismo día en asunto/cuerpo (`para hoy`, `entrega hoy`, `mismo día`).
+  3. **Hidratación D+1 por Defecto en `EmailDraftsModule`:** `initialDateStr` valida `docDate >= minDeliveryDate` (regla `D+1` / `calculateStandardMinDeliveryDate`) en lugar de `todayBogotaStr`, y los ítems del borrador con `item.deliveryDate < minDeliveryDate` se normalizan a `null` para heredar `deliveryDate`. La entrega `HOY` (`D+0`) queda exclusivamente como excepción manual explícita del operador en el selector de fecha.
+  4. **Exclusión de NIT/Nombre Propio del Proveedor:** El emparejamiento difuso en `email-ingest` excluye el NIT propio de la empresa (`901393217` / *Investments Cortes*) cuando proviene de encabezados de proveedor en OCs externas.

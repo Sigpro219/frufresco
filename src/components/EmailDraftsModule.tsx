@@ -1716,7 +1716,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     // Group activeItems by item.deliveryDate (fall back to the global deliveryDate)
     const groups: Record<string, any[]> = {};
     for (const item of activeItems) {
-      const itemDate = item.deliveryDate || deliveryDate;
+      const validItemDate = (item.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(item.deliveryDate) && item.deliveryDate >= minDeliveryDate)
+        ? item.deliveryDate
+        : null;
+      const itemDate = validItemDate || deliveryDate;
       if (!groups[itemDate]) {
         groups[itemDate] = [];
       }
@@ -4945,6 +4948,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
         return {
             ...item,
+            deliveryDate: (item.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(item.deliveryDate) && item.deliveryDate >= minDeliveryDate) ? item.deliveryDate : null,
             originalName: cleanName,
             originalQuantity: baseQty,
             quantity: finalQty,
@@ -5157,7 +5161,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
       const docDate = currentAtt?.deliveryDate || meta?.deliveryDate || '';
       let initialDateStr = '';
-      if (docDate && /^\d{4}-\d{2}-\d{2}$/.test(docDate) && docDate >= todayBogotaStr) {
+      // Escenario 454 SDD: Regla D+1 por defecto; HOY (D+0) solo se aplica por selección manual explícita del operador
+      if (docDate && /^\d{4}-\d{2}-\d{2}$/.test(docDate) && docDate >= minDeliveryDate) {
         initialDateStr = docDate;
       } else {
         initialDateStr = minDeliveryDate;
