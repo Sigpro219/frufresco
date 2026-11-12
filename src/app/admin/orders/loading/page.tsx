@@ -1095,7 +1095,72 @@ function OrderLoadingContent() {
             const newLat = reassignSelectedClient.latitude || null;
             const newLng = reassignSelectedClient.longitude || null;
 
-            // 1. Update orders table in Supabase (including updating segment type if changed)
+            // 0. Re-Cotización Atómica de Acuerdo (Escenario 436 SDD & Guardrail 3 Goldfish)
+            // Al reasignar sede, re-cotizar order_items contra el acuerdo/lista del cliente destino
+            let currentItems = selectedOrder.order_items || [];
+            if (!currentItems || currentItems.length === 0) {
+                const { data: dbItems } = await supabase
+                    .from('order_items')
+                    .select('*')
+                    .eq('order_id', selectedOrder.id);
+                currentItems = dbItems || [];
+            }
+
+            let recalculatedTotal = Number(selectedOrder.total || 0);
+            let recalculatedSubtotal = Number(selectedOrder.subtotal || 0);
+            let updatedItemsList = currentItems;
+
+            if (currentItems.length > 0) {
+                try {
+                    const pricingRes = await fetch('/api/orders/resolve-agreement-pricing', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            client_id: reassignSelectedClient.id,
+                            delivery_date: selectedOrder.delivery_date,
+                            client_type: isNewClientB2C ? 'B2C' : 'B2B'
+                        })
+                    });
+                    const pricingJson = await pricingRes.json();
+                    const contractPrices: Record<string, number> = pricingJson?.contractPrices || {};
+
+                    if (contractPrices && Object.keys(contractPrices).length > 0) {
+                        let newSubtotal = 0;
+                        const itemUpdates: Array<{ id: string; unit_price: number }> = [];
+                        updatedItemsList = currentItems.map((it: any) => {
+                            const matchedPrice = contractPrices[it.product_id];
+                            const unitPrice = (matchedPrice !== undefined && Number(matchedPrice) > 0)
+                                ? Number(matchedPrice)
+                                : Number(it.unit_price || 0);
+                            const itemQty = Number(it.quantity || 0);
+                            newSubtotal += Math.round(unitPrice * itemQty);
+                            itemUpdates.push({
+                                id: it.id,
+                                unit_price: unitPrice
+                            });
+                            return {
+                                ...it,
+                                unit_price: unitPrice
+                            };
+                        });
+
+                        // Persistir actualizaciones en order_items
+                        await Promise.all(
+                            itemUpdates.map(u => 
+                                supabase.from('order_items').update({ unit_price: u.unit_price }).eq('id', u.id)
+                            )
+                        );
+
+                        recalculatedSubtotal = newSubtotal;
+                        const prevTax = Number(selectedOrder.tax || 0);
+                        recalculatedTotal = newSubtotal + prevTax;
+                    }
+                } catch (priceErr) {
+                    console.warn('Error resolviendo precios de acuerdo en reasignación:', priceErr);
+                }
+            }
+
+            // 1. Update orders table in Supabase (including updating segment type and recalculated totals)
             const { error: orderError } = await supabase
                 .from('orders')
                 .update({
@@ -1105,7 +1170,9 @@ function OrderLoadingContent() {
                     latitude: newLat,
                     longitude: newLng,
                     geocoding_status: newLat && newLng ? 'SUCCESS' : 'PENDING',
-                    admin_notes: updatedAdminNotes
+                    admin_notes: updatedAdminNotes,
+                    total: recalculatedTotal,
+                    subtotal: recalculatedSubtotal
                 })
                 .eq('id', selectedOrder.id);
 
@@ -1161,7 +1228,10 @@ function OrderLoadingContent() {
                 latitude: newLat,
                 longitude: newLng,
                 profiles: reassignSelectedClient,
-                admin_notes: updatedAdminNotes
+                admin_notes: updatedAdminNotes,
+                total: recalculatedTotal,
+                subtotal: recalculatedSubtotal,
+                order_items: updatedItemsList
             };
 
             setSelectedOrder(updatedOrder);
@@ -4764,7 +4834,7 @@ useEffect(() => {
                                                                                         }}
                                                                                     >
                                                                                         <RotateCcw size={9} strokeWidth={2.8} />
-                                                                                        <span>HIJO DE #{rep.parentSequenceId || ''}</span>
+                                                                                        <span>{rep.parentSequenceId ? `HIJO DE #${rep.parentSequenceId}` : 'REPOSICIÓN ($0 COP)'}</span>
                                                                                     </Link>
                                                                                 );
                                                                             }
