@@ -73,7 +73,8 @@ export default function PurchasesPrintPage() {
                         id, order_id, product_id, quantity, unit, selected_options, variant_label,
                         products(id, name, unit_of_measure, purchase_sublist, weight_kg, parent_id, min_inventory_level, accounting_id)
                     )
-                `);
+                `)
+                .range(0, 4999);
 
             if (rawOrderIds) {
                 const ids = rawOrderIds.split(',').map(id => id.trim()).filter(Boolean);
@@ -103,7 +104,7 @@ export default function PurchasesPrintPage() {
                 const { data: latestClosing } = await supabase
                     .from('daily_inventory_closings')
                     .select('snapshot_items, closing_date')
-                    .lt('closing_date', selectedDate)
+                    .lte('closing_date', selectedDate)
                     .order('closing_date', { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -115,7 +116,9 @@ export default function PurchasesPrintPage() {
                             ? Number(item.bodegaPost10am)
                             : (item.physicalCount !== null && item.physicalCount !== undefined
                                 ? Number(item.physicalCount)
-                                : 0);
+                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
+                                    ? Number(item.calculatedStock)
+                                    : 0));
                         stockMap[item.productId] = Math.max(0, finalStock);
                     });
                     hasOfficialClosing = true;
@@ -592,42 +595,39 @@ export default function PurchasesPrintPage() {
 
                                                     return (
                                                         <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
-                                                            {/* 1 & 2. Stock INV y UM (Unificados verticalmente por SKU cuando hay variantes) */}
-                                                            {spanInfo.isFirst && (
-                                                                <>
-                                                                    <td
-                                                                        rowSpan={spanInfo.span}
-                                                                        style={{
-                                                                            textAlign: 'right',
-                                                                            fontSize: '7.8pt',
-                                                                            fontWeight: '700',
-                                                                            fontVariantNumeric: 'tabular-nums',
-                                                                            color: it.stock_bodega > 0 ? '#0F172A' : '#94A3B8',
-                                                                            backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
-                                                                            verticalAlign: 'middle',
-                                                                            borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                            padding: '3px 4px'
-                                                                        }}
-                                                                    >
-                                                                        {it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-'}
-                                                                    </td>
-                                                                    <td
-                                                                        rowSpan={spanInfo.span}
-                                                                        style={{
-                                                                            textAlign: 'center',
-                                                                            fontSize: '7.5pt',
-                                                                            fontWeight: '600',
-                                                                            color: '#334155',
-                                                                            backgroundColor: spanInfo.span > 1 ? '#F8FAFC' : undefined,
-                                                                            verticalAlign: 'middle',
-                                                                            borderRight: spanInfo.span > 1 ? '1px solid #E2E8F0' : undefined,
-                                                                            padding: '3px 3px'
-                                                                        }}
-                                                                    >
-                                                                        {it.unit}
-                                                                    </td>
-                                                                </>
-                                                            )}
+                                                            {/* 1. Stock INV (Existencia de bodega: en línea base muestra el stock; en variantes hijas indica 'inc.') */}
+                                                            <td
+                                                                style={{
+                                                                    textAlign: 'right',
+                                                                    fontSize: '7.8pt',
+                                                                    fontWeight: spanInfo.isFirst && it.stock_bodega > 0 ? '800' : '600',
+                                                                    fontVariantNumeric: 'tabular-nums',
+                                                                    color: spanInfo.isFirst ? (it.stock_bodega > 0 ? '#0F172A' : '#94A3B8') : '#64748B',
+                                                                    backgroundColor: !spanInfo.isFirst ? '#F8FAFC' : undefined,
+                                                                    verticalAlign: 'middle',
+                                                                    padding: '3px 4px'
+                                                                }}
+                                                            >
+                                                                {spanInfo.isFirst 
+                                                                    ? (it.stock_bodega > 0 ? it.stock_bodega.toLocaleString('es-CO') : '-')
+                                                                    : <span style={{ fontSize: '6.8pt', fontStyle: 'italic' }} title="Stock unificado en línea principal">inc.</span>
+                                                                }
+                                                            </td>
+
+                                                            {/* 2. UM (Unidad de Medida visible en cada línea) */}
+                                                            <td
+                                                                style={{
+                                                                    textAlign: 'center',
+                                                                    fontSize: '7.5pt',
+                                                                    fontWeight: '600',
+                                                                    color: '#334155',
+                                                                    backgroundColor: !spanInfo.isFirst ? '#F8FAFC' : undefined,
+                                                                    verticalAlign: 'middle',
+                                                                    padding: '3px 3px'
+                                                                }}
+                                                            >
+                                                                {it.unit || 'KG'}
+                                                            </td>
 
                                                             {/* 3. Producto / Calibre Especificado */}
                                                             <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: '3px 6px 3px 4px' }}>
