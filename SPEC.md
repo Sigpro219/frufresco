@@ -16707,3 +16707,24 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   3. **Acceso Inmediato a la Remisión Oficial (Documento 5 Duplex):**
      - En la cabecera superior derecha del modal de detalle de pedido en `/admin/orders/loading`, se consagra el botón permanente **`[🖨️ Imprimir Remisión]`** con enlace directo a `/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`.
      - Dicho botón permite emitir en tiempo real el juego Duplex (`ORIGINAL - CLIENTE` y `COPIA - ARCHIVO Y CONTABILIDAD`) con membrete oficial de *Investments Cortés S.A.S.*, recuadro de canastillas y código QR dinámico de PQRS, sin depender de lanzamientos nocturnos ni selecciones por lote.
+
+
+---
+
+### Escenario 443: Soberanía de Unidad de Liquidación (Kilos vs Libras de 500 gr) y Remisión Valorizada en Modal de Clientes y Contingencia (SDD v1.9.398)
+- **Given** el módulo de administración de clientes (`ClientsModule.tsx`), el motor de contingencia e impresión de remisiones (`/admin/orders/contingency-print`), las reglas de integridad física del catálogo (§Estándares Físicos: 1 Lb = 0.5 Kg / 500 gr) y el aislamiento estricto por cliente B2B:
+- **When** un cliente institucional (ej. CESAP) requiere contractualmente que su remisión oficial de entrega se expida valorizada (con columnas de precios unitarios y subtotales) y liquidada en Libras de 500 gramos en lugar del estándar de Kilos:
+- **Then**:
+  1. **Desbloqueo de Soberanía Operativa en Modal de Clientes (`ClientsModule.tsx`):**
+     - Se incorpora el selector interactivo `UNIDAD FACTURACIÓN: [ LIBRAS (LB) / KILOS (KG) ]` en la sección de Logística de Entrega para sucursales y cuentas individuales B2B (al lado de `REQUIERE CANASTILLAS`), eliminando el bloqueo que confinaba esta opción exclusivamente a las Casas Matrices.
+     - El switch persiste de forma directa en `profiles.logistics_data.billing_weight_unit` ('kg' o 'lb') al guardar el cliente, respetando el aislamiento estricto y garantizando que los demás clientes del sistema continúen facturando en Kilos sin alteración.
+  2. **Conversión Visual y Preservación Matemática en Remisión (`contingency-print`):**
+     - Si el cliente, el pedido o su matriz posee `billing_weight_unit === 'lb'`, el motor de impresión transforma en tiempo de renderizado:
+       * Unidad de medida de peso: `Kg` $\rightarrow$ `Lb`.
+       * Cantidad visual: `qty × 2` (ej. 250 Kg $\rightarrow$ 500 Lb).
+       * Tarifa unitaria: `unit_price / 2` (ej. $4.900/Kg $\rightarrow$ $2.450/Lb).
+       * Productos en unidades discretas (`Und`, `Atado`, `Bandeja`, `Paquete`) conservan su unidad y tarifa intactas.
+       * El subtotal de línea y el total consolidado del pedido permanecen matemáticamente inalterados al centavo.
+  3. **Blindaje de Visibilidad de Precios:**
+     - El impresor respeta el flag `order.logistics_data.remission_with_prices_override`, habilitando las columnas `VALOR/UM`, `IVA` y `TOTAL` incluso ante discrepancias transitorias en la herencia de perfiles, garantizando la entrega de la remisión valorizada requerida por interventoría.
+     - Se vincula `parent:parent_id(..., logistics_data)` en la consulta Supabase para blindar la herencia de configuraciones logísticas hacia sucursales subordinadas.

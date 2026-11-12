@@ -91,6 +91,7 @@ interface OrderData {
             company_name?: string;
             document_type?: string;
             remission_with_prices?: boolean;
+            logistics_data?: any;
         } | null;
     };
     order_items: OrderItem[];
@@ -577,7 +578,7 @@ function ContingencyPrintContent() {
                         payment_method, payment_status,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
-                        profiles:profiles(id, created_at, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices)),
+                        profiles:profiles(id, created_at, company_name, contact_name, contact_phone, phone, address, city, municipality, latitude, longitude, delivery_restrictions, logistics_data, nit, role, parent_id, document_type, remission_with_prices, needs_crates, crate_balance, parent:parent_id(id, company_name, document_type, remission_with_prices, logistics_data)),
                         order_items(id, product_id, quantity, unit, unit_price, nickname, variant_label, selected_options, products(id, name, sku, unit_of_measure, weight_kg, accounting_id, category, purchase_sublist, parent_id, min_inventory_level, iva_rate))
                     `);
 
@@ -1361,7 +1362,10 @@ function ContingencyPrintContent() {
                     const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || (order.admin_notes || '').includes('FUERA DE ACUERDO - DESPACHADO SIN PRECIO'));
                     const isUnpricedOffAgreement = isOffAgreementRemission && !Boolean(order.logistics_data?.off_agreement_priced) && Number(order.total || 0) === 0;
                     const isZeroCostDoc = isReposicion || isObsequio || isUnpricedOffAgreement;
-                    const withPrices = !isZeroCostDoc && (order.profiles?.remission_with_prices !== false && order.profiles?.parent?.remission_with_prices !== false);
+                    const withPrices = !isZeroCostDoc && (
+                        Boolean(order.logistics_data?.remission_with_prices_override) ||
+                        (order.profiles?.remission_with_prices !== false && order.profiles?.parent?.remission_with_prices !== false)
+                    );
                     const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
                         const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
                         const m = notes.match(/pedido\s*(?:#|no\.?|num\.?)?\s*(\d{3,})/i) || notes.match(/#ped-(\d{3,})/i);
@@ -1572,7 +1576,7 @@ function ContingencyPrintContent() {
                                                         const price = isZeroCostDoc ? 0 : Number(itm.unit_price || 0);
 
                                                         // Escenario 254: Conversión visual de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                                                        const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb');
+                                                        const isClientInLb = (order.profiles?.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (order.profiles?.parent?.logistics_data?.billing_weight_unit === 'lb');
                                                         const isKgUnit = unit === 'Kg';
                                                         const displayUnit = (isClientInLb && isKgUnit) ? 'Lb' : unit;
                                                         const displayQty = (isClientInLb && isKgUnit) ? (qty * 2) : qty;

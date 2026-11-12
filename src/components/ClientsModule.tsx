@@ -8307,6 +8307,63 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                         </span>
                                                     </div>
 
+                                                    {/* Unidad de Facturación: Kilos (Kg) vs Libras (Lb) - Escenario 254 */}
+                                                    <div 
+                                                        onClick={() => {
+                                                            if (isReadOnly) return;
+                                                            const currentUnit = formData.logistics_data?.billing_weight_unit || 'kg';
+                                                            const nextUnit = currentUnit === 'lb' ? 'kg' : 'lb';
+                                                            setFormData({
+                                                                ...formData,
+                                                                logistics_data: {
+                                                                    ...(formData.logistics_data || {}),
+                                                                    billing_weight_unit: nextUnit
+                                                                }
+                                                            });
+                                                        }}
+                                                        style={{ 
+                                                            height: '42px', 
+                                                            padding: '0 1rem', 
+                                                            borderRadius: THEME.radius.md, 
+                                                            border: `1.5px solid ${formData.logistics_data?.billing_weight_unit === 'lb' ? '#8B5CF6' : THEME.colors.border}`, 
+                                                            backgroundColor: formData.logistics_data?.billing_weight_unit === 'lb' ? '#F5F3FF' : 'white', 
+                                                            cursor: isReadOnly ? 'default' : 'pointer', 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'space-between',
+                                                            gap: '8px', 
+                                                            transition: 'all 0.2s ease',
+                                                            boxShadow: formData.logistics_data?.billing_weight_unit === 'lb' ? '0 2px 6px rgba(139, 92, 246, 0.15)' : 'none',
+                                                            opacity: isReadOnly ? 0.9 : 1
+                                                        }}
+                                                        title="Haz clic para alternar: Unidad de facturación por defecto Kilos (KG) o Libras (LB) para este cliente"
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <Scale size={16} style={{ color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#7C3AED' : '#64748B', flexShrink: 0 }} />
+                                                            <span style={{ 
+                                                                fontSize: '0.72rem', 
+                                                                fontWeight: '700', 
+                                                                color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#5B21B6' : THEME.colors.textMain, 
+                                                                fontFamily: THEME.typography.fontFamilySecondary 
+                                                            }}>
+                                                                UNIDAD FACTURACIÓN
+                                                            </span>
+                                                        </div>
+                                                        <span style={{
+                                                            fontSize: '0.62rem',
+                                                            fontWeight: '800',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '9999px',
+                                                            backgroundColor: formData.logistics_data?.billing_weight_unit === 'lb' ? '#DDD6FE' : '#F1F5F9',
+                                                            color: formData.logistics_data?.billing_weight_unit === 'lb' ? '#5B21B6' : '#475569',
+                                                            border: `1px solid ${formData.logistics_data?.billing_weight_unit === 'lb' ? '#C4B5FD' : '#CBD5E1'}`,
+                                                            textTransform: 'uppercase',
+                                                            letterSpacing: '0.04em'
+                                                        }}>
+                                                            {formData.logistics_data?.billing_weight_unit === 'lb' ? 'LIBRAS (LB)' : 'KILOS (KG)'}
+                                                        </span>
+                                                    </div>
+
                                                     <button 
                                                         type="button"
                                                         onClick={() => setIsExceptionsModalOpen(true)}
