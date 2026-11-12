@@ -8581,7 +8581,25 @@ ${primaryAdminNotes}`.trim();
                                                                                 const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || item.suggestedProduct;
                                                                                 if (p) {
                                                                                     e.preventDefault(); 
-                                                                                    selectStagedProduct(item.id, p, idx, undefined, undefined, true);
+                                                                                    const hasModalOptions = Array.isArray(p.options_config) && p.options_config.length > 0;
+                                                                                    selectStagedProduct(item.id, p, idx, undefined, undefined, hasModalOptions);
+                                                                                    if (!hasModalOptions) {
+                                                                                        setActiveRowSearchQuery(null);
+                                                                                        setActiveDropdownRowIndex(null);
+                                                                                        const nextIdx = idx + 1;
+                                                                                        const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                                                                        if (nextInput) {
+                                                                                            nextInput.focus({ preventScroll: true });
+                                                                                            nextInput.select();
+                                                                                            scrollToStagedRow(nextIdx);
+                                                                                        } else {
+                                                                                            const confirmBtn = document.getElementById('confirm-inject-button');
+                                                                                            if (confirmBtn) {
+                                                                                                confirmBtn.focus();
+                                                                                                confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                                            }
+                                                                                        }
+                                                                                    }
                                                                                 }
                                                                             } else if (e.key === 'Enter') {
                                                                                 e.preventDefault();

@@ -10398,10 +10398,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                     if (p.options_config && p.options_config.length > 0) {
                                       openCustomizingModal(p, i);
                                     } else {
-                                      const qtyInput = document.getElementById(`draft-qty-input-${i}`) as HTMLInputElement | null;
-                                      if (qtyInput) {
-                                        qtyInput.focus();
-                                        qtyInput.select();
+                                      const nextIdx = i + 1;
+                                      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                      if (nextInput) {
+                                        nextInput.focus({ preventScroll: true });
+                                        nextInput.select();
+                                        scrollToDraftRow(nextIdx);
+                                      } else {
+                                        document.getElementById('btn-approve-draft')?.focus();
                                       }
                                     }
                                   }
