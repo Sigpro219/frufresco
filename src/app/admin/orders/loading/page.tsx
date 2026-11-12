@@ -77,8 +77,10 @@ import {
     History,
     ExternalLink,
     Settings,
-    Gift
+    Gift,
+    FileSpreadsheet
 } from 'lucide-react';
+import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
 
 
 
@@ -418,6 +420,7 @@ function OrderLoadingContent() {
     const [showLockWarningModal, setShowLockWarningModal] = useState(false);
     const [showPostLaunchModal, setShowPostLaunchModal] = useState(false);
     const [lastLaunchedOrderIds, setLastLaunchedOrderIds] = useState<string[]>([]);
+    const [isExportingRelacion, setIsExportingRelacion] = useState(false);
 
     const [variantQuantity, setVariantQuantity] = useState<string | number>('1');
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -3163,6 +3166,19 @@ useEffect(() => {
     };
 
 
+    const handleExportRelacionDocumentos = async () => {
+        setIsExportingRelacion(true);
+        try {
+            const targetDate = selectedDate !== 'all' && selectedDate !== 'history15' ? selectedDate : getTomorrowDateStr();
+            await exportRelacionDocumentosWithPicker({ selectedDate: targetDate });
+        } catch (err: any) {
+            console.error('[LoadingPage] Error exportando relación de documentos:', err);
+            alert(`Error al generar Relación de Documentos: ${err?.message || 'Error desconocido'}`);
+        } finally {
+            setIsExportingRelacion(false);
+        }
+    };
+
     const isWithinCutoffWindow = () => {
         const bogota = getColombiaTime();
         const hours = bogota.getHours();
@@ -4319,6 +4335,43 @@ useEffect(() => {
                                 <span>Galería</span>
                             </button>
                         </div>
+
+                        {/* Exportar Relación de Documentos (.xlsx) - Formato Operacional Oficial */}
+                        <button
+                            type="button"
+                            onClick={handleExportRelacionDocumentos}
+                            disabled={isExportingRelacion}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                height: '38px',
+                                padding: '0 12px',
+                                backgroundColor: '#ECFDF5',
+                                color: '#065F46',
+                                border: '1.5px solid #A7F3D0',
+                                borderRadius: '8px',
+                                fontSize: '0.74rem',
+                                fontWeight: '800',
+                                cursor: isExportingRelacion ? 'wait' : 'pointer',
+                                boxShadow: '0 1px 2px rgba(16, 185, 129, 0.1)',
+                                transition: 'all 0.15s ease',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.backgroundColor = '#059669';
+                                e.currentTarget.style.color = '#FFFFFF';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.backgroundColor = '#ECFDF5';
+                                e.currentTarget.style.color = '#065F46';
+                            }}
+                            title="Descargar planilla oficial de Relación de Documentos (.xlsx) para la fecha seleccionada"
+                        >
+                            <FileSpreadsheet size={15} />
+                            <span>{isExportingRelacion ? 'Exportando...' : 'Relación Doc (.xlsx)'}</span>
+                        </button>
 
                         {/* New Order Button */}
                         <Link href="/admin/orders/create" style={{ 
@@ -5633,6 +5686,55 @@ useEffect(() => {
                                     </div>
                                     <div style={{ marginTop: '0.5rem' }}>
                                         <WasteFormatPrintButton deliveryDate={selectedDate !== 'all' ? selectedDate : getTomorrowDateStr()} />
+                                    </div>
+                                </div>
+
+                                {/* Relación de Documentos (.xlsx) - Clona formato operacional histórico */}
+                                <div
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #059669',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#047857', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <FileSpreadsheet size={16} /> Relación de Documentos
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Planilla Excel oficial (16 columnas) de despacho, clientes, direcciones y zonas.
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '0.5rem' }}>
+                                        <button
+                                            type="button"
+                                            disabled={isExportingRelacion}
+                                            onClick={handleExportRelacionDocumentos}
+                                            style={{
+                                                width: '100%',
+                                                padding: '7px 10px',
+                                                backgroundColor: '#059669',
+                                                color: '#FFFFFF',
+                                                borderRadius: '8px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                border: 'none',
+                                                cursor: isExportingRelacion ? 'wait' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '5px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <FileSpreadsheet size={12} />
+                                            <span>{isExportingRelacion ? 'Exportando...' : 'Descargar Excel (.xlsx)'}</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
