@@ -522,7 +522,10 @@ function paginateRemissionItems(items: OrderItem[]): OrderItem[][] {
         }
 
         if (remaining.length <= INTERMEDIATE_PAGE_MAX + LAST_PAGE_MAX) {
-            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(36, remaining.length - 8));
+            // Distribución simétrica equilibrada (Balanced Split):
+            // La primera página absorbe ligeramente más ítems (+2 a +3) porque no lleva el bloque de firmas y totales al pie.
+            const half = Math.ceil(remaining.length / 2);
+            const firstPageCount = Math.min(INTERMEDIATE_PAGE_MAX, Math.max(20, half + 2));
             pages.push(remaining.slice(0, firstPageCount));
             pages.push(remaining.slice(firstPageCount));
             break;
@@ -1515,12 +1518,15 @@ function ContingencyPrintContent() {
                                         </div>
                                     </div>
 
-                                    {/* Products Table con Escala Adaptativa en 4 Niveles (Spacious, Standard, Dense, UltraDense) */}
+                                    {/* Products Table con Escala Adaptativa Simétrica (Simetría Editorial Multi-Página) */}
                                     {(() => {
-                                        const count = pageItems.length;
-                                        const isUltraDense = count >= 38;
-                                        const isDense = count >= 27 && count < 38;
-                                        const isStandard = count >= 16 && count < 27;
+                                        // Regla de Simetría Editorial: Todas las páginas de una misma remisión comparten idéntica escala tipográfica y altura de celdas
+                                        const effectiveCount = remissionPages.length > 1
+                                            ? Math.max(...remissionPages.map(p => p.length))
+                                            : pageItems.length;
+                                        const isUltraDense = effectiveCount >= 38;
+                                        const isDense = effectiveCount >= 27 && effectiveCount < 38;
+                                        const isStandard = effectiveCount >= 16 && effectiveCount < 27;
                                         // Nivel 1: Spacious (1-15), Nivel 2: Standard (16-26), Nivel 3: Dense (27-37), Nivel 4: UltraDense (38-48)
                                         const rowPad = isUltraDense ? '0.4px 3px' : isDense ? '1px 3px' : isStandard ? '2px 3.5px' : '3px 4px';
                                         const prodPad = isUltraDense ? '0.4px 4px' : isDense ? '1px 4px' : isStandard ? '2px 4.5px' : '3px 5px';
@@ -1548,7 +1554,7 @@ function ContingencyPrintContent() {
                                                                 <th style={{ width: '11%', textAlign: 'right', fontSize: thFontSize, padding: thPad }}>TOTAL</th>
                                                             </>
                                                         )}
-                                                        <th style={{ width: withPrices ? '14%' : '16%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: thFontSize, padding: thPad }}>KG-UN RECIBE</th>
+                                                        <th style={{ width: withPrices ? '14%' : '16%', textAlign: 'center', backgroundColor: '#1E293B', color: '#FFFFFF', fontSize: thFontSize, padding: thPad }}>CANTIDAD RECIBIDA</th>
                                                         <th style={{ width: withPrices ? '7%' : '7.5%', textAlign: 'center', fontSize: thFontSize, padding: thPad }}>[]</th>
                                                     </tr>
                                                 </thead>
@@ -1656,8 +1662,11 @@ function ContingencyPrintContent() {
                                             Continúa en la siguiente página... (Pág. {pageIdx + 1} de {remissionPages.length})
                                         </div>
                                     ) : (() => {
-                                        const isUltraDense = pageItems.length >= 38;
-                                        const isDense = pageItems.length >= 25;
+                                        const effectiveCount = remissionPages.length > 1
+                                            ? Math.max(...remissionPages.map(p => p.length))
+                                            : pageItems.length;
+                                        const isUltraDense = effectiveCount >= 38;
+                                        const isDense = effectiveCount >= 25;
                                         return (
                                             <div style={{ marginTop: 'auto', paddingTop: isUltraDense ? '1.5px' : isDense ? '3px' : '6px' }}>
                                                 {/* Summary & Canastillas Control Compact */}
