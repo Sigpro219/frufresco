@@ -16604,3 +16604,21 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Saneamiento Retroactivo en Base de Datos (`public.profiles`):**
        * Se ejecuta la normalización de los 82 perfiles residenciales activos (`role IN ('b2c_client', 'client')`) fijando `document_type = 'remission'` y `remission_with_prices = true`, restaurando la coherencia relacional integral.
 
+---
+
+### Escenario 438: Inyección en Tiempo Real del Inventario Oficial en Consolidado Maestro de Compras (Paso 2 BCP) y Poka-Yoke Anti-Colisión de Calibres en Motor de Matching (SDD v1.9.393)
+- **Given** la exportación del Consolidado Maestro de Compras en Excel (`compras_YYYY-MM-DD.xlsx`) en el Paso 2 del Asistente Guiado de Despacho Manual (`ManualDispatchWizardModal.tsx`) y el motor unificado de concordancia semántica de productos (`order-parser-engine.ts`):
+- **When** el operador logístico emite la matriz de compras para Corabastos o se procesan pedidos multicanal (correo, OCR, WhatsApp):
+- **Then** el sistema asegura la integridad operativa mediante las siguientes reglas vinculantes:
+  1. **Inyección en Tiempo Real del Cierre de Inventario en Columna A:**
+     - En `ManualDispatchWizardModal.tsx` (`handleExportMasterPurchasesExcel`), el sistema consulta obligatoriamente la tabla `daily_inventory_closings` buscando el último cierre oficial bloqueado (`is_locked = true`) a la fecha de la tanda (`lte('closing_date', targetDate)`).
+     - La **Columna A (`Inventario`)** se puebla automáticamente con las existencias oficiales auditadas (`physicalCount` con fallback a `calculatedStock`) cruzando por `productId` y `accounting_id`.
+     - Queda estrictamente derogada la plantilla en blanco con inventario vacío (`''`), garantizando visibilidad inmediata del stock en piso para compras netas.
+  2. **Supresión Operativa de Observaciones en Columna I:**
+     - Por directriz operativa y para evitar ruido visual o desvíos en compras, la **Columna I (`Observación`)** se mantiene completamente limpia (`''`), impidiendo el volcado desordenado de nicknames o variaciones de texto de los pedidos.
+  3. **Poka-Yoke Anti-Colisión de Calibres y Grados en Motor de Matching (`order-parser-engine.ts`):**
+     - **Preservación de Tokens Críticos:** El filtro de longitud de tokens ya no descarta palabras de 1 o 2 letras cuando coinciden con calificadores de grado o calibre (`/^(a|aa|aaa|b|c|r12)$/i`).
+     - **Barrera Estricta de Grado (AA vs A vs AAA):** Si la solicitud del cliente o el texto contiene explícitamente `\b(?:tipo\s+)?aa\b`, queda estrictamente prohibido mapear al producto base `tipo a` (ej. `#1112 Cubeta huevos tipo a`). El motor descarta automáticamente cualquier producto que no contenga `aa`. Del mismo modo, si la solicitud pide `tipo a`, se vetan los productos `tipo aa` y `tipo aaa`.
+     - **Saneamiento de Memoria Histórica (`document_learning_memory`):** Se audita y corrige cualquier registro envenenado donde calificadores de mayor grado (`huevo aa`) estuviesen enlazados erróneamente a códigos de menor calibre.
+
+

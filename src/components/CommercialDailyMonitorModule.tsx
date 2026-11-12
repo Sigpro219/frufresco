@@ -565,6 +565,7 @@ export default function CommercialDailyMonitorModule() {
         return productConsolidated.filter(p =>
             p.productName.toLowerCase().includes(s) ||
             p.sku.toLowerCase().includes(s) ||
+            (p.accountingId && p.accountingId.toString().toLowerCase().includes(s)) ||
             p.category.toLowerCase().includes(s)
         );
     }, [productConsolidated, searchTerm]);
@@ -676,7 +677,7 @@ export default function CommercialDailyMonitorModule() {
             const matches = ord.items.filter(it => it.productId === selectedDrilldownProductId);
             matches.forEach(match => {
                 rows.push({
-                    orderSequenceId: ord.sequenceId,
+                    orderSequenceId: ord.friendlyId || ord.sequenceId,
                     orderId: ord.id,
                     clientName: ord.branchName || ord.clientName,
                     zone: ord.zone,
@@ -692,13 +693,23 @@ export default function CommercialDailyMonitorModule() {
         });
 
         const term = searchTerm.trim().toLowerCase();
+        if (!term) return rows.sort((a, b) => b.quantity - a.quantity);
+
+        // Poka-Yoke: Si el término de búsqueda coincide con el producto seleccionado (ej. venía de buscar "huevos"),
+        // no descartar los clientes porque el usuario estaba buscando el producto, no el cliente.
+        const currentProd = productsMap.get(selectedDrilldownProductId);
+        const prodName = (currentProd?.name || '').toLowerCase();
+        const prodAccId = (currentProd?.accounting_id || '').toString().toLowerCase();
+        if (prodName.includes(term) || (prodAccId && prodAccId === term)) {
+            return rows.sort((a, b) => b.quantity - a.quantity);
+        }
+
         return rows.filter(r => {
-            if (!term) return true;
             return r.clientName.toLowerCase().includes(term) ||
                 r.zone.toLowerCase().includes(term) ||
                 r.orderSequenceId.toString().toLowerCase().includes(term);
         }).sort((a, b) => b.quantity - a.quantity);
-    }, [dayOrders, selectedDrilldownProductId, searchTerm]);
+    }, [dayOrders, selectedDrilldownProductId, searchTerm, productsMap]);
 
     // Totales del Día
     const dayTotals = useMemo(() => {
@@ -1458,7 +1469,10 @@ export default function CommercialDailyMonitorModule() {
                             </button>
 
                             <button
-                                onClick={() => setActiveView('product_drilldown')}
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setActiveView('product_drilldown');
+                                }}
                                 style={{
                                     padding: '0.4rem 0.85rem',
                                     border: 'none',
@@ -1974,6 +1988,7 @@ export default function CommercialDailyMonitorModule() {
                                                     <button
                                                         onClick={() => {
                                                             setSelectedDrilldownProductId(p.productId);
+                                                            setSearchTerm('');
                                                             setActiveView('product_drilldown');
                                                         }}
                                                         style={{
@@ -2035,7 +2050,7 @@ export default function CommercialDailyMonitorModule() {
                                 >
                                     {productConsolidated.map(p => (
                                         <option key={p.productId} value={p.productId}>
-                                            {p.productName} ({formatNumber(p.totalQuantity, 1)} {p.unit} • {p.ordersCount} pedidos)
+                                            {p.accountingId ? `[#${p.accountingId}] ` : ''}{p.productName} ({formatNumber(p.totalQuantity, 1)} {p.unit} • {p.ordersCount} pedidos)
                                         </option>
                                     ))}
                                 </select>

@@ -394,12 +394,32 @@ export function findBestProductMatchDetails(
 
   // Prioridad 3: Coincidencia por tokens / palabras individuales (Priorizar el producto base más corto)
   // Por ejemplo: 'espinaca' debe coincidir con 'Espinaca' y NO con 'Espinaca sin raiz'
-  const queryTokens = (strippedInput || cleanInput).split(/\s+/).filter(t => t.length > 2);
+  // Poka-Yoke Anti-Desviación: Preservar tokens clasificadores críticos (a, aa, aaa, b, c, r12)
+  const isGradeQualifier = (t: string) => /^(a|aa|aaa|b|c|r12)$/i.test(t);
+  const rawTokens = (strippedInput || cleanInput).toLowerCase().split(/\s+/).filter(Boolean);
+  const queryTokens = rawTokens.filter(t => t.length > 2 || isGradeQualifier(t));
+
   if (queryTokens.length > 0) {
+    const normalizedTarget = (strippedInput || cleanInput).toLowerCase();
+    const queryHasAA = /\b(?:tipo\s+)?aa\b/i.test(normalizedTarget);
+    const queryHasAAA = /\b(?:tipo\s+)?aaa\b/i.test(normalizedTarget);
+    const queryHasA = /\b(?:tipo\s+)?a\b/i.test(normalizedTarget) && !queryHasAA && !queryHasAAA;
+
     const candidates = products.filter(p => {
-      const pClean = sanitizeDocText(p.name);
-      const pTokens = pClean.split(/\s+/).filter(t => t.length > 2);
-      return queryTokens.every(qt => pTokens.some(pt => pt.startsWith(qt) || qt.startsWith(pt)));
+      const pClean = sanitizeDocText(p.name).toLowerCase();
+
+      // Guardrail Estricto de Calibre / Grado (AA vs A vs AAA)
+      if (queryHasAA && !/\b(?:tipo\s+)?aa\b/i.test(pClean)) return false;
+      if (queryHasAAA && !/\b(?:tipo\s+)?aaa\b/i.test(pClean)) return false;
+      if (queryHasA && (/\b(?:tipo\s+)?aa\b/i.test(pClean) || /\b(?:tipo\s+)?aaa\b/i.test(pClean))) return false;
+
+      const pTokens = pClean.split(/\s+/).filter(t => t.length > 2 || isGradeQualifier(t));
+      return queryTokens.every(qt => {
+        if (isGradeQualifier(qt)) {
+          return pTokens.some(pt => pt === qt);
+        }
+        return pTokens.some(pt => pt.startsWith(qt) || qt.startsWith(pt));
+      });
     });
 
     if (candidates.length > 0) {

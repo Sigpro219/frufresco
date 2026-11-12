@@ -536,6 +536,28 @@ export default function ManualDispatchWizardModal({
                 if (isSavePickerAborted(pickerErr)) return;
             }
 
+            // 0. Cargar Inventario Base Oficial desde daily_inventory_closings en tiempo real (SPEC.md §30.2)
+            const targetDate = deliveryDate || new Date().toISOString().split('T')[0];
+            const inventoryStockMap = new Map<string, number>();
+            try {
+                const { data: closings } = await supabase
+                    .from('daily_inventory_closings')
+                    .select('closing_date, snapshot_items')
+                    .lte('closing_date', targetDate)
+                    .order('closing_date', { ascending: false })
+                    .limit(1);
+
+                if (closings && closings[0]?.snapshot_items && Array.isArray(closings[0].snapshot_items)) {
+                    closings[0].snapshot_items.forEach((it: any) => {
+                        const stockVal = Number(it.physicalCount !== undefined && it.physicalCount !== null ? it.physicalCount : (it.calculatedStock || 0));
+                        if (it.productId) inventoryStockMap.set(`ID_${it.productId}`, stockVal);
+                        if (it.accountingId) inventoryStockMap.set(`ACC_${it.accountingId}`, stockVal);
+                    });
+                }
+            } catch (invErr) {
+                console.warn('[handleExportMasterPurchasesExcel] Error cargando inventario oficial:', invErr);
+            }
+
             // Recopilar y consolidar productos de todos los pedidos seleccionados
             const productMap = new Map<string, {
                 inventory: number | string;
@@ -563,9 +585,15 @@ export default function ManualDispatchWizardModal({
                     const unit = (item.unit || prod.unit_of_measure || 'Kg').toLowerCase();
                     const qty = Number(item.quantity || 0);
 
+                    const invStock = (prod.id && inventoryStockMap.has(`ID_${prod.id}`))
+                        ? inventoryStockMap.get(`ID_${prod.id}`)
+                        : (accountingId && inventoryStockMap.has(`ACC_${accountingId}`))
+                            ? inventoryStockMap.get(`ACC_${accountingId}`)
+                            : '';
+
                     if (!productMap.has(key)) {
                         productMap.set(key, {
-                            inventory: '',
+                            inventory: invStock !== '' && invStock !== undefined && invStock !== null ? Number(invStock) : '',
                             obsInventory: '',
                             accountingId: accountingId || '',
                             productName: name,
@@ -649,7 +677,7 @@ export default function ManualDispatchWizardModal({
                     p.group,                                                        // 6. Grupo
                     p.kg > 0 ? Number(p.kg.toFixed(2)) : '',                        // 7. KG
                     p.un > 0 ? Number(p.un.toFixed(0)) : '',                        // 8. UN
-                    Array.from(p.observations).join(' | '),                         // 9. Observación
+                    '',                                                             // 9. Observación (Sin volcado por directriz operativa)
                     p.detail,                                                       // 10. Detalle
                     p.operationMark                                                 // 11. Marca Operación
                 ]);
