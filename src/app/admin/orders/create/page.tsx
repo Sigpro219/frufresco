@@ -41,6 +41,7 @@ import {
     Coins,
     Scale,
     User,
+    UserPlus,
     UploadCloud,
     Maximize2,
     Minimize2,
@@ -6477,35 +6478,101 @@ ${primaryAdminNotes}`.trim();
                             ) : (
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                                     
-                                    {/* TOGGLE: EXISTING VS NEW B2C */}
-                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                        <button
-                                            onClick={() => setB2CMode('search')}
-                                            style={{
-                                                flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #D1D5DB',
-                                                backgroundColor: b2cMode === 'search' ? '#EFF6FF' : 'white',
-                                                color: b2cMode === 'search' ? '#1D4ED8' : '#6B7280',
-                                                fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem'
-                                            }}
-                                        >
-                                            Buscar Cliente Existente
-                                        </button>
-                                        <button
-                                            onClick={() => setB2CMode('new')}
-                                            style={{
-                                                flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #D1D5DB',
-                                                backgroundColor: b2cMode === 'new' ? '#EFF6FF' : 'white',
-                                                color: b2cMode === 'new' ? '#1D4ED8' : '#6B7280',
-                                                fontWeight: '700', cursor: 'pointer', fontSize: '0.85rem'
-                                            }}
-                                        >
-                                            Cliente Nuevo
-                                        </button>
+                                    {/* HEADER & SEGMENTED SWITCHER: EXISTING VS NEW B2C */}
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '0.75rem',
+                                        marginBottom: '0.75rem',
+                                        paddingBottom: '0.65rem',
+                                        borderBottom: '1px solid #E2E8F0'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#ECFDF5',
+                                                border: '1.5px solid #A7F3D0',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#059669',
+                                                flexShrink: 0
+                                            }}>
+                                                <Home size={17} strokeWidth={2} />
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    CANAL MINORISTA RESIDENCIAL (HOGAR)
+                                                </span>
+                                                <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', lineHeight: '1.2' }}>
+                                                    {b2cMode === 'search' ? 'Selección de Cliente Registrado' : 'Ficha de Cliente Hogar Nuevo'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Segmented Control Pill Switcher */}
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            padding: '3px',
+                                            backgroundColor: '#F1F5F9',
+                                            borderRadius: '9px',
+                                            border: '1px solid #CBD5E1',
+                                            gap: '2px'
+                                        }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setB2CMode('search')}
+                                                style={{
+                                                    padding: '0.35rem 0.85rem',
+                                                    borderRadius: '7px',
+                                                    border: 'none',
+                                                    backgroundColor: b2cMode === 'search' ? '#FFFFFF' : 'transparent',
+                                                    color: b2cMode === 'search' ? '#0F172A' : '#64748B',
+                                                    fontWeight: b2cMode === 'search' ? '800' : '600',
+                                                    fontSize: '0.78rem',
+                                                    cursor: 'pointer',
+                                                    boxShadow: b2cMode === 'search' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <Search size={13} strokeWidth={2} />
+                                                <span>Buscar Existente</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setB2CMode('new')}
+                                                style={{
+                                                    padding: '0.35rem 0.85rem',
+                                                    borderRadius: '7px',
+                                                    border: 'none',
+                                                    backgroundColor: b2cMode === 'new' ? '#FFFFFF' : 'transparent',
+                                                    color: b2cMode === 'new' ? '#059669' : '#64748B',
+                                                    fontWeight: b2cMode === 'new' ? '800' : '600',
+                                                    fontSize: '0.78rem',
+                                                    cursor: 'pointer',
+                                                    boxShadow: b2cMode === 'new' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <UserPlus size={13} strokeWidth={2.2} />
+                                                <span>Cliente Nuevo</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {b2cMode === 'search' ? (
                                         <div style={{ position: 'relative' }}>
-                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Buscar por Nombre o Teléfono</label>
+                                            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>Buscar por Nombre, Teléfono o Dirección</label>
                                             
                                             {selectedClientB2C ? (
                                                 <div style={{
@@ -6703,57 +6770,65 @@ ${primaryAdminNotes}`.trim();
                                                 ) : (
                                                     <>
                                                         <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Ej: Juan Pérez o 300..."
-                                                                value={clientSearchB2C}
-                                                                onChange={(e) => {
-                                                                    setClientSearchB2C(e.target.value);
-                                                                    setFocusedClientIndexB2C(0);
-                                                                }}
-                                                                onFocus={() => {
-                                                                    if (filteredClientsB2C.length > 0 && focusedClientIndexB2C < 0) {
+                                                            <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                                                                <Search size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Buscar por Nombre, Teléfono o Dirección..."
+                                                                    value={clientSearchB2C}
+                                                                    onChange={(e) => {
+                                                                        setClientSearchB2C(e.target.value);
                                                                         setFocusedClientIndexB2C(0);
-                                                                    }
-                                                                }}
-                                                                onKeyDown={(e) => {
-                                                                    if (filteredClientsB2C.length === 0) return;
-                                                                    if (e.key === 'ArrowDown') {
-                                                                        e.preventDefault();
-                                                                        setFocusedClientIndexB2C(prev => Math.min(prev + 1, filteredClientsB2C.length - 1));
-                                                                    } else if (e.key === 'ArrowUp') {
-                                                                        e.preventDefault();
-                                                                        setFocusedClientIndexB2C(prev => Math.max(prev - 1, 0));
-                                                                    } else if (e.key === 'Enter' || e.key === 'Tab') {
-                                                                        const targetIndex = focusedClientIndexB2C >= 0 ? focusedClientIndexB2C : 0;
-                                                                        if (filteredClientsB2C[targetIndex]) {
+                                                                    }}
+                                                                    onFocus={(e) => {
+                                                                        e.target.style.borderColor = '#0D7A57';
+                                                                        e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)';
+                                                                        if (filteredClientsB2C.length > 0 && focusedClientIndexB2C < 0) {
+                                                                            setFocusedClientIndexB2C(0);
+                                                                        }
+                                                                    }}
+                                                                    onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                                    onKeyDown={(e) => {
+                                                                        if (filteredClientsB2C.length === 0) return;
+                                                                        if (e.key === 'ArrowDown') {
                                                                             e.preventDefault();
-                                                                            selectClientB2C(filteredClientsB2C[targetIndex]);
+                                                                            setFocusedClientIndexB2C(prev => Math.min(prev + 1, filteredClientsB2C.length - 1));
+                                                                        } else if (e.key === 'ArrowUp') {
+                                                                            e.preventDefault();
+                                                                            setFocusedClientIndexB2C(prev => Math.max(prev - 1, 0));
+                                                                        } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                                                            const targetIndex = focusedClientIndexB2C >= 0 ? focusedClientIndexB2C : 0;
+                                                                            if (filteredClientsB2C[targetIndex]) {
+                                                                                e.preventDefault();
+                                                                                selectClientB2C(filteredClientsB2C[targetIndex]);
+                                                                                setFocusedClientIndexB2C(-1);
+                                                                            }
+                                                                        } else if (e.key === 'Escape') {
+                                                                            setClientSearchB2C('');
                                                                             setFocusedClientIndexB2C(-1);
                                                                         }
-                                                                    } else if (e.key === 'Escape') {
-                                                                        setClientSearchB2C('');
-                                                                        setFocusedClientIndexB2C(-1);
-                                                                    }
-                                                                }}
-                                                                style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                            />
+                                                                    }}
+                                                                    style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                                />
+                                                            </div>
                                                             <button 
                                                                 onClick={loadData}
                                                                 style={{ 
                                                                     padding: '0 1rem', 
-                                                                    backgroundColor: 'white', 
-                                                                    border: '1px solid #D1D5DB', 
-                                                                    borderRadius: '8px', 
+                                                                    backgroundColor: '#FFFFFF', 
+                                                                    border: '1.5px solid #CBD5E1', 
+                                                                    borderRadius: '10px', 
                                                                     cursor: 'pointer',
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     justifyContent: 'center',
-                                                                    color: THEME.colors.primary
+                                                                    color: THEME.colors.primary,
+                                                                    height: '40px',
+                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                                                                 }}
                                                                 title="Actualizar Lista de Clientes"
                                                             >
-                                                                <RefreshCw size={16} strokeWidth={1.5} />
+                                                                <RefreshCw size={15} strokeWidth={1.8} />
                                                             </button>
                                                         </div>
                                                         {filteredClientsB2C.length > 0 && (
@@ -6800,120 +6875,225 @@ ${primaryAdminNotes}`.trim();
                                                 )}
                                         </div>
                                     ) : (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div style={{
+                                            backgroundColor: '#FFFFFF',
+                                            border: '1.5px solid #E2E8F0',
+                                            borderRadius: '14px',
+                                            padding: '1.25rem 1.35rem',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(2, 1fr)',
+                                            gap: '1rem'
+                                        }}>
+                                            {/* Nombre del Cliente */}
                                             <div style={{ gridColumn: '1 / -1' }}>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Nombre del Cliente</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ej: María Pérez"
-                                                    value={guestInfo.name} onChange={e => setGuestInfo({ ...guestInfo, name: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                />
-                                            </div>
-                                            
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Cédula / NIT</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ej: 123456789"
-                                                    value={guestInfo.nit} onChange={e => setGuestInfo({ ...guestInfo, nit: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Teléfono</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ej: 300 123 4567"
-                                                    value={guestInfo.phone} onChange={e => setGuestInfo({ ...guestInfo, phone: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Correo Electrónico</label>
-                                                <input
-                                                    type="email"
-                                                    placeholder="ejemplo@email.com"
-                                                    value={guestInfo.email} onChange={e => setGuestInfo({ ...guestInfo, email: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Ciudad</label>
-                                                <select
-                                                    value={guestInfo.city} 
-                                                    onChange={e => setGuestInfo({ ...guestInfo, city: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
-                                                >
-                                                    <option value="Bogotá">Bogotá</option>
-                                                    <option value="Medellín">Medellín</option>
-                                                    <option value="Cali">Cali</option>
-                                                    <option value="Barranquilla">Barranquilla</option>
-                                                    <option value="Chía">Chía</option>
-                                                    <option value="Cajicá">Cajicá</option>
-                                                    <option value="Soacha">Soacha</option>
-                                                </select>
-                                            </div>
-
-                                            <div style={{ gridColumn: '1 / -1' }}>
-                                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', color: '#374151', marginBottom: '0.5rem' }}>Dirección de Entrega</label>
-                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <User size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Nombre del Cliente</span>
+                                                    <span style={{ color: '#DC2626' }}>*</span>
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <User size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
                                                     <input
                                                         type="text"
-                                                        placeholder="Ej: Cra 15 # 85 - 10"
-                                                        value={guestInfo.address} onChange={e => setGuestInfo({ ...guestInfo, address: e.target.value })}
-                                                        style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #D1D5DB' }}
+                                                        placeholder="Ej: Martha Carrasco"
+                                                        value={guestInfo.name}
+                                                        onChange={e => setGuestInfo({ ...guestInfo, name: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                        onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                        onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
                                                     />
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Cédula / NIT */}
+                                            <div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <FileText size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Cédula / NIT</span>
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <FileText size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ej: 123456789"
+                                                        value={guestInfo.nit}
+                                                        onChange={e => setGuestInfo({ ...guestInfo, nit: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                        onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                        onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Teléfono */}
+                                            <div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <Phone size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Teléfono / WhatsApp</span>
+                                                    <span style={{ color: '#DC2626' }}>*</span>
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <Phone size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ej: 313 413 0814"
+                                                        value={guestInfo.phone}
+                                                        onChange={e => setGuestInfo({ ...guestInfo, phone: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                        onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                        onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Correo Electrónico */}
+                                            <div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <Mail size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Correo Electrónico</span>
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <Mail size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                    <input
+                                                        type="email"
+                                                        placeholder="ejemplo@email.com"
+                                                        value={guestInfo.email}
+                                                        onChange={e => setGuestInfo({ ...guestInfo, email: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                        onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                        onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Ciudad */}
+                                            <div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <Building2 size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Ciudad</span>
+                                                </label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <Building2 size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                    <select
+                                                        value={guestInfo.city} 
+                                                        onChange={e => setGuestInfo({ ...guestInfo, city: e.target.value })}
+                                                        style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px', cursor: 'pointer' }}
+                                                        onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                        onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                    >
+                                                        <option value="Bogotá">Bogotá</option>
+                                                        <option value="Medellín">Medellín</option>
+                                                        <option value="Cali">Cali</option>
+                                                        <option value="Barranquilla">Barranquilla</option>
+                                                        <option value="Chía">Chía</option>
+                                                        <option value="Cajicá">Cajicá</option>
+                                                        <option value="Soacha">Soacha</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            {/* Dirección de Entrega */}
+                                            <div style={{ gridColumn: '1 / -1' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.74rem', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                                                    <MapPin size={13} strokeWidth={2.2} color="#0D7A57" />
+                                                    <span>Dirección Física de Entrega</span>
+                                                    <span style={{ color: '#DC2626' }}>*</span>
+                                                </label>
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <div style={{ position: 'relative', flex: 1, minWidth: '260px', display: 'flex', alignItems: 'center' }}>
+                                                        <MapPin size={15} style={{ position: 'absolute', left: '12px', color: '#94A3B8', pointerEvents: 'none' }} />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Ej: Carrera 90A #8-10 Interior 5 Apto 1020"
+                                                            value={guestInfo.address}
+                                                            onChange={e => setGuestInfo({ ...guestInfo, address: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.58rem 0.85rem 0.58rem 2.35rem', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '0.88rem', fontWeight: '600', color: '#0F172A', outline: 'none', transition: 'all 0.15s ease', backgroundColor: '#FFFFFF', height: '40px' }}
+                                                            onFocus={(e) => { e.target.style.borderColor = '#0D7A57'; e.target.style.boxShadow = '0 0 0 3px rgba(13, 122, 87, 0.1)'; }}
+                                                            onBlur={(e) => { e.target.style.borderColor = '#CBD5E1'; e.target.style.boxShadow = 'none'; }}
+                                                        />
+                                                    </div>
                                                     <button
                                                         onClick={() => handleGeocode()}
                                                         disabled={isGettingLocation}
                                                         type="button"
                                                         style={{
-                                                            backgroundColor: '#3B82F6', color: 'white', border: 'none', borderRadius: '8px', padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px'
+                                                            backgroundColor: '#0F172A',
+                                                            color: '#FFFFFF',
+                                                            border: 'none',
+                                                            borderRadius: '10px',
+                                                            padding: '0 1.15rem',
+                                                            height: '40px',
+                                                            cursor: isGettingLocation ? 'not-allowed' : 'pointer',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.80rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: '0 2px 4px rgba(15, 23, 42, 0.15)',
+                                                            transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseOver={(e) => { if (!isGettingLocation) e.currentTarget.style.backgroundColor = '#1E293B'; }}
+                                                        onMouseOut={(e) => { if (!isGettingLocation) e.currentTarget.style.backgroundColor = '#0F172A'; }}
                                                     >
-                                                        {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />} Validar
+                                                        {isGettingLocation ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} strokeWidth={2.2} />}
+                                                        <span>{isGettingLocation ? 'Validando...' : 'Validar GPS'}</span>
                                                     </button>
                                                     <button
                                                         onClick={handleOpenMap}
                                                         type="button"
                                                         style={{
-                                                            backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 1rem', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px'
+                                                            backgroundColor: '#F8FAFC',
+                                                            color: '#0D7A57',
+                                                            border: '1.5px solid #A7F3D0',
+                                                            borderRadius: '10px',
+                                                            padding: '0 1.15rem',
+                                                            height: '40px',
+                                                            cursor: 'pointer',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.80rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                                            transition: 'all 0.15s ease'
                                                         }}
+                                                        onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#ECFDF5'; }}
+                                                        onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
                                                     >
-                                                        <MapIcon size={16} /> Ver en Mapa
+                                                        <MapIcon size={15} strokeWidth={2} />
+                                                        <span>Ver en Mapa</span>
                                                     </button>
                                                 </div>
+
                                                 {latitude && longitude && (
                                                     <div style={{ 
                                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                                                        padding: '0.6rem 1rem', backgroundColor: (outOfZone && !hasCoverageOverride) ? '#FEF2F2' : (outOfZone && hasCoverageOverride) ? '#FFFBEB' : '#F0FDF4', 
-                                                        border: (outOfZone && !hasCoverageOverride) ? '1px solid #FECACA' : (outOfZone && hasCoverageOverride) ? '1px solid #FDE68A' : '1px solid #DCFCE7', 
-                                                        borderRadius: '8px', marginTop: '8px' 
+                                                        padding: '0.65rem 1rem', backgroundColor: (outOfZone && !hasCoverageOverride) ? '#FEF2F2' : (outOfZone && hasCoverageOverride) ? '#FFFBEB' : '#F0FDF4', 
+                                                        border: (outOfZone && !hasCoverageOverride) ? '1.5px solid #FECACA' : (outOfZone && hasCoverageOverride) ? '1.5px solid #FDE68A' : '1.5px solid #BBF7D0', 
+                                                        borderRadius: '10px', marginTop: '10px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                                                     }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             {(outOfZone && !hasCoverageOverride) ? (
                                                                 <>
-                                                                    <X size={18} color="#DC2626" />
-                                                                    <span style={{ fontSize: '0.8rem', color: '#DC2626', fontWeight: '700' }}>
-                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={14} strokeWidth={1.5} /> Fuera de Cobertura ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
+                                                                    <X size={17} color="#DC2626" />
+                                                                    <span style={{ fontSize: '0.80rem', color: '#DC2626', fontWeight: '700' }}>
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#EF4444' }}><AlertTriangle size={14} strokeWidth={1.8} /> Fuera de Cobertura ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             ) : (outOfZone && hasCoverageOverride) ? (
                                                                 <>
-                                                                    <CheckCircle2 size={18} color="#D97706" />
-                                                                    <span style={{ fontSize: '0.8rem', color: '#D97706', fontWeight: '700' }}>
-                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><Sparkles size={14} strokeWidth={1.5} /> Excepción Autorizada: {coverageOverrideReason || 'Sin motivo'} ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
+                                                                    <CheckCircle2 size={17} color="#D97706" />
+                                                                    <span style={{ fontSize: '0.80rem', color: '#D97706', fontWeight: '700' }}>
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><Sparkles size={14} strokeWidth={1.8} /> Excepción Autorizada: {coverageOverrideReason || 'Sin motivo'} ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <CheckCircle2 size={18} color="#166534" />
-                                                                    <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700' }}>
-                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16A34A' }}><CheckCircle2 size={14} strokeWidth={1.5} /> Ubicación Confirmada ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
+                                                                    <CheckCircle2 size={17} color="#166534" />
+                                                                    <span style={{ fontSize: '0.80rem', color: '#166534', fontWeight: '700' }}>
+                                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16A34A' }}><CheckCircle2 size={14} strokeWidth={2} /> Ubicación Confirmada ({latitude.toFixed(5)}, {longitude.toFixed(5)})</span>
                                                                     </span>
                                                                 </>
                                                             )}
@@ -6927,7 +7107,36 @@ ${primaryAdminNotes}`.trim();
                                                         </button>
                                                     </div>
                                                 )}
+                                            </div>
 
+                                            {/* Footer: Guardar en Directorio */}
+                                            <div style={{
+                                                gridColumn: '1 / -1',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '0.65rem 1rem',
+                                                backgroundColor: '#F8FAFC',
+                                                borderRadius: '10px',
+                                                border: '1px solid #E2E8F0',
+                                                marginTop: '0.25rem',
+                                                flexWrap: 'wrap',
+                                                gap: '8px'
+                                            }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={guestInfo.saveToDirectory}
+                                                        onChange={e => setGuestInfo({ ...guestInfo, saveToDirectory: e.target.checked })}
+                                                        style={{ width: '16px', height: '16px', accentColor: '#0D7A57', cursor: 'pointer' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.80rem', fontWeight: '700', color: '#334155' }}>
+                                                        Registrar automáticamente en el directorio de clientes Hogar al confirmar pedido
+                                                    </span>
+                                                </label>
+                                                <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '800', backgroundColor: '#ECFDF5', padding: '2px 8px', borderRadius: '5px', border: '1px solid #A7F3D0' }}>
+                                                    Tarifa minorista Clientes Hogar activa
+                                                </span>
                                             </div>
                                         </div>
                                     )}
