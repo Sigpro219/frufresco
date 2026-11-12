@@ -21,32 +21,44 @@ export async function GET(request: NextRequest) {
         }
 
         // Consultar orden con Service Role para acceso agnóstico y seguro
-        const { data: order, error: orderErr } = await supabase
+        // Discriminar si es UUID nativo o búsqueda por consecutivo numérico de remisión (ej: 1573 o #REM-1573)
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId.trim());
+        let orderQuery = supabase
             .from('orders')
             .select(`
                 id, sequence_id, status, delivery_date, shipping_address, profile_id,
                 profiles:profile_id(id, company_name, contact_name, phone, contact_phone, nit)
-            `)
-            .eq('id', orderId)
-            .maybeSingle();
+            `);
+
+        if (isUuid) {
+            orderQuery = orderQuery.eq('id', orderId.trim());
+        } else {
+            const digits = orderId.replace(/\D/g, '');
+            if (!digits) {
+                return NextResponse.json({ error: 'Formato de identificador o número de remisión no válido' }, { status: 400 });
+            }
+            orderQuery = orderQuery.eq('sequence_id', parseInt(digits, 10));
+        }
+
+        const { data: order, error: orderErr } = await orderQuery.maybeSingle();
 
         if (orderErr) {
             console.error('Error fetching order for PQRS:', orderErr);
-            return NextResponse.json({ error: 'Error al consultar la orden' }, { status: 500 });
+            return NextResponse.json({ error: 'Error al consultar la orden: ' + orderErr.message }, { status: 500 });
         }
 
         if (!order) {
             return NextResponse.json({ error: 'Pedido no encontrado' }, { status: 404 });
         }
 
-        // Consultar ítems de la orden
+        // Consultar ítems de la orden usando el UUID soberano
         const { data: items, error: itemsErr } = await supabase
             .from('order_items')
             .select(`
                 id, product_id, quantity, unit, nickname, variant_label,
                 products(id, name, accounting_id, unit_of_measure, category)
             `)
-            .eq('order_id', orderId);
+            .eq('order_id', order.id);
 
         if (itemsErr) {
             console.error('Error fetching order items for PQRS:', itemsErr);
