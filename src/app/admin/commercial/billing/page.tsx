@@ -74,6 +74,7 @@ import {
     Scale
 } from 'lucide-react';
 import { downloadWorldOfficeExcel, downloadCreditNotesExcel, CreditNoteReportItem, resolveWorldOfficeBranch, resolveWorldOfficeNote } from '@/lib/worldOfficeExport';
+import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
 import { cleanHumanResolutionNotes, parseRcaFromRecord } from '@/lib/rcaTaxonomy';
 import CadenaRadianReconciliationSubmodule from '@/components/admin/billing/CadenaRadianReconciliationSubmodule';
 import OverweightBillingArbitrationModal from '@/components/admin/billing/OverweightBillingArbitrationModal';
@@ -3226,6 +3227,111 @@ export default function BillingDashboard() {
         }
     };
 
+    // Export Relación de Documentos (.xlsx) por Fecha Activa
+    const handleExportRelacionByDate = async () => {
+        const targetDate = selectedBillingDate !== 'all' ? selectedBillingDate : getBogotaDate(0);
+        setIsProcessing(true);
+        try {
+            const targetOrders = selectedOrderIds.length > 0 
+                ? filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id))
+                : filteredPendingOrders;
+            
+            await exportRelacionDocumentosWithPicker({
+                selectedDate: targetDate,
+                orders: targetOrders.map((o: any) => ({
+                    id: o.id,
+                    sequence_id: o.sequence_id,
+                    invoice_number: o.billing_invoices?.invoice_number || o.invoice_number,
+                    status: o.status,
+                    type: o.type,
+                    payment_method: o.payment_method,
+                    delivery_date: o.delivery_date,
+                    delivery_address: o.shipping_address,
+                    delivery_phone: o.customer_phone,
+                    subtotal: o.subtotal,
+                    shipping_cost: 0,
+                    discount_amount: 0,
+                    total_amount: o.total,
+                    warehouse_spaces: o.warehouse_spaces,
+                    profiles: o.profiles
+                }))
+            });
+            showToast({
+                type: 'success',
+                title: 'Relación de Documentos Descargada',
+                message: `Planilla generada para ${targetDate} (${targetOrders.length} pedidos).`
+            });
+        } catch (err: any) {
+            console.error('Error exportando relación de documentos:', err);
+            showToast({ type: 'error', message: `Error al generar Relación de Documentos: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Export Relación de Documentos (.xlsx) por Corte Cerrado
+    const handleExportRelacionByCut = async (cutId: string) => {
+        setIsProcessing(true);
+        try {
+            const targetCut = cuts.find(c => c.id === cutId);
+            const { data: cutOrders, error: cutOrdersErr } = await supabase
+                .from('orders')
+                .select(`
+                    id, sequence_id, status, type, payment_method, delivery_date,
+                    shipping_address, customer_phone, total, subtotal, tax, warehouse_spaces,
+                    billing_invoices!billing_invoices_order_id_fkey(invoice_number),
+                    profiles (
+                        id, company_name, razon_social, contact_name, role, phone, address,
+                        document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
+                    )
+                `)
+                .eq('billing_cut_id', cutId);
+
+            if (cutOrdersErr) throw cutOrdersErr;
+            if (!cutOrders || cutOrders.length === 0) {
+                showToast({ type: 'warning', message: 'No se encontraron pedidos asociados a este corte.' });
+                return;
+            }
+
+            const cutDate = targetCut?.scheduled_date || cutOrders[0]?.delivery_date || getBogotaDate(0);
+
+            await exportRelacionDocumentosWithPicker({
+                selectedDate: cutDate,
+                orders: cutOrders.map((o: any) => {
+                    const inv = Array.isArray(o.billing_invoices) ? o.billing_invoices[0] : o.billing_invoices;
+                    return {
+                        id: o.id,
+                        sequence_id: o.sequence_id,
+                        invoice_number: inv?.invoice_number || null,
+                        status: o.status,
+                        type: o.type,
+                        payment_method: o.payment_method,
+                        delivery_date: o.delivery_date,
+                        delivery_address: o.shipping_address,
+                        delivery_phone: o.customer_phone,
+                        subtotal: o.subtotal,
+                        shipping_cost: 0,
+                        discount_amount: 0,
+                        total_amount: o.total,
+                        warehouse_spaces: o.warehouse_spaces,
+                        profiles: o.profiles
+                    };
+                })
+            });
+
+            showToast({
+                type: 'success',
+                title: 'Relación de Documentos de Corte',
+                message: `Se exportó la relación del Corte #${String(targetCut?.cut_number || 1).padStart(4, '0')} (${cutOrders.length} pedidos).`
+            });
+        } catch (err: any) {
+            console.error('Error exportando relación del corte:', err);
+            showToast({ type: 'error', message: `Error al generar relación del corte: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     // Export orders in preview modal to World Office Excel
     const handleExportPreviewToWorldOffice = async () => {
         if (previewOrders.length === 0) return;
@@ -4792,6 +4898,33 @@ export default function BillingDashboard() {
                                         <span>Excel Rápido WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
                                     </button>
 
+                                    {/* 📊 Relación de Documentos (.xlsx) - Paridad Gemba 16 Columnas */}
+                                    <button
+                                        type="button"
+                                        onClick={handleExportRelacionByDate}
+                                        disabled={isProcessing || filteredPendingOrders.length === 0}
+                                        style={{
+                                            backgroundColor: '#F0FDF4',
+                                            color: '#166534',
+                                            border: '1px solid #BBF7D0',
+                                            padding: '0.30rem 0.60rem',
+                                            borderRadius: '6px',
+                                            fontWeight: '700',
+                                            fontSize: '0.70rem',
+                                            cursor: isProcessing || filteredPendingOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                            opacity: filteredPendingOrders.length === 0 ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Descargar planilla oficial de Relación de Documentos (.xlsx) de 16 columnas para la fecha seleccionada"
+                                    >
+                                        <FileSpreadsheet size={12} style={{ color: '#166534' }} />
+                                        <span>Relación Doc (.xlsx)</span>
+                                    </button>
+
                                     {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) - SDD Escenario 432 & Goldfish Salvaguarda 1 */}
                                     <button
                                         type="button"
@@ -4998,6 +5131,14 @@ export default function BillingDashboard() {
                                                                         onMouseLeave={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.color = THEME.colors.textMain; }}
                                                                     >
                                                                         <FileSpreadsheet size={13} style={{ color: THEME.colors.primary }} /> Plano World Office (.xlsx)
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleExportRelacionByCut(cut.id)}
+                                                                        disabled={isProcessing}
+                                                                        style={{ backgroundColor: '#F0FDF4', color: '#166534', padding: '0.36rem 0.75rem', borderRadius: '7px', border: '1px solid #BBF7D0', fontWeight: '700', fontSize: '0.72rem', cursor: isProcessing ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', transition: 'all 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}
+                                                                        title="Descargar la Relación de Documentos oficial (16 columnas) cerrada para este corte"
+                                                                    >
+                                                                        <FileSpreadsheet size={13} style={{ color: '#166534' }} /> Relación (.xlsx)
                                                                     </button>
                                                                 </div>
                                                             </td>

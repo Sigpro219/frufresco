@@ -16788,3 +16788,19 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Comprobante de Radicación Ejecutivo:** Al enviar, se proyecta una tarjeta de certificación digital con el código de ticket `PQR-2026-XXXX-XXXX`, temporizador de compromiso de respuesta (< 15 minutos en horario diurno) y botón de contacto prioritario por WhatsApp con mensaje pre-estructurado.
   3. **Blindaje de Dominio en Código QR de Contingencia:**
      - En `contingency-print/page.tsx`, se garantiza que el valor codificado en el componente `QRCodeSVG` apunte invariable e incondicionalmente a `https://frufresco.com/pqrs?order_id=${order.id}` (neutralizando cualquier residuo de `localhost` en impresiones locales o entornos de desarrollo).
+
+
+---
+
+### Escenario 445: Paridad Operativa de la Relación de Documentos (.xlsx) en Torre de Control y Módulo de Facturación Comercial (Por Fecha y por Corte Histórico Cerrado) (SDD v1.9.400)
+- **Given** la Torre de Control y Cargue de Pedidos (`/admin/orders/loading`), el Módulo de Facturación y Cobranza (`/admin/commercial/billing`), la utilidad de exportación ([exportRelacionDocumentosExcel.ts](file:///c:/Projects/frufresco/src/lib/exportRelacionDocumentosExcel.ts)) y el histórico de cortes contables (`billing_cuts`).
+- **When** el despachador de planta, el supervisor de bodega o el analista de facturación requieren consultar, descargar o auditar la relación de salida de pedidos con su estructura oficial de 16 columnas:
+- **Then**:
+  1. **Disponibilidad en Torre de Control y Cargue (`/admin/orders/loading`):**
+     - Se consagra el botón permanente **`[📊 Relación Doc (.xlsx)]`** en la barra superior de herramientas (junto al botón de creación de pedidos), permitiendo la descarga en 1 clic de la planilla para la fecha activa seleccionada (*Hoy*, *Ayer* o fecha personalizada).
+     - En el modal de confirmación post-lanzamiento (`showPostLaunchModal`), se integra la 4ta tarjeta oficial de despacho **«Relación de Documentos»** en paralelo con *Remisiones*, *Rótulos Térmicos* y *Control Mermas*, garantizando que la planilla viaje lista antes de la salida de furgones.
+  2. **Acceso Dual en Módulo de Facturación (`/admin/commercial/billing`):**
+     - **Acceso por Fecha Activa:** En la cabecera operativa de facturación (junto al botón *«Excel Rápido WO»*), se dispone del botón directo **`[📊 Relación de Documentos (.xlsx)]`**, filtrando los pedidos y montos vigentes para la fecha seleccionada en el selector de tandas.
+     - **Acceso por Corte Histórico:** En la tabla de cortes cerrados (`subTab === 'cuts'`), cada fila de corte AM o PM incorpora el botón **`[📊 Relación (.xlsx)]`** al lado de *«Plano World Office (.xlsx)»* e *«Imprimir Documentos»*, permitiendo auditar con exactitud forense la lista cerrada de pedidos y números oficiales de facturación con los que se liquidó dicho corte en su momento.
+  3. **Preservación Invariable de Formato:**
+     - Ambas pantallas utilizan la misma firma canónica de 16 columnas (*No., Tipo, Documento, Cliente, Sucursal, Espacio, Vr/Total, Adicionales, Descuentos, Vr/Pagar, Celular, Dirección, Forma de pago, Proveedor, Diferencia, Zona*), homologando el estándar físico del Gemba.
