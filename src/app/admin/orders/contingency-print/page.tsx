@@ -914,19 +914,6 @@ function ContingencyPrintContent() {
         await saveWorkbookWithPicker(XLSX, workbook, manifestExcelName, fileHandle);
     };
 
-    if (loading) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
-                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0F172A', marginBottom: '8px' }}>
-                    Generando Kit de Contingencia de Piso...
-                </div>
-                <div style={{ color: '#64748B', fontSize: '0.9rem' }}>
-                    Compilando remisiones, planilla de compras y manifiesto de ruta.
-                </div>
-            </div>
-        );
-    }
-
     const showAll = mode === 'all';
     const showPurchases = showAll || mode === 'purchases';
     const showRemissions = showAll || mode === 'remissions';
@@ -1014,6 +1001,19 @@ function ContingencyPrintContent() {
             margin: '6mm 8mm'
         });
     };
+
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
+                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0F172A', marginBottom: '8px' }}>
+                    Generando Kit de Contingencia de Piso...
+                </div>
+                <div style={{ color: '#64748B', fontSize: '0.9rem' }}>
+                    Compilando remisiones, planilla de compras y manifiesto de ruta.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="print-root-wrapper" style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '20px 0', color: '#000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
