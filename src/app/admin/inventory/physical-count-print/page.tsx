@@ -63,11 +63,13 @@ export default function PhysicalCountPrintPage() {
                     .from('products')
                     .select('id, name, sku, unit_of_measure, inventory_group, category, accounting_id, parent_id')
                     .eq('is_active', true)
-                    .order('name', { ascending: true }),
+                    .order('name', { ascending: true })
+                    .limit(5000),
                 supabase
                     .from('inventory_stocks')
                     .select('product_id, quantity')
                     .gt('quantity', 0)
+                    .limit(5000)
             ]);
 
             if (prodRes.error) throw prodRes.error;

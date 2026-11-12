@@ -536,6 +536,10 @@ export default function CommercialDailyMonitorModule() {
         return { equalVal, multiple, underMin };
     }, [dayOrders]);
 
+    // Normalizador sin tildes para búsqueda tolerante (ej. "esparra" -> encuentra "Espárragos" y "Esparragos Frescos")
+    const normalizeSearch = (str: string) =>
+        (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
     // Filtrar órdenes por Poka-Yoke y Búsqueda
     const filteredOrders = useMemo(() => {
         return dayOrders.filter(o => {
@@ -546,13 +550,13 @@ export default function CommercialDailyMonitorModule() {
 
             // Filtro de Búsqueda
             if (searchTerm.trim()) {
-                const s = searchTerm.toLowerCase();
-                return o.clientName.toLowerCase().includes(s) ||
-                    (o.friendlyId && o.friendlyId.toLowerCase().includes(s)) ||
-                    o.sequenceId.toString().toLowerCase().includes(s) ||
-                    o.zone.toLowerCase().includes(s) ||
-                    o.address.toLowerCase().includes(s) ||
-                    o.nit.toLowerCase().includes(s);
+                const s = normalizeSearch(searchTerm.trim());
+                return normalizeSearch(o.clientName).includes(s) ||
+                    (o.friendlyId && normalizeSearch(o.friendlyId).includes(s)) ||
+                    normalizeSearch(o.sequenceId.toString()).includes(s) ||
+                    normalizeSearch(o.zone).includes(s) ||
+                    normalizeSearch(o.address).includes(s) ||
+                    normalizeSearch(o.nit).includes(s);
             }
             return true;
         });
@@ -561,12 +565,12 @@ export default function CommercialDailyMonitorModule() {
     // Filtrar consolidado de productos por búsqueda
     const filteredProducts = useMemo(() => {
         if (!searchTerm.trim()) return productConsolidated;
-        const s = searchTerm.toLowerCase();
+        const s = normalizeSearch(searchTerm.trim());
         return productConsolidated.filter(p =>
-            p.productName.toLowerCase().includes(s) ||
-            p.sku.toLowerCase().includes(s) ||
-            (p.accountingId && p.accountingId.toString().toLowerCase().includes(s)) ||
-            p.category.toLowerCase().includes(s)
+            normalizeSearch(p.productName).includes(s) ||
+            normalizeSearch(p.sku).includes(s) ||
+            (p.accountingId && normalizeSearch(p.accountingId.toString()).includes(s)) ||
+            normalizeSearch(p.category).includes(s)
         );
     }, [productConsolidated, searchTerm]);
 
@@ -692,22 +696,22 @@ export default function CommercialDailyMonitorModule() {
             });
         });
 
-        const term = searchTerm.trim().toLowerCase();
+        const term = normalizeSearch(searchTerm.trim());
         if (!term) return rows.sort((a, b) => b.quantity - a.quantity);
 
         // Poka-Yoke: Si el término de búsqueda coincide con el producto seleccionado (ej. venía de buscar "huevos"),
         // no descartar los clientes porque el usuario estaba buscando el producto, no el cliente.
         const currentProd = productsMap.get(selectedDrilldownProductId);
-        const prodName = (currentProd?.name || '').toLowerCase();
-        const prodAccId = (currentProd?.accounting_id || '').toString().toLowerCase();
+        const prodName = normalizeSearch(currentProd?.name || '');
+        const prodAccId = normalizeSearch((currentProd?.accounting_id || '').toString());
         if (prodName.includes(term) || (prodAccId && prodAccId === term)) {
             return rows.sort((a, b) => b.quantity - a.quantity);
         }
 
         return rows.filter(r => {
-            return r.clientName.toLowerCase().includes(term) ||
-                r.zone.toLowerCase().includes(term) ||
-                r.orderSequenceId.toString().toLowerCase().includes(term);
+            return normalizeSearch(r.clientName).includes(term) ||
+                normalizeSearch(r.zone).includes(term) ||
+                normalizeSearch(r.orderSequenceId.toString()).includes(term);
         }).sort((a, b) => b.quantity - a.quantity);
     }, [dayOrders, selectedDrilldownProductId, searchTerm, productsMap]);
 

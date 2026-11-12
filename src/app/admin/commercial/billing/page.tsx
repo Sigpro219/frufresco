@@ -698,6 +698,32 @@ export default function BillingDashboard() {
     const [confirmBatchLiquidation, setConfirmBatchLiquidation] = useState(false);
     const [previewCutPokaYokeError, setPreviewCutPokaYokeError] = useState<string | null>(null);
 
+    // Zero-Gap Sticky Dock Telemetry
+    const billingDockRef = useRef<HTMLDivElement>(null);
+    const [billingDockHeight, setBillingDockHeight] = useState(128);
+    const billingDockObserverRef = useRef<ResizeObserver | null>(null);
+
+    const setBillingDockNode = useCallback((node: HTMLDivElement | null) => {
+        if (billingDockObserverRef.current) {
+            billingDockObserverRef.current.disconnect();
+            billingDockObserverRef.current = null;
+        }
+        (billingDockRef as any).current = node;
+        if (node) {
+            setBillingDockHeight(Math.round(node.offsetHeight));
+            if (typeof ResizeObserver !== 'undefined') {
+                const observer = new ResizeObserver((entries) => {
+                    for (const entry of entries) {
+                        const h = entry.borderBoxSize?.[0]?.blockSize ?? node.offsetHeight;
+                        setBillingDockHeight(Math.round(h));
+                    }
+                });
+                observer.observe(node);
+                billingDockObserverRef.current = observer;
+            }
+        }
+    }, []);
+
     const showToast = useCallback((toast: { type: 'success' | 'error' | 'warning' | 'info'; title?: string; message: string }) => {
         const id = Math.random().toString(36).substring(2, 9);
         setToasts(prev => [...prev.slice(-3), { ...toast, id }]);
@@ -1247,6 +1273,12 @@ export default function BillingDashboard() {
             fetchDossiersData();
         }
     }, [activeTab, portfolioSubTab]);
+
+    useEffect(() => {
+        if (billingDockRef.current) {
+            setBillingDockHeight(Math.round(billingDockRef.current.offsetHeight));
+        }
+    }, [activeTab, subTab, portfolioSubTab, selectedBillingDate, pendingStatusFilter]);
 
     const handleOpenDossierModal = (client: any) => {
         const existing = dossiersDataMap[client.id];
@@ -3915,21 +3947,33 @@ export default function BillingDashboard() {
             {/* Contenedor Maestro Universal 1600px */}
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.6rem 0.8rem 2.5rem', width: '100%', overflowX: 'clip', overflowY: 'visible' }}>
 
-                {/* Línea 1 Sticky: Subtabs Bar Unificada (top: 85px, zIndex: 45) */}
-                <div style={{
-                    position: 'sticky',
-                    top: '85px',
-                    zIndex: 45,
-                    backgroundColor: '#FFFFFF',
-                    borderBottom: `1px solid ${THEME.colors.border}`,
-                    padding: '0.24rem 0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '0.4rem',
-                    marginBottom: '0.35rem'
-                }}>
+                {/* UNIFIED STICKY CONTROL DOCK (BELOW 85px NAVBAR - ZERO GAP) */}
+                <div 
+                    ref={setBillingDockNode}
+                    style={{
+                        position: 'sticky',
+                        top: '85px',
+                        zIndex: 45,
+                        backgroundColor: '#FFFFFF',
+                        borderBottom: `1px solid ${THEME.colors.border}`,
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.04)',
+                        padding: '0.24rem 0.6rem 0.40rem',
+                        marginBottom: '0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.35rem'
+                    }}
+                >
+                    {/* Fila 1: Subtabs Bar Unificada */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.4rem',
+                        paddingBottom: activeTab !== 'configuration' ? '0.25rem' : '0',
+                        borderBottom: activeTab !== 'configuration' ? '1px solid #F1F5F9' : 'none'
+                    }}>
                     {/* Left: Main Module Tabs + Integrated Subtabs */}
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
@@ -4227,22 +4271,13 @@ export default function BillingDashboard() {
                     </div>
                 </div>
 
-                {/* Línea 2 Sticky: Frosted Command Dock Unificado (top: 122px, zIndex: 40) */}
-                {activeTab !== 'configuration' && (
-                    <div style={{
-                        position: 'sticky',
-                        top: '122px',
-                        zIndex: 40,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: '12px',
-                        border: '1px solid #E2E8F0',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-                        padding: '0.42rem 0.75rem',
-                        marginBottom: '0.55rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.40rem'
-                    }}>
+                    {/* Fila 2: Command Dock Unificado (Buscador, Tanda, Filtros, Cortes) */}
+                    {activeTab !== 'configuration' && (
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.40rem'
+                        }}>
                         {/* Fila 1: Superbuscador Omnibox Universal (PROTAGONISTA) + Selector de Tanda / Acciones Generales */}
                         <div style={{
                             display: 'flex',
@@ -4815,6 +4850,7 @@ export default function BillingDashboard() {
                         )}
                     </div>
                 )}
+                </div>
 
                 {/* INVOICING SUBMODULE */}
                 {activeTab === 'invoicing' && (
@@ -4894,12 +4930,12 @@ export default function BillingDashboard() {
                                     <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}># Corte</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fecha y Franja</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pedidos</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Bruto</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}># Corte</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fecha y Franja</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pedidos</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Bruto</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -5190,7 +5226,7 @@ export default function BillingDashboard() {
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
                                         <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '34px', textAlign: 'center' }}>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '34px', textAlign: 'center' }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={filteredBatchAccumulatedOrders.length > 0 && filteredBatchAccumulatedOrders.every(o => selectedOrderIds.includes(o.id))}
@@ -5206,12 +5242,12 @@ export default function BillingDashboard() {
                                                         style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '14px', height: '14px' }}
                                                     />
                                                 </th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Remisión / Pedido</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Cliente / Razón Social</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Entrega</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Ítems</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'right' }}>Total Pedido</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Modalidad</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Remisión / Pedido</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Cliente / Razón Social</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem' }}>Entrega</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Ítems</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'right' }}>Total Pedido</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.62rem', textAlign: 'center' }}>Modalidad</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -5317,7 +5353,7 @@ export default function BillingDashboard() {
                                         <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
                                                 {/* 0. Checkbox Maestro */}
-                                                <th style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center', borderTopLeftRadius: '12px' }}>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center', borderTopLeftRadius: '12px' }}>
                                                     <input
                                                         type="checkbox"
                                                         checked={filteredPendingOrders.length > 0 && filteredPendingOrders.every(o => selectedOrderIds.includes(o.id))}
@@ -5339,7 +5375,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('sequence_id')}
                                                     title="Ordenar por número de pedido o fecha de creación"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'sequence_id' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span># Pedido</span>
@@ -5351,7 +5387,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('fiscal_consecutive')}
                                                     title="Ordenar por número fiscal de factura electrónica"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'fiscal_consecutive' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Consecutivo</span>
@@ -5363,7 +5399,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('client')}
                                                     title="Ordenar alfabéticamente por cliente o razón social"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '140px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '140px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'client' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Cliente</span>
@@ -5375,7 +5411,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('items')}
                                                     title="Ordenar por cantidad de productos"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '60px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '60px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'items' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Ítems</span>
@@ -5387,7 +5423,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('novelties')}
                                                     title="Ordenar por novedades o incidencias de entrega"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '125px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '125px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'novelties' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Novedades</span>
@@ -5399,7 +5435,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('document')}
                                                     title="Ordenar por tipo de documento fiscal o plazo de crédito"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.30rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.30rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'document' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Documento</span>
@@ -5411,7 +5447,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('grace_status')}
                                                     title="Ordenar por estado de entrega y cuenta regresiva de gracia post-entrega"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '95px', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'grace_status' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                         <span>Estado</span>
@@ -5423,7 +5459,7 @@ export default function BillingDashboard() {
                                                 <th 
                                                     onClick={() => handleSort('total')}
                                                     title="Ordenar por valor total del pedido"
-                                                    style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', textAlign: 'right', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
+                                                    style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.35rem', width: '85px', textAlign: 'right', fontSize: '0.60rem', fontWeight: '800', color: sortConfig.key === 'total' ? '#0D7A57' : THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer', userSelect: 'none' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end' }}>
                                                         <span>Total</span>
@@ -5432,7 +5468,7 @@ export default function BillingDashboard() {
                                                 </th>
 
                                                 {/* 9. Acciones */}
-                                                <th style={{ position: 'sticky', top: '214px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '80px', textAlign: 'center', fontSize: '0.60rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', borderTopRightRadius: '12px' }}>Acciones</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.45rem 0.25rem', width: '80px', textAlign: 'center', fontSize: '0.60rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', borderTopRightRadius: '12px' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -6422,12 +6458,12 @@ export default function BillingDashboard() {
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopLeftRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}># Pedido</th>
-                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Producto / Ítem</th>
-                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Cantidad Devuelta</th>
-                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Motivo / Novedad</th>
-                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: '169px', zIndex: 30 }}>Estado</th>
-                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopRightRadius: '14px', position: 'sticky', top: '169px', zIndex: 30 }}>Acciones</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopLeftRadius: '14px', position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}># Pedido</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}>Producto / Ítem</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}>Cantidad Devuelta</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}>Motivo / Novedad</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}>Estado</th>
+                                                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, borderTopRightRadius: '14px', position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30 }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -6771,14 +6807,14 @@ export default function BillingDashboard() {
                                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Prefijo & # Factura</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Vencimiento & Plazo</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Base Imponible</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>IVA</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Neto</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado Cartera</th>
-                                                    <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Prefijo & # Factura</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Vencimiento & Plazo</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Base Imponible</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>IVA</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Neto</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado Cartera</th>
+                                                    <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -6985,12 +7021,12 @@ export default function BillingDashboard() {
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.76rem' }}>
                                         <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC' }}>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>NIT</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Límite de Crédito</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado Ficha</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cupo Solicitado</th>
-                                                <th style={{ position: 'sticky', top: '169px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cliente / Razón Social</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>NIT</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Límite de Crédito</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estado Ficha</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cupo Solicitado</th>
+                                                <th style={{ position: 'sticky', top: `${85 + billingDockHeight}px`, zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>

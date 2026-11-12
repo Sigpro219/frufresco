@@ -248,14 +248,15 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 closingsRes
             ] = await Promise.all([
                 supabase.from('app_settings').select('value').eq('key', 'work_cells_governance').maybeSingle(),
-                supabase.from('products').select('id, name, sku, accounting_id, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id, theoretical_shrinkage_pct').eq('is_active', true),
-                supabase.from('inventory_stocks').select('id, product_id, warehouse_id, quantity, status, min_stock_level, updated_at'),
-                supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true),
+                supabase.from('products').select('id, name, sku, accounting_id, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id, theoretical_shrinkage_pct').eq('is_active', true).limit(5000),
+                supabase.from('inventory_stocks').select('id, product_id, warehouse_id, quantity, status, min_stock_level, updated_at').limit(5000),
+                supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true).limit(5000),
                 supabase.from('inventory_movements')
                     .select('id, product_id, quantity, type, notes, created_at, reference_type')
                     .not('reference_type', 'like', 'sandbox_%')
                     .gte('created_at', startIso)
-                    .lte('created_at', endIso),
+                    .lte('created_at', endIso)
+                    .limit(10000),
                 supabase.from('inventory_movements')
                     .select('id, product_id, quantity, type, notes, created_at, reference_type')
                     .not('reference_type', 'like', 'sandbox_%')

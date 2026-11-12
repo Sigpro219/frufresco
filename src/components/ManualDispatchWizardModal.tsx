@@ -38,6 +38,7 @@ import Link from 'next/link';
 import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { DirectPdfDocKey, saveRemotePrintUrlAsPdfDirect } from '@/components/print/savePdfDirect';
 import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
+import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -63,6 +64,7 @@ export default function ManualDispatchWizardModal({
     const [finalizingLoading, setFinalizingLoading] = useState<boolean>(false);
     const [pdfBusyDoc, setPdfBusyDoc] = useState<DirectPdfDocKey | null>(null);
     const [pdfProgressText, setPdfProgressText] = useState<string>('');
+    const [isExportingRelacion, setIsExportingRelacion] = useState<boolean>(false);
 
     // Checklist de Conformidad por Bloque
     const [step1Confirmed, setStep1Confirmed] = useState<boolean>(false);
@@ -585,11 +587,15 @@ export default function ManualDispatchWizardModal({
                     const unit = (item.unit || prod.unit_of_measure || 'Kg').toLowerCase();
                     const qty = Number(item.quantity || 0);
 
-                    const invStock = (prod.id && inventoryStockMap.has(`ID_${prod.id}`))
+                    const invStock = (prod.id && inventoryStockMap.has(`ID_${prod.id}`) && (inventoryStockMap.get(`ID_${prod.id}`) || 0) > 0)
                         ? inventoryStockMap.get(`ID_${prod.id}`)
-                        : (accountingId && inventoryStockMap.has(`ACC_${accountingId}`))
-                            ? inventoryStockMap.get(`ACC_${accountingId}`)
-                            : '';
+                        : (prod.parent_id && inventoryStockMap.has(`ID_${prod.parent_id}`) && (inventoryStockMap.get(`ID_${prod.parent_id}`) || 0) > 0)
+                            ? inventoryStockMap.get(`ID_${prod.parent_id}`)
+                            : (prod.id && inventoryStockMap.has(`ID_${prod.id}`))
+                                ? inventoryStockMap.get(`ID_${prod.id}`)
+                                : (accountingId && inventoryStockMap.has(`ACC_${accountingId}`))
+                                    ? inventoryStockMap.get(`ACC_${accountingId}`)
+                                    : '';
 
                     if (!productMap.has(key)) {
                         productMap.set(key, {
@@ -710,6 +716,22 @@ export default function ManualDispatchWizardModal({
         } catch (err: any) {
             console.error('Error generando Excel de compras:', err);
             alert(`Error al generar el archivo Excel: ${err?.message || 'Error desconocido'}`);
+        }
+    };
+
+    const handleExportRelacionDocumentos = async () => {
+        setIsExportingRelacion(true);
+        try {
+            await exportRelacionDocumentosWithPicker({
+                selectedDate: deliveryDate,
+                orders: selectedOrdersList,
+                manualSpacesMap,
+            });
+        } catch (err: any) {
+            console.error('[ManualDispatchWizardModal] Error exportando relación de documentos:', err);
+            alert(`Error al generar Relación de Documentos: ${err?.message || 'Error desconocido'}`);
+        } finally {
+            setIsExportingRelacion(false);
         }
     };
 
@@ -1286,18 +1308,34 @@ export default function ManualDispatchWizardModal({
                                         Matriz oficial en Excel para compras, directores y cruce contable World Office.
                                     </div>
                                 </div>
-                                <button
-                                    onClick={handleExportMasterPurchasesExcel}
-                                    style={{
-                                        marginTop: '0.85rem', padding: '7px 10px', backgroundColor: '#0284C7', color: '#FFFFFF',
-                                        borderRadius: '7px', fontSize: '0.72rem', fontWeight: '900', border: 'none', cursor: 'pointer',
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
-                                    }}
-                                    title="Descarga directa compras_YYYY-MM-DD.xlsx con matriz consolidada"
-                                >
-                                    <Download size={13} /> Exportar Excel (.xlsx)
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '0.85rem' }}>
+                                    <button
+                                        onClick={handleExportMasterPurchasesExcel}
+                                        style={{
+                                            padding: '6px 10px', backgroundColor: '#0284C7', color: '#FFFFFF',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', border: 'none', cursor: 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                                            boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
+                                        }}
+                                        title="Descarga directa compras_YYYY-MM-DD.xlsx con matriz consolidada"
+                                    >
+                                        <Download size={12} /> Consolidado Maestro (.xlsx)
+                                    </button>
+                                    <button
+                                        onClick={handleExportRelacionDocumentos}
+                                        disabled={isExportingRelacion}
+                                        style={{
+                                            padding: '6px 10px', backgroundColor: '#0369A1', color: '#FFFFFF',
+                                            borderRadius: '7px', fontSize: '0.70rem', fontWeight: '900', border: 'none', cursor: 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                                            boxShadow: '0 2px 6px rgba(3, 105, 161, 0.25)',
+                                            opacity: isExportingRelacion ? 0.7 : 1
+                                        }}
+                                        title="Descargar Relación de Documentos de Despacho (.xlsx) clon exacto de la operación histórica con asignación de espacios"
+                                    >
+                                        <FileSpreadsheet size={12} /> {isExportingRelacion ? 'Generando...' : 'Relación Documentos (.xlsx)'}
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Card 2C: Control de Ingreso y Báscula (Patio / Muelle de Recibo) */}

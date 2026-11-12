@@ -425,7 +425,29 @@ function OrderLoadingContent() {
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
 
     const dockRef = useRef<HTMLDivElement>(null);
-    const [dockHeight, setDockHeight] = useState(135);
+    const [dockHeight, setDockHeight] = useState(125);
+    const dockObserverRef = useRef<ResizeObserver | null>(null);
+
+    const setDockNode = useCallback((node: HTMLDivElement | null) => {
+        if (dockObserverRef.current) {
+            dockObserverRef.current.disconnect();
+            dockObserverRef.current = null;
+        }
+        (dockRef as any).current = node;
+        if (node) {
+            setDockHeight(Math.round(node.offsetHeight));
+            if (typeof ResizeObserver !== 'undefined') {
+                const observer = new ResizeObserver((entries) => {
+                    for (const entry of entries) {
+                        const h = entry.borderBoxSize?.[0]?.blockSize ?? node.offsetHeight;
+                        setDockHeight(Math.round(h));
+                    }
+                });
+                observer.observe(node);
+                dockObserverRef.current = observer;
+            }
+        }
+    }, []);
 
 
 
@@ -522,16 +544,9 @@ function OrderLoadingContent() {
     const hasActiveFilters = !!(filterStatus || filterGps || filterChannel || selectedChannel || filterClientType || searchTerm);
 
     useEffect(() => {
-        if (!dockRef.current) return;
-        const updateHeight = () => {
-            if (dockRef.current) {
-                setDockHeight(dockRef.current.offsetHeight);
-            }
-        };
-        updateHeight();
-        const observer = new ResizeObserver(updateHeight);
-        observer.observe(dockRef.current);
-        return () => observer.disconnect();
+        if (dockRef.current) {
+            setDockHeight(Math.round(dockRef.current.offsetHeight));
+        }
     }, [activeTab, hasActiveFilters, selectedDate]);
 
 
@@ -3342,7 +3357,7 @@ useEffect(() => {
 
                 {/* UNIFIED STICKY CONTROL DOCK (BELOW 85px NAVBAR - ZERO TRANSPARENT GAPS) */}
                 <div 
-                    ref={dockRef}
+                    ref={setDockNode}
                     style={{ 
                         position: 'sticky',
                         top: '85px',
@@ -4548,7 +4563,7 @@ useEffect(() => {
 
 
 
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopLeftRadius: THEME.radius.lg, ...THEME.typography?.tableHeader }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.75rem', width: '13%', textAlign: 'left', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopLeftRadius: THEME.radius.lg, ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('id')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'id' ? THEME.colors.primary : '#0F172A' }}
@@ -4562,7 +4577,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '31%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.75rem', width: '31%', textAlign: 'left', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('customer')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'customer' ? THEME.colors.primary : '#0F172A' }}
@@ -4576,7 +4591,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.75rem', width: '27%', textAlign: 'left', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.75rem', width: '27%', textAlign: 'left', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('address')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', color: sortField === 'address' ? THEME.colors.primary : '#0F172A' }}
@@ -4590,7 +4605,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.65rem', width: '10%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('items')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none', width: '100%', color: sortField === 'items' ? THEME.colors.primary : '#0F172A' }}
@@ -4604,7 +4619,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.65rem', width: '15%', textAlign: 'right', position: 'relative', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.65rem', width: '15%', textAlign: 'right', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', ...THEME.typography?.tableHeader }}>
                                                 <div 
                                                     onClick={() => handleSort('total')}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end', width: '100%', cursor: 'pointer', userSelect: 'none', color: sortField === 'total' ? THEME.colors.primary : '#0F172A' }}
@@ -4618,7 +4633,7 @@ useEffect(() => {
                                                     )}
                                                 </div>
                                             </th>
-                                            <th style={{ padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopRightRadius: THEME.radius.lg }}>
+                                            <th style={{ position: 'sticky', top: `${85 + dockHeight}px`, zIndex: openHeaderDropdown ? 95 : 35, padding: '0.85rem 0.5rem', width: '4%', textAlign: 'center', backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', borderTopRightRadius: THEME.radius.lg }}>
                                                 {(() => {
                                                     const launchableOrders = filteredOrders.filter(o => o.isComplete && ['pending_approval', 'pending', 'recibido'].includes(o.status));
                                                     const isAllSelected = launchableOrders.length > 0 && selectedOrders.size === launchableOrders.length;

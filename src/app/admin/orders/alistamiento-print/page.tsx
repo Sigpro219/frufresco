@@ -619,7 +619,8 @@ export default function AlistamientoSabanaPrintPage() {
                 const { data: stockRows } = await supabase
                     .from('inventory_stocks')
                     .select('product_id, quantity')
-                    .eq('status', 'available');
+                    .eq('status', 'available')
+                    .limit(5000);
 
                 (stockRows || []).forEach((row: { product_id: string; quantity: number }) => {
                     newInventoryMap[row.product_id] = (newInventoryMap[row.product_id] ?? 0) + row.quantity;

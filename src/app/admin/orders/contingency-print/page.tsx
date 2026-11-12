@@ -638,7 +638,7 @@ function ContingencyPrintContent() {
 
                 const [ordersRes, stocksRes] = await Promise.all([
                     query.order('created_at', { ascending: true }),
-                    supabase.from('inventory_stocks').select('product_id, quantity').eq('status', 'available')
+                    supabase.from('inventory_stocks').select('product_id, quantity').eq('status', 'available').limit(5000)
                 ]);
 
                 if (ordersRes.error) {

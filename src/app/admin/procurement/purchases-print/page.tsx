@@ -11,6 +11,7 @@ import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } fr
 import { formatStructuredSpecification } from '@/lib/orderUtils';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
+import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
 
 
 
@@ -44,6 +45,7 @@ export default function PurchasesPrintPage() {
     const [selectedSublist, setSelectedSublist] = useState<string>('ALL');
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<PurchaseItem[]>([]);
+    const [isExportingRelacion, setIsExportingRelacion] = useState(false);
     const printDocRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -304,6 +306,19 @@ export default function PurchasesPrintPage() {
         await saveWorkbookWithPicker(XLSX, workbook, finalFilename, fileHandle);
     };
 
+    // Export Relación de Documentos (.xlsx) - Clona formato operacional histórico
+    const handleExportRelacionDocumentos = async () => {
+        setIsExportingRelacion(true);
+        try {
+            await exportRelacionDocumentosWithPicker({ selectedDate });
+        } catch (err) {
+            console.error('[PurchasesPrintPage] Error exportando relación de documentos:', err);
+            alert('Ocurrió un error al exportar la relación de documentos.');
+        } finally {
+            setIsExportingRelacion(false);
+        }
+    };
+
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#F1F5F9', paddingBottom: '3rem' }}>
             <GoldenPrintStyles paperSize="oficio" />
@@ -430,6 +445,30 @@ export default function PurchasesPrintPage() {
                         title="Descargar consolidado en formato Excel con 10 columnas estándar"
                     >
                         <FileSpreadsheet size={14} /> Excel (10 cols)
+                    </button>
+
+                    {/* Relación de Documentos (.xlsx) */}
+                    <button
+                        onClick={handleExportRelacionDocumentos}
+                        disabled={isExportingRelacion}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 10px',
+                            backgroundColor: '#0284C7',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.76rem',
+                            fontWeight: '700',
+                            whiteSpace: 'nowrap',
+                            opacity: isExportingRelacion ? 0.7 : 1
+                        }}
+                        title="Descargar Relación de Documentos (.xlsx) con 16 columnas estándar y desglose de despacho"
+                    >
+                        <FileSpreadsheet size={14} /> {isExportingRelacion ? 'Generando...' : 'Relación Doc. (.xlsx)'}
                     </button>
 
                     <DirectPdfSaveButton docType="purchases" selectedDate={selectedDate} containerRef={printDocRef} />
