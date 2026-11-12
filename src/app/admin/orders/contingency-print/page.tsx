@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, getOrderProcurementReferences } from '@/lib/orderUtils';
-import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare } from 'lucide-react';
+import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
@@ -591,6 +591,47 @@ function ContingencyPrintContent() {
     const [loading, setLoading] = useState(true);
     const printDocRef = useRef<HTMLDivElement>(null);
 
+    // Superbuscador Omnibox & Navegación Secuencial (SpaceX v2)
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+    const [currentOrderIndex, setCurrentOrderIndex] = useState<number>(0);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const searchContainerRef = useRef<HTMLDivElement>(null);
+
+    // Cerrar dropdown del buscador al hacer click fuera
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+                setIsSearchOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Atajos globales de teclado: Ctrl+K / Cmd+K y '/' para enfocar el buscador
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+                searchInputRef.current?.select();
+                setIsSearchOpen(true);
+            } else if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+                searchInputRef.current?.select();
+                setIsSearchOpen(true);
+            } else if (e.key === 'Escape') {
+                setIsSearchOpen(false);
+                searchInputRef.current?.blur();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     useEffect(() => {
         if (paramDate && paramDate !== selectedDate) {
             setSelectedDate(paramDate);
@@ -890,7 +931,89 @@ function ContingencyPrintContent() {
     const showPurchases = showAll || mode === 'purchases';
     const showRemissions = showAll || mode === 'remissions';
     const showDispatch = showAll || mode === 'dispatch';
-    const totalRemissionSheets = orders.reduce((acc, o) => acc + paginateRemissionItems(o.order_items || []).length * 2, 0);
+
+    // Pedidos activos para remisiones (excluye facturados FAC-IMP) o despachos
+    const activePrintOrders = useMemo(() => {
+        if (mode === 'remissions') {
+            return orders.filter(order => {
+                const prof = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
+                const parent = Array.isArray(prof?.parent) ? prof?.parent[0] : prof?.parent;
+                const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
+                return !(rawDocType === 'invoice' || (order as any).document_type === 'invoice');
+            });
+        }
+        return orders;
+    }, [orders, mode]);
+
+    const totalRemissionSheets = useMemo(() => {
+        return activePrintOrders.reduce((acc, o) => acc + paginateRemissionItems(o.order_items || []).length * 2, 0);
+    }, [activePrintOrders]);
+
+    // Filtrado en memoria de alta velocidad para el Omnibox (0 tokens, 0 llamadas a BD)
+    const filteredMatches = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return [];
+        return activePrintOrders.filter(order => {
+            const orderNum = getFriendlyOrderId(order).toLowerCase();
+            const { parentName, branchName } = extractParentAndBranch(order);
+            const pName = parentName.toLowerCase();
+            const bName = branchName.toLowerCase();
+            const cName = (order.customer_name || '').toLowerCase();
+            const nit = (order.profiles?.nit || '').toLowerCase();
+            const espacio = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
+                ? formatSpaceLabel(order.warehouse_spaces).toLowerCase()
+                : '';
+            return (
+                orderNum.includes(q) ||
+                pName.includes(q) ||
+                bName.includes(q) ||
+                cName.includes(q) ||
+                nit.includes(q) ||
+                espacio.includes(q)
+            );
+        });
+    }, [activePrintOrders, searchQuery]);
+
+    const scrollToOrder = (orderId: string) => {
+        const el = document.getElementById(`remission-order-${orderId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setHighlightedOrderId(orderId);
+            setTimeout(() => {
+                setHighlightedOrderId(null);
+            }, 2500);
+        }
+        const idx = activePrintOrders.findIndex(o => o.id === orderId);
+        if (idx !== -1) setCurrentOrderIndex(idx);
+        setIsSearchOpen(false);
+    };
+
+    const handlePrevOrder = () => {
+        if (activePrintOrders.length === 0) return;
+        const nextIdx = currentOrderIndex > 0 ? currentOrderIndex - 1 : activePrintOrders.length - 1;
+        setCurrentOrderIndex(nextIdx);
+        scrollToOrder(activePrintOrders[nextIdx].id);
+    };
+
+    const handleNextOrder = () => {
+        if (activePrintOrders.length === 0) return;
+        const nextIdx = currentOrderIndex < activePrintOrders.length - 1 ? currentOrderIndex + 1 : 0;
+        setCurrentOrderIndex(nextIdx);
+        scrollToOrder(activePrintOrders[nextIdx].id);
+    };
+
+    const handlePrintSingleOrder = (orderId: string, orderNum: string, clientName: string) => {
+        const el = document.getElementById(`remission-order-${orderId}`);
+        if (!el) return;
+        const safeClient = clientName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+        printViaNewWindow({
+            element: el,
+            title: `Remision_${orderNum}_${safeClient}`,
+            paperSize: 'letter',
+            orientation: 'portrait',
+            margin: '6mm 8mm'
+        });
+    };
 
     return (
         <div className="print-root-wrapper" style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', padding: '20px 0', color: '#000', fontFamily: 'Arial, Helvetica, sans-serif' }}>
@@ -908,6 +1031,14 @@ function ContingencyPrintContent() {
                         margin: 0 !important;
                         padding: 0 !important;
                         width: 100% !important;
+                    }
+                    .order-remission-group {
+                        border: none !important;
+                        box-shadow: none !important;
+                        outline: none !important;
+                        background: transparent !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
                     }
                 }
                 @page {
@@ -976,50 +1107,169 @@ function ContingencyPrintContent() {
                             )}
                         </h1>
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                            {orders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${totalRemissionSheets} hojas)` : ''}
-                        </span>
-                        <span style={{ fontSize: '0.68rem', fontWeight: '700', color: mode === 'dispatch' ? '#065F46' : mode === 'remissions' ? '#0D7A57' : '#92400E', backgroundColor: mode === 'dispatch' || mode === 'remissions' ? '#ECFDF5' : '#FEF3C7', padding: '1px 6px', borderRadius: '12px', border: mode === 'dispatch' || mode === 'remissions' ? '1px solid #A7F3D0' : '1px solid #FCD34D', whiteSpace: 'nowrap' }}>
-                            {mode === 'dispatch' ? 'Despacho y Ruta' : mode === 'remissions' ? 'Original + Copia' : mode === 'purchases' ? 'Corabastos' : 'Kit Completo'}
+                            {activePrintOrders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${totalRemissionSheets} hojas)` : ''}
                         </span>
                     </div>
 
-                    {/* Selector rápido de sub-modos */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
-                        {[
-                            { key: 'remissions', label: 'Remisiones' },
-                            { key: 'dispatch', label: 'Manifiesto' },
-                            { key: 'purchases', label: 'Compras' },
-                            { key: 'all', label: 'Todo' }
-                        ].map((sub) => {
-                            const isActive = mode === sub.key;
-                            return (
+                    {/* Superbuscador Omnibox de Documentos & Navegador Secuencial (SpaceX Raptor 3) */}
+                    <div ref={searchContainerRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            padding: '2px 8px',
+                            gap: '6px',
+                            width: '270px',
+                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)'
+                        }}>
+                            <Search size={13} color="#64748B" />
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder="Buscar pedido, cliente, espacio... (Ctrl+K)"
+                                value={searchQuery}
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setIsSearchOpen(true);
+                                }}
+                                onFocus={() => {
+                                    if (searchQuery.trim()) setIsSearchOpen(true);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && filteredMatches.length > 0) {
+                                        scrollToOrder(filteredMatches[0].id);
+                                    }
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontSize: '0.72rem',
+                                    outline: 'none',
+                                    width: '100%',
+                                    color: '#0F172A',
+                                    fontWeight: '500'
+                                }}
+                            />
+                            {searchQuery && (
                                 <button
-                                    key={sub.key}
                                     type="button"
                                     onClick={() => {
-                                        const params = new URLSearchParams();
-                                        if (selectedDate) params.set('date', selectedDate);
-                                        if (rawOrderIds) params.set('orderIds', rawOrderIds);
-                                        params.set('mode', sub.key);
-                                        router.replace(`/admin/orders/contingency-print?${params.toString()}`);
+                                        setSearchQuery('');
+                                        setIsSearchOpen(false);
                                     }}
-                                    style={{
-                                        padding: '2px 7px',
-                                        fontSize: '0.68rem',
-                                        fontWeight: isActive ? '800' : '600',
-                                        backgroundColor: isActive ? '#0D7A57' : 'transparent',
-                                        color: isActive ? '#FFFFFF' : '#475569',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    title={`Ver vista de ${sub.label}`}
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex' }}
                                 >
-                                    {sub.label}
+                                    <X size={12} color="#94A3B8" />
                                 </button>
-                            );
-                        })}
+                            )}
+                        </div>
+
+                        {/* Stepper Secuencial [ ◀ X de N ▶ ] */}
+                        {activePrintOrders.length > 0 && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '1px 3px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handlePrevOrder}
+                                    title="Pedido anterior"
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 3px', display: 'flex', alignItems: 'center', color: '#334155' }}
+                                >
+                                    <ChevronLeft size={13} />
+                                </button>
+                                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#0F172A', padding: '0 4px', whiteSpace: 'nowrap' }}>
+                                    {currentOrderIndex + 1} / {activePrintOrders.length}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleNextOrder}
+                                    title="Siguiente pedido"
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 3px', display: 'flex', alignItems: 'center', color: '#334155' }}
+                                >
+                                    <ChevronRight size={13} />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Dropdown de Coincidencias */}
+                        {isSearchOpen && searchQuery.trim() && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                marginTop: '4px',
+                                width: '380px',
+                                maxHeight: '320px',
+                                overflowY: 'auto',
+                                backgroundColor: '#FFFFFF',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '8px',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                zIndex: 10000,
+                                padding: '4px'
+                            }}>
+                                <div style={{ padding: '4px 8px', fontSize: '0.65rem', fontWeight: '700', color: '#64748B', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>{filteredMatches.length} coincidencias</span>
+                                    <span>Presiona Enter para ir al primero</span>
+                                </div>
+                                {filteredMatches.length === 0 ? (
+                                    <div style={{ padding: '12px 8px', textAlign: 'center', fontSize: '0.74rem', color: '#94A3B8' }}>
+                                        No se encontraron remisiones para "{searchQuery}"
+                                    </div>
+                                ) : (
+                                    filteredMatches.map((matchedOrder) => {
+                                        const ordNum = getFriendlyOrderId(matchedOrder);
+                                        const { parentName: pN, branchName: bN } = extractParentAndBranch(matchedOrder);
+                                        const espLabel = (matchedOrder.warehouse_spaces && matchedOrder.warehouse_spaces.length > 0)
+                                            ? formatSpaceLabel(matchedOrder.warehouse_spaces)
+                                            : null;
+                                        return (
+                                            <div
+                                                key={`match-${matchedOrder.id}`}
+                                                onClick={() => scrollToOrder(matchedOrder.id)}
+                                                style={{
+                                                    padding: '6px 8px',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer',
+                                                    borderBottom: '1px solid #F8FAFC',
+                                                    transition: 'background-color 0.1s ease',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: '8px'
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F0FDF4')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                            >
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontWeight: '800', fontSize: '0.75rem', color: '#0F172A' }}>
+                                                            #{ordNum}
+                                                        </span>
+                                                        {espLabel && (
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '700', backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '3px', color: '#1E293B' }}>
+                                                                Esp. {espLabel}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#334155', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {pN}
+                                                    </div>
+                                                    {bN && (
+                                                        <div style={{ fontSize: '0.64rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {bN}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span style={{ fontSize: '0.66rem', color: '#0D7A57', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                                                    Ir ↗
+                                                </span>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1373,7 +1623,7 @@ function ContingencyPrintContent() {
                 {/* 2. REMISIONES DE ENTREGA FÍSICAS DE CONTINGENCIA          */}
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
-                {showRemissions && orders.flatMap((order, orderIdx) => {
+                {showRemissions && orders.map((order, orderIdx) => {
                     const prof = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
                     const parent = Array.isArray(prof?.parent) ? prof?.parent[0] : prof?.parent;
                     const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
@@ -1381,7 +1631,7 @@ function ContingencyPrintContent() {
 
                     // SPEC.md Escenario 432: Exclusión Mutua Poka-Yoke: Pedidos con Factura Impresa (FAC-IMP) viajan con factura DIAN física expedida en World Office, NO con remisión
                     if (isInvoiceRequired) {
-                        return [];
+                        return null;
                     }
 
                     const b2cGift = extractB2CGiftDetails(order);
@@ -1425,11 +1675,76 @@ function ContingencyPrintContent() {
                     const remissionPages = paginateRemissionItems(items);
 
                     // Cada pedido genera duplicado consecutivo (Original y Copia), paginado si tiene más de 17 ítems
-                    return [
-                        { copyType: 'ORIGINAL - CLIENTE', isCopy: false },
-                        { copyType: 'COPIA - TRANSPORTADOR / CONTABILIDAD', isCopy: true }
-                    ].flatMap((copyInfo, copyIdx) => 
-                        remissionPages.map((pageItems, pageIdx) => {
+                    return (
+                        <div
+                            key={`remission-order-block-${order.id}`}
+                            id={`remission-order-${order.id}`}
+                            className="order-remission-group"
+                            style={{
+                                scrollMarginTop: '65px',
+                                transition: 'all 0.3s ease',
+                                ...(highlightedOrderId === order.id ? {
+                                    boxShadow: '0 0 0 3px #10B981, 0 8px 24px rgba(16, 185, 129, 0.25)',
+                                    borderRadius: '8px'
+                                } : {})
+                            }}
+                        >
+                            {/* Micro-Barra de Control de Orden On-Screen (no-print) */}
+                            <div className="no-print" style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '4px 10px',
+                                backgroundColor: highlightedOrderId === order.id ? '#ECFDF5' : '#F1F5F9',
+                                border: highlightedOrderId === order.id ? '1px solid #10B981' : '1px solid #CBD5E1',
+                                borderRadius: '6px',
+                                marginBottom: '8px',
+                                marginTop: orderIdx > 0 ? '16px' : '0px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.74rem' }}>
+                                    <span style={{ fontWeight: '900', color: '#0F172A', backgroundColor: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
+                                        #{orderNum}
+                                    </span>
+                                    <span style={{ color: '#1E293B', fontWeight: '700' }}>
+                                        {parentName} {branchName ? `· ${branchName}` : ''}
+                                    </span>
+                                    {espacioNum && espacioNum !== 'S/A' && (
+                                        <span style={{ backgroundColor: '#E2E8F0', color: '#0F172A', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.68rem' }}>
+                                            Espacio {espacioNum}
+                                        </span>
+                                    )}
+                                    <span style={{ color: '#64748B', fontSize: '0.68rem' }}>
+                                        ({remissionPages.length * 2} hojas)
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handlePrintSingleOrder(order.id, orderNum, parentName)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        padding: '3px 10px',
+                                        backgroundColor: '#FFFFFF',
+                                        border: '1px solid #0D7A57',
+                                        borderRadius: '5px',
+                                        color: '#0D7A57',
+                                        fontWeight: '800',
+                                        fontSize: '0.72rem',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(13, 122, 87, 0.1)'
+                                    }}
+                                    title={`Imprimir únicamente las ${remissionPages.length * 2} hojas del pedido #${orderNum}`}
+                                >
+                                    <Printer size={13} /> Imprimir solo este pedido
+                                </button>
+                            </div>
+
+                            {[
+                                { copyType: 'ORIGINAL - CLIENTE', isCopy: false },
+                                { copyType: 'COPIA - TRANSPORTADOR / CONTABILIDAD', isCopy: true }
+                            ].map((copyInfo, copyIdx) => 
+                                remissionPages.map((pageItems, pageIdx) => {
                             const isLastPage = pageIdx === remissionPages.length - 1;
                             const pageSubtitle = b2cGift.isB2CGift
                                 ? `DE PARTE DE (REMITENTE): ${b2cGift.senderName.toUpperCase()} · PARA: ${b2cGift.recipientName.toUpperCase()}${remissionPages.length > 1 ? ` · PÁG. ${pageIdx + 1} DE ${remissionPages.length}` : ''}`
@@ -1794,8 +2109,10 @@ function ContingencyPrintContent() {
                                 </Letterhead>
                             );
                         })
-                    );
-                })}
+                    )}
+                </div>
+            );
+        })}
 
 
                 {/* ========================================================= */}

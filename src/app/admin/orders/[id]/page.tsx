@@ -62,6 +62,8 @@ export default function OrderDetailPage() {
         total_weight_kg: number;
         document_url?: string;
         logistics_data?: any;
+        invoice_id?: string;
+        billing_cut_id?: string;
         profile?: {
             id?: string;
             company_name: string;
@@ -261,8 +263,8 @@ export default function OrderDetailPage() {
     const checkIsEditable = useCallback(async () => {
         if (!order) return false;
 
-        // 0. Locked statuses
-        if (['picking', 'shipped', 'in_transit', 'delivered', 'cancelled'].includes(order.status)) {
+        // 0. Locked statuses or already invoiced/in a billing cut (Mandato Fiscal Canónico)
+        if (['picking', 'shipped', 'in_transit', 'delivered', 'cancelled'].includes(order.status) || order.invoice_id || order.billing_cut_id) {
             return false;
         }
 
@@ -1034,6 +1036,22 @@ export default function OrderDetailPage() {
                                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: statusStyle.dot }} />
                                     {getDisplayStatus(order.status)}
                                 </span>
+                                {(order.invoice_id || order.billing_cut_id) && (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        padding: '4px 10px',
+                                        borderRadius: '999px',
+                                        fontSize: '0.72rem',
+                                        fontWeight: '900',
+                                        backgroundColor: '#EFF6FF',
+                                        color: '#1E40AF',
+                                        border: '1px solid #BFDBFE'
+                                    }}>
+                                        <Lock size={11} /> Facturado (Inmodificable)
+                                    </span>
+                                )}
                                 {order.sequence_id && (
                                     <span style={{
                                         fontSize: '0.72rem',

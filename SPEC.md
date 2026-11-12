@@ -16852,3 +16852,53 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - Al seleccionar "Hoy", el campo muestra la fecha real del sistema en hora de Bogotá (ej: `2026-11-12`), erradicando el estado vacío residual (`dd / mm / aaaa`).
      - Al seleccionar "Todas", el campo permanece limpio sin advertencias de validación del navegador.
      - Al ingresar una fecha personalizada, se activa el resaltado verde esmeralda y el botón de retorno rápido a "Hoy".
+
+
+---
+
+### Escenario 449: Protocolo de Autonomía Operativa de Facturación: Reversión Atómica de Cortes ("Devolver el Tiempo"), Auto-Sanación de Cortes Zombies y Cerrojo Inmutable Post-Corte AM (SDD v1.9.404)
+- **Given** la Mesa de Facturación Comercial (`/admin/commercial/billing`), la tabla de cortes (`billing_cuts`), las facturas emitidas (`billing_invoices`), la auditoría del sistema (`audit_logs`) y la pantalla de detalle de orden (`/admin/orders/[id]`):
+- **When** el analista comercial o despachador requiere cerrar el ciclo de facturación, o ante un error operativo necesita revertir un corte emitido ("devolver el tiempo") sin recurrir a soporte técnico por base de datos:
+- **Then**:
+  1. **Cierre Inmutable del Ciclo de Facturación (Corte AM Cierra Formalmente):**
+     - Al confirmar la generación de un corte oficial en `handleConfirmGenerateCut`, el registro en `billing_cuts` se inserta con `status = 'closed'` (y transiciona a `'exported'` tras la descarga del plano para World Office).
+     - La compuerta `isDateLockedByCutAM` se activa en `true` para la fecha programada, bloqueando la tanda en *Modo Consulta (Corte AM Cerrado)* e impidiendo la sobreescritura accidental del ciclo contable.
+     - En `/admin/orders/[id]`, la función `checkIsEditable` valida estrictamente la existencia de `invoice_id` o `billing_cut_id`. Si el pedido ya cuenta con documento fiscal o corte emitido, el pedido queda congelado e inmodificable (`isEditable = false`), proyectando el badge `[ 🔒 Facturado (Inmodificable) ]`. Cualquier ajuste posterior debe realizarse obligatoriamente por Nota Crédito en el Corte ADJ.
+  2. **Reversión Atómica de Cortes ("Devolver el Tiempo" en 1 Clic desde la UI):**
+     - En la pestaña Historial de Cortes (`subTab === 'cuts'`), cada fila expone la acción administrativa **`[ ↺ Revertir ]`**.
+     - **Modal Poka-Yoke de Seguridad:** Exige registrar el motivo de la reversión (*Error en pedidos incluidos*, *Tarifas mal liquidadas*, *Corte abortado o duplicado*, *Otro*). Si el corte ya fue descargado a World Office (`status === 'exported'`), exige marcar obligatoriamente la casilla de confirmación juramentada: `[ ] Confirmo bajo mi responsabilidad que este corte NO ha sido procesado ni importado en World Office Desktop`.
+     - **Cascarón de Reversión Atómica:**
+       * *Liberación de Pedidos:* Se actualiza `orders.billing_cut_id = null` y `orders.invoice_id = null` para todos los pedidos del corte, haciéndolos reaparecer inmediatamente en la bandeja de *Pedidos por Facturar*.
+       * *Revocación de Facturas:* Se purgan los registros asociados en `billing_invoices`.
+       * *Rebobinado Seguro de Consecutivos DIAN:* Si el rango de facturas del corte revertido coincide con el final de la secuencia en `app_settings` (`max(raw) + 1 === billing_invoice_next_number`), el sistema retrocede el contador atómicamente a `min(raw)`, evitando quemar o desperdiciar números oficiales DIAN. Si existen cortes posteriores, el contador no retrocede para evitar colisiones de clave primaria.
+       * *Eliminación del Corte:* Se purga el registro en `billing_cuts`.
+       * *Bitácora en `audit_logs`:* Se estampa un registro inmutable con `action: 'REVERT_BILLING_CUT'`, detallando corte, fecha, total, cantidad de pedidos liberados, usuario y justificación.
+  3. **Auto-Sanación de Cortes Zombies (Self-Healing on Load):**
+     - Al cargar `/admin/commercial/billing`, el hook `fetchData` inspecciona si existen registros residuales en `billing_cuts` con `status === 'open'` o pedidos atrapados sin facturas completadas.
+     - Si se detecta una anomalía, se proyecta un banner preventivo: `«⚠️ Se detectó un corte incompleto o interrumpido (#X - Y pedidos). [ ↺ Reparar y Liberar Pedidos en 1 Clic ]»`.
+     - Al accionar el botón, el sistema ejecuta la limpieza en segundo plano y devuelve los pedidos al buzón de facturación en caliente.
+
+
+---
+
+### Escenario 450: Poda de Grasa SpaceX y Superbuscador Omnibox de Navegación de Remisiones en Contingencia de Despacho (SDD v1.9.405)
+- **Given** la Pantalla de Impresión de Contingencia y Remisiones (`/admin/orders/contingency-print`), con tandas masivas de despacho (58+ pedidos, 122+ hojas HTML en el DOM), el contenedor de documentos (`printDocRef`) y la barra de herramientas adhesiva (`topControlBar`):
+- **When** el supervisor de bodega, el despachador de muelle o el conductor auditan, localizan o imprimen remisiones físicas en jornadas de madrugada (3:00 AM):
+- **Then**:
+  1. **Poda Radical de Grasa Visual e Infraestructura Redundante (SpaceX Raptor 3):**
+     - Se elimina el badge cosmético redundante `Original + Copia` junto al título (la duplicidad se comunica formalmente en el membrete físico de cada hoja con `ORIGINAL - CLIENTE` y `COPIA - ARCHIVO`).
+     - Se eliminan las píldoras de sub-modo redundantes (`[Remisiones | Manifiesto | Compras | Todo]`), unificando la gobernanza de selección de documentos exclusivamente en el selector institucional soberano `<PrintDocumentSwitcher />`.
+     - Se preserva el soporte total a los parámetros de URL query `mode` (`remissions`, `dispatch`, `purchases`, `all`) para garantizar retrocompatibilidad absoluta con deep-links del sistema.
+  2. **Superbuscador Omnibox de Documentos con Salto Suave (Jump-To No Destructivo):**
+     - La barra sticky incorpora un campo de búsqueda omnibox de alta densidad con atajo de teclado global (`Ctrl+K` y `/`), indexando en memoria en tiempo real ($O(N)$ en RAM, 0 llamadas a BD, 0 latencia):
+       * Identificador amigable de pedido (`#1111_1599`, `1599`).
+       * Nombre de Razón Social / Casa Matriz (`IRCC S.A.S.`, `COLSUBSIDIO`, etc.).
+       * Sucursal o Punto de Entrega (`EL CORRAL PLAZA 127`, `BOSQUES DE ATHAN`).
+       * Espacio o Bahía de Bodega (`Espacio 1-4`, `1-4`).
+       * NIT o Identificación del Cliente.
+     - **Comportamiento No Destructivo del DOM (Poka-Yoke de Impresión Segura):** El buscador **no** amputa ni filtra las hojas del DOM para evitar que el operador imprima inadvertidamente un lote incompleto al pulsar el botón maestro.
+     - **Salto y Resaltado Visual:** Al dar clic o presionar `Enter` sobre un resultado, la ventana ejecuta `scrollIntoView({ behavior: 'smooth' })` hacia el ancla `#remission-order-[id]` (con `scrollMarginTop: 60px` para no quedar solapado tras la barra sticky) y activa un destello de enfoque visual esmeralda durante 2.5 segundos.
+     - **Navegador Secuencial `[ ◀ Anterior | X de N | Siguiente ▶ ]`:** Permite al operario desplazarse secuencialmente orden por orden mediante controles de flecha en pantalla.
+  3. **Impresión Quirúrgica Individual por Pedido (Zero Paper Waste):**
+     - Cada bloque de orden renderiza en pantalla una micro-barra de control de orden (con clase `no-print`) que expone el botón de acción: **`[ 🖨️ Imprimir solo este pedido ]`**.
+     - Al accionarlo, extrae exclusivamente el duplicado correspondiente a esa orden específica y dispara `printViaNewWindow` sin forzar la impresión de las 122 hojas de la jornada.
