@@ -89,6 +89,7 @@ export const RCA_CATEGORIES_L1: DefectCategoryL1[] = [
         description: 'Decisiones y circunstancias exclusivas del cliente donde el producto cumplía la norma.',
         subtypes: [
             { code: 'producto_agotado_plaza', label: 'Desabastecimiento en Plaza / Agotado Corabastos', typicalResponsible: 'proveedor', description: 'Producto no disponible en la central mayorista durante el abastecimiento nocturno.' },
+            { code: 'despacho_parcial_rechazado', label: 'Escasez parcial / Rechazo por volumen incompleto', typicalResponsible: 'comercial', description: 'Se despachó una fracción por escasez en plaza (ej. 2 de 10 Kg) y el cliente rechazó por volumen incompleto.' },
             { code: 'sobrestock_cliente', label: 'Sobrestock o falta de nevera en cliente', typicalResponsible: 'cliente', description: 'Cliente recibió producto conforme pero no tiene capacidad de guarda.' },
             { code: 'cambio_menu_restaurante', label: 'Cambio de minuta / menú del chef', typicalResponsible: 'cliente', description: 'Cancelación de recetas o eventos propios del restaurante.' },
             { code: 'error_autogestion_cliente', label: 'Error propio del cliente en portal B2B', typicalResponsible: 'cliente', description: 'El ecónomo del cliente digitó mal la cantidad en su propia cuenta.' },
@@ -196,12 +197,54 @@ export const RESPONSIBLE_PARTIES: Record<string, ResponsibleParty> = {
     }
 };
 
+export type ImputedEntityType = 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client' | 'market_shortage' | 'company_policy';
+
+export interface InstitutionalImputationOption {
+    id: string;
+    name: string;
+    role: string;
+    entityType: 'market_shortage' | 'company_policy' | 'provider';
+    badge: string;
+    description: string;
+}
+
+export const INSTITUTIONAL_IMPUTATION_ENTITIES: InstitutionalImputationOption[] = [
+    {
+        id: 'inst-escasez-plaza',
+        name: 'ESCASEZ EN PLAZA / SIN DISPONIBILIDAD',
+        role: 'Fuerza Mayor / Mercado',
+        entityType: 'market_shortage',
+        badge: 'Causa Externa / Mercado',
+        description: 'Producto agotado o sin oferta suficiente en Corabastos / plaza ($0 nómina).'
+    },
+    {
+        id: 'inst-despacho-parcial',
+        name: 'DECISIÓN COMERCIAL / DESPACHO PARCIAL',
+        role: 'Política Comercial',
+        entityType: 'company_policy',
+        badge: 'Asumido Empresa',
+        description: 'Despacho parcial por escasez rechazado por el cliente o política comercial ($0 nómina).'
+    },
+    {
+        id: 'inst-proveedor-origen',
+        name: 'PROVEEDOR / ORIGEN (CAMPO)',
+        role: 'Proveedor',
+        entityType: 'provider',
+        badge: 'Proveedor',
+        description: 'Responsabilidad atribuida al proveedor de origen en PQR multi-ítem ($0 nómina).'
+    }
+];
+
+export function isNonPayrollEntityType(entityType?: string | null): boolean {
+    return entityType === 'provider' || entityType === 'client' || entityType === 'market_shortage' || entityType === 'company_policy';
+}
+
 export interface ImputedEntity {
     id: string;
     name: string;
     documentId?: string;
     role?: string;
-    entityType: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
+    entityType: ImputedEntityType;
     sharePercent: number; // 0 a 100
     deductionAmount?: number; // Valor en COP
     baseAmount?: number; // Valor nominal asignado en COP (antes de exoneración)
@@ -226,7 +269,7 @@ export interface ItemImputation {
         entityId: string;
         entityName: string;
         entityRole?: string;
-        entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
+        entityType?: ImputedEntityType;
         amount: number;
         waiveDeduction?: boolean;
     }[];

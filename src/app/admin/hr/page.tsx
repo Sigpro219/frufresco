@@ -255,7 +255,8 @@ export default function HRManagement() {
                 ) return;
 
                 rca.imputedEntities.forEach((entity: any, idx: number) => {
-                    const isCollaborator = !entity.entityType || ['employee', 'driver', 'sales_rep'].includes(entity.entityType);
+                    const isNonPayroll = ['provider', 'client', 'market_shortage', 'company_policy'].includes(entity.entityType);
+                    const isCollaborator = !isNonPayroll && (!entity.entityType || ['employee', 'driver', 'sales_rep'].includes(entity.entityType));
                     const amount = Number(entity.deductionAmount) || 0;
                     if (isCollaborator && amount > 0 && entity.name) {
                         const ordSeq = Array.isArray(pqr.orders) ? pqr.orders[0]?.sequence_id : pqr.orders?.sequence_id;

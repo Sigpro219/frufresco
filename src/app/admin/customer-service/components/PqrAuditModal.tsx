@@ -21,7 +21,10 @@ import {
     DISPOSICION_SANITARIA_TEMPLATES,
     DefectCategoryL1,
     ImputedEntity,
+    ImputedEntityType,
     ItemImputation,
+    INSTITUTIONAL_IMPUTATION_ENTITIES,
+    isNonPayrollEntityType,
     cleanHumanResolutionNotes,
     stripRcaMetadataTags
 } from '@/lib/rcaTaxonomy';
@@ -31,7 +34,7 @@ export interface ItemCollaboratorShare {
     entityId: string;
     entityName: string;
     entityRole?: string;
-    entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
+    entityType?: ImputedEntityType;
     amount: number;
     waiveDeduction?: boolean;
 }
@@ -211,7 +214,7 @@ export default function PqrAuditModal({
         entityId: string;
         entityName: string;
         entityRole?: string;
-        entityType?: 'provider' | 'employee' | 'driver' | 'sales_rep' | 'client';
+        entityType?: ImputedEntityType;
         waiveDeduction?: boolean;
     }>>({});
 
@@ -1463,7 +1466,18 @@ export default function PqrAuditModal({
     const handleAddImputedEntity = (entityId: string) => {
         if (!entityId) return;
         let newEntity: ImputedEntity | null = null;
-        if (rcaResponsible === 'proveedor') {
+        const instOpt = INSTITUTIONAL_IMPUTATION_ENTITIES.find(i => i.id === entityId);
+        if (instOpt) {
+            newEntity = {
+                id: instOpt.id,
+                name: instOpt.name,
+                role: instOpt.role,
+                entityType: instOpt.entityType,
+                sharePercent: 100,
+                deductionAmount: 0,
+                waiveDeduction: true
+            };
+        } else if (rcaResponsible === 'proveedor') {
             const prov = providersList.find(p => p.id === entityId);
             if (prov) {
                 newEntity = {
@@ -1612,17 +1626,21 @@ export default function PqrAuditModal({
                 return;
             }
 
-            // Normal operational employees
+            // Normal operational employees or institutional non-payroll causes
             (entry.collaborators || []).forEach(colab => {
                 if (!colab.entityId) return;
+                const instOpt = INSTITUTIONAL_IMPUTATION_ENTITIES.find(i => i.id === colab.entityId);
+                const resolvedType = (instOpt?.entityType || colab.entityType || 'employee') as ImputedEntityType;
+                const isNonPayroll = isNonPayrollEntityType(resolvedType);
+                const effectiveWaive = isNonPayroll ? true : Boolean(colab.waiveDeduction);
                 const rawAmt = Number(colab.amount) || 0;
-                const deduction = colab.waiveDeduction ? 0 : rawAmt;
+                const deduction = effectiveWaive ? 0 : rawAmt;
                 const existing = entityMap.get(colab.entityId);
 
                 if (existing) {
                     existing.baseAmount = (existing.baseAmount || 0) + rawAmt;
                     existing.deductionAmount = (existing.deductionAmount || 0) + deduction;
-                    existing.waiveDeduction = Boolean(existing.waiveDeduction && colab.waiveDeduction);
+                    existing.waiveDeduction = isNonPayroll ? true : Boolean(existing.waiveDeduction && effectiveWaive);
                     if (!existing.assignedItemNames) existing.assignedItemNames = [];
                     if (!existing.assignedItemNames.includes(pName)) existing.assignedItemNames.push(pName);
                 } else {
@@ -1659,12 +1677,19 @@ export default function PqrAuditModal({
         const unitPrice = Number(oi?.unit_price || ret?.unit_price || 0);
         const itemAmount = Math.round(unitPrice * (Number(ret?.quantity_returned) || 0));
 
-        let name = 'Funcionario';
+        let name = 'Responsable';
         let role = 'Operativo';
         let type: any = 'employee';
+        let defaultWaive = false;
 
+        const instOpt = INSTITUTIONAL_IMPUTATION_ENTITIES.find(i => i.id === entityId);
         const foundColab = collaboratorsList.find(c => c.id === entityId);
-        if (foundColab) {
+        if (instOpt) {
+            name = instOpt.name;
+            role = instOpt.role;
+            type = instOpt.entityType;
+            defaultWaive = true;
+        } else if (foundColab) {
             name = foundColab.contact_name;
             role = foundColab.role || 'Operativo';
             type = 'employee';
@@ -1698,7 +1723,7 @@ export default function PqrAuditModal({
                 entityRole: role,
                 entityType: type,
                 amount: splitAmount,
-                waiveDeduction: false
+                waiveDeduction: defaultWaive
             });
 
             const nextMatrix = {
@@ -1762,6 +1787,8 @@ export default function PqrAuditModal({
 
             const updatedCols = currentItem.collaborators.map(c => {
                 if (c.entityId === entityId) {
+                    const isInst = isNonPayrollEntityType(c.entityType) || INSTITUTIONAL_IMPUTATION_ENTITIES.some(i => i.id === c.entityId);
+                    if (isInst) return { ...c, waiveDeduction: true };
                     return { ...c, waiveDeduction: !c.waiveDeduction };
                 }
                 return c;
@@ -1951,8 +1978,14 @@ export default function PqrAuditModal({
                 }
             } else if (field === 'entityId') {
                 updated.entityId = value;
+                const instOpt = INSTITUTIONAL_IMPUTATION_ENTITIES.find(i => i.id === value);
                 const foundColab = collaboratorsList.find(c => c.id === value);
-                if (foundColab) {
+                if (instOpt) {
+                    updated.entityName = instOpt.name;
+                    updated.entityRole = instOpt.role;
+                    updated.entityType = instOpt.entityType;
+                    updated.waiveDeduction = true;
+                } else if (foundColab) {
                     updated.entityName = foundColab.contact_name;
                     updated.entityRole = foundColab.role || 'Operativo';
                     updated.entityType = 'employee';
@@ -1962,7 +1995,7 @@ export default function PqrAuditModal({
                     updated.entityType = 'driver';
                 }
             } else if (field === 'waiveDeduction') {
-                updated.waiveDeduction = Boolean(value);
+                updated.waiveDeduction = isNonPayrollEntityType(updated.entityType) ? true : Boolean(value);
             }
 
             const nextMap = { ...prev, [returnId]: updated };
@@ -4993,9 +5026,17 @@ export default function PqrAuditModal({
                                                                     <SearchableSelect
                                                                         value=""
                                                                         onChange={val => handleAddCollaboratorToItem(ret.id, val)}
-                                                                        placeholder="+ Asignar funcionario a este producto..."
-                                                                        searchPlaceholder="Buscar funcionario por nombre o cargo..."
+                                                                        placeholder="+ Asignar responsable o causa externa..."
+                                                                        searchPlaceholder="Buscar funcionario, escasez o causa externa..."
                                                                         options={[
+                                                                            ...INSTITUTIONAL_IMPUTATION_ENTITIES
+                                                                                .filter(inst => !assignedCols.some(ac => ac.entityId === inst.id))
+                                                                                .map(inst => ({
+                                                                                    value: inst.id,
+                                                                                    label: inst.name,
+                                                                                    sublabel: inst.description,
+                                                                                    badge: inst.badge
+                                                                                })),
                                                                             ...(itemResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
                                                                                 ? [{
                                                                                     value: assignedRouteDriver.id || 'driver-route',
@@ -6473,9 +6514,15 @@ export default function PqrAuditModal({
                                                                 <SearchableSelect
                                                                     value={imp.entityId}
                                                                     onChange={val => handleItemImputationChange(ret.id, 'entityId', val)}
-                                                                    placeholder="-- Seleccionar Funcionario Responsable --"
-                                                                    searchPlaceholder="Buscar por nombre o cargo..."
+                                                                    placeholder="-- Seleccionar Responsable o Causa Externa --"
+                                                                    searchPlaceholder="Buscar por nombre, cargo o escasez..."
                                                                     options={[
+                                                                        ...INSTITUTIONAL_IMPUTATION_ENTITIES.map(inst => ({
+                                                                            value: inst.id,
+                                                                            label: inst.name,
+                                                                            sublabel: inst.description,
+                                                                            badge: inst.badge
+                                                                        })),
                                                                         ...(itemResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
                                                                             ? [{
                                                                                 value: assignedRouteDriver.id || 'driver-route',
@@ -6707,8 +6754,8 @@ export default function PqrAuditModal({
                                                             setSelectedImputedToAdd('');
                                                         }
                                                     }}
-                                                    placeholder={`-- Seleccionar ${rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario'} para Imputar --`}
-                                                    searchPlaceholder={rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario por nombre o cargo..."}
+                                                    placeholder={`-- Seleccionar ${rcaResponsible === 'cliente' ? 'Cliente' : 'Funcionario o Causa Externa'} para Imputar --`}
+                                                    searchPlaceholder={rcaResponsible === 'cliente' ? "Buscar cliente..." : "Buscar funcionario, escasez o causa externa..."}
                                                     clearable
                                                     options={rcaResponsible === 'cliente' ? (
                                                         pqr?.profiles ? [{
@@ -6719,6 +6766,12 @@ export default function PqrAuditModal({
                                                         }] : []
                                                     ) : (
                                                         [
+                                                            ...INSTITUTIONAL_IMPUTATION_ENTITIES.map(inst => ({
+                                                                value: inst.id,
+                                                                label: inst.name,
+                                                                sublabel: inst.description,
+                                                                badge: inst.badge
+                                                            })),
                                                             ...(rcaResponsible === 'transporte' && assignedRouteDriver && !collaboratorsList.some(c => c.id === assignedRouteDriver.id)
                                                                 ? [{
                                                                     value: assignedRouteDriver.id || 'driver-route',

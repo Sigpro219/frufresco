@@ -16941,3 +16941,15 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   2. **Separación Hermética `Convenio` vs. `Lista General`:** El badge verde `Convenio` se renderiza única y exclusivamente cuando `agreementProductIds.has(prod.id)` es verdadero. Los productos liquidados con tarifas de respaldo (`Lista General` / modelo dinámico) muestran el badge `Lista General` sin inducir falsos positivos al operador.
   3. **Integridad del Candado `Restringido a Convenio`:** Cuando `allowOffAgreement === false`, el filtro de búsqueda en vivo valida estrictamente `agreementProductIds.has(p.id)`, impidiendo que productos fuera del acuerdo se filtren desde el diccionario de precios de respaldo.
   4. **Cumplimiento de Identificadores en UI:** El desplegable de resultados etiqueta los códigos de producto como `ID: #[accounting_id]` (erradicando `SKU:`).
+
+
+---
+
+### Escenario 453: Imputabilidad de Escasez en Plaza, Despacho Parcial y Causas Externas en Matriz SAC (`PqrAuditModal` / `rcaTaxonomy` / `HR`) (SDD v1.9.408)
+- **Given** una PQR con uno o más ítems afectados por desabastecimiento total o parcial en plaza (ej. cliente solicita `10 Kg`, solo se consiguen `2 Kg` y los rechaza por volumen incompleto, o falta parte de la línea por escasez mientras otra fracción tuvo falla operativa, como en `SAC-0062`):
+- **When** el auditor configura la Matriz de Imputabilidad en `PqrAuditModal` (por ítem o global):
+- **Then**:
+  1. **Catálogo de Entidades Institucionales (`INSTITUTIONAL_IMPUTATION_ENTITIES`):** Se habilitan las entidades reservadas `inst-escasez-plaza` (`entityType: 'market_shortage'`), `inst-despacho-parcial` (`entityType: 'company_policy'`) y `inst-proveedor-origen` (`entityType: 'provider'`) en los selectores de asignación de producto y de matriz global.
+  2. **Invariante Cero Cobro a Nómina:** Toda entidad cuyo `entityType` pertenezca a `isNonPayrollEntityType` (`'market_shortage' | 'company_policy' | 'provider' | 'client'`) nace y permanece bloqueada con `waiveDeduction: true` y `deductionAmount: 0`, conservando su `baseAmount` (COP) y `sharePercent` (%) para trazabilidad financiera, reporte PDF y cierre al `100%` de la matriz sin afectar el ajuste/nota crédito al cliente.
+  3. **Blindaje en Nómina (`/admin/hr`):** `hr/page.tsx` excluye explícitamente todo registro de `imputedEntities` cuyo `entityType` sea no-laboral (`isNonPayrollEntityType`), impidiendo descuentos indebidos a colaboradores.
+  4. **Taxonomía RCA:** `RCA_CATEGORIES_L1` (`comercial_cliente`) incorpora el subtipo `despacho_parcial_rechazado` (*"Escasez parcial / Rechazo por volumen incompleto"*).
