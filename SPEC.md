@@ -16667,6 +16667,24 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   3. **Blindaje Aritmético en Mesa de Facturación (`billing/page.tsx`):**
      - La compuerta de bloqueo `isUnpricedOffAgreement` debe verificar la realidad financiera del pedido: si `order.total > 0` y **ningún ítem de la orden tiene `unit_price == 0`**, el sistema no debe activar jamás el badge `Remisión $0 (Por Fijar)` ni el estado de bloqueo `ASIGNAR PRECIO ($0)`.
 
+---
+
+### Escenario 441: Topología Soberana de Dos Ramas Git (`main` y `liard`) y Purga Definitiva de Ramas Legadas (SDD v1.9.396)
+- **Given** la infraestructura de despliegue en Vercel y el control de versiones en GitHub (`https://github.com/Sigpro219/frufresco.git`):
+- **When** se ejecutan operaciones de sincronización remota o despliegues de producción:
+- **Then** rigen las siguientes reglas de gobierno de ramas:
+  1. **Topología Exclusiva de Dos Ramas Soberanas:**
+     - El repositorio de FruFresco opera de forma **estricta y exclusiva con 2 ramas activas**:
+       * **`main`**: Rama troncal de desarrollo, integración continua y fuente de verdad del código.
+       * **`liard`**: Rama productiva vinculada al pipeline de despliegue automatizado en Vercel Pro (`frufresco-liard.vercel.app`).
+  2. **Purga Definitiva y Prohibición Perentoria de Ramas Legadas:**
+     - Se eliminan físicamente del servidor remoto de GitHub las 6 ramas obsoletas: `CORE`, `core`, `frufresco-liarversel`, `tenant-frufresco`, `tenant1` y `white-label`.
+     - Queda estrictamente prohibido que cualquier script, agente, hook de CI/CD o comando manual vuelva a crear, sincronizar o empujar cambios hacia ramas distintas a `main` y `liard`.
+  3. **Comando Canónico Único de Despliegue:**
+     - Toda orden explícita de push se canaliza de forma atómica y exclusiva mediante:
+       `git push origin main:main main:liard`
+
+
 
 
 

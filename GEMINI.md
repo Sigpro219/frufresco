@@ -1,8 +1,9 @@
 # FruFresco - Reglas Operativas del Espacio de Trabajo
 
 ## 1. Política de Sincronización Multi-Rama Git
-- Cada cambio confirmado o corregido en el repositorio DEBE ser empujado (`git push`) estrictamente a las 8 ramas activas:
-  `main`, `CORE`, `core`, `frufresco-liarversel`, `liard`, `tenant-frufresco`, `tenant1`, `white-label`.
+- FruFresco opera de forma estricta y exclusiva bajo una topología de **2 ramas de producción**: `main` (rama de integración) y `liard` (rama de despliegue en Vercel).
+- Queda terminantemente prohibido recrear ramas legadas u obsoletas (`CORE`, `core`, `frufresco-liarversel`, `tenant-frufresco`, `tenant1`, `white-label`).
+- Todo push remoto bajo orden explícita del usuario debe dirigirse exclusivamente a: `origin main:main` y `origin main:liard`.
 
 ## 2. Guardián Matutino de Cosecha (Session Catch-up Guard)
 - Al recibir la primera interacción de una nueva jornada o semana (ej. lunes a cualquier hora o tras el fin de semana):
