@@ -1359,12 +1359,13 @@ function CreateOrderContent() {
         let isCancelled = false;
 
         async function resolveContract() {
-            const isB2B = clientType === 'B2B' || Boolean(selectedClient);
+            const isB2B = clientType === 'B2B';
             const activeId = isB2B ? selectedClient : selectedClientB2C;
             const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
             const checkDate = deliveryDate ? deliveryDate.split('T')[0] : todayBogota;
 
-            if (!activeId) {
+            // En B2B se exige cliente seleccionado para conocer acuerdo/lista; en B2C siempre aplica la lista minorista oficial de Hogar
+            if (isB2B && !activeId) {
                 setActivePricingModel(null);
                 setIsB2CDefault(false);
                 setIsContractExpired(false);
@@ -1377,7 +1378,7 @@ function CreateOrderContent() {
             }
 
             try {
-                const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${activeId}&order_date=${todayBogota}&delivery_date=${checkDate}&client_type=${clientType}`);
+                const res = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${activeId || ''}&order_date=${todayBogota}&delivery_date=${checkDate}&client_type=${clientType}`);
                 if (!res.ok) throw new Error('Error en resolución de precios');
                 const data = await res.json();
                 if (isCancelled) return;
@@ -4357,12 +4358,10 @@ function CreateOrderContent() {
                     const variantLabel = structuredSpec || item.variant_label || fallbackOptionLabel;
                     const prodId = item.suggestedProduct?.id;
 
-                    // En Hogar (B2C) aplican precios de lista minorista; en B2B aplican precios contractuales / General Institucional
-                    const resolvedPrice = clientType === 'B2C'
-                        ? (item.price || (prodId && contractPrices[prodId]) || 0)
-                        : ((prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
-                            ? contractPrices[prodId]
-                            : (item.price || (prodId && contractPrices[prodId]) || 0));
+                    // En Hogar (B2C) aplican precios de lista minorista oficial; en B2B aplican precios contractuales / General Institucional
+                    const resolvedPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
+                        ? contractPrices[prodId]
+                        : (item.price || 0);
 
                     const prodExc = prodId ? clientExceptions.find(e => e.product_id === prodId) : null;
                     const resolvedNote = item.selected_options?.nota_alistamiento ?? prodExc?.picking_note ?? undefined;

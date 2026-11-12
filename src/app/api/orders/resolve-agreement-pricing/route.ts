@@ -6,8 +6,9 @@ export const revalidate = 0; // Dynamic route
 const GENERAL_INSTITUCIONAL_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
 const CLIENTES_HOGAR_ID = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
 
-// In-memory cache for General Institucional prices to avoid downloading thousands of rows on every request
+// In-memory cache for General Institucional & Clientes Hogar prices to avoid downloading thousands of rows on every request
 let cachedGeneralPrices: { map: Record<string, number>; timestamp: number } | null = null;
+let cachedHogarPrices: { map: Record<string, number>; timestamp: number } | null = null;
 const CACHE_TTL_MS = 120_000; // 2 minutes
 
 function getSupabase() {
@@ -67,6 +68,37 @@ async function getGeneralInstitutionalPrices(supabase: any): Promise<Record<stri
     return map;
 }
 
+async function getClientesHogarPrices(supabase: any): Promise<Record<string, number>> {
+    const now = Date.now();
+    if (cachedHogarPrices && (now - cachedHogarPrices.timestamp < CACHE_TTL_MS)) {
+        return cachedHogarPrices.map;
+    }
+
+    const [hogarPricesRes, genPricesMap] = await Promise.all([
+        supabase.from('pricing_model_prices').select('product_id, price').eq('model_id', CLIENTES_HOGAR_ID),
+        getGeneralInstitutionalPrices(supabase)
+    ]);
+
+    const map: Record<string, number> = {};
+    (hogarPricesRes.data || []).forEach((p: any) => {
+        if (p.product_id && p.price !== null && Number(p.price) > 0) {
+            map[p.product_id] = Number(p.price);
+        }
+    });
+
+    // Respaldo de seguridad: si un producto del catálogo no está explícito en la lista Hogar, hereda el precio General
+    if (genPricesMap) {
+        for (const [prodId, gPrice] of Object.entries(genPricesMap)) {
+            if (!map[prodId] && Number(gPrice) > 0) {
+                map[prodId] = Number(gPrice);
+            }
+        }
+    }
+
+    cachedHogarPrices = { map, timestamp: now };
+    return map;
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');
@@ -96,15 +128,32 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
     // Brecha A5: El descuento y la vigencia aplican prioritariamente a la FECHA DEL PEDIDO
     const defaultBogotaDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
     const checkDate = orderDate ? orderDate.split('T')[0] : (deliveryDate ? deliveryDate.split('T')[0] : defaultBogotaDate);
-    const isB2B = clientType === 'B2B' || Boolean(clientId);
+    
+    // Determinación inicial B2C vs B2B
+    let isB2C = clientType === 'B2C' || clientType === 'HOGAR';
 
     if (!clientId) {
+        if (isB2C || !clientType || clientType !== 'B2B') {
+            const hogarPrices = await getClientesHogarPrices(supabase);
+            return NextResponse.json({
+                success: true,
+                resolvedModel: { id: CLIENTES_HOGAR_ID, name: 'Clientes Hogar' },
+                activeAgreement: null,
+                isExpired: false,
+                isB2CDefault: true,
+                allowOffAgreementPurchases: true,
+                contractPrices: hogarPrices,
+                agreementProductIds: [],
+                customPriceIds: Object.keys(hogarPrices),
+                campaignPrices: {}
+            });
+        }
         return NextResponse.json({
             success: true,
-            resolvedModel: { id: CLIENTES_HOGAR_ID, name: 'Clientes Hogar' },
+            resolvedModel: { id: GENERAL_INSTITUCIONAL_ID, name: 'General Institucional' },
             activeAgreement: null,
             isExpired: false,
-            isB2CDefault: true,
+            isB2CDefault: false,
             allowOffAgreementPurchases: true,
             contractPrices: {},
             agreementProductIds: [],
@@ -120,6 +169,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             .select('id, company_name, pricing_model_id, parent_id, role, payment_days, logistics_data, allow_off_agreement_purchases, override_parent_off_agreement')
             .eq('id', clientId)
             .maybeSingle();
+
+        if (currentProfile?.role === 'b2c_client' || currentProfile?.pricing_model_id === CLIENTES_HOGAR_ID) {
+            isB2C = true;
+        } else if (currentProfile?.role === 'b2b_client') {
+            isB2C = false;
+        }
+        const isB2B = !isB2C;
 
         const branchId = currentProfile?.id || clientId;
         const parentId = currentProfile?.parent_id || null;
@@ -372,7 +428,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                         .eq('quote_id', targetAgreement.id)
                 )
             );
-        } else if (resolvedModel && !resolvedModel.is_agreement && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID && resolvedModel.id !== CLIENTES_HOGAR_ID) {
+        } else if (resolvedModel?.id === CLIENTES_HOGAR_ID) {
+            parallelQueries.push(
+                getClientesHogarPrices(supabase).then(hMap => ({
+                    data: Object.entries(hMap).map(([product_id, price]) => ({ product_id, price }))
+                }))
+            );
+        } else if (resolvedModel && !resolvedModel.is_agreement && resolvedModel.id !== GENERAL_INSTITUCIONAL_ID) {
             parallelQueries.push(
                 Promise.resolve(
                     supabase
@@ -429,7 +491,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         // Queda ESTRICTAMENTE PROHIBIDO heredar precios automaticos de General Institucional ($3.400) para clientes con acuerdo.
         const hasAssignedAgreement = Boolean(activeAgreement || candidateAgreement);
         // SPEC.md §7.2 & Escenario 429: con acuerdo + allowOff, los SKUs fuera de convenio liquidan General Institucional (nunca $0 COP)
-        if (isB2B && (!hasAssignedAgreement || allowOff)) {
+        if ((isB2B && (!hasAssignedAgreement || allowOff)) || isB2C) {
             const castedGenPrices = (genPricesMap || {}) as Record<string, number>;
             for (const [prodId, gPrice] of Object.entries(castedGenPrices)) {
                 const numericPrice = Number(gPrice);
