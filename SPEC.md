@@ -16641,5 +16641,32 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - En `findBestProductMatchDetails`, la búsqueda en `learnedMemory` debe restringir la coincidencia a igualdad estricta (`memText === cleanInput || memText === strippedInput`) o por igualdad exacta de tokens.
      - Se deroga la condición laxa `cleanInput.includes(memText) || memText.includes(cleanInput)` que provocaba que memorias genéricas cortas (ej. "cubeta huevos") secuestraran productos calificados de grado superior ("cubeta huevos tipo aa").
 
+---
+
+### Escenario 440: Invalidez Perentoria Absoluta de `products.base_price`, Soberanía Dinámica de Modelos de Precios y Poka-Yoke Anti-Falso Positivo en Ítems Fuera de Acuerdo (SDD v1.9.395)
+- **Given** la arquitectura de fijación de precios, la resolución de acuerdos comerciales (`resolve-agreement-pricing`), las pantallas de creación y aprobación de pedidos (`orders/create`, `EmailDraftsModule.tsx`) y la mesa de control de facturación (`billing/page.tsx`):
+- **When** se evalúa, liquida o audita el precio comercial de cualquier producto en cualquier módulo del sistema:
+- **Then** rigen las siguientes leyes de hierro de gobierno de datos:
+  1. **Mandato Perentorio: Prohibición e Invalidez Total de `products.base_price`:**
+     - La columna `products.base_price` en la base de datos es un artefacto legado obsoleto y **QUEDA TERMINANTEMENTE PROHIBIDO UTILIZARLA PARA NINGÚN PROPÓSITO**.
+     - Ningún módulo de frontend, API, worker, script o agente debe leer, depender o considerar `products.base_price` para:
+       * Determinar el precio de venta al público o cliente institucional.
+       * Actuar como fallback de tarificación.
+       * Diagnosticar si un producto "tiene precio" o está en "$0 COP".
+     - El 100% de la tarificación comercial en FruFresco emana **exclusiva y soberanamente** de:
+       * Acuerdos Comerciales Vigentes del Cliente (`quotes` y `quote_items` en estado `agreement`).
+       * Modelos Dinámicos de Precios (`pricing_models` y `pricing_model_prices`, ej. `General Institucional` o `Clientes Hogar`).
+       * Matriz de Costos + Reglas de Margen Comercial (`commercial_cost_matrix` + `pricing_rules`).
+     - Queda estrictamente proscrito que cualquier auditoría, agente o desarrollador justifique anomalías de tarificación aludiendo a `products.base_price`.
+  2. **Poka-Yoke Anti-Falso Positivo en Ítems Fuera de Acuerdo (Armonización Escenario 429):**
+     - Si un cliente institucional cuenta con un acuerdo comercial vigente (`quotes.status = 'agreement'`) y tiene habilitadas compras abiertas (`allow_off_agreement_purchases = true`):
+       * Todo ítem solicitado que no esté explícitamente pactado en su acuerdo individual liquida en tiempo real la tarifa vigente del modelo **General Institucional** (`pricing_model_prices`).
+       * Si el ítem liquida una tarifa mayor a $0 COP (ej. `#409 Aguacate papelillo` a $4.500), el ítem **nace formalmente valorizado**.
+       * En `orders/create/page.tsx` y `EmailDraftsModule.tsx`, **QUEDA TERMINANTEMENTE PROHIBIDO** estampar en `admin_notes` la nota `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ...]`.
+       * Dicha etiqueta y el estado de bloqueo `off_agreement_priced: false` se reservan **ÚNICA Y EXCLUSIVAMENTE** para ítems cuyo precio unitario final resuelto sea estricta y matemáticamente `$0 COP`.
+  3. **Blindaje Aritmético en Mesa de Facturación (`billing/page.tsx`):**
+     - La compuerta de bloqueo `isUnpricedOffAgreement` debe verificar la realidad financiera del pedido: si `order.total > 0` y **ningún ítem de la orden tiene `unit_price == 0`**, el sistema no debe activar jamás el badge `Remisión $0 (Por Fijar)` ni el estado de bloqueo `ASIGNAR PRECIO ($0)`.
+
+
 
 

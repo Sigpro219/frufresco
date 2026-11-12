@@ -49,3 +49,15 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
 * **Cero Emojis:** Queda terminantemente prohibido el uso de emojis unicode (🥬, 🥦, 📦, 🍎, etc.) en cualquier capa visual o interactiva de la aplicación.
 * **Transformación de Datos de BD:** Si registros de base de datos heredados contienen emojis o cadenas de texto en campos como `icon`, el código debe mapearlos obligatoriamente a componentes Lucide antes de renderizarlos.
 * **Selectores de Iconos:** En modales donde el usuario elija un icono para un registro (como "Nueva Célula"), el selector debe componerse exclusivamente de opciones vectoriales de `lucide-react`.
+
+---
+
+## 6. Prohibición Perentoria de `products.base_price` (Artefacto Legado Zombi)
+* **Regla Inmutable:** La columna `products.base_price` en PostgreSQL es un artefacto obsoleto de los inicios del sistema que **NO SE USA NUNCA PARA NADA**.
+* **Prohibición Total:** Queda terminantemente prohibido utilizar, leer, auditar o justificar tarifas comerciales con base en `products.base_price`.
+* **Fuentes Únicas y Soberanas de Tarificación:** Toda tarifa en FruFresco emana exclusivamente de:
+  1. Acuerdos Comerciales Vigentes del Cliente (`quotes` / `quote_items` en estado `'agreement'`).
+  2. Modelos Dinámicos de Precios (`pricing_models` y `pricing_model_prices`, ej. General Institucional, Clientes Hogar).
+  3. Matriz de Costos + Reglas de Margen Comercial (`commercial_cost_matrix` + `pricing_rules`).
+* **Poka-Yoke Anti-Falso Positivo:** Si un cliente B2B tiene acuerdo y `allow_off_agreement_purchases = true`, y pide un producto fuera del acuerdo que liquida tarifa en el modelo General Institucional, el ítem nace formalmente valorizado y queda estrictamente prohibido marcarlo como "despachado sin precio".
+
