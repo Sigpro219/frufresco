@@ -2639,10 +2639,18 @@ export default function BillingDashboard() {
         }
 
         setIsProcessing(true);
+        let createdCutRecord: any = null;
 
         try {
             const isNcSlot = previewSlot === 'ADJ';
             const totalCutAmount = previewOrders.reduce((sum, o) => sum + o.netTotal, 0);
+
+            // 0. Poka-Yoke: Limpiar facturas huérfanas previas sin corte para los pedidos a procesar
+            await supabase
+                .from('billing_invoices')
+                .delete()
+                .is('cut_id', null)
+                .in('order_id', previewOrders.map(o => o.id));
 
             // 1. Create billing_cuts record
             const { data: cutNumberData } = await supabase
@@ -2667,6 +2675,7 @@ export default function BillingDashboard() {
                 .single();
 
             if (cutErr) throw cutErr;
+            createdCutRecord = newCut;
 
             // 2. Link orders to this cut
             const orderIdsToUpdate = previewOrders.map(o => o.id);
@@ -2689,6 +2698,28 @@ export default function BillingDashboard() {
                 if (s.key === 'billing_invoice_next_number' && s.value) execInvoiceNext = Number(s.value);
                 if (s.key === 'billing_nc_next_number' && s.value) execNcNext = Number(s.value);
             });
+
+            // Poka-Yoke Anti-Colisión: Verificar si algún número ya existe en billing_invoices
+            const candidateNumbers = previewOrders.map((_, idx) => `${isNcSlot ? ncPrefix : invoicePrefix}-${(isNcSlot ? execNcNext : execInvoiceNext) + idx}`);
+            const { data: collisions } = await supabase
+                .from('billing_invoices')
+                .select('invoice_number')
+                .in('invoice_number', candidateNumbers);
+
+            if (collisions && collisions.length > 0) {
+                const { data: allExisting } = await supabase
+                    .from('billing_invoices')
+                    .select('invoice_number');
+                let maxFound = execInvoiceNext;
+                (allExisting || []).forEach(row => {
+                    const match = String(row.invoice_number).match(/(\d+)$/);
+                    if (match) {
+                        const parsed = parseInt(match[1], 10);
+                        if (parsed >= maxFound) maxFound = parsed + 1;
+                    }
+                });
+                if (!isNcSlot) execInvoiceNext = maxFound;
+            }
 
             // 3. Create billing_invoices records
             const invoicesToInsert = previewOrders.map((o, idx) => {
@@ -2788,6 +2819,16 @@ export default function BillingDashboard() {
             fetchData();
         } catch (err: any) {
             console.error('Error generating cut:', err);
+            // Rollback de rescate para no dejar pedidos bloqueados ni cortes vacíos
+            if (createdCutRecord?.id) {
+                try {
+                    await supabase.from('orders').update({ billing_cut_id: null, invoice_id: null }).eq('billing_cut_id', createdCutRecord.id);
+                    await supabase.from('billing_invoices').delete().eq('cut_id', createdCutRecord.id);
+                    await supabase.from('billing_cuts').delete().eq('id', createdCutRecord.id);
+                } catch (rbErr) {
+                    console.error('Error during rollback:', rbErr);
+                }
+            }
             showToast({ type: 'error', message: `Error al generar el corte: ${err.message}` });
         } finally {
             setIsProcessing(false);
