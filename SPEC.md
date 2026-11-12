@@ -16830,3 +16830,25 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Columnas `Cliente` y `Sucursal`:** Para clientes B2B, `Cliente` refleja invariable y exactamente la Casa Matriz / Razón Social corporativa (ej. `IRCC S.A.S...`, `SERVICIOS ALIMENTICIOS ALDIMARK SAS`, `DIPLOMAT EMBAJADA HOTEL TRYP`), y `Sucursal` la sede de destino (`EL CORRAL PLAZA 127`, `ALDIMARK-COOPIDROGAS`, `TRYP`). Para clientes Hogar (B2C), `Cliente` indica el nombre del cliente y `Sucursal` se marca como `Hogar`.
      - **Columna `Espacio`:** Resuelve fielmente el espacio físico asignado en bodega (`warehouse_spaces`), garantizando que la columna nunca salga vacía en planillas operativas.
      - **Valores Financieros Coherentes:** Si el campo legado `subtotal` es $\le 0$, se infiere de la ecuación fundamental `total + discount - shipping - tax` para erradicar celdas de `Vr/Total` en $0$. `Adicionales` incorpora fletes e impuestos, y `Vr/Pagar` coincide con el `total` neto, cumpliendo la invariante `Vr/Total + Adicionales - Descuentos = Vr/Pagar`.
+
+
+---
+
+### Escenario 448: Consolidación Ergonómica de Cabecera de Facturación (Raptor 3) y Sincronización de Tanda en Vivo (SDD v1.9.403)
+- **Given** el Módulo de Facturación y Cobranza (`/admin/commercial/billing`), la barra de herramientas adhesiva (`billingDockNode`) y el selector de fecha operativa (`selectedBillingDate`):
+- **When** el analista comercial y el supervisor de despacho auditan la tanda y emiten documentos fiscales en pantallas de alta densidad:
+- **Then**:
+  1. **Arquitectura Ergonómica en 3 Líneas de Comando (Reducción de Altura > 40%):**
+     - **Línea 1 (Navegación & Identidad):** Pestañas maestras (`Facturación`, `Conciliación Cadena & RADIAN`, `Excedentes Báscula`, `Cartera`, `Configuración`) y subpestañas operativas (`Por Facturar`, `Lotes`, `Historial`, `Devoluciones`) en el flanco izquierdo con micro-tipografía densa. En el flanco derecho, micro-toggle de `Tanda operativa` y badge de telemetría reactiva `[ 🟢 EN VIVO ]` sin salto de línea ni desbordamiento.
+     - **Línea 2 (Comando, Tanda & Cortes Soberanos):**
+       * *Flanco Izquierdo:* Superbuscador Omnibox (`max-w-[400px]`) emparejado con el selector de tanda operativo (`Ayer`, `Hoy`, `Mañana`, `Todas`, y Datepicker interactivo).
+       * *Flanco Derecho:* Acciones de exportación (`NC Pendientes` —visible solo si > 0—, `Excel Rápido WO`, `Relación Doc (.xlsx)`) y los botones soberanos de corte (`🌙 Corte Tarde (FAC-IMP)` y `☀️ Corte Mañana (AM)`).
+       * *Erradicación de Grasa Visual:* Se elimina el texto explicativo estático redundante de 220px (`Cortes: 🌙 Tarde...`), preservando su documentación completa dentro de los tooltips de los botones.
+     - **Línea 3 (Segmentación por Estado & Selección Contextual):**
+       * *Flanco Izquierdo:* Píldoras de filtrado por documento (`Todos`, `Facturas`, `Remisiones`, `Reposiciones`) y por estado operativo (`Listos`, `En Gracia` —oculto si 0—, `En Prep.`, `En Ruta`, `Novedades`, `Retenidos`).
+       * *Flanco Derecho:* Acciones contextuales de lote activadas únicamente cuando existen pedidos seleccionados (`Acumular Lote`, `Unificar`, `Limpiar`).
+  2. **Sincronización Poka-Yoke de Fecha en Datepicker:**
+     - El componente `<input type="date">` enlaza su valor directamente a `selectedBillingDate !== 'all' ? selectedBillingDate : ''`.
+     - Al seleccionar "Hoy", el campo muestra la fecha real del sistema en hora de Bogotá (ej: `2026-11-12`), erradicando el estado vacío residual (`dd / mm / aaaa`).
+     - Al seleccionar "Todas", el campo permanece limpio sin advertencias de validación del navegador.
+     - Al ingresar una fecha personalizada, se activa el resaltado verde esmeralda y el botón de retorno rápido a "Hoy".

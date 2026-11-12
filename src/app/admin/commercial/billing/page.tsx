@@ -4189,747 +4189,901 @@ export default function BillingDashboard() {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        flexWrap: 'wrap',
                         gap: '0.4rem',
-                        paddingBottom: activeTab !== 'configuration' ? '0.25rem' : '0',
+                        paddingBottom: activeTab !== 'configuration' ? '0.22rem' : '0',
                         borderBottom: activeTab !== 'configuration' ? '1px solid #F1F5F9' : 'none'
                     }}>
-                    {/* Left: Main Module Tabs + Integrated Subtabs */}
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
-                            {hasInvoicingAccess && (
+                        {/* Left: Main Module Tabs + Integrated Subtabs */}
+                        <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'inline-flex', gap: '2px', alignItems: 'center' }}>
+                                {hasInvoicingAccess && (
+                                    <button
+                                        onClick={() => setActiveTab('invoicing')}
+                                        style={{ 
+                                            padding: '0.24rem 0.55rem', 
+                                            borderRadius: '5px', 
+                                            border: 'none', 
+                                            background: activeTab === 'invoicing' ? '#0D7A57' : 'transparent', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.72rem', 
+                                            cursor: 'pointer', 
+                                            color: activeTab === 'invoicing' ? 'white' : '#64748B', 
+                                            boxShadow: activeTab === 'invoicing' ? '0 1px 3px rgba(13, 122, 87, 0.2)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <Receipt size={12} /> Facturación
+                                    </button>
+                                )}
+
                                 <button
-                                    onClick={() => setActiveTab('invoicing')}
+                                    onClick={() => setActiveTab('cadena_radian')}
                                     style={{ 
-                                        padding: '0.28rem 0.65rem', 
-                                        borderRadius: '6px', 
+                                        padding: '0.24rem 0.55rem', 
+                                        borderRadius: '5px', 
                                         border: 'none', 
-                                        background: activeTab === 'invoicing' ? '#0D7A57' : 'transparent', 
+                                        background: activeTab === 'cadena_radian' ? '#0D7A57' : 'transparent', 
                                         fontWeight: '800', 
-                                        fontSize: '0.74rem', 
+                                        fontSize: '0.72rem', 
                                         cursor: 'pointer', 
-                                        color: activeTab === 'invoicing' ? 'white' : '#64748B', 
-                                        boxShadow: activeTab === 'invoicing' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
+                                        color: activeTab === 'cadena_radian' ? 'white' : '#64748B', 
+                                        boxShadow: activeTab === 'cadena_radian' ? '0 1px 3px rgba(13, 122, 87, 0.2)' : 'none',
                                         transition: 'all 0.15s ease',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '4px'
                                     }}
                                 >
-                                    <Receipt size={12} /> Facturación
+                                    <ShieldCheck size={12} /> Conciliación Cadena & RADIAN
                                 </button>
-                            )}
-
-                            <button
-                                onClick={() => setActiveTab('cadena_radian')}
-                                style={{ 
-                                    padding: '0.28rem 0.65rem', 
-                                    borderRadius: '6px', 
-                                    border: 'none', 
-                                    background: activeTab === 'cadena_radian' ? '#0D7A57' : 'transparent', 
-                                    fontWeight: '800', 
-                                    fontSize: '0.74rem', 
-                                    cursor: 'pointer', 
-                                    color: activeTab === 'cadena_radian' ? 'white' : '#64748B', 
-                                    boxShadow: activeTab === 'cadena_radian' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                            >
-                                <ShieldCheck size={12} /> Conciliación Cadena & RADIAN
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setIsOverweightModalOpen(true)}
-                                style={{
-                                    padding: '0.28rem 0.65rem',
-                                    borderRadius: '6px',
-                                    border: '1px solid #F59E0B',
-                                    background: '#FFFBEB',
-                                    fontWeight: '800',
-                                    fontSize: '0.73rem',
-                                    cursor: 'pointer',
-                                    color: '#B45309',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                                title="Arbitraje de Excedentes de Báscula por Pedido + Producto (SÍ Cobrar -> Col M / NO Cobrar -> Col P)"
-                            >
-                                <Scale size={12} /> Excedentes Báscula (Col P / M)
-                            </button>
-
-                            {hasPortfolioAccess && (
-                                <button
-                                    onClick={() => setActiveTab('portfolio')}
-                                    style={{ 
-                                        padding: '0.28rem 0.65rem', 
-                                        borderRadius: '6px', 
-                                        border: 'none', 
-                                        background: activeTab === 'portfolio' ? '#0D7A57' : 'transparent', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.74rem', 
-                                        cursor: 'pointer', 
-                                        color: activeTab === 'portfolio' ? 'white' : '#64748B', 
-                                        boxShadow: activeTab === 'portfolio' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
-                                        transition: 'all 0.15s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <Wallet size={12} /> Cartera
-                                </button>
-                            )}
-
-                            {hasConfigAccess && (
-                                <button
-                                    onClick={() => setActiveTab('configuration')}
-                                    style={{ 
-                                        padding: '0.28rem 0.65rem', 
-                                        borderRadius: '6px', 
-                                        border: 'none', 
-                                        background: activeTab === 'configuration' ? '#0D7A57' : 'transparent', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.74rem', 
-                                        cursor: 'pointer', 
-                                        color: activeTab === 'configuration' ? 'white' : '#64748B', 
-                                        boxShadow: activeTab === 'configuration' ? '0 1px 4px rgba(13, 122, 87, 0.2)' : 'none',
-                                        transition: 'all 0.15s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <Settings size={12} /> Configuración
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Divisor Vertical */}
-                        <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1', margin: '0 4px' }} />
-
-                        {/* Subtabs Operativas */}
-                        {activeTab === 'invoicing' && (
-                            <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '7px' }}>
-                                <button
-                                    onClick={() => setSubTab('pending')}
-                                    style={{ 
-                                        backgroundColor: subTab === 'pending' ? 'white' : 'transparent', 
-                                        color: subTab === 'pending' ? '#0D7A57' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: subTab === 'pending' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <ShoppingCart size={11} style={{ color: subTab === 'pending' ? '#0D7A57' : '#64748B' }} /> Pedidos por Facturar ({pendingOrdersCount})
-                                </button>
-                                <button
-                                    onClick={() => setSubTab('batch_accumulated')}
-                                    style={{ 
-                                        backgroundColor: subTab === 'batch_accumulated' ? 'white' : 'transparent', 
-                                        color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: subTab === 'batch_accumulated' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <Archive size={11} style={{ color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B' }} /> Acumulados por Lote ({batchAccumulatedCount})
-                                </button>
-                                <button
-                                    onClick={() => setSubTab('cuts')}
-                                    style={{ 
-                                        backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
-                                        color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: subTab === 'cuts' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <Layers size={11} style={{ color: subTab === 'cuts' ? '#0D7A57' : '#64748B' }} /> Historial ({cuts.length})
-                                </button>
-                                <button
-                                    onClick={() => setSubTab('returns')}
-                                    style={{ 
-                                        backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
-                                        color: subTab === 'returns' ? '#DC2626' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: subTab === 'returns' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <AlertCircle size={11} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones ({returns.length})
-                                </button>
-                            </div>
-                        )}
-
-                        {activeTab === 'portfolio' && (
-                            <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '7px' }}>
-                                <button
-                                    onClick={() => setPortfolioSubTab('invoices')}
-                                    style={{ 
-                                        backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
-                                        color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: portfolioSubTab === 'invoices' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <FileText size={11} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Facturas ({invoices.length})
-                                </button>
-                                <button
-                                    onClick={() => setPortfolioSubTab('dossiers')}
-                                    style={{ 
-                                        backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
-                                        color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
-                                        padding: '0.22rem 0.55rem', 
-                                        borderRadius: '5px', 
-                                        border: 'none', 
-                                        fontWeight: '800', 
-                                        fontSize: '0.70rem', 
-                                        cursor: 'pointer', 
-                                        boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}
-                                >
-                                    <FileSignature size={11} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Fichas B2B ({b2bClients.length})
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right: Tanda operativa toggle + EN VIVO telemetría */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {activeTab === 'invoicing' && (
-                            <>
-                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.66rem', fontWeight: '700', color: '#475569', backgroundColor: '#F8FAFC', padding: '2px 6px', borderRadius: '5px', border: '1px solid #E2E8F0' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={includeAllStatuses}
-                                        onChange={(e) => setIncludeAllStatuses(e.target.checked)}
-                                        style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '12px', height: '12px' }}
-                                    />
-                                    Tanda operativa
-                                </label>
 
                                 <button
                                     type="button"
-                                    onClick={() => fetchData(true)}
-                                    title={lastRealtimeSync ? `Sincronización en tiempo real activa (Última: ${lastRealtimeSync}) — Clic para refrescar ahora` : 'Sincronización en tiempo real activa — Clic para refrescar ahora'}
+                                    onClick={() => setIsOverweightModalOpen(true)}
                                     style={{
+                                        padding: '0.24rem 0.55rem',
+                                        borderRadius: '5px',
+                                        border: '1px solid #F59E0B',
+                                        background: '#FFFBEB',
+                                        fontWeight: '800',
+                                        fontSize: '0.71rem',
+                                        cursor: 'pointer',
+                                        color: '#B45309',
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '4px',
-                                        backgroundColor: '#ECFDF5',
-                                        border: '1px solid #A7F3D0',
-                                        padding: '0.18rem 0.5rem',
-                                        borderRadius: '5px',
-                                        fontSize: '0.62rem',
-                                        fontWeight: '800',
-                                        color: '#065F46',
-                                        cursor: 'pointer'
+                                        gap: '4px'
                                     }}
+                                    title="Arbitraje de Excedentes de Báscula por Pedido + Producto (SÍ Cobrar -> Col M / NO Cobrar -> Col P)"
                                 >
-                                    <span style={{
-                                        width: '5px',
-                                        height: '5px',
-                                        borderRadius: '50%',
-                                        backgroundColor: '#10B981',
-                                        boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
-                                    }} />
-                                    <span>EN VIVO</span>
-                                    <RefreshCw
-                                        size={9}
-                                        style={{
-                                            color: '#059669',
-                                            animation: isRefreshingRealtime ? 'spin 0.8s linear infinite' : 'none'
-                                        }}
-                                    />
+                                    <Scale size={12} /> Excedentes Báscula
                                 </button>
-                            </>
-                        )}
-                    </div>
-                </div>
 
-                    {/* Fila 2: Command Dock Unificado (Buscador, Tanda, Filtros, Cortes) */}
+                                {hasPortfolioAccess && (
+                                    <button
+                                        onClick={() => setActiveTab('portfolio')}
+                                        style={{ 
+                                            padding: '0.24rem 0.55rem', 
+                                            borderRadius: '5px', 
+                                            border: 'none', 
+                                            background: activeTab === 'portfolio' ? '#0D7A57' : 'transparent', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.72rem', 
+                                            cursor: 'pointer', 
+                                            color: activeTab === 'portfolio' ? 'white' : '#64748B', 
+                                            boxShadow: activeTab === 'portfolio' ? '0 1px 3px rgba(13, 122, 87, 0.2)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <Wallet size={12} /> Cartera
+                                    </button>
+                                )}
+
+                                {hasConfigAccess && (
+                                    <button
+                                        onClick={() => setActiveTab('configuration')}
+                                        style={{ 
+                                            padding: '0.24rem 0.55rem', 
+                                            borderRadius: '5px', 
+                                            border: 'none', 
+                                            background: activeTab === 'configuration' ? '#0D7A57' : 'transparent', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.72rem', 
+                                            cursor: 'pointer', 
+                                            color: activeTab === 'configuration' ? 'white' : '#64748B', 
+                                            boxShadow: activeTab === 'configuration' ? '0 1px 3px rgba(13, 122, 87, 0.2)' : 'none',
+                                            transition: 'all 0.15s ease',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <Settings size={12} /> Configuración
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Divisor Vertical */}
+                            <div style={{ width: '1px', height: '14px', backgroundColor: '#CBD5E1', margin: '0 3px' }} />
+
+                            {/* Subtabs Operativas */}
+                            {activeTab === 'invoicing' && (
+                                <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px' }}>
+                                    <button
+                                        onClick={() => setSubTab('pending')}
+                                        style={{ 
+                                            backgroundColor: subTab === 'pending' ? 'white' : 'transparent', 
+                                            color: subTab === 'pending' ? '#0D7A57' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: subTab === 'pending' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <ShoppingCart size={11} style={{ color: subTab === 'pending' ? '#0D7A57' : '#64748B' }} /> Por Facturar ({pendingOrdersCount})
+                                    </button>
+                                    <button
+                                        onClick={() => setSubTab('batch_accumulated')}
+                                        style={{ 
+                                            backgroundColor: subTab === 'batch_accumulated' ? 'white' : 'transparent', 
+                                            color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: subTab === 'batch_accumulated' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <Archive size={11} style={{ color: subTab === 'batch_accumulated' ? '#0D7A57' : '#64748B' }} /> Lotes ({batchAccumulatedCount})
+                                    </button>
+                                    <button
+                                        onClick={() => setSubTab('cuts')}
+                                        style={{ 
+                                            backgroundColor: subTab === 'cuts' ? 'white' : 'transparent', 
+                                            color: subTab === 'cuts' ? '#0F172A' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: subTab === 'cuts' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <Layers size={11} style={{ color: subTab === 'cuts' ? '#0D7A57' : '#64748B' }} /> Historial ({cuts.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setSubTab('returns')}
+                                        style={{ 
+                                            backgroundColor: subTab === 'returns' ? 'white' : 'transparent', 
+                                            color: subTab === 'returns' ? '#DC2626' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: subTab === 'returns' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <AlertCircle size={11} style={{ color: subTab === 'returns' ? '#DC2626' : '#64748B' }} /> Devoluciones ({returns.length})
+                                    </button>
+                                </div>
+                            )}
+
+                            {activeTab === 'portfolio' && (
+                                <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px' }}>
+                                    <button
+                                        onClick={() => setPortfolioSubTab('invoices')}
+                                        style={{ 
+                                            backgroundColor: portfolioSubTab === 'invoices' ? 'white' : 'transparent', 
+                                            color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: portfolioSubTab === 'invoices' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <FileText size={11} style={{ color: portfolioSubTab === 'invoices' ? '#0D7A57' : '#64748B' }} /> Facturas ({invoices.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setPortfolioSubTab('dossiers')}
+                                        style={{ 
+                                            backgroundColor: portfolioSubTab === 'dossiers' ? 'white' : 'transparent', 
+                                            color: portfolioSubTab === 'dossiers' ? '#0F172A' : '#64748B', 
+                                            padding: '0.20rem 0.50rem', 
+                                            borderRadius: '4px', 
+                                            border: 'none', 
+                                            fontWeight: '800', 
+                                            fontSize: '0.68rem', 
+                                            cursor: 'pointer', 
+                                            boxShadow: portfolioSubTab === 'dossiers' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <FileSignature size={11} style={{ color: portfolioSubTab === 'dossiers' ? '#0D7A57' : '#64748B' }} /> Fichas B2B ({b2bClients.length})
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right: Tanda operativa toggle + EN VIVO telemetría */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            {activeTab === 'invoicing' && (
+                                <>
+                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.65rem', fontWeight: '700', color: '#475569', backgroundColor: '#F8FAFC', padding: '2px 5px', borderRadius: '5px', border: '1px solid #E2E8F0' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={includeAllStatuses}
+                                            onChange={(e) => setIncludeAllStatuses(e.target.checked)}
+                                            style={{ cursor: 'pointer', accentColor: '#0D7A57', width: '11px', height: '11px' }}
+                                        />
+                                        Tanda operativa
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => fetchData(true)}
+                                        title={lastRealtimeSync ? `Sincronización en tiempo real activa (Última: ${lastRealtimeSync}) — Clic para refrescar ahora` : 'Sincronización en tiempo real activa — Clic para refrescar ahora'}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            backgroundColor: '#ECFDF5',
+                                            border: '1px solid #A7F3D0',
+                                            padding: '0.18rem 0.45rem',
+                                            borderRadius: '5px',
+                                            fontSize: '0.62rem',
+                                            fontWeight: '800',
+                                            color: '#065F46',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <span style={{
+                                            width: '5px',
+                                            height: '5px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#10B981',
+                                            boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
+                                        }} />
+                                        <span>EN VIVO</span>
+                                        <RefreshCw
+                                            size={9}
+                                            style={{
+                                                color: '#059669',
+                                                animation: isRefreshingRealtime ? 'spin 0.8s linear infinite' : 'none'
+                                            }}
+                                        />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Fila 2: Command Dock Unificado (Buscador, Tanda, Cortes y Filtros) */}
                     {activeTab !== 'configuration' && (
                         <div style={{
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '0.40rem'
+                            gap: '0.30rem'
                         }}>
-                        {/* Fila 1: Superbuscador Omnibox Universal (PROTAGONISTA) + Selector de Tanda / Acciones Generales */}
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.75rem',
-                            width: '100%'
-                        }}>
-                            {/* Flanco Izquierdo: Buscador Omnibox con máxima presencia y amplitud */}
-                            <div style={{ flex: '1 1 360px', maxWidth: '640px' }}>
-                                <GalleryOmnibox
-                                    value={billingSearchQuery}
-                                    onChange={setBillingSearchQuery}
-                                    placeholder={
-                                        activeTab === 'invoicing'
-                                            ? (subTab === 'cuts' ? 'Buscar en historial de cortes...' : subTab === 'pending' ? 'Buscar por cliente, NIT, pedido (#ID), producto...' : 'Buscar devoluciones...')
-                                            : (portfolioSubTab === 'invoices' ? 'Buscar facturas...' : 'Buscar clientes B2B...')
-                                    }
-                                    filteredCount={
-                                        activeTab === 'invoicing'
-                                            ? (subTab === 'cuts' ? filteredCuts.length : subTab === 'pending' ? filteredPendingOrders.length : filteredReturns.length)
-                                            : (portfolioSubTab === 'invoices' ? filteredInvoices.length : filteredDossiers.length)
-                                    }
-                                    totalCount={
-                                        activeTab === 'invoicing'
-                                            ? (subTab === 'cuts' ? cuts.length : subTab === 'pending' ? pendingOrders.length : returns.length)
-                                            : (portfolioSubTab === 'invoices' ? invoices.length : b2bClients.length)
-                                    }
-                                    style={{ width: '100%', minWidth: '300px', maxWidth: '640px' }}
-                                />
-                            </div>
-
-                            {/* Flanco Derecho Fila 1: Selector de Tanda en Invoicing */}
-                            {activeTab === 'invoicing' && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', backgroundColor: '#F8FAFC', padding: '3px 6px', borderRadius: '8px', border: '1px solid #CBD5E1', flexShrink: 0 }}>
-                                    <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#64748B', padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                        <Calendar size={12} style={{ color: '#0D7A57' }} /> Tanda:
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedBillingDate(getBogotaDate(-1))}
-                                        style={{
-                                            border: 'none',
-                                            padding: '3px 7px',
-                                            borderRadius: '5px',
-                                            fontSize: '0.66rem',
-                                            fontWeight: selectedBillingDate === getBogotaDate(-1) ? '800' : '600',
-                                            backgroundColor: selectedBillingDate === getBogotaDate(-1) ? '#0D7A57' : 'transparent',
-                                            color: selectedBillingDate === getBogotaDate(-1) ? 'white' : '#475569',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Ayer
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedBillingDate(getBogotaDate(0))}
-                                        style={{
-                                            border: 'none',
-                                            padding: '3px 7px',
-                                            borderRadius: '5px',
-                                            fontSize: '0.66rem',
-                                            fontWeight: selectedBillingDate === getBogotaDate(0) ? '800' : '600',
-                                            backgroundColor: selectedBillingDate === getBogotaDate(0) ? '#0D7A57' : 'transparent',
-                                            color: selectedBillingDate === getBogotaDate(0) ? 'white' : '#475569',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Hoy
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedBillingDate(getBogotaDate(1))}
-                                        style={{
-                                            border: 'none',
-                                            padding: '3px 7px',
-                                            borderRadius: '5px',
-                                            fontSize: '0.66rem',
-                                            fontWeight: selectedBillingDate === getBogotaDate(1) ? '800' : '600',
-                                            backgroundColor: selectedBillingDate === getBogotaDate(1) ? '#0D7A57' : 'transparent',
-                                            color: selectedBillingDate === getBogotaDate(1) ? 'white' : '#475569',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Mañana
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedBillingDate('all')}
-                                        style={{
-                                            border: 'none',
-                                            padding: '3px 7px',
-                                            borderRadius: '5px',
-                                            fontSize: '0.66rem',
-                                            fontWeight: selectedBillingDate === 'all' ? '800' : '600',
-                                            backgroundColor: selectedBillingDate === 'all' ? '#0D7A57' : 'transparent',
-                                            color: selectedBillingDate === 'all' ? 'white' : '#475569',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Todas
-                                    </button>
-                                    {/* Datepicker compacto */}
-                                    {(() => {
-                                        const isCustomDate = selectedBillingDate !== getBogotaDate(1) && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
-                                        return (
-                                            <div
-                                                title="Seleccionar fecha de despacho específica"
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '2px',
-                                                    padding: '2px 5px',
-                                                    borderRadius: '5px',
-                                                    backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
-                                                    border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
-                                                    position: 'relative'
-                                                }}
-                                            >
-                                                <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
-                                                <input
-                                                    type="date"
-                                                    max={getBogotaDate(7)}
-                                                    value={isCustomDate ? selectedBillingDate : ''}
-                                                    onChange={(e) => {
-                                                        if (e.target.value) {
-                                                            setSelectedBillingDate(e.target.value);
-                                                        }
-                                                    }}
-                                                    className="clean-date-input"
-                                                    style={{
-                                                        border: 'none',
-                                                        outline: 'none',
-                                                        backgroundColor: 'transparent',
-                                                        color: isCustomDate ? '#FFFFFF' : '#334155',
-                                                        fontSize: '0.66rem',
-                                                        fontWeight: isCustomDate ? '800' : '600',
-                                                        cursor: 'pointer',
-                                                        padding: 0,
-                                                        width: isCustomDate ? '78px' : '72px'
-                                                    }}
-                                                />
-                                                {isCustomDate && (
-                                                    <button
-                                                        type="button"
-                                                        title="Restablecer tanda a Hoy"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedBillingDate(getBogotaDate(0));
-                                                        }}
-                                                        style={{
-                                                            border: 'none',
-                                                            background: 'rgba(255, 255, 255, 0.25)',
-                                                            color: 'white',
-                                                            borderRadius: '50%',
-                                                            width: '13px',
-                                                            height: '13px',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            cursor: 'pointer',
-                                                            padding: 0
-                                                        }}
-                                                    >
-                                                        <X size={8} strokeWidth={3} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-
-                            {/* Acciones en Cartera (Dossiers) */}
-                            {activeTab === 'portfolio' && portfolioSubTab === 'dossiers' && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <button
-                                        onClick={handleCreateNewDossier}
-                                        style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.36rem 0.75rem', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 5px rgba(13, 122, 87, 0.2)' }}
-                                    >
-                                        <Plus size={12} strokeWidth={2.5} /> Crear Expediente
-                                    </button>
-                                    <a
-                                        href="/admin/commercial/billing/print-credit/blank"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#334155', padding: '0.36rem 0.70rem', borderRadius: '6px', fontWeight: '700', fontSize: '0.72rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                    >
-                                        <Printer size={11} /> Imprimir Vacío
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Fila 2: Telemetría de Estado & Pipeline Operativo de Cortes (Solo en Pedidos por Facturar) */}
-                        {activeTab === 'invoicing' && subTab === 'pending' && (
+                            {/* Línea 2A: Buscador + Tanda (Izquierda) & Exportaciones + Cortes Soberanos (Derecha) */}
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 gap: '0.6rem',
                                 width: '100%',
-                                paddingTop: '0.35rem',
-                                borderTop: '1px solid #F1F5F9',
                                 flexWrap: 'wrap'
                             }}>
-                                {/* Flanco Izquierdo: Píldoras de Filtro Rápido + Selección */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingStatusFilter('all')}
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 7px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: pendingStatusFilter === 'all' ? '800' : '600',
-                                                backgroundColor: pendingStatusFilter === 'all' ? '#0F172A' : 'transparent',
-                                                color: pendingStatusFilter === 'all' ? 'white' : '#64748B',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Todos ({pendingOrders.length})
-                                        </button>
+                                {/* Flanco Izquierdo: Buscador Omnibox + Selector de Tanda Unificado */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 500px', maxWidth: '780px', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: '1 1 260px', maxWidth: '380px' }}>
+                                        <GalleryOmnibox
+                                            value={billingSearchQuery}
+                                            onChange={setBillingSearchQuery}
+                                            placeholder={
+                                                activeTab === 'invoicing'
+                                                    ? (subTab === 'cuts' ? 'Buscar en historial de cortes...' : subTab === 'pending' ? 'Buscar por cliente, NIT, pedido (#ID), producto...' : 'Buscar devoluciones...')
+                                                    : (portfolioSubTab === 'invoices' ? 'Buscar facturas...' : 'Buscar clientes B2B...')
+                                            }
+                                            filteredCount={
+                                                activeTab === 'invoicing'
+                                                    ? (subTab === 'cuts' ? filteredCuts.length : subTab === 'pending' ? filteredPendingOrders.length : filteredReturns.length)
+                                                    : (portfolioSubTab === 'invoices' ? filteredInvoices.length : filteredDossiers.length)
+                                            }
+                                            totalCount={
+                                                activeTab === 'invoicing'
+                                                    ? (subTab === 'cuts' ? cuts.length : subTab === 'pending' ? pendingOrders.length : returns.length)
+                                                    : (portfolioSubTab === 'invoices' ? invoices.length : b2bClients.length)
+                                            }
+                                            style={{ width: '100%', minWidth: '240px', maxWidth: '380px' }}
+                                        />
+                                    </div>
 
-                                        {/* Distribución de Documentos: Facturas */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingStatusFilter(pendingStatusFilter === 'invoices' ? 'all' : 'invoices')}
-                                            title="Filtrar pedidos con Factura de Venta (FV)"
-                                            style={{
-                                                border: pendingStatusFilter === 'invoices' ? '1px solid #93C5FD' : '1px solid transparent',
-                                                padding: '2px 7px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: pendingStatusFilter === 'invoices' ? '800' : '700',
-                                                backgroundColor: pendingStatusFilter === 'invoices' ? '#1E40AF' : '#EFF6FF',
-                                                color: pendingStatusFilter === 'invoices' ? 'white' : '#1E40AF',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px'
-                                            }}
-                                        >
-                                            <FileText size={10} /> Facturas ({invoicesCount})
-                                        </button>
-
-                                        {/* Distribución de Documentos: Remisiones */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingStatusFilter(pendingStatusFilter === 'remissions' ? 'all' : 'remissions')}
-                                            title="Filtrar pedidos con Remisión Comercial (REM)"
-                                            style={{
-                                                border: pendingStatusFilter === 'remissions' ? '1px solid #FDE68A' : '1px solid transparent',
-                                                padding: '2px 7px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: pendingStatusFilter === 'remissions' ? '800' : '700',
-                                                backgroundColor: pendingStatusFilter === 'remissions' ? '#92400E' : '#FEF3C7',
-                                                color: pendingStatusFilter === 'remissions' ? 'white' : '#92400E',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px'
-                                            }}
-                                        >
-                                            <Package size={10} /> Remisiones ({remissionsCount})
-                                        </button>
-
-                                        {/* Distribución de Documentos: Reposiciones */}
-                                        {replacementsCount > 0 && (
+                                    {/* Selector de Tanda en Invoicing */}
+                                    {activeTab === 'invoicing' && (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px 5px', borderRadius: '7px', border: '1px solid #CBD5E1', flexShrink: 0 }}>
+                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', padding: '0 3px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                <Calendar size={11} style={{ color: '#0D7A57' }} /> Tanda:
+                                            </span>
                                             <button
                                                 type="button"
-                                                onClick={() => setPendingStatusFilter(pendingStatusFilter === 'replacements' ? 'all' : 'replacements')}
-                                                title="Filtrar reposiciones o garantías SAC (REP)"
-                                                style={{
-                                                    border: pendingStatusFilter === 'replacements' ? '1px solid #E9D5FF' : '1px solid transparent',
-                                                    padding: '2px 7px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '0.65rem',
-                                                    fontWeight: pendingStatusFilter === 'replacements' ? '800' : '700',
-                                                    backgroundColor: pendingStatusFilter === 'replacements' ? '#6B21A8' : '#FAF5FF',
-                                                    color: pendingStatusFilter === 'replacements' ? 'white' : '#6B21A8',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
-                                                }}
-                                            >
-                                                <RotateCcw size={10} /> Reposiciones ({replacementsCount})
-                                            </button>
-                                        )}
-
-                                        {/* Divisor vertical */}
-                                        <div style={{ width: '1px', height: '12px', backgroundColor: '#CBD5E1', margin: '0 2px' }} />
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingStatusFilter('ready')}
-                                            title="Pedidos entregados con margen de gracia cumplido"
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 7px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: pendingStatusFilter === 'ready' ? '800' : '600',
-                                                backgroundColor: pendingStatusFilter === 'ready' ? '#0D7A57' : 'transparent',
-                                                color: pendingStatusFilter === 'ready' ? 'white' : '#065F46',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px'
-                                            }}
-                                        >
-                                            <Check size={11} /> Listos ({readyCount})
-                                        </button>
-                                        {graceCount > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPendingStatusFilter('grace')}
-                                                title="Pedidos dentro del margen de 120m de inspección post-entrega"
+                                                onClick={() => setSelectedBillingDate(getBogotaDate(-1))}
+                                                title={`Tanda de Ayer (${getBogotaDate(-1)})`}
                                                 style={{
                                                     border: 'none',
-                                                    padding: '2px 7px',
+                                                    padding: '2px 6px',
                                                     borderRadius: '4px',
                                                     fontSize: '0.65rem',
-                                                    fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
-                                                    backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
-                                                    color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
+                                                    fontWeight: selectedBillingDate === getBogotaDate(-1) ? '800' : '600',
+                                                    backgroundColor: selectedBillingDate === getBogotaDate(-1) ? '#0D7A57' : 'transparent',
+                                                    color: selectedBillingDate === getBogotaDate(-1) ? 'white' : '#475569',
+                                                    cursor: 'pointer'
                                                 }}
                                             >
-                                                <Clock size={11} /> En Gracia ({graceCount})
+                                                Ayer
                                             </button>
-                                        )}
-                                        {inRouteCount > 0 && (
                                             <button
                                                 type="button"
-                                                onClick={() => setPendingStatusFilter('in_route')}
+                                                onClick={() => setSelectedBillingDate(getBogotaDate(0))}
+                                                title={`Tanda de Hoy (${getBogotaDate(0)})`}
                                                 style={{
                                                     border: 'none',
-                                                    padding: '2px 7px',
+                                                    padding: '2px 6px',
                                                     borderRadius: '4px',
                                                     fontSize: '0.65rem',
-                                                    fontWeight: pendingStatusFilter === 'in_route' ? '800' : '600',
-                                                    backgroundColor: pendingStatusFilter === 'in_route' ? '#0284C7' : 'transparent',
-                                                    color: pendingStatusFilter === 'in_route' ? 'white' : '#0369A1',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
+                                                    fontWeight: selectedBillingDate === getBogotaDate(0) ? '800' : '600',
+                                                    backgroundColor: selectedBillingDate === getBogotaDate(0) ? '#0D7A57' : 'transparent',
+                                                    color: selectedBillingDate === getBogotaDate(0) ? 'white' : '#475569',
+                                                    cursor: 'pointer'
                                                 }}
                                             >
-                                                <Truck size={11} /> En Ruta ({inRouteCount})
+                                                Hoy
                                             </button>
-                                        )}
-                                        {inProcessCount > 0 && (
                                             <button
                                                 type="button"
-                                                onClick={() => setPendingStatusFilter('in_process')}
+                                                onClick={() => setSelectedBillingDate(getBogotaDate(1))}
+                                                title={`Tanda de Mañana (${getBogotaDate(1)})`}
                                                 style={{
                                                     border: 'none',
-                                                    padding: '2px 7px',
+                                                    padding: '2px 6px',
                                                     borderRadius: '4px',
                                                     fontSize: '0.65rem',
-                                                    fontWeight: pendingStatusFilter === 'in_process' ? '800' : '600',
-                                                    backgroundColor: pendingStatusFilter === 'in_process' ? '#475569' : 'transparent',
-                                                    color: pendingStatusFilter === 'in_process' ? 'white' : '#475569',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
+                                                    fontWeight: selectedBillingDate === getBogotaDate(1) ? '800' : '600',
+                                                    backgroundColor: selectedBillingDate === getBogotaDate(1) ? '#0D7A57' : 'transparent',
+                                                    color: selectedBillingDate === getBogotaDate(1) ? 'white' : '#475569',
+                                                    cursor: 'pointer'
                                                 }}
                                             >
-                                                <Layers size={11} /> En Prep. ({inProcessCount})
+                                                Mañana
                                             </button>
-                                        )}
-                                        {noveltiesCount > 0 && (
                                             <button
                                                 type="button"
-                                                onClick={() => setPendingStatusFilter('novelties')}
+                                                onClick={() => setSelectedBillingDate('all')}
+                                                title="Mostrar pedidos de todas las tandas sin filtrar por fecha"
                                                 style={{
                                                     border: 'none',
-                                                    padding: '2px 7px',
+                                                    padding: '2px 6px',
                                                     borderRadius: '4px',
                                                     fontSize: '0.65rem',
-                                                    fontWeight: pendingStatusFilter === 'novelties' ? '800' : '600',
-                                                    backgroundColor: pendingStatusFilter === 'novelties' ? '#DC2626' : 'transparent',
-                                                    color: pendingStatusFilter === 'novelties' ? 'white' : '#991B1B',
+                                                    fontWeight: selectedBillingDate === 'all' ? '800' : '600',
+                                                    backgroundColor: selectedBillingDate === 'all' ? '#0D7A57' : 'transparent',
+                                                    color: selectedBillingDate === 'all' ? 'white' : '#475569',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Todas
+                                            </button>
+                                            {/* Datepicker compacto sincronizado */}
+                                            {(() => {
+                                                const isCustomDate = selectedBillingDate !== getBogotaDate(1) && selectedBillingDate !== getBogotaDate(0) && selectedBillingDate !== getBogotaDate(-1) && selectedBillingDate !== 'all';
+                                                return (
+                                                    <div
+                                                        title="Seleccionar fecha de despacho específica"
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '2px',
+                                                            padding: '2px 5px',
+                                                            borderRadius: '4px',
+                                                            backgroundColor: isCustomDate ? '#0D7A57' : '#FFFFFF',
+                                                            border: isCustomDate ? '1px solid #0D7A57' : '1px solid #CBD5E1',
+                                                            position: 'relative'
+                                                        }}
+                                                    >
+                                                        <Calendar size={11} strokeWidth={2.2} style={{ color: isCustomDate ? '#FFFFFF' : '#0D7A57', flexShrink: 0 }} />
+                                                        <input
+                                                            type="date"
+                                                            max={getBogotaDate(7)}
+                                                            value={selectedBillingDate !== 'all' ? selectedBillingDate : ''}
+                                                            onChange={(e) => {
+                                                                if (e.target.value) {
+                                                                    setSelectedBillingDate(e.target.value);
+                                                                }
+                                                            }}
+                                                            className="clean-date-input"
+                                                            style={{
+                                                                border: 'none',
+                                                                outline: 'none',
+                                                                backgroundColor: 'transparent',
+                                                                color: isCustomDate ? '#FFFFFF' : '#334155',
+                                                                fontSize: '0.66rem',
+                                                                fontWeight: isCustomDate ? '800' : '600',
+                                                                cursor: 'pointer',
+                                                                padding: 0,
+                                                                width: '84px'
+                                                            }}
+                                                        />
+                                                        {isCustomDate && (
+                                                            <button
+                                                                type="button"
+                                                                title="Restablecer tanda a Hoy"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedBillingDate(getBogotaDate(0));
+                                                                }}
+                                                                style={{
+                                                                    border: 'none',
+                                                                    background: 'rgba(255, 255, 255, 0.25)',
+                                                                    color: 'white',
+                                                                    borderRadius: '50%',
+                                                                    width: '13px',
+                                                                    height: '13px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    cursor: 'pointer',
+                                                                    padding: 0
+                                                                }}
+                                                            >
+                                                                <X size={8} strokeWidth={3} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Flanco Derecho: Exportaciones & Cortes Soberanos (En Invoicing) / Acciones Cartera */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                    {activeTab === 'invoicing' && subTab === 'pending' && (
+                                        <>
+                                            {/* Novedades NC (Solo si > 0) */}
+                                            {(filteredCreditNotes.length > 0 || creditNotesItems.length > 0) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleExportCreditNotesExcel}
+                                                    disabled={isProcessing}
+                                                    style={{
+                                                        backgroundColor: '#FAF5FF',
+                                                        color: '#6B21A8',
+                                                        border: '1px solid #D8B4FE',
+                                                        padding: '0.26rem 0.52rem',
+                                                        borderRadius: '5px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.68rem',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 1px 2px rgba(107, 33, 168, 0.08)'
+                                                    }}
+                                                    title="Descargar reporte Excel de notas crédito para World Office"
+                                                >
+                                                    <FileSpreadsheet size={11} color="#7C3AED" />
+                                                    <span>NC Pendientes ({filteredCreditNotes.length > 0 ? filteredCreditNotes.length : creditNotesItems.length})</span>
+                                                </button>
+                                            )}
+
+                                            {/* Excel Rápido WO */}
+                                            <button
+                                                type="button"
+                                                onClick={handleExportPendingToWorldOffice}
+                                                disabled={pendingOrders.length === 0 || isProcessing}
+                                                style={{
+                                                    backgroundColor: '#FFFFFF',
+                                                    color: '#334155',
+                                                    border: '1px solid #CBD5E1',
+                                                    padding: '0.26rem 0.52rem',
+                                                    borderRadius: '5px',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.68rem',
+                                                    cursor: pendingOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                                    opacity: pendingOrders.length === 0 ? 0.6 : 1,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)'
+                                                }}
+                                                title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office para los pedidos visibles (sin generar corte formal)"
+                                            >
+                                                <FileSpreadsheet size={11} style={{ color: '#0D7A57' }} />
+                                                <span>Excel Rápido WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
+                                            </button>
+
+                                            {/* Relación de Documentos (.xlsx) */}
+                                            <button
+                                                type="button"
+                                                onClick={handleExportRelacionByDate}
+                                                disabled={isProcessing || filteredPendingOrders.length === 0}
+                                                style={{
+                                                    backgroundColor: '#F0FDF4',
+                                                    color: '#166534',
+                                                    border: '1px solid #BBF7D0',
+                                                    padding: '0.26rem 0.52rem',
+                                                    borderRadius: '5px',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.68rem',
+                                                    cursor: isProcessing || filteredPendingOrders.length === 0 ? 'not-allowed' : 'pointer',
+                                                    opacity: filteredPendingOrders.length === 0 ? 0.6 : 1,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title="Descargar planilla oficial de Relación de Documentos (.xlsx) de 16 columnas para la fecha seleccionada"
+                                            >
+                                                <FileSpreadsheet size={11} style={{ color: '#166534' }} />
+                                                <span>Relación Doc (.xlsx)</span>
+                                            </button>
+
+                                            {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenCutPreview('PM')}
+                                                disabled={isProcessing || pendingFacImpOrdersCount === 0}
+                                                title={pendingFacImpOrdersCount === 0 
+                                                    ? 'No hay pedidos pendientes con Factura Impresa para esta tanda' 
+                                                    : 'Corte Pre-Despacho Tarde (FAC-IMP): Genera plano World Office exclusivamente para pedidos con Factura Electrónica Impresa obligatoria en muelle antes de la salida de ruta'}
+                                                style={{
+                                                    backgroundColor: pendingFacImpOrdersCount === 0 ? '#E2E8F0' : '#DC2626',
+                                                    color: pendingFacImpOrdersCount === 0 ? '#94A3B8' : 'white',
+                                                    border: 'none',
+                                                    padding: '0.28rem 0.65rem',
+                                                    borderRadius: '5px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.70rem',
+                                                    cursor: (isProcessing || pendingFacImpOrdersCount === 0) ? 'not-allowed' : 'pointer',
+                                                    opacity: pendingFacImpOrdersCount === 0 ? 0.65 : 1,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: pendingFacImpOrdersCount === 0 ? 'none' : '0 2px 5px rgba(220, 38, 38, 0.2)'
+                                                }}
+                                            >
+                                                <Moon size={11} />
+                                                <span>Corte Tarde (FAC-IMP) {pendingFacImpOrdersCount > 0 ? `(${pendingFacImpOrdersCount})` : '(0)'}</span>
+                                            </button>
+
+                                            {/* ☀️ Corte Mañana (Post-Entrega) */}
+                                            <button
+                                                type="button"
+                                                onClick={() => isDateLockedByCutAM ? undefined : handleOpenCutPreview('AM')}
+                                                disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCutAM}
+                                                title={isDateLockedByCutAM 
+                                                    ? 'Esta fecha ya tiene un corte AM cerrado. Modo Consulta activo' 
+                                                    : 'Corte Post-Entrega Mañana (AM): Formaliza facturación de pedidos entregados bajo remisión tras cumplirse el margen de gracia de 120m y novedades de báscula'}
+                                                style={{
+                                                    backgroundColor: isDateLockedByCutAM ? '#E2E8F0' : '#0D7A57',
+                                                    color: isDateLockedByCutAM ? '#64748B' : 'white',
+                                                    border: 'none',
+                                                    padding: '0.28rem 0.70rem',
+                                                    borderRadius: '5px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.70rem',
+                                                    cursor: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 'not-allowed' : 'pointer',
+                                                    opacity: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 0.6 : 1,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: isDateLockedByCutAM ? 'none' : '0 2px 5px rgba(13, 122, 87, 0.2)'
+                                                }}
+                                            >
+                                                {isDateLockedByCutAM ? <Lock size={11} /> : <Sun size={11} />}
+                                                <span>
+                                                    {isDateLockedByCutAM 
+                                                        ? 'Corte AM Cerrado' 
+                                                        : `Corte Mañana (AM) ${selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${pendingOrdersCount})`}`}
+                                                </span>
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {/* Acciones en Cartera (Dossiers) */}
+                                    {activeTab === 'portfolio' && portfolioSubTab === 'dossiers' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <button
+                                                onClick={handleCreateNewDossier}
+                                                style={{ backgroundColor: '#0D7A57', color: 'white', border: 'none', padding: '0.32rem 0.65rem', borderRadius: '5px', fontWeight: '800', fontSize: '0.70rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(13, 122, 87, 0.2)' }}
+                                            >
+                                                <Plus size={11} strokeWidth={2.5} /> Crear Expediente
+                                            </button>
+                                            <a
+                                                href="/admin/commercial/billing/print-credit/blank"
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                style={{ backgroundColor: 'white', border: '1px solid #CBD5E1', color: '#334155', padding: '0.32rem 0.60rem', borderRadius: '5px', fontWeight: '700', fontSize: '0.70rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                            >
+                                                <Printer size={11} /> Imprimir Vacío
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Línea 2B: Píldoras de Filtro Rápido (Izquierda) + Acciones Contextuales de Selección (Derecha) */}
+                            {activeTab === 'invoicing' && subTab === 'pending' && (
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '0.5rem',
+                                    width: '100%',
+                                    paddingTop: '0.22rem',
+                                    borderTop: '1px solid #F1F5F9',
+                                    flexWrap: 'wrap'
+                                }}>
+                                    {/* Flanco Izquierdo: Píldoras de Filtro Rápido */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '5px', border: '1px solid #E2E8F0', alignItems: 'center' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter('all')}
+                                                style={{
+                                                    border: 'none',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: pendingStatusFilter === 'all' ? '800' : '600',
+                                                    backgroundColor: pendingStatusFilter === 'all' ? '#0F172A' : 'transparent',
+                                                    color: pendingStatusFilter === 'all' ? 'white' : '#64748B',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Todos ({pendingOrders.length})
+                                            </button>
+
+                                            {/* Distribución de Documentos: Facturas */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter(pendingStatusFilter === 'invoices' ? 'all' : 'invoices')}
+                                                title="Filtrar pedidos con Factura de Venta (FV)"
+                                                style={{
+                                                    border: pendingStatusFilter === 'invoices' ? '1px solid #93C5FD' : '1px solid transparent',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: pendingStatusFilter === 'invoices' ? '800' : '700',
+                                                    backgroundColor: pendingStatusFilter === 'invoices' ? '#1E40AF' : '#EFF6FF',
+                                                    color: pendingStatusFilter === 'invoices' ? 'white' : '#1E40AF',
                                                     cursor: 'pointer',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '3px'
                                                 }}
                                             >
-                                                <AlertTriangle size={11} /> Novedades ({noveltiesCount})
+                                                <FileText size={10} /> Facturas ({invoicesCount})
+                                            </button>
+
+                                            {/* Distribución de Documentos: Remisiones */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter(pendingStatusFilter === 'remissions' ? 'all' : 'remissions')}
+                                                title="Filtrar pedidos con Remisión Comercial (REM)"
+                                                style={{
+                                                    border: pendingStatusFilter === 'remissions' ? '1px solid #FDE68A' : '1px solid transparent',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: pendingStatusFilter === 'remissions' ? '800' : '700',
+                                                    backgroundColor: pendingStatusFilter === 'remissions' ? '#92400E' : '#FEF3C7',
+                                                    color: pendingStatusFilter === 'remissions' ? 'white' : '#92400E',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
+                                                }}
+                                            >
+                                                <Package size={10} /> Remisiones ({remissionsCount})
+                                            </button>
+
+                                            {/* Distribución de Documentos: Reposiciones */}
+                                            {replacementsCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPendingStatusFilter(pendingStatusFilter === 'replacements' ? 'all' : 'replacements')}
+                                                    title="Filtrar reposiciones o garantías SAC (REP)"
+                                                    style={{
+                                                        border: pendingStatusFilter === 'replacements' ? '1px solid #E9D5FF' : '1px solid transparent',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: pendingStatusFilter === 'replacements' ? '800' : '700',
+                                                        backgroundColor: pendingStatusFilter === 'replacements' ? '#6B21A8' : '#FAF5FF',
+                                                        color: pendingStatusFilter === 'replacements' ? 'white' : '#6B21A8',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    <RotateCcw size={10} /> Reposiciones ({replacementsCount})
+                                                </button>
+                                            )}
+
+                                            {/* Divisor vertical */}
+                                            <div style={{ width: '1px', height: '12px', backgroundColor: '#CBD5E1', margin: '0 2px' }} />
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter('ready')}
+                                                title="Pedidos entregados con margen de gracia cumplido"
+                                                style={{
+                                                    border: 'none',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.64rem',
+                                                    fontWeight: pendingStatusFilter === 'ready' ? '800' : '600',
+                                                    backgroundColor: pendingStatusFilter === 'ready' ? '#0D7A57' : 'transparent',
+                                                    color: pendingStatusFilter === 'ready' ? 'white' : '#065F46',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
+                                                }}
+                                            >
+                                                <Check size={10} /> Listos ({readyCount})
+                                            </button>
+                                            {graceCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPendingStatusFilter('grace')}
+                                                    title="Pedidos dentro del margen de 120m de inspección post-entrega"
+                                                    style={{
+                                                        border: 'none',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
+                                                        backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
+                                                        color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    <Clock size={10} /> En Gracia ({graceCount})
+                                                </button>
+                                            )}
+                                            {inRouteCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPendingStatusFilter('in_route')}
+                                                    style={{
+                                                        border: 'none',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: pendingStatusFilter === 'in_route' ? '800' : '600',
+                                                        backgroundColor: pendingStatusFilter === 'in_route' ? '#0284C7' : 'transparent',
+                                                        color: pendingStatusFilter === 'in_route' ? 'white' : '#0369A1',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    <Truck size={10} /> En Ruta ({inRouteCount})
+                                                </button>
+                                            )}
+                                            {inProcessCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPendingStatusFilter('in_process')}
+                                                    style={{
+                                                        border: 'none',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: pendingStatusFilter === 'in_process' ? '800' : '600',
+                                                        backgroundColor: pendingStatusFilter === 'in_process' ? '#475569' : 'transparent',
+                                                        color: pendingStatusFilter === 'in_process' ? 'white' : '#475569',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    <Layers size={10} /> En Prep. ({inProcessCount})
+                                                </button>
+                                            )}
+                                            {noveltiesCount > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPendingStatusFilter('novelties')}
+                                                    style={{
+                                                        border: 'none',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.64rem',
+                                                        fontWeight: pendingStatusFilter === 'novelties' ? '800' : '600',
+                                                        backgroundColor: pendingStatusFilter === 'novelties' ? '#DC2626' : 'transparent',
+                                                        color: pendingStatusFilter === 'novelties' ? 'white' : '#991B1B',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}
+                                                >
+                                                    <AlertTriangle size={10} /> Novedades ({noveltiesCount})
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Remisiones retenidas sin precio */}
+                                        {unpricedOffAgreementCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenAssignPriceModal()}
+                                                title="Remisiones con tarifa pendiente asignable por Comercial (SoD)"
+                                                style={{
+                                                    backgroundColor: '#FEF2F2',
+                                                    color: '#991B1B',
+                                                    border: '1px solid #F87171',
+                                                    padding: '0.24rem 0.50rem',
+                                                    borderRadius: '5px',
+                                                    fontWeight: '800',
+                                                    fontSize: '0.66rem',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                <AlertTriangle size={10} style={{ color: '#DC2626' }} />
+                                                <span>{unpricedOffAgreementCount} Retenidos</span>
                                             </button>
                                         )}
                                     </div>
 
-                                    {/* Remisiones retenidas sin precio */}
-                                    {unpricedOffAgreementCount > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenAssignPriceModal()}
-                                            title="Remisiones con tarifa pendiente asignable por Comercial (SoD)"
-                                            style={{
-                                                backgroundColor: '#FEF2F2',
-                                                color: '#991B1B',
-                                                border: '1px solid #F87171',
-                                                padding: '0.28rem 0.55rem',
-                                                borderRadius: '6px',
-                                                fontWeight: '800',
-                                                fontSize: '0.68rem',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            <AlertTriangle size={11} style={{ color: '#DC2626' }} />
-                                            <span>{unpricedOffAgreementCount} Retenidos</span>
-                                        </button>
-                                    )}
-
-                                    {/* Selección Contextual */}
+                                    {/* Flanco Derecho: Selección Contextual */}
                                     {selectedOrderIds.length > 0 && (
-                                        <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                             <button
                                                 type="button"
                                                 onClick={() => handleAccumulateOrdersForBatch(selectedOrderIds)}
@@ -4937,10 +5091,10 @@ export default function BillingDashboard() {
                                                     backgroundColor: '#F8FAFC',
                                                     color: '#0F172A',
                                                     border: '1px solid #CBD5E1',
-                                                    padding: '0.28rem 0.6rem',
-                                                    borderRadius: '6px',
+                                                    padding: '0.24rem 0.55rem',
+                                                    borderRadius: '5px',
                                                     fontWeight: '800',
-                                                    fontSize: '0.68rem',
+                                                    fontSize: '0.66rem',
                                                     cursor: 'pointer',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
@@ -4948,7 +5102,7 @@ export default function BillingDashboard() {
                                                 }}
                                                 title="Enviar pedidos seleccionados a la bandeja de facturación por lote acumulado"
                                             >
-                                                <Archive size={11} style={{ color: '#0D7A57' }} />
+                                                <Archive size={10} style={{ color: '#0D7A57' }} />
                                                 <span>Acumular Lote ({selectedOrderIds.length})</span>
                                             </button>
 
@@ -4966,19 +5120,19 @@ export default function BillingDashboard() {
                                                             backgroundColor: '#0D7A57',
                                                             color: 'white',
                                                             border: 'none',
-                                                            padding: '0.28rem 0.65rem',
-                                                            borderRadius: '6px',
+                                                            padding: '0.24rem 0.60rem',
+                                                            borderRadius: '5px',
                                                             fontWeight: '900',
-                                                            fontSize: '0.68rem',
+                                                            fontSize: '0.66rem',
                                                             cursor: 'pointer',
                                                             display: 'inline-flex',
                                                             alignItems: 'center',
                                                             gap: '4px',
-                                                            boxShadow: '0 1px 4px rgba(13, 122, 87, 0.25)'
+                                                            boxShadow: '0 1px 3px rgba(13, 122, 87, 0.25)'
                                                         }}
                                                         title="Unificar los pedidos seleccionados del mismo cliente en una sola Factura de Venta"
                                                     >
-                                                        <CheckCircle2 size={11} />
+                                                        <CheckCircle2 size={10} />
                                                         <span>Unificar ({selectedOrderIds.length})</span>
                                                     </button>
                                                 );
@@ -4991,8 +5145,8 @@ export default function BillingDashboard() {
                                                     border: '1px solid #FECACA',
                                                     backgroundColor: '#FEF2F2',
                                                     color: '#991B1B',
-                                                    padding: '0.25rem 0.5rem',
-                                                    borderRadius: '5px',
+                                                    padding: '0.22rem 0.45rem',
+                                                    borderRadius: '4px',
                                                     fontSize: '0.64rem',
                                                     fontWeight: '700',
                                                     cursor: 'pointer'
@@ -5000,177 +5154,12 @@ export default function BillingDashboard() {
                                             >
                                                 Limpiar ({selectedOrderIds.length})
                                             </button>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
-
-                                {/* Flanco Derecho: Pipeline Operativo de Cortes & Exportación (SpaceX Clean) */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                    {/* Guía Rápida de Cortes */}
-                                    <div
-                                        title="🌙 Corte Tarde (Pre-Despacho FAC-IMP): Para pedidos que viajan mañana y exigen Factura DIAN física impresa en muelle (hoteles, colegios, grandes superficies). No altera el alistamiento en bodega.&#10;&#10;☀️ Corte Mañana (Post-Entrega): Para remisiones entregadas tras cumplirse el margen de gracia de 120m y confirmación de pesos en báscula."
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            backgroundColor: '#F8FAFC',
-                                            border: '1px solid #E2E8F0',
-                                            padding: '0.26rem 0.5rem',
-                                            borderRadius: '6px',
-                                            fontSize: '0.63rem',
-                                            color: '#64748B',
-                                            cursor: 'help'
-                                        }}
-                                    >
-                                        <HelpCircle size={12} style={{ color: '#0D7A57' }} />
-                                        <span style={{ fontWeight: '700', color: '#334155' }}>Cortes:</span>
-                                        <span>🌙 Tarde (FAC-IMP) / ☀️ Mañana (Remisiones)</span>
-                                    </div>
-
-                                    {/* SpaceX: Novedades NC SOLO si hay registros pendientes (> 0) */}
-                                    {(filteredCreditNotes.length > 0 || creditNotesItems.length > 0) && (
-                                        <button
-                                            type="button"
-                                            onClick={handleExportCreditNotesExcel}
-                                            disabled={isProcessing}
-                                            style={{
-                                                backgroundColor: '#FAF5FF',
-                                                color: '#6B21A8',
-                                                border: '1px solid #D8B4FE',
-                                                padding: '0.30rem 0.60rem',
-                                                borderRadius: '6px',
-                                                fontWeight: '800',
-                                                fontSize: '0.70rem',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                cursor: 'pointer',
-                                                boxShadow: '0 1px 3px rgba(107, 33, 168, 0.1)'
-                                            }}
-                                            title="Descargar reporte Excel de notas crédito para World Office"
-                                        >
-                                            <FileSpreadsheet size={12} color="#7C3AED" />
-                                            <span>NC Pendientes ({filteredCreditNotes.length > 0 ? filteredCreditNotes.length : creditNotesItems.length})</span>
-                                        </button>
-                                    )}
-
-                                    {/* Excel Rápido WO (Utilidad Secundaria SpaceX) */}
-                                    <button
-                                        type="button"
-                                        onClick={handleExportPendingToWorldOffice}
-                                        disabled={pendingOrders.length === 0 || isProcessing}
-                                        style={{
-                                            backgroundColor: '#FFFFFF',
-                                            color: '#334155',
-                                            border: '1px solid #CBD5E1',
-                                            padding: '0.30rem 0.60rem',
-                                            borderRadius: '6px',
-                                            fontWeight: '700',
-                                            fontSize: '0.70rem',
-                                            cursor: pendingOrders.length === 0 ? 'not-allowed' : 'pointer',
-                                            opacity: pendingOrders.length === 0 ? 0.6 : 1,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)'
-                                        }}
-                                        title="Descargar archivo Excel (.xlsx) con la plantilla oficial de World Office para los pedidos visibles (sin generar corte formal)"
-                                    >
-                                        <FileSpreadsheet size={12} style={{ color: '#0D7A57' }} />
-                                        <span>Excel Rápido WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
-                                    </button>
-
-                                    {/* 📊 Relación de Documentos (.xlsx) - Paridad Gemba 16 Columnas */}
-                                    <button
-                                        type="button"
-                                        onClick={handleExportRelacionByDate}
-                                        disabled={isProcessing || filteredPendingOrders.length === 0}
-                                        style={{
-                                            backgroundColor: '#F0FDF4',
-                                            color: '#166534',
-                                            border: '1px solid #BBF7D0',
-                                            padding: '0.30rem 0.60rem',
-                                            borderRadius: '6px',
-                                            fontWeight: '700',
-                                            fontSize: '0.70rem',
-                                            cursor: isProcessing || filteredPendingOrders.length === 0 ? 'not-allowed' : 'pointer',
-                                            opacity: filteredPendingOrders.length === 0 ? 0.6 : 1,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        title="Descargar planilla oficial de Relación de Documentos (.xlsx) de 16 columnas para la fecha seleccionada"
-                                    >
-                                        <FileSpreadsheet size={12} style={{ color: '#166534' }} />
-                                        <span>Relación Doc (.xlsx)</span>
-                                    </button>
-
-                                    {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) - SDD Escenario 432 & Goldfish Salvaguarda 1 */}
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOpenCutPreview('PM')}
-                                        disabled={isProcessing || pendingFacImpOrdersCount === 0}
-                                        title={pendingFacImpOrdersCount === 0 
-                                            ? 'No hay pedidos pendientes con Factura Impresa para esta tanda' 
-                                            : 'Corte Pre-Despacho Tarde (FAC-IMP): Genera plano World Office exclusivamente para pedidos con Factura Electrónica Impresa obligatoria en muelle antes de la salida de ruta'}
-                                        style={{
-                                            backgroundColor: pendingFacImpOrdersCount === 0 ? '#E2E8F0' : '#DC2626',
-                                            color: pendingFacImpOrdersCount === 0 ? '#94A3B8' : 'white',
-                                            border: 'none',
-                                            padding: '0.32rem 0.75rem',
-                                            borderRadius: '6px',
-                                            fontWeight: '800',
-                                            fontSize: '0.71rem',
-                                            cursor: (isProcessing || pendingFacImpOrdersCount === 0) ? 'not-allowed' : 'pointer',
-                                            opacity: pendingFacImpOrdersCount === 0 ? 0.65 : 1,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: pendingFacImpOrdersCount === 0 ? 'none' : '0 2px 6px rgba(220, 38, 38, 0.25)'
-                                        }}
-                                    >
-                                        <Moon size={12} />
-                                        <span>Corte Tarde (FAC-IMP) {pendingFacImpOrdersCount > 0 ? `(${pendingFacImpOrdersCount})` : '(0)'}</span>
-                                    </button>
-
-                                    {/* ☀️ Corte Mañana (Post-Entrega) */}
-                                    <button
-                                        type="button"
-                                        onClick={() => isDateLockedByCutAM ? undefined : handleOpenCutPreview('AM')}
-                                        disabled={pendingOrdersCount === 0 || isProcessing || isDateLockedByCutAM}
-                                        title={isDateLockedByCutAM 
-                                            ? 'Esta fecha ya tiene un corte AM cerrado. Modo Consulta activo' 
-                                            : 'Corte Post-Entrega Mañana (AM): Formaliza facturación de pedidos entregados bajo remisión tras cumplirse el margen de gracia de 120m y novedades de báscula'}
-                                        style={{
-                                            backgroundColor: isDateLockedByCutAM ? '#E2E8F0' : '#0D7A57',
-                                            color: isDateLockedByCutAM ? '#64748B' : 'white',
-                                            border: 'none',
-                                            padding: '0.32rem 0.80rem',
-                                            borderRadius: '6px',
-                                            fontWeight: '800',
-                                            fontSize: '0.71rem',
-                                            cursor: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 'not-allowed' : 'pointer',
-                                            opacity: (pendingOrdersCount === 0 || isDateLockedByCutAM) ? 0.6 : 1,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: isDateLockedByCutAM ? 'none' : '0 2px 6px rgba(13, 122, 87, 0.2)'
-                                        }}
-                                    >
-                                        {isDateLockedByCutAM ? <Lock size={12} /> : <Sun size={12} />}
-                                        <span>
-                                            {isDateLockedByCutAM 
-                                                ? 'Corte AM Cerrado' 
-                                                : `Corte Mañana (Post-Entrega) ${selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${pendingOrdersCount})`}`}
-                                        </span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* INVOICING SUBMODULE */}
