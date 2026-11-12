@@ -1095,7 +1095,7 @@ interface CommittedSaleData {
             });
             setMovements(segregatedMovs);
 
-            // 3. Cargar ventas de órdenes para esta fecha de entrega (incluyendo pedidos pendientes/por aprobar antes de lanzamiento oficial)
+            // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
             try {
                 const [{ data: cutoffSetting }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
                     supabase.from('app_settings').select('value').eq('key', 'cutoff_hour_admin').maybeSingle(),
@@ -1103,7 +1103,7 @@ interface CommittedSaleData {
                         .from('orders')
                         .select('id, created_at')
                         .eq('delivery_date', balanceDate)
-                        .neq('status', 'cancelled')
+                        .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered'])
                         .range(0, 4999)
                 ]);
 
