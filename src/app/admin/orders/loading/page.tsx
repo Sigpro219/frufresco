@@ -17,7 +17,7 @@ import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '
 import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { getDocumentBadgeStyle } from '@/components/ClientsModule';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
-import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
+import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
 import { 
     MessageSquare, 
     Phone, 
@@ -475,7 +475,8 @@ function OrderLoadingContent() {
                     setAllowHolidaysSetting(allowHolidays);
                     setCutoffRulesActive(cutoffEnabled);
                     setCutoffHourState(cutoffHour);
-                    setMinDeliveryDate(calculateStandardMinDeliveryDate(cutoffEnabled, cutoffHour, allowSundays, allowHolidays));
+                    // SDD Escenario 219 & Gemba Ops: En Torre de Control la fecha mínima permitida para despachos y reposiciones es hoy mismo (no retroactiva)
+                    setMinDeliveryDate(formatDateToYYYYMMDD(getBogotaNow()));
                 }
             } catch (e) {
                 console.error('Error fetching settings in loading page:', e);
@@ -565,7 +566,7 @@ function OrderLoadingContent() {
         }, 1000);
         return () => clearInterval(timer);
     }, []);
-    const [minDeliveryDate, setMinDeliveryDate] = useState(() => calculateStandardMinDeliveryDate(true, 20, false, false));
+    const [minDeliveryDate, setMinDeliveryDate] = useState(() => formatDateToYYYYMMDD(getBogotaNow()));
     const [editShippingAddress, setEditShippingAddress] = useState('');
     const [editLatitude, setEditLatitude] = useState<number | null>(null);
     const [editLongitude, setEditLongitude] = useState<number | null>(null);
@@ -574,6 +575,11 @@ function OrderLoadingContent() {
     const [showAddressInput, setShowAddressInput] = useState(false);
     const [editPurchaseOrder, setEditPurchaseOrder] = useState('');
     const [editSolped, setEditSolped] = useState('');
+
+    const isSelectedOrderReplacement = useMemo(() => {
+        if (!selectedOrder) return false;
+        return getOrderReplacementInfo(selectedOrder).isReplacement;
+    }, [selectedOrder]);
 
     const isSelectedOrderColsubsidio = useMemo(() => {
         if (!selectedOrder) return false;
@@ -2862,19 +2868,29 @@ useEffect(() => {
             return;
         }
 
-        // POKA-YOKE SDD ESCENARIO 219: Blindaje Integral de Fecha de Despacho
+        // POKA-YOKE SDD ESCENARIO 219: Blindaje Integral de Fecha de Despacho (Anti-Retroactividad)
         if (editDeliveryDate) {
             const deliveryOnly = editDeliveryDate.split('T')[0];
             const originalDeliveryOnly = (selectedOrder.delivery_date || '').split('T')[0];
             if (deliveryOnly !== originalDeliveryOnly) {
                 if (deliveryOnly < minDeliveryDate) {
-                    alert(`Fecha no permitida: La nueva fecha de entrega (${deliveryOnly}) no puede ser anterior a la fecha mínima operativa permitida (${minDeliveryDate}).`);
+                    alert(`Fecha no permitida: La nueva fecha de entrega (${deliveryOnly}) no puede ser anterior a la fecha mínima operativa permitida (${minDeliveryDate}). No se permiten entregas retroactivas.`);
                     return;
                 }
                 const holidayCheck = isValidDeliveryDate(deliveryOnly, allowSundaysSetting, allowHolidaysSetting);
                 if (!holidayCheck.valid) {
-                    alert(`Fecha de despacho rechazada: ${holidayCheck.reason || 'Día no habilitado según políticas de entrega (domingos/festivos desactivados).'}`);
-                    return;
+                    const isSpecialCase = isSelectedOrderReplacement || selectedOrder?.type?.startsWith('b2b');
+                    if (isSpecialCase) {
+                        const confirmException = window.confirm(
+                            `AVISO DE CALENDARIO:\n\n` +
+                            `La nueva fecha de entrega (${deliveryOnly}) corresponde a un día no habitual: ${holidayCheck.reason || 'Día no habilitado'}.\n\n` +
+                            `¿Desea autorizar este despacho como excepción operativa de entrega?`
+                        );
+                        if (!confirmException) return;
+                    } else {
+                        alert(`Fecha de despacho rechazada: ${holidayCheck.reason || 'Día no habilitado según políticas de entrega (domingos/festivos desactivados).'}`);
+                        return;
+                    }
                 }
             }
         }
@@ -6224,7 +6240,14 @@ useEffect(() => {
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr', gap: '0.85rem', marginBottom: '0.75rem' }}>
                                             {/* Fecha de Entrega */}
                                             <div>
-                                                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#065F46', marginBottom: '4px' }}>FECHA DE ENTREGA</label>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#065F46' }}>FECHA DE ENTREGA</label>
+                                                    {isSelectedOrderReplacement && (
+                                                        <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#047857', backgroundColor: '#D1FAE5', padding: '1px 5px', borderRadius: '4px' }}>
+                                                            REPOSICIÓN
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <input 
                                                     type="date"
                                                     min={minDeliveryDate}
@@ -6233,15 +6256,29 @@ useEffect(() => {
                                                         const val = e.target.value;
                                                         if (val) {
                                                             if (val < minDeliveryDate) {
-                                                                alert(`Fecha no permitida: Debe ser igual o posterior a ${minDeliveryDate}.`);
+                                                                alert(`Fecha no permitida: La fecha de entrega (${val}) no puede ser anterior a hoy (${minDeliveryDate}). No se permiten entregas retroactivas.`);
                                                                 return;
                                                             }
                                                             const check = isValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
                                                             if (!check.valid) {
-                                                                alert(`${check.reason || 'Día no habilitado para entregas.'}`);
-                                                                const nextV = getNextValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
-                                                                setEditDeliveryDate(formatDateToYYYYMMDD(nextV));
-                                                                return;
+                                                                const isSpecialCase = isSelectedOrderReplacement || selectedOrder?.type?.startsWith('b2b');
+                                                                if (isSpecialCase) {
+                                                                    const confirmException = window.confirm(
+                                                                        `AVISO DE CALENDARIO:\n\n` +
+                                                                        `La fecha seleccionada (${val}) es ${check.reason || 'un día no habitual de despacho'}.\n\n` +
+                                                                        `¿Desea autorizar esta fecha como excepción operativa de entrega?`
+                                                                    );
+                                                                    if (!confirmException) {
+                                                                        const nextV = getNextValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
+                                                                        setEditDeliveryDate(formatDateToYYYYMMDD(nextV));
+                                                                        return;
+                                                                    }
+                                                                } else {
+                                                                    alert(`${check.reason || 'Día no habilitado para entregas.'}`);
+                                                                    const nextV = getNextValidDeliveryDate(val, allowSundaysSetting, allowHolidaysSetting);
+                                                                    setEditDeliveryDate(formatDateToYYYYMMDD(nextV));
+                                                                    return;
+                                                                }
                                                             }
                                                             setEditDeliveryDate(val);
                                                         }

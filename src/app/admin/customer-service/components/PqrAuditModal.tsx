@@ -5394,6 +5394,7 @@ export default function PqrAuditModal({
                                                             </span>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                                 {[
+                                                                    { label: 'Hoy (Urgente)', date: minTodayDate },
                                                                     { label: 'Mañana', date: d1Date },
                                                                     { label: 'Pasado mañana', date: d2Date },
                                                                     { label: 'En 3 días', date: d3Date }
