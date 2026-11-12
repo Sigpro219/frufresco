@@ -16902,3 +16902,6 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   3. **Impresión Quirúrgica Individual por Pedido (Zero Paper Waste):**
      - Cada bloque de orden renderiza en pantalla una micro-barra de control de orden (con clase `no-print`) que expone el botón de acción: **`[ 🖨️ Imprimir solo este pedido ]`**.
      - Al accionarlo, extrae exclusivamente el duplicado correspondiente a esa orden específica y dispara `printViaNewWindow` sin forzar la impresión de las 122 hojas de la jornada.
+  4. **Renderizado Universal de Contingencia para Clientes con Factura DIAN (`FAC-IMP`):**
+     - En la pantalla de contingencia se renderiza el 100% de los pedidos de la jornada (58 de 58 pedidos completos), erradicando discrepancias entre el botón de tanda (`Hoy 58`) y los documentos disponibles en muelle.
+     - Los clientes amparados bajo Factura Impresa DIAN (`document_type = 'invoice'`, ej. *Hotel Tequendama Suites*, *IRCC El Corral*) se renderizan como **`GUÍA DE ENTREGA / CONTINGENCIA`**, portando el badge distintivo `[ ORIGINAL - FACTURA IMPRESA (FAC-IMP) ]` y el banner normativo de soporte para firma y verificación en muelle mientras se adjunta la factura definitiva expedida en World Office.

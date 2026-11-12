@@ -1431,6 +1431,15 @@ export default function BillingDashboard() {
     const [isRefreshingRealtime, setIsRefreshingRealtime] = useState(false);
     const [lastRealtimeSync, setLastRealtimeSync] = useState<string>('');
 
+    // Reversión Atómica de Cortes & Auto-Sanación (Pilar 2 & 3 - Escenario 449 SDD)
+    const [isRevertModalOpen, setIsRevertModalOpen] = useState(false);
+    const [cutToRevert, setCutToRevert] = useState<any>(null);
+    const [revertReason, setRevertReason] = useState('Error en pedidos incluidos');
+    const [revertCustomReason, setRevertCustomReason] = useState('');
+    const [revertWoConfirmed, setRevertWoConfirmed] = useState(false);
+    const [isRevertingCut, setIsRevertingCut] = useState(false);
+    const [zombieCutAlert, setZombieCutAlert] = useState<{ cut: any; stuckOrdersCount: number } | null>(null);
+
     // Central Data Fetching
     const fetchData = useCallback(async (silentOrEvent?: boolean | React.MouseEvent) => {
         const silent = silentOrEvent === true;
@@ -1447,6 +1456,18 @@ export default function BillingDashboard() {
                 .order('created_at', { ascending: false });
             if (cutsError) throw cutsError;
             setCuts(cutsData || []);
+
+            // Auto-Sanación (Pilar 3 SDD Escenario 449): Detectar cortes zombies o interrumpidos en 'open'
+            const openOrStuckCut = (cutsData || []).find((c: any) => c.status === 'open');
+            if (openOrStuckCut) {
+                const { count: stuckCount } = await supabase
+                    .from('orders')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('billing_cut_id', openOrStuckCut.id);
+                setZombieCutAlert({ cut: openOrStuckCut, stuckOrdersCount: stuckCount || 0 });
+            } else {
+                setZombieCutAlert(null);
+            }
 
             // 2. Fetch returns (both pending_review and approved for full credit note reconciliation)
             const { data: returnsData, error: returnsError } = await supabase
@@ -2667,7 +2688,7 @@ export default function BillingDashboard() {
                     cut_number: nextCutNum,
                     scheduled_date: selectedBillingDate === 'all' ? getBogotaDate(0) : selectedBillingDate,
                     cut_slot: previewSlot,
-                    status: 'open',
+                    status: 'closed', // Ciclo cerrado formalmente (Escenario 449 SDD)
                     total_orders: previewOrders.length,
                     total_amount: totalCutAmount
                 })
@@ -3170,6 +3191,185 @@ export default function BillingDashboard() {
         } catch (err: any) {
             console.error('Export error:', err);
             showToast({ type: 'error', message: `Error al exportar plano para World Office: ${err.message}` });
+        }
+    };
+
+    // Reversión Atómica de Cortes & Auto-Sanación (Pilar 2 & 3 - Escenario 449 SDD)
+    const handleOpenRevertModal = (cut: any) => {
+        setCutToRevert(cut);
+        setRevertReason('Error en pedidos incluidos');
+        setRevertCustomReason('');
+        setRevertWoConfirmed(false);
+        setIsRevertModalOpen(true);
+    };
+
+    const handleConfirmRevertCut = async () => {
+        if (!cutToRevert) return;
+        if (cutToRevert.status === 'exported' && !revertWoConfirmed) {
+            showToast({
+                type: 'warning',
+                title: 'Confirmación Requerida',
+                message: 'Debe confirmar bajo su responsabilidad que el corte no ha sido procesado en World Office Desktop.'
+            });
+            return;
+        }
+
+        setIsRevertingCut(true);
+        try {
+            const cutId = cutToRevert.id;
+            const isNcSlot = cutToRevert.cut_slot === 'ADJ';
+
+            // 1. Obtener las facturas asociadas a este corte
+            const { data: cutInvoices } = await supabase
+                .from('billing_invoices')
+                .select('id, invoice_number_raw, invoice_prefix')
+                .eq('cut_id', cutId);
+
+            // 2. Rebobinado seguro de consecutivos DIAN (Asunción 2 Goldfish)
+            const settingKey = isNcSlot ? 'billing_nc_next_number' : 'billing_invoice_next_number';
+            const { data: currentSeqData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', settingKey)
+                .single();
+
+            const currentNextNum = Number(currentSeqData?.value || 0);
+            let wasRewound = false;
+            let minRewound = 0;
+
+            if (cutInvoices && cutInvoices.length > 0) {
+                const rawNumbers = cutInvoices
+                    .map((inv: any) => Number(inv.invoice_number_raw))
+                    .filter((n: number) => !isNaN(n) && n > 0);
+
+                if (rawNumbers.length > 0) {
+                    const minRaw = Math.min(...rawNumbers);
+                    const maxRaw = Math.max(...rawNumbers);
+
+                    // Solo se rebobina si el corte revertido es el último emitido (contiguo a la secuencia actual)
+                    if (maxRaw + 1 === currentNextNum) {
+                        await supabase
+                            .from('app_settings')
+                            .upsert({
+                                key: settingKey,
+                                value: String(minRaw),
+                                updated_at: new Date().toISOString()
+                            });
+                        wasRewound = true;
+                        minRewound = minRaw;
+                        if (isNcSlot) {
+                            setNcNextNumber(minRaw);
+                        } else {
+                            setInvoiceNextNumber(minRaw);
+                        }
+                    }
+                }
+            }
+
+            // 3. Liberar pedidos: desvincular billing_cut_id e invoice_id
+            const { error: releaseErr } = await supabase
+                .from('orders')
+                .update({ billing_cut_id: null, invoice_id: null })
+                .eq('billing_cut_id', cutId);
+
+            if (releaseErr) throw releaseErr;
+
+            // 4. Eliminar las facturas de billing_invoices
+            const { error: delInvErr } = await supabase
+                .from('billing_invoices')
+                .delete()
+                .eq('cut_id', cutId);
+
+            if (delInvErr) throw delInvErr;
+
+            // 5. Eliminar el corte de billing_cuts
+            const { error: delCutErr } = await supabase
+                .from('billing_cuts')
+                .delete()
+                .eq('id', cutId);
+
+            if (delCutErr) throw delCutErr;
+
+            // 6. Bitácora inmutable en audit_logs (Pilar 4 & Asunción 3 Goldfish)
+            const finalReason = revertReason === 'Otro' ? (revertCustomReason || 'Otro motivo') : revertReason;
+            await supabase.from('audit_logs').insert({
+                action: 'REVERT_BILLING_CUT',
+                details: {
+                    cut_id: cutId,
+                    cut_number: cutToRevert.cut_number,
+                    scheduled_date: cutToRevert.scheduled_date,
+                    cut_slot: cutToRevert.cut_slot,
+                    total_orders: cutToRevert.total_orders,
+                    total_amount: cutToRevert.total_amount,
+                    reason: finalReason,
+                    rewound_consecutive: wasRewound,
+                    rewound_to: wasRewound ? minRewound : null,
+                    reverted_at: new Date().toISOString()
+                }
+            });
+
+            showToast({
+                type: 'success',
+                title: `Corte #${cutToRevert.cut_number} Revertido`,
+                message: `${cutToRevert.total_orders} pedidos devueltos a la bandeja de pendientes. ${wasRewound ? `Consecutivo DIAN rebobinado a ${minRewound}.` : ''}`
+            });
+
+            setIsRevertModalOpen(false);
+            setCutToRevert(null);
+            fetchData();
+        } catch (err: any) {
+            console.error('Error al revertir corte:', err);
+            showToast({
+                type: 'error',
+                title: 'Error de Reversión',
+                message: `No se pudo revertir el corte: ${err.message}`
+            });
+        } finally {
+            setIsRevertingCut(false);
+        }
+    };
+
+    const handleSelfHealZombieCut = async (cutId: string) => {
+        setIsProcessing(true);
+        try {
+            // Liberar pedidos atrapados
+            await supabase
+                .from('orders')
+                .update({ billing_cut_id: null, invoice_id: null })
+                .eq('billing_cut_id', cutId);
+
+            // Eliminar facturas huérfanas
+            await supabase
+                .from('billing_invoices')
+                .delete()
+                .eq('cut_id', cutId);
+
+            // Eliminar corte zombie
+            await supabase
+                .from('billing_cuts')
+                .delete()
+                .eq('id', cutId);
+
+            await supabase.from('audit_logs').insert({
+                action: 'SELF_HEAL_ZOMBIE_CUT',
+                details: {
+                    cut_id: cutId,
+                    healed_at: new Date().toISOString()
+                }
+            });
+
+            showToast({
+                type: 'success',
+                title: 'Auto-Sanación Completada',
+                message: 'El corte interrumpido fue eliminado y los pedidos fueron liberados a pendientes.'
+            });
+            setZombieCutAlert(null);
+            fetchData();
+        } catch (err: any) {
+            console.error('Error en auto-sanación:', err);
+            showToast({ type: 'error', message: `Falla en auto-sanación: ${err.message}` });
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -4207,6 +4407,50 @@ export default function BillingDashboard() {
 
             {/* Contenedor Maestro Universal 1600px */}
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.6rem 0.8rem 2.5rem', width: '100%', overflowX: 'clip', overflowY: 'visible' }}>
+
+                {/* AUTO-SANACIÓN DE CORTES ZOMBIES (PILAR 3 - ESCENARIO 449 SDD) */}
+                {zombieCutAlert && (
+                    <div style={{
+                        backgroundColor: '#FFFBEB',
+                        border: '1px solid #F59E0B',
+                        borderRadius: '8px',
+                        padding: '0.45rem 0.85rem',
+                        marginBottom: '0.45rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.15)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AlertTriangle size={15} color="#D97706" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#92400E' }}>
+                                Se detectó un corte incompleto o interrumpido (#{zombieCutAlert.cut.cut_number} del {zombieCutAlert.cut.scheduled_date} - {zombieCutAlert.stuckOrdersCount} pedidos amarrados).
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => handleSelfHealZombieCut(zombieCutAlert.cut.id)}
+                            disabled={isProcessing}
+                            style={{
+                                backgroundColor: '#D97706',
+                                color: 'white',
+                                border: 'none',
+                                padding: '0.24rem 0.65rem',
+                                borderRadius: '5px',
+                                fontWeight: '800',
+                                fontSize: '0.68rem',
+                                cursor: isProcessing ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                flexShrink: 0
+                            }}
+                        >
+                            <RotateCcw size={11} /> Reparar y Liberar Pedidos en 1 Clic
+                        </button>
+                    </div>
+                )}
 
                 {/* UNIFIED STICKY CONTROL DOCK (BELOW 85px NAVBAR - ZERO GAP) */}
                 <div 
@@ -5307,8 +5551,17 @@ export default function BillingDashboard() {
                                                             <td style={{ padding: '0.55rem 0.75rem', fontWeight: '600', color: '#334155', fontSize: '0.76rem' }}>{cut.total_orders} pedidos</td>
                                                             <td style={{ padding: '0.55rem 0.75rem', textAlign: 'right', fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>{formatMoney(cut.total_amount)}</td>
                                                             <td style={{ padding: '0.55rem 0.75rem' }}>
-                                                                <span style={{ backgroundColor: cut.status === 'exported' ? '#ECFDF5' : '#FEF3C7', color: cut.status === 'exported' ? '#065F46' : '#92400E', border: `1px solid ${cut.status === 'exported' ? '#A7F3D0' : '#FDE68A'}`, padding: '0.18rem 0.5rem', borderRadius: '99px', fontSize: '0.66rem', fontWeight: '800', textTransform: 'uppercase' }}>
-                                                                    {cut.status}
+                                                                <span style={{ 
+                                                                    backgroundColor: cut.status === 'exported' ? '#ECFDF5' : cut.status === 'closed' ? '#EFF6FF' : '#FEF3C7', 
+                                                                    color: cut.status === 'exported' ? '#065F46' : cut.status === 'closed' ? '#1E40AF' : '#92400E', 
+                                                                    border: `1px solid ${cut.status === 'exported' ? '#A7F3D0' : cut.status === 'closed' ? '#BFDBFE' : '#FDE68A'}`, 
+                                                                    padding: '0.18rem 0.5rem', 
+                                                                    borderRadius: '99px', 
+                                                                    fontSize: '0.66rem', 
+                                                                    fontWeight: '800', 
+                                                                    textTransform: 'uppercase' 
+                                                                }}>
+                                                                    {cut.status === 'closed' ? 'CERRADO' : cut.status === 'exported' ? 'EXPORTADO' : cut.status}
                                                                 </span>
                                                             </td>
                                                             <td style={{ padding: '0.55rem 0.75rem', textAlign: 'right' }}>
@@ -5351,6 +5604,29 @@ export default function BillingDashboard() {
                                                                         title="Descargar la Relación de Documentos oficial (16 columnas) cerrada para este corte"
                                                                     >
                                                                         <FileSpreadsheet size={13} style={{ color: '#166534' }} /> Relación (.xlsx)
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => handleOpenRevertModal(cut)}
+                                                                        disabled={isProcessing}
+                                                                        style={{ 
+                                                                            backgroundColor: '#FEF2F2', 
+                                                                            color: '#DC2626', 
+                                                                            padding: '0.36rem 0.70rem', 
+                                                                            borderRadius: '7px', 
+                                                                            border: '1px solid #FECACA', 
+                                                                            fontWeight: '700', 
+                                                                            fontSize: '0.72rem', 
+                                                                            cursor: isProcessing ? 'wait' : 'pointer', 
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '4px', 
+                                                                            transition: 'all 0.15s ease', 
+                                                                            boxShadow: '0 1px 2px rgba(220, 38, 38, 0.05)' 
+                                                                        }}
+                                                                        title="Revertir este corte, liberar pedidos a pendientes y rebobinar consecutivos si corresponde"
+                                                                    >
+                                                                        <RotateCcw size={12} style={{ color: '#DC2626' }} /> Revertir
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -9311,6 +9587,208 @@ export default function BillingDashboard() {
                             >
                                 <Check size={14} strokeWidth={2.5} />
                                 {woSubmitting ? 'Sincronizando...' : 'Confirmar Radicación en WO'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE REVERSIÓN ATÓMICA DE CORTE (PILAR 2 - ESCENARIO 449 SDD) */}
+            {isRevertModalOpen && cutToRevert && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        border: '1px solid #E2E8F0',
+                        maxWidth: '520px',
+                        width: '100%',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            backgroundColor: '#FEF2F2',
+                            borderBottom: '1px solid #FEE2E2',
+                            padding: '1rem 1.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#DC2626',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white'
+                                }}>
+                                    <RotateCcw size={16} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: '900', color: '#991B1B' }}>
+                                        Revertir Corte #{cutToRevert.cut_number} ({cutToRevert.cut_slot})
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.68rem', color: '#B91C1C' }}>
+                                        Fecha: {cutToRevert.scheduled_date} • {cutToRevert.total_orders} pedidos • {formatMoney(cutToRevert.total_amount)}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setIsRevertModalOpen(false); setCutToRevert(null); }}
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#991B1B' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{
+                                backgroundColor: '#F8FAFC',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '8px',
+                                padding: '0.75rem',
+                                fontSize: '0.74rem',
+                                color: '#475569',
+                                lineHeight: '1.4'
+                            }}>
+                                <strong>Efecto de la Reversión ("Devolver el Tiempo"):</strong>
+                                <ul style={{ margin: '0.35rem 0 0 1rem', padding: 0 }}>
+                                    <li>Los <strong>{cutToRevert.total_orders} pedidos</strong> quedarán liberados e inmediatamente disponibles en la bandeja de pendientes.</li>
+                                    <li>Se eliminarán las facturas generadas de este corte en el sistema web.</li>
+                                    <li>Si este corte era el último emitido, el consecutivo DIAN se rebobinará automáticamente para no quemar números.</li>
+                                </ul>
+                            </div>
+
+                            {/* Asunción 1 Goldfish: Advertencia si fue exportado a World Office */}
+                            {cutToRevert.status === 'exported' && (
+                                <div style={{
+                                    backgroundColor: '#FEF2F2',
+                                    border: '1px solid #FCA5A5',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#991B1B', fontWeight: '800', fontSize: '0.76rem' }}>
+                                        <AlertTriangle size={14} /> Corte marcado como Exportado a World Office
+                                    </div>
+                                    <p style={{ fontSize: '0.70rem', color: '#B91C1C', margin: '4px 0 8px' }}>
+                                        Este corte ya descargó plano para World Office. Revertirlo si ya fue importado en el software contable generará un descuadre fiscal.
+                                    </p>
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: '700', color: '#7F1D1D' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={revertWoConfirmed}
+                                            onChange={(e) => setRevertWoConfirmed(e.target.checked)}
+                                            style={{ accentColor: '#DC2626', marginTop: '2px' }}
+                                        />
+                                        Confirmo bajo mi responsabilidad que este corte NO ha sido procesado ni importado en World Office Desktop.
+                                    </label>
+                                </div>
+                            )}
+
+                            {/* Motivo de Reversión */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: '800', color: '#334155', marginBottom: '4px' }}>
+                                    Motivo de la Reversión (Obligatorio para Auditoría):
+                                </label>
+                                <select
+                                    value={revertReason}
+                                    onChange={(e) => setRevertReason(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.40rem 0.60rem',
+                                        borderRadius: '6px',
+                                        border: '1px solid #CBD5E1',
+                                        fontSize: '0.76rem',
+                                        fontWeight: '600',
+                                        backgroundColor: 'white'
+                                    }}
+                                >
+                                    <option value="Error en pedidos incluidos">Error en pedidos incluidos</option>
+                                    <option value="Tarifas mal liquidadas">Tarifas mal liquidadas</option>
+                                    <option value="Corte abortado o duplicado">Corte abortado o duplicado</option>
+                                    <option value="Otro">Otro motivo (especificar)</option>
+                                </select>
+                                {revertReason === 'Otro' && (
+                                    <input
+                                        type="text"
+                                        placeholder="Describe el motivo de la reversión..."
+                                        value={revertCustomReason}
+                                        onChange={(e) => setRevertCustomReason(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            marginTop: '6px',
+                                            padding: '0.40rem 0.60rem',
+                                            borderRadius: '6px',
+                                            border: '1px solid #CBD5E1',
+                                            fontSize: '0.76rem'
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            backgroundColor: '#F8FAFC',
+                            borderTop: '1px solid #E2E8F0',
+                            padding: '0.75rem 1.25rem',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '8px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => { setIsRevertModalOpen(false); setCutToRevert(null); }}
+                                disabled={isRevertingCut}
+                                style={{
+                                    padding: '0.40rem 0.85rem',
+                                    borderRadius: '6px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: 'white',
+                                    color: '#475569',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmRevertCut}
+                                disabled={isRevertingCut || (cutToRevert.status === 'exported' && !revertWoConfirmed)}
+                                style={{
+                                    padding: '0.40rem 0.95rem',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: (cutToRevert.status === 'exported' && !revertWoConfirmed) ? '#94A3B8' : '#DC2626',
+                                    color: 'white',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    cursor: (cutToRevert.status === 'exported' && !revertWoConfirmed) ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 4px rgba(220, 38, 38, 0.25)'
+                                }}
+                            >
+                                <RotateCcw size={13} />
+                                {isRevertingCut ? 'Revirtiendo Corte...' : 'Confirmar Reversión'}
                             </button>
                         </div>
                     </div>

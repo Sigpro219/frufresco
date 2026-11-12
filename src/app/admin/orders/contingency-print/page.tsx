@@ -919,18 +919,10 @@ function ContingencyPrintContent() {
     const showRemissions = showAll || mode === 'remissions';
     const showDispatch = showAll || mode === 'dispatch';
 
-    // Pedidos activos para remisiones (excluye facturados FAC-IMP) o despachos
+    // Pedidos activos para remisiones o despachos (renderizado universal de contingencia en piso)
     const activePrintOrders = useMemo(() => {
-        if (mode === 'remissions') {
-            return orders.filter(order => {
-                const prof = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
-                const parent = Array.isArray(prof?.parent) ? prof?.parent[0] : prof?.parent;
-                const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
-                return !(rawDocType === 'invoice' || (order as any).document_type === 'invoice');
-            });
-        }
         return orders;
-    }, [orders, mode]);
+    }, [orders]);
 
     const totalRemissionSheets = useMemo(() => {
         return activePrintOrders.reduce((acc, o) => acc + paginateRemissionItems(o.order_items || []).length * 2, 0);
@@ -1629,11 +1621,6 @@ function ContingencyPrintContent() {
                     const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
                     const isInvoiceRequired = rawDocType === 'invoice' || (order as any).document_type === 'invoice';
 
-                    // SPEC.md Escenario 432: Exclusión Mutua Poka-Yoke: Pedidos con Factura Impresa (FAC-IMP) viajan con factura DIAN física expedida en World Office, NO con remisión
-                    if (isInvoiceRequired) {
-                        return null;
-                    }
-
                     const b2cGift = extractB2CGiftDetails(order);
                     const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
@@ -1705,6 +1692,11 @@ function ContingencyPrintContent() {
                                     <span style={{ fontWeight: '900', color: '#0F172A', backgroundColor: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
                                         #{orderNum}
                                     </span>
+                                    {isInvoiceRequired && (
+                                        <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', border: '1px solid #93C5FD', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.65rem' }}>
+                                            📄 FAC-IMP
+                                        </span>
+                                    )}
                                     <span style={{ color: '#1E293B', fontWeight: '700' }}>
                                         {parentName} {branchName ? `· ${branchName}` : ''}
                                     </span>
@@ -1753,16 +1745,25 @@ function ContingencyPrintContent() {
                             return (
                                 <Letterhead
                                     key={`remission-${order.id}-copy-${copyIdx}-page-${pageIdx}`}
-                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : isObsequio ? `REMISIÓN DE OBSEQUIO #${orderNum}` : !withPrices ? `REMISIÓN A CIEGAS #${orderNum}` : `REMISIÓN #${orderNum}`}
+                                    title={isReposicion ? `REPOSICIÓN DE GARANTÍA #${orderNum}` : isObsequio ? `REMISIÓN DE OBSEQUIO #${orderNum}` : isInvoiceRequired ? `GUÍA DE ENTREGA / CONTINGENCIA #${orderNum}` : !withPrices ? `REMISIÓN A CIEGAS #${orderNum}` : `REMISIÓN #${orderNum}`}
                                     subtitle={pageSubtitle}
                                     date={order.delivery_date}
-                                    badge={copyInfo.copyType}
-                                    badgeVariant={copyInfo.isCopy ? 'light' : 'dark'}
+                                    badge={copyInfo.isCopy ? 'COPIA - ARCHIVO' : isInvoiceRequired ? 'ORIGINAL - FACTURA IMPRESA (FAC-IMP)' : copyInfo.copyType}
+                                    badgeVariant={copyInfo.isCopy ? 'light' : isInvoiceRequired ? 'amber' : 'dark'}
                                     espacioNum={espacioNum}
                                     className="page-break"
                                     paperSize="letter"
                                     showWatermark={false}
                                 >
+                                    {/* Banner Poka-Yoke de Contingencia para Cliente con Factura Impresa DIAN */}
+                                    {isInvoiceRequired && (
+                                        <div style={{ backgroundColor: '#EFF6FF', border: '1.2px solid #3B82F6', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#1E40AF', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>📄 CONTROL DE ENTREGA / CONTINGENCIA: Pedido amparado bajo Factura DIAN física expedida en World Office. Documento oficial de soporte para firma y verificación en muelle.</span>
+                                            <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 5px', borderRadius: '3px', fontSize: '6.2pt' }}>
+                                                CLIENTE FAC-IMP
+                                            </span>
+                                        </div>
+                                    )}
                                     {/* Poka-Yoke Banner Reposición si aplica */}
                                     {isReposicion && (
                                         <div style={{ backgroundColor: '#FEF2F2', border: '1.2px solid #EF4444', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#991B1B', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
