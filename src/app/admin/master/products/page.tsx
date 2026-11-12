@@ -95,32 +95,8 @@ export default function MasterProductsPage() {
     const [filterIvaHeader, setFilterIvaHeader] = useState<string>('all');
     const [filterWebHeader, setFilterWebHeader] = useState<string>('all');
     const [filterStatusHeader, setFilterStatusHeader] = useState<string>('all');
-    const [filterDevHeader, setFilterDevHeader] = useState<string>('all');
     const [filterPhotoHeader, setFilterPhotoHeader] = useState<string>('all');
     const [filterUnitHeader, setFilterUnitHeader] = useState<string>('all');
-
-    const toggleDevVerified = async (product: Product) => {
-        const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
-        const newStatus = !isCurrentlyVerified;
-        const updatedTags = newStatus
-            ? Array.from(new Set([...(product.tags || []), 'verified_dev']))
-            : (product.tags || []).filter(t => t !== 'verified_dev');
-
-        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: newStatus, tags: updatedTags } : p));
-
-        try {
-            const { error } = await supabase
-                .from('products')
-                .update({ tags: updatedTags })
-                .eq('id', product.id);
-
-            if (error) throw error;
-            showToast(newStatus ? `SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
-        } catch (e: any) {
-            setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
-            showToast('Error actualizando revisión DEV: ' + e.message, 'error');
-        }
-    };
 
     useEffect(() => {
         const handleClickOutside = () => setOpenHeaderDropdown(null);
@@ -386,8 +362,7 @@ export default function MasterProductsPage() {
                 Tags: Array.isArray(p.tags) ? p.tags.join(',') : '',
                 Keywords: p.keywords || '',
                 Desviacion_Utilidad_Pct: p.utility_deviation_pct || 0,
-                Heredar_Precio: p.inherit_price ? 'SI' : 'NO',
-                Revisado_Dev: (p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'))) ? 'SI' : 'NO'
+                Heredar_Precio: p.inherit_price ? 'SI' : 'NO'
             };
         });
 
@@ -933,13 +908,7 @@ export default function MasterProductsPage() {
                             return isNaN(n) ? fallback : n;
                         };
 
-                        const isVerifiedDev = (row.Revisado_Dev || row['Revisado Dev'] || row.revisado_dev || row.is_verified_dev) === 'SI' || (row.Revisado_Dev || row['Revisado Dev'] || row.revisado_dev || row.is_verified_dev) === true;
-                        let tags = cleanArrayStr(row.Tags || row.tags);
-                        if (isVerifiedDev && !tags.includes('verified_dev')) {
-                            tags.push('verified_dev');
-                        } else if (!isVerifiedDev && tags.includes('verified_dev') && (row.Revisado_Dev !== undefined || row['Revisado Dev'] !== undefined || row.is_verified_dev !== undefined)) {
-                            tags = tags.filter(t => t !== 'verified_dev');
-                        }
+                        const tags = cleanArrayStr(row.Tags || row.tags);
 
                         const cleanParentUUID = (val: any): string | null => {
                             if (!val) return null;
@@ -982,7 +951,6 @@ export default function MasterProductsPage() {
                             keywords: (row.Keywords || row.keywords || '').toString() || null,
                             utility_deviation_pct: parseNum(row.Desviacion_Utilidad_Pct || row.utility_deviation_pct, 0),
                             inherit_price: (row.Heredar_Precio || row.inherit_price) === 'SI' || row.inherit_price === true,
-                            is_verified_dev: isVerifiedDev,
                             
                             options_config,
                             variants,
@@ -1219,10 +1187,6 @@ export default function MasterProductsPage() {
                         return !p.image_url || !p.description || !p.display_name || !p.buying_team || !p.procurement_method;
                     }
 
-                    // Filtro Dev (@dev, @revisado, @pendiente)
-                    if (tag === 'dev' || tag === 'revisado') return p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
-                    if (tag === 'pendiente') return !p.is_verified_dev && !(p.tags && p.tags.includes('verified_dev'));
-
                     // Filtro Categoría (@frutas, @despensa...)
                     const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
                         label.toLowerCase().startsWith(tag)
@@ -1254,19 +1218,9 @@ export default function MasterProductsPage() {
                 );
             });
 
-            // Filtro por header Dev (Dropdown)
-            if (filterDevHeader === 'revisado') {
-                const isDev = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
-                if (!isDev) return false;
-            }
-            if (filterDevHeader === 'pendiente') {
-                const isDev = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
-                if (isDev) return false;
-            }
-
             return matchesSearch;
         });
-    }, [products, searchQuery, filterHierarchy, filterCategoryHeader, filterIvaHeader, filterWebHeader, filterStatusHeader, filterDevHeader]);
+    }, [products, searchQuery, filterHierarchy, filterCategoryHeader, filterIvaHeader, filterWebHeader, filterStatusHeader]);
 
     const paginatedProducts = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -1289,7 +1243,6 @@ export default function MasterProductsPage() {
         // Conteo de Jerarquía
         const parentCount = products.filter(p => p.parent_id === p.id).length;
         const childCount = products.filter(p => p.parent_id !== null && p.parent_id !== p.id).length;
-        const devVerifiedCount = products.filter(p => p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'))).length;
 
         return {
             total,
@@ -1299,8 +1252,7 @@ export default function MasterProductsPage() {
             noImageCount: noImg,
             alerts: withAlert,
             parentCount,
-            childCount,
-            devVerifiedCount
+            childCount
         };
     }, [products]);
 
@@ -1355,7 +1307,7 @@ export default function MasterProductsPage() {
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
             <Toast />
             
-            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '2rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1rem 1.75rem 2rem 1.75rem' }}>
                 {!canEdit && (
                     <div style={{
                         padding: '12px 16px',
@@ -1374,14 +1326,14 @@ export default function MasterProductsPage() {
                         <span>Modo Vista: No tienes permisos para modificar el catálogo maestro.</span>
                     </div>
                 )}
-                <header style={{ marginBottom: '2rem' }}>
+                <header style={{ marginBottom: '0.85rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <ArrowLeft size={14} strokeWidth={1.5} /> Volver al Dashboard
+                            <Link href="/admin/dashboard" style={{ textDecoration: 'none', color: THEME.colors.textSecondary, fontWeight: '600', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <ArrowLeft size={13} strokeWidth={1.5} /> Volver al Dashboard
                             </Link>
-                            <h1 style={{ fontSize: '2rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.4rem 0 0 0', letterSpacing: '-0.02em' }}>Maestro de Productos (Datos Técnicos)</h1>
-                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.9rem', marginTop: '0.2rem' }}>Gestión centralizada de estándares, códigos contables y definiciones técnicas.</p>
+                            <h1 style={{ fontSize: '1.55rem', fontWeight: '800', color: THEME.colors.textMain, margin: '0.15rem 0 0 0', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Maestro de Productos (Datos Técnicos)</h1>
+                            <p style={{ color: THEME.colors.textSecondary, fontSize: '0.82rem', margin: '0.15rem 0 0 0' }}>Gestión centralizada de estándares, códigos contables y definiciones técnicas.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             {confirmSanitize ? (
@@ -1558,32 +1510,32 @@ export default function MasterProductsPage() {
                 {/* KPI DASHBOARD */}
                 <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                    gap: '1rem', 
-                    marginBottom: '2rem' 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', 
+                    gap: '0.65rem', 
+                    marginBottom: '0.75rem' 
                 }}>
                     {[
-                        { label: 'Total Histórico', value: formatNumber(kpiMetrics.total), icon: <Database size={16} strokeWidth={1.5} />, color: '#6366F1', bg: '#EEF2FF' },
-                        { label: 'Catálogo Activo', value: `${formatNumber(kpiMetrics.activeCount)} (${kpiMetrics.total > 0 ? formatNumber((kpiMetrics.activeCount / kpiMetrics.total) * 100, 1) : 0}%)`, icon: <CheckCircle size={16} strokeWidth={1.5} />, color: THEME.colors.primary, bg: THEME.colors.primaryLight },
-                        { label: 'Publicados en Web', value: formatNumber(kpiMetrics.webCount), icon: <Globe size={16} strokeWidth={1.5} />, color: '#3B82F6', bg: '#EFF6FF' },
-                        { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={16} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' }, // Replaced with Globe or Eye for styling, let's keep Globe for similarity
-                        { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={16} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
-                        { label: 'Jerarquía (P/H)', value: `${formatNumber(kpiMetrics.parentCount)} P / ${formatNumber(kpiMetrics.childCount)} H`, icon: <GitFork size={16} strokeWidth={1.5} />, color: '#6D28D9', bg: '#F5F3FF' },
+                        { label: 'Total Histórico', value: formatNumber(kpiMetrics.total), icon: <Database size={14} strokeWidth={1.5} />, color: '#6366F1', bg: '#EEF2FF' },
+                        { label: 'Catálogo Activo', value: `${formatNumber(kpiMetrics.activeCount)} (${kpiMetrics.total > 0 ? formatNumber((kpiMetrics.activeCount / kpiMetrics.total) * 100, 1) : 0}%)`, icon: <CheckCircle size={14} strokeWidth={1.5} />, color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+                        { label: 'Publicados en Web', value: formatNumber(kpiMetrics.webCount), icon: <Globe size={14} strokeWidth={1.5} />, color: '#3B82F6', bg: '#EFF6FF' },
+                        { label: 'Cobertura Imagen', value: `${formatNumber(kpiMetrics.imageCoverage)}%`, icon: <Globe size={14} strokeWidth={1.5} />, color: '#F59E0B', bg: '#FFFBEB' },
+                        { label: 'Alertas Inventario', value: formatNumber(kpiMetrics.alerts), icon: <AlertTriangle size={14} strokeWidth={1.5} />, color: '#EF4444', bg: '#FEF2F2' },
+                        { label: 'Jerarquía (P/H)', value: `${formatNumber(kpiMetrics.parentCount)} P / ${formatNumber(kpiMetrics.childCount)} H`, icon: <GitFork size={14} strokeWidth={1.5} />, color: '#6D28D9', bg: '#F5F3FF' },
                     ].map((card, i) => (
                         <div key={i} style={{
                             backgroundColor: THEME.colors.surface,
-                            padding: '0.85rem 1.1rem',
-                            borderRadius: THEME.radius.lg,
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: THEME.radius.md,
                             border: `1px solid ${THEME.colors.border}`,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.75rem',
+                            gap: '0.6rem',
                             transition: 'all 0.2s ease',
                             cursor: 'default',
                             boxShadow: THEME.shadow.sm
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
                             e.currentTarget.style.boxShadow = THEME.shadow.md;
                             e.currentTarget.style.borderColor = THEME.colors.borderActive;
                         }}
@@ -1594,22 +1546,23 @@ export default function MasterProductsPage() {
                         }}
                         >
                             <div style={{ 
-                                width: '36px', 
-                                height: '36px', 
-                                borderRadius: THEME.radius.md, 
+                                width: '30px', 
+                                height: '30px', 
+                                borderRadius: THEME.radius.sm, 
                                 backgroundColor: card.bg, 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
-                                color: card.color
+                                color: card.color,
+                                flexShrink: 0
                             }}>
                                 {card.icon}
                             </div>
-                            <div>
-                                <p style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                            <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0, lineHeight: 1.1 }}>
                                     {card.label}
                                 </p>
-                                <p style={{ fontSize: '1.25rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>
+                                <p style={{ fontSize: '1.05rem', fontWeight: '800', color: THEME.colors.textMain, margin: '1px 0 0 0', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                                     {card.value}
                                 </p>
                             </div>
@@ -2014,7 +1967,7 @@ export default function MasterProductsPage() {
                                 </th>
 
                                 {/* ESTADO */}
-                                <th style={stickyThStyle(openHeaderDropdown === 'status', 'left', '120px')}>
+                                <th style={{ ...stickyThStyle(openHeaderDropdown === 'status', 'left', '120px'), borderTopRightRadius: THEME.radius.lg }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>ESTADO</span>
                                         <button 
@@ -2040,53 +1993,25 @@ export default function MasterProductsPage() {
                                         </div>
                                     )}
                                 </th>
-
-                                {/* DEV REVISIÓN */}
-                                <th style={{ ...stickyThStyle(openHeaderDropdown === 'dev', 'left', '130px'), borderTopRightRadius: THEME.radius.lg }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <span>DEV (REVISADO)</span>
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); setOpenHeaderDropdown(openHeaderDropdown === 'dev' ? null : 'dev'); }}
-                                            style={{ background: filterDevHeader !== 'all' ? '#10B981' : '#E2E8F0', color: filterDevHeader !== 'all' ? 'white' : '#475569', border: 'none', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                            title="Filtrar por revisión Dev"
-                                        >
-                                            <ChevronDown size={12} />
-                                        </button>
-                                    </div>
-                                    {openHeaderDropdown === 'dev' && (
-                                        <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, backgroundColor: 'white', border: '1px solid #CBD5E1', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)', minWidth: '150px', padding: '0.4rem', fontWeight: 'normal', textTransform: 'none' }}>
-                                            <div onClick={() => { setFilterDevHeader('all'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'all' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'all' ? '#F1F5F9' : 'transparent' }}>
-                                                <Filter size={13} style={{ color: '#64748B' }} /> Todos
-                                            </div>
-                                            <div onClick={() => { setFilterDevHeader('revisado'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'revisado' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'revisado' ? '#F1F5F9' : 'transparent' }}>
-                                                <CheckCircle2 size={13} style={{ color: '#10B981' }} /> Revisados
-                                            </div>
-                                            <div onClick={() => { setFilterDevHeader('pendiente'); setOpenHeaderDropdown(null); }} style={{ padding: '0.45rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: filterDevHeader === 'pendiente' ? 'bold' : 'normal', backgroundColor: filterDevHeader === 'pendiente' ? '#F1F5F9' : 'transparent' }}>
-                                                <Clock size={13} style={{ color: '#F59E0B' }} /> Pendientes
-                                            </div>
-                                        </div>
-                                    )}
-                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={13} style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
+                                    <td colSpan={12} style={{ textAlign: 'center', padding: '3rem', color: THEME.colors.textSecondary, fontSize: '0.9rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                             <RefreshCw size={16} className="animate-spin" strokeWidth={1.5} /> Cargando maestros...
                                         </div>
                                     </td>
                                 </tr>
                             ) : paginatedProducts.map(p => (
-                                <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, height: '80px', transition: 'background-color 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                    <td style={{ padding: '0.5rem 1rem' }}>
+                                <tr key={p.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                    <td style={{ padding: '0.35rem 0.65rem' }}>
                                         <label 
                                             onClick={(e) => e.stopPropagation()}
                                             style={{ 
-                                                width: '46px', 
-                                                height: '46px', 
+                                                width: '38px', 
+                                                height: '38px', 
                                                 backgroundColor: '#F3F4F6', 
                                                 borderRadius: THEME.radius.sm, 
                                                 overflow: 'hidden', 
@@ -2118,14 +2043,14 @@ export default function MasterProductsPage() {
                                                 <Image 
                                                     src={p.image_url} 
                                                     alt={p.name} 
-                                                    width={46} 
-                                                    height={46} 
+                                                    width={38} 
+                                                    height={38} 
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                    sizes="46px"
+                                                    sizes="38px"
                                                     loading="lazy"
                                                 />
                                             ) : (
-                                                <ImageOff size={16} style={{ opacity: 0.4 }} strokeWidth={1.5} />
+                                                <ImageOff size={14} style={{ opacity: 0.4 }} strokeWidth={1.5} />
                                             )}
                                             {savingId === p.id && (
                                                 <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2135,28 +2060,26 @@ export default function MasterProductsPage() {
                                         </label>
                                     </td>
                                     <td 
-                                        style={{ padding: '0.75rem 1rem', cursor: 'pointer' }}
+                                        style={{ padding: '0.35rem 0.65rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                                         onClick={() => setSelectedEditProduct(p)}
                                         title="Abrir panel de edición maestro"
                                     >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <span style={{ 
-                                                    fontWeight: '800', 
-                                                    color: THEME.colors.primary, 
-                                                    fontSize: '0.85rem',
-                                                    display: 'block'
-                                                }}>
-                                                    ID: {p.accounting_id ? formatNumber(p.accounting_id) : 'S/N'}
-                                                </span>
-                                                <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
-                                            </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ 
+                                                fontWeight: '800', 
+                                                color: THEME.colors.primary, 
+                                                fontSize: '0.82rem',
+                                                display: 'block'
+                                            }}>
+                                                ID: {p.accounting_id ? formatNumber(p.accounting_id) : 'S/N'}
+                                            </span>
+                                            <Edit3 size={10} style={{ opacity: 0.5 }} strokeWidth={1.5} />
                                         </div>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem' }}>
-                                        <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.85rem' }}>{p.name}</div>
+                                    <td style={{ padding: '0.35rem 0.65rem' }}>
+                                        <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.83rem', lineHeight: 1.25 }}>{p.name}</div>
                                     </td>
-                                        <td style={{ padding: '0.75rem 1rem' }}>
+                                        <td style={{ padding: '0.35rem 0.65rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
                                                 <span style={{ 
                                                     padding: '0.2rem 0.5rem', 
@@ -2220,37 +2143,38 @@ export default function MasterProductsPage() {
                                                 })()}
                                             </div>
                                         </td>
-                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem' }}>
                                         <div style={{ 
                                             backgroundColor: '#F8FAFC', 
-                                            padding: '6px 10px', 
+                                            padding: '4px 8px', 
                                             borderRadius: THEME.radius.sm, 
                                             border: `1px solid ${THEME.colors.border}`,
-                                            fontSize: '0.75rem',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '3px',
-                                            minWidth: '160px'
+                                            fontSize: '0.7rem',
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                            gap: '2px 8px',
+                                            minWidth: '215px',
+                                            lineHeight: 1.2
                                         }}>
-                                            <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <User size={10} strokeWidth={1.5} /> {p.buying_team || 'Sin asignar'}
+                                            <div style={{ fontWeight: '600', color: THEME.colors.textMain, fontSize: '0.67rem', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.buying_team || 'Sin asignar'}>
+                                                <User size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.buying_team || 'Sin asignar'}</span>
                                             </div>
-                                            <div style={{ fontWeight: '500', color: THEME.colors.textSecondary, borderTop: `1px solid ${THEME.colors.border}`, paddingTop: '3px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <Wrench size={10} strokeWidth={1.5} /> {p.procurement_method || 'General'}
+                                            <div style={{ fontWeight: '500', color: THEME.colors.textSecondary, fontSize: '0.64rem', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.procurement_method || 'General'}>
+                                                <Wrench size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.procurement_method || 'General'}</span>
                                             </div>
                                             {p.inventory_group && (
-                                                <div style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <BarChart2 size={10} strokeWidth={1.5} /> {p.inventory_group}
+                                                <div style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.inventory_group}>
+                                                    <BarChart2 size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.inventory_group}</span>
                                                 </div>
                                             )}
                                             {p.purchase_sublist && (
-                                                <div style={{ fontSize: '0.6rem', color: THEME.colors.primary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <FileText size={10} strokeWidth={1.5} /> {p.purchase_sublist}
+                                                <div style={{ fontSize: '0.6rem', color: THEME.colors.primary, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.purchase_sublist}>
+                                                    <FileText size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.purchase_sublist}</span>
                                                 </div>
                                             )}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem', textAlign: 'center' }}>
                                         <span style={{ 
                                             backgroundColor: '#F1F5F9', 
                                             padding: '2px 6px', 
@@ -2264,7 +2188,7 @@ export default function MasterProductsPage() {
                                             {p.unit_of_measure}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem', textAlign: 'center' }}>
                                         {(() => {
                                             const rate = p.iva_rate ?? 19;
                                             const colors: Record<number, { bg: string, text: string, border: string }> = {
@@ -2294,7 +2218,7 @@ export default function MasterProductsPage() {
                                         })()}
                                     </td>
                                     <td style={{ 
-                                        padding: '0.75rem 1rem', 
+                                        padding: '0.35rem 0.65rem', 
                                         textAlign: 'center',
                                         backgroundColor: p.min_inventory_level > 0 ? '#FEF2F2' : 'transparent',
                                         borderLeft: p.min_inventory_level > 0 ? '3px solid #EF4444' : 'none',
@@ -2328,8 +2252,8 @@ export default function MasterProductsPage() {
                                             <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: '500', opacity: 0.6 }}>—</span>
                                         )}
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem', textAlign: 'center' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'row', gap: '4px', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap' }}>
                                             <button 
                                                 onClick={() => setConversionProduct(p)}
                                                 style={{ 
@@ -2369,38 +2293,37 @@ export default function MasterProductsPage() {
                                             </div>
                                         </div>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', width: '250px' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem', width: '220px' }}>
                                         <div 
                                             onClick={() => setExpandedDescriptions(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                                             style={{ 
-                                                fontSize: '0.75rem', 
+                                                fontSize: '0.73rem', 
                                                 color: THEME.colors.textSecondary, 
                                                 cursor: 'pointer',
                                                 transition: 'all 0.2s ease',
                                                 display: 'flex',
                                                 flexDirection: 'column',
-                                                gap: '2px'
+                                                gap: '1px'
                                             }}
                                         >
                                             <div style={{ 
-                                                lineClamp: expandedDescriptions[p.id] ? 'none' : 2, 
+                                                lineClamp: expandedDescriptions[p.id] ? 'none' : 1, 
                                                 display: '-webkit-box', 
-                                                WebkitLineClamp: expandedDescriptions[p.id] ? 'none' : 2, 
+                                                WebkitLineClamp: expandedDescriptions[p.id] ? 'none' : 1, 
                                                 WebkitBoxOrient: 'vertical', 
                                                 overflow: 'hidden',
-                                                lineHeight: '1.4'
+                                                lineHeight: '1.28'
                                             }}>
                                                 {p.description || 'Sin descripción'}
                                             </div>
-                                            {(p.description?.length || 0) > 60 && (
+                                            {(p.description?.length || 0) > 45 && (
                                                 <span style={{ 
                                                     color: THEME.colors.primary, 
-                                                    fontSize: '0.65rem', 
+                                                    fontSize: '0.62rem', 
                                                     fontWeight: '600', 
                                                     display: 'flex', 
                                                     alignItems: 'center', 
-                                                    gap: '2px',
-                                                    marginTop: '2px'
+                                                    gap: '2px'
                                                 }}>
                                                     {expandedDescriptions[p.id] ? (
                                                         <><ChevronUp size={10} strokeWidth={1.5} /> Ver menos</>
@@ -2411,7 +2334,7 @@ export default function MasterProductsPage() {
                                             )}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem', textAlign: 'center' }}>
                                         <div 
                                             onClick={() => canEdit && updateProductField(p.id, 'show_on_web', !p.show_on_web)}
                                             title={!canEdit ? "Modo Vista" : (p.show_on_web ? 'Visible en tienda (Click para ocultar)' : 'Oculto en tienda (Click para mostrar)')}
@@ -2428,7 +2351,7 @@ export default function MasterProductsPage() {
                                             {p.show_on_web ? <Globe size={18} strokeWidth={1.5} /> : <EyeOff size={18} strokeWidth={1.5} />}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '0.75rem 1rem' }}>
+                                    <td style={{ padding: '0.35rem 0.65rem' }}>
                                         <div 
                                             onClick={() => canEdit && updateProductField(p.id, 'is_active', !p.is_active)}
                                             style={{ 
@@ -2451,44 +2374,6 @@ export default function MasterProductsPage() {
                                                 {p.is_active ? 'ON' : 'OFF'}
                                             </span>
                                         </div>
-                                    </td>
-                                    <td style={{ padding: '0.75rem 1rem' }}>
-                                        {(() => {
-                                            const isVerified = p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
-                                            return (
-                                                <div 
-                                                    onClick={() => canEdit && toggleDevVerified(p)}
-                                                    style={{ 
-                                                        display: 'flex', 
-                                                        alignItems: 'center', 
-                                                        justifyContent: 'center',
-                                                        gap: '4px', 
-                                                        background: isVerified ? '#ECFDF5' : '#FFFBEB',
-                                                        border: `1px solid ${isVerified ? '#A7F3D0' : '#FDE68A'}`,
-                                                        padding: '4px 8px',
-                                                        borderRadius: '20px',
-                                                        width: '100%',
-                                                        cursor: canEdit ? 'pointer' : 'not-allowed',
-                                                        transition: 'all 0.2s',
-                                                        boxShadow: isVerified ? '0 1px 2px rgba(16, 185, 129, 0.15)' : 'none'
-                                                    }}
-                                                    title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
-                                                >
-                                                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
-                                                    <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isVerified ? '#065F46' : '#92400E', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        {isVerified ? (
-                                                            <>
-                                                                <CheckCircle2 size={11} strokeWidth={2.2} /> REVISADO
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Clock size={11} strokeWidth={2.2} /> PENDIENTE
-                                                            </>
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })()}
                                     </td>
                                 </tr>
                             ))}

@@ -165,29 +165,6 @@ export default function AdminProductsPage() {
     const [isInfoGuideOpen, setIsInfoGuideOpen] = useState(false);
     const ITEMS_PER_PAGE = 50;
 
-    const toggleDevVerified = async (product: Product) => {
-        const isCurrentlyVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
-        const newStatus = !isCurrentlyVerified;
-        const updatedTags = newStatus
-            ? Array.from(new Set([...(product.tags || []), 'verified_dev']))
-            : (product.tags || []).filter(t => t !== 'verified_dev');
-
-        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: newStatus, tags: updatedTags } : p));
-
-        try {
-            const { error } = await supabase
-                .from('products')
-                .update({ tags: updatedTags })
-                .eq('id', product.id);
-
-            if (error) throw error;
-            showToast(newStatus ? `SKU ${product.sku || product.name} marcado como REVISADO (DEV)` : `SKU ${product.sku || product.name} marcado como PENDIENTE (DEV)`, 'info');
-        } catch (e: any) {
-            setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_verified_dev: isCurrentlyVerified } : p));
-            showToast('Error actualizando revisión DEV: ' + e.message, 'error');
-        }
-    };
-
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
         if ((window as any).showToast) {
             (window as any).showToast(message, type);
@@ -280,7 +257,6 @@ export default function AdminProductsPage() {
     const [priceFilter, setPriceFilter] = useState<'all' | 'with_price' | 'zero_price'>('all');
     const [variantFilter, setVariantFilter] = useState<'all' | 'with_variants' | 'without_variants'>('all');
     const [visibilityColFilter, setVisibilityColFilter] = useState<'all' | 'visible' | 'hidden'>('all');
-    const [devReviewFilter, setDevReviewFilter] = useState<'all' | 'verified' | 'pending'>('all');
     const [sortConfig, setSortConfig] = useState<{
         column: 'name' | 'category' | 'price' | null;
         direction: 'asc' | 'desc';
@@ -313,7 +289,6 @@ export default function AdminProductsPage() {
         priceFilter,
         variantFilter,
         visibilityColFilter,
-        devReviewFilter,
         sortConfig
     ]);
 
@@ -323,7 +298,6 @@ export default function AdminProductsPage() {
         setPriceFilter('all');
         setVariantFilter('all');
         setVisibilityColFilter('all');
-        setDevReviewFilter('all');
         setCategoryFilter('all');
         setSortConfig({ column: null, direction: 'asc' });
     };
@@ -334,7 +308,6 @@ export default function AdminProductsPage() {
         priceFilter !== 'all' || 
         variantFilter !== 'all' || 
         visibilityColFilter !== 'all' || 
-        devReviewFilter !== 'all' ||
         categoryFilter !== 'all' ||
         sortConfig.column !== null;
 
@@ -716,13 +689,6 @@ export default function AdminProductsPage() {
             filtered = filtered.filter(p => !p.is_active);
         }
 
-        // 6. Filtro Dev Revisión
-        if (devReviewFilter === 'verified') {
-            filtered = filtered.filter(p => p.is_verified_dev || (p.tags && p.tags.includes('verified_dev')));
-        } else if (devReviewFilter === 'pending') {
-            filtered = filtered.filter(p => !p.is_verified_dev && (!p.tags || !p.tags.includes('verified_dev')));
-        }
-
         // --- FILTRO POR BÚSQUEDA AVANZADA (POWER SEARCH) ---
         if (query) {
             // Separar factores por comas
@@ -750,14 +716,6 @@ export default function AdminProductsPage() {
                         // Filtro Web/Active (@web, @virtual, @oculto)
                         if (tag === 'web' || tag === 'virtual' || tag === 'on') return p.show_on_web;
                         if (tag === 'oculto' || tag === 'hidden' || tag === 'off') return !p.show_on_web;
-
-                        // Filtro Dev Revisión (@revisado, @dev, @pendiente)
-                        if (tag === 'revisado' || tag === 'rev' || tag === 'dev') {
-                            return p.is_verified_dev || (p.tags && p.tags.includes('verified_dev'));
-                        }
-                        if (tag === 'pendiente' || tag === 'norev' || tag === 'nodev') {
-                            return !p.is_verified_dev && (!p.tags || !p.tags.includes('verified_dev'));
-                        }
 
                         // Filtro Categoría (@frutas, @despensa...)
                         const categoryEntry = Object.entries(CATEGORY_MAP).find(([, label]) => 
@@ -834,7 +792,6 @@ export default function AdminProductsPage() {
         priceFilter, 
         variantFilter, 
         visibilityColFilter, 
-        devReviewFilter, 
         sortConfig,
         productPrices
     ]);
@@ -1389,12 +1346,6 @@ export default function AdminProductsPage() {
                                 <span style={activeChipStyle}>
                                     {visibilityColFilter === 'visible' ? 'Visibles' : 'Ocultos'}
                                     <X size={12} style={{ cursor: 'pointer' }} onClick={() => setVisibilityColFilter('all')} />
-                                </span>
-                            )}
-                            {devReviewFilter !== 'all' && (
-                                <span style={activeChipStyle}>
-                                    {devReviewFilter === 'verified' ? 'Dev Revisado' : 'Dev Pendiente'}
-                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setDevReviewFilter('all')} />
                                 </span>
                             )}
                             {sortConfig.column && (
@@ -2100,94 +2051,6 @@ export default function AdminProductsPage() {
                                         )}
                                     </th>
 
-                                    {/* COLUMNA DEV REVISIÓN */}
-                                    <th style={{ ...stickyThStyle(openHeaderMenu === 'devreview', 'center'), position: 'sticky' }}>
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                            <span>Dev Revisión</span>
-                                            <button
-                                                type="button"
-                                                data-header-dropdown="true"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setOpenHeaderMenu(openHeaderMenu === 'devreview' ? null : 'devreview');
-                                                }}
-                                                title="Filtrar por revisión técnica"
-                                                style={{
-                                                    background: devReviewFilter !== 'all' ? THEME.colors.primaryLight : 'transparent',
-                                                    border: `1px solid ${devReviewFilter !== 'all' ? THEME.colors.primary : 'transparent'}`,
-                                                    color: devReviewFilter !== 'all' ? THEME.colors.primary : THEME.colors.textSecondary,
-                                                    borderRadius: '6px',
-                                                    padding: '3px 5px',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '2px',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <SlidersHorizontal size={13} strokeWidth={1.75} />
-                                                {devReviewFilter !== 'all' && (
-                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: THEME.colors.primary }} />
-                                                )}
-                                            </button>
-                                        </div>
-
-                                        {openHeaderMenu === 'devreview' && (
-                                            <div data-header-dropdown="true" style={{ ...dropdownBaseStyle, right: 0, left: 'auto' }}>
-                                                <div style={dropdownSectionHeaderStyle}>Filtro de Dev Revisión</div>
-                                                <button
-                                                    type="button"
-                                                    style={dropdownItemStyle(devReviewFilter === 'all')}
-                                                    onClick={() => {
-                                                        setDevReviewFilter('all');
-                                                        setOpenHeaderMenu(null);
-                                                    }}
-                                                >
-                                                    Todos
-                                                    {devReviewFilter === 'all' && <Check size={13} style={{ marginLeft: 'auto' }} />}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    style={dropdownItemStyle(devReviewFilter === 'verified')}
-                                                    onClick={() => {
-                                                        setDevReviewFilter('verified');
-                                                        setOpenHeaderMenu(null);
-                                                    }}
-                                                >
-                                                    <CheckCircle size={13} style={{ color: '#059669' }} /> Revisados (DEV)
-                                                    {devReviewFilter === 'verified' && <Check size={13} style={{ marginLeft: 'auto' }} />}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    style={dropdownItemStyle(devReviewFilter === 'pending')}
-                                                    onClick={() => {
-                                                        setDevReviewFilter('pending');
-                                                        setOpenHeaderMenu(null);
-                                                    }}
-                                                >
-                                                    <AlertCircle size={13} style={{ color: '#D97706' }} /> Pendientes (DEV)
-                                                    {devReviewFilter === 'pending' && <Check size={13} style={{ marginLeft: 'auto' }} />}
-                                                </button>
-
-                                                {devReviewFilter !== 'all' && (
-                                                    <>
-                                                        <div style={dropdownDividerStyle} />
-                                                        <button
-                                                            type="button"
-                                                            style={dropdownResetStyle}
-                                                            onClick={() => {
-                                                                setDevReviewFilter('all');
-                                                                setOpenHeaderMenu(null);
-                                                            }}
-                                                        >
-                                                            <RotateCcw size={12} /> Restablecer filtro
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </th>
-
                                     {/* COLUMNA ACCIÓN */}
                                     <th style={{ ...stickyThStyle(false, 'center'), borderTopRightRadius: THEME.radius.lg }}>Acción</th>
                                 </tr>
@@ -2626,34 +2489,6 @@ export default function AdminProductsPage() {
                                                 {product.is_active ? <Eye size={14} strokeWidth={1.5} /> : <EyeOff size={14} strokeWidth={1.5} />}
                                                 {product.is_active ? 'Visible' : 'Oculto'}
                                             </span>
-                                        </td>
-                                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                            {(() => {
-                                                const isVerified = product.is_verified_dev || (product.tags && product.tags.includes('verified_dev'));
-                                                return (
-                                                    <button
-                                                        onClick={() => canEdit && toggleDevVerified(product)}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px',
-                                                            padding: '4px 8px',
-                                                            borderRadius: '20px',
-                                                            border: `1px solid ${isVerified ? '#A7F3D0' : '#FDE68A'}`,
-                                                            backgroundColor: isVerified ? '#ECFDF5' : '#FFFBEB',
-                                                            color: isVerified ? '#065F46' : '#92400E',
-                                                            fontSize: '0.7rem',
-                                                            fontWeight: '700',
-                                                            cursor: canEdit ? 'pointer' : 'not-allowed',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                        title={canEdit ? (isVerified ? "Dev: SKU Revisado (Click para marcar pendiente)" : "Dev: Pendiente (Click para marcar revisado)") : "Modo Vista"}
-                                                    >
-                                                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isVerified ? '#10B981' : '#F59E0B' }}></div>
-                                                        <span>{isVerified ? 'REVISADO' : 'PENDIENTE'}</span>
-                                                    </button>
-                                                );
-                                            })()}
                                         </td>
                                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                                             <button
