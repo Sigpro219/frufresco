@@ -4779,11 +4779,12 @@ useEffect(() => {
                                                                             </span>
                                                                         )}
 
-                                                                        {/* SPEC.md Escenario 432: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) */}
+                                                                        {/* SPEC.md Escenario 432 & 437: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) */}
                                                                         {(() => {
                                                                             const prof = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || {});
-                                                                            const rawDoc = order.document_type || prof?.document_type || 'remission';
-                                                                            const withPrices = (prof?.remission_with_prices !== false) && (order.remission_with_prices !== false);
+                                                                            const isHogarOrder = order.type === 'b2c' || order.type === 'b2c_wompi' || order.type === 'hogar' || prof?.role === 'b2c_client' || prof?.role === 'client' || (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR'));
+                                                                            const rawDoc = isHogarOrder ? 'remission' : (order.document_type || prof?.document_type || 'remission');
+                                                                            const withPrices = isHogarOrder ? true : ((prof?.remission_with_prices !== false) && (order.remission_with_prices !== false));
                                                                             const docBadge = getDocumentBadgeStyle(rawDoc, withPrices);
 
                                                                             return (

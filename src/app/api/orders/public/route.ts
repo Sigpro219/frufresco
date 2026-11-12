@@ -293,6 +293,8 @@ export async function POST(request: Request) {
                         longitude: cLng || null,
                         is_active: true,
                         pricing_model_id: CLIENTES_HOGAR_ID,
+                        document_type: 'remission',
+                        remission_with_prices: true,
                         logistics_data: initialLogistics,
                         geocoding_status: (cLat && cLng) ? 'VERIFIED' : 'PENDING'
                     };

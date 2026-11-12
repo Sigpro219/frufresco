@@ -108,7 +108,8 @@ export async function POST(request: Request) {
                                 longitude: order.longitude,
                                 geocoding_status: order.latitude ? 'verified' : 'pending',
                                 document_id: extractedId,
-                                document_type: 'invoice', // Factura Digital
+                                document_type: 'remission', // Escenario 437 SDD: Clientes Hogar viajan con Remisión con Precios (REM-$)
+                                remission_with_prices: true,
                                 nit: extractedId,
                                 delivery_restrictions: '08:00 a 19:00'
                             })

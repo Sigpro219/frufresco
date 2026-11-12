@@ -5250,7 +5250,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         preferred_payment_method: (editData as any)?.preferred_payment_method || (editData as any)?.logistics_data?.preferred_payment_method || 'wompi',
         allow_off_agreement_purchases: (editData as any)?.allow_off_agreement_purchases !== undefined ? (editData as any).allow_off_agreement_purchases : true,
         override_parent_off_agreement: (editData as any)?.override_parent_off_agreement || false,
-        document_type: editData?.document_type || 'invoice',
+        document_type: editData?.document_type || (isB2C ? 'remission' : 'invoice'),
         remission_with_prices: editData?.remission_with_prices !== undefined ? editData.remission_with_prices : true,
         print_invoice: (editData as any)?.print_invoice || false,
         is_corporate_parent: isB2C ? false : (editData?.is_corporate_parent !== undefined ? editData.is_corporate_parent : (!isEdit ? true : false)),

@@ -1417,17 +1417,26 @@ function CreateOrderContent() {
         };
     }, [clientType, selectedClient, selectedClientB2C, deliveryDate]);
 
-    // Reactively update prices in cart when contractPrices change
+    // Reactively update prices in cart and staged items when contractPrices change (Escenario 437 SDD)
     useEffect(() => {
         if (Object.keys(contractPrices).length > 0) {
             setCart(prev => prev.map(item => {
                 const resolvedPrice = (contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null)
                     ? contractPrices[item.product.id]
-                    : 0;
+                    : (Number(item.product?.base_price) || 0);
                 return {
                     ...item,
                     price: resolvedPrice
                 };
+            }));
+            setStagedItems(prev => prev.map(st => {
+                if (st.suggestedProduct && contractPrices[st.suggestedProduct.id] !== undefined && contractPrices[st.suggestedProduct.id] !== null) {
+                    return {
+                        ...st,
+                        price: contractPrices[st.suggestedProduct.id]
+                    };
+                }
+                return st;
             }));
         }
     }, [contractPrices]);
@@ -3952,6 +3961,8 @@ function CreateOrderContent() {
                             created_at: new Date().toISOString(),
                             email: guestInfo.email || null,
                             nit: guestInfo.nit || null,
+                            document_type: draftClientType === 'b2b_client' ? 'invoice' : 'remission',
+                            remission_with_prices: true,
                             is_active: guestInfo.saveToDirectory
                         });
 
@@ -3991,15 +4002,13 @@ function CreateOrderContent() {
                 const prod = item.suggestedProduct!;
                 const prodId = prod.id;
                 const isOffAgreementItem = hasActiveB2BAgreement && !agreementProductIds.has(prodId);
-                // SPEC.md Escenario 429: Si compra fuera de convenio pero está autorizado, liquidar precio de respaldo Institucional en vez de $0 COP
-                const fallbackPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && contractPrices[prodId] > 0)
-                    ? contractPrices[prodId]
-                    : (item.price || 0);
+                // SPEC.md Escenario 429 & 437: Soberanía del Acuerdo Comercial sobre precios de OCR/Excel
+                const resolvedContractPrice = (prodId && contractPrices[prodId] !== undefined && contractPrices[prodId] !== null && Number(contractPrices[prodId]) > 0)
+                    ? Number(contractPrices[prodId])
+                    : (Number(prod.base_price) || Number(item.price) || 0);
                 const unitPrice = (isOffAgreementItem && !allowOffAgreementPurchases)
                     ? 0
-                    : ((clientType === 'B2B' && fallbackPrice > 0)
-                        ? fallbackPrice
-                        : (item.price || fallbackPrice || 0));
+                    : resolvedContractPrice;
 
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '1');
                 const itemTotal = unitPrice * qtyNum;
@@ -4945,6 +4954,8 @@ function CreateOrderContent() {
                             created_at: new Date().toISOString(),
                             email: guestInfo.email || null,
                             nit: guestInfo.nit || null,
+                            document_type: draftClientType === 'b2b_client' ? 'invoice' : 'remission',
+                            remission_with_prices: true,
                             is_active: guestInfo.saveToDirectory
                         });
 
@@ -5012,7 +5023,7 @@ function CreateOrderContent() {
                 };
             }
 
-            let finalDocumentType = 'invoice';
+            let finalDocumentType = clientType === 'B2C' ? 'remission' : 'invoice';
             let finalRemissionWithPrices = true;
 
             if (clientType === 'B2B') {
@@ -5022,13 +5033,8 @@ function CreateOrderContent() {
                     finalRemissionWithPrices = (b2bDetails as any).remission_with_prices !== undefined ? (b2bDetails as any).remission_with_prices : true;
                 }
             } else {
-                if (b2cMode !== 'new') {
-                    const b2cDetails = getSelectedB2CDetails();
-                    if (b2cDetails) {
-                        finalDocumentType = (b2cDetails as any).document_type || 'invoice';
-                        finalRemissionWithPrices = (b2cDetails as any).remission_with_prices !== undefined ? (b2cDetails as any).remission_with_prices : true;
-                    }
-                }
+                finalDocumentType = 'remission';
+                finalRemissionWithPrices = true;
             }
 
             const isExoneratedZero = orderNature === 'replacement';
@@ -5085,7 +5091,11 @@ function CreateOrderContent() {
 
                 for (const item of groupItems) {
                     const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                    const rawPrice = forceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                    // Escenario 437 SDD: Soberanía del Acuerdo Comercial sobre tarifas de memoria
+                    const resolvedContractPrice = (item.product?.id && contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && Number(contractPrices[item.product.id]) > 0)
+                        ? Number(contractPrices[item.product.id])
+                        : (Number(item.price) || Number(item.product?.base_price) || 0);
+                    const rawPrice = forceZero ? 0 : resolvedContractPrice;
                     const uPrice = Math.round(rawPrice * discountMultiplier);
                     const lineSub = qtyNum * uPrice;
                     const lineIva = lineSub * ((item.product?.iva_rate || 0) / 100);
@@ -5197,7 +5207,11 @@ ${primaryAdminNotes}`.trim();
 
             const itemsData = primaryCartItems.map(item => {
                 const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-                const rawPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                // Escenario 437 SDD: Soberanía del Acuerdo Comercial sobre tarifas de memoria al persistir
+                const resolvedContractPrice = (item.product?.id && contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && Number(contractPrices[item.product.id]) > 0)
+                    ? Number(contractPrices[item.product.id])
+                    : (Number(item.price) || Number(item.product?.base_price) || 0);
+                const rawPrice = primaryForceZero ? 0 : resolvedContractPrice;
                 const unitPrice = (clientType === 'B2C' && isCollaboratorOrder) ? Math.round(rawPrice * collabDiscountMultiplier) : rawPrice;
                 const cleanAlias = (item.nickname || '').trim();
                 const cleanProdName = (item.product?.name || '').trim();
@@ -5236,7 +5250,11 @@ ${primaryAdminNotes}`.trim();
 
                     const payrollMovements = primaryCartItems.map(item => {
                         const qtyNum = parseFloat(item.qty.toString().replace(",", ".") || "0");
-                        const rawPrice = primaryForceZero ? 0 : (item.price !== undefined && item.price !== null ? item.price : (item.product?.id && contractPrices[item.product.id] ? contractPrices[item.product.id] : 0));
+                        // Escenario 437 SDD: Soberanía del Acuerdo Comercial sobre tarifas de memoria al persistir
+                const resolvedContractPrice = (item.product?.id && contractPrices[item.product.id] !== undefined && contractPrices[item.product.id] !== null && Number(contractPrices[item.product.id]) > 0)
+                    ? Number(contractPrices[item.product.id])
+                    : (Number(item.price) || Number(item.product?.base_price) || 0);
+                const rawPrice = primaryForceZero ? 0 : resolvedContractPrice;
                         const unitPrice = Math.round(rawPrice * collabDiscountMultiplier);
                         const lineTotal = Math.round(qtyNum * unitPrice);
                         const uom = item.originalUnit || item.product?.unit_of_measure || "Kg";

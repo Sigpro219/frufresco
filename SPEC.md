@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.375 + Roadmap `onFRU v2.0` (Fase I Cerrada: Escenarios 1..397 | Apertura Oficial `onFRU v2.0` Fase II Facturable: Escenarios Serie 400+ — WFM/RTLS Anti-Sabotaje, Planta de Procesados MES & Alianza Exclusiva `FruFresco × Friogan`)
-> **Fecha:** 9 de Noviembre, 2026  
-> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
+> **Versión:** 1.9.392 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..437)  
+> **Fecha:** 11 de Noviembre, 2026  
+> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 437 Certificados en Caliente (Goldfish) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..437 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -19,7 +19,7 @@
 | :---: | :--- | :---: | :--- | :---: | :---: |
 | **D1** | **Tienda B2C, Catálogo Público y Checkout** | 7 | Capítulos 25, 40 | Escenarios 186 a 192, 223 a 224, 229, 240, 243 (§40.1 - §40.8) | 🟢 100% |
 | **D2** | **Portal Corporativo B2B e Institucional** | 4 | Capítulo 41 | Escenarios 193 a 196, 224, 240, 243, 252, 254, 304 (§41.1 - §41.4) | 🟢 100% |
-| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254, 260, 262, 263 | 🟢 100% |
+| **D3** | **Gestión de Pedidos, Alistamiento y Despacho** | 9 | Capítulos 1, 2, 3, 4, 13, 16, 19, 30, 34, 36 | Escenarios 1 a 68, 70 a 127, 150 a 158, 218 a 224, 226, 228, 241, 242, 244, 246, 247, 248, 250, 252, 253, 254, 260, 262, 263, 431, 432, 433, 435, 436, 437 | 🟢 100% |
 | **D4** | **Compras, Abastecimiento y Tesorería Gemba** | 9 | Capítulo 31 | Escenarios 128 a 135, 141, 256 (§31.1 - §31.12) | 🟢 100% |
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258, 430 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL FASE I** | **onFRU SCOS v1.9.x (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **397 Escenarios Canónicos (1..397)** | **🟢 100%** |
+| **TOTAL ONFRU** | **onFRU SCOS v1.9.392 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **437 Escenarios Canónicos (1..437)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
@@ -16570,4 +16570,37 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
        * El campo `orders.total`, `subtotal` e `IVA` deben recalcularse y persistirse atómicamente, impidiendo que cuentas institucionales sean facturadas con listas de catálogo general minorista.
   3. **Poka-Yoke Anti-Glosa en Homologación de Productos Institucionales:**
      - En centros de producción de alimentos y cocinas institucionales (Catering, Casinos, Hospitales), la ingesta de texto ambiguo (ej. "ZANAHORIA BABY 1000 GR") debe mapear preferentemente al código institucional estándar (`#778 Zanahoria cero`), restringiendo productos gourmet premium (`#138 Zanahoria baby` a $15.000) a requerimientos con confirmación explícita de mesa de control.
+
+
+---
+
+### Escenario 437: Soberanía Absoluta del Acuerdo Comercial, Re-Cotización Incondicional por Mutación de Destinatario y Estandarización Documental B2C Remisión (SDD v1.9.392)
+- **Given** la mesa de montaje de pedidos (`/admin/orders/create`), el módulo de aprobación de borradores de correo (`/api/orders/email-drafts/approve`) y el directorio de clientes (`profiles`):
+- **When** se crea o aprueba un pedido, se conmuta de cliente durante el montaje, o se registra un consumidor final (B2C Hogar):
+- **Then** rigen las siguientes reglas canónicas de gobernanza transaccional y soberanía tarifaria:
+  1. **Invariante de Mutación de Cliente (Re-Cotización Integral $A \to B$):**
+     - Si un pedido inicia su montaje con el Cliente $A$ y posteriormente el operador o el sistema reasigna el pedido al Cliente $B$, el **100% de los ítems existentes en el carrito o staging deben re-cotizarse atómicamente a las tarifas del Cliente $B$**.
+     - En `src/app/admin/orders/create/page.tsx`, queda proscrita la retención perezosa de precios de memoria (`item.price !== undefined ? item.price : ...`). Al persistir el pedido en `handleCreateOrder`, los precios de cada línea en `order_items` deben provenir estrictamente de `contractPrices[product.id]` resueltos para el cliente final de destino (`finalProfileId`).
+  2. **Prevalencia Incondicional del Acuerdo Comercial sobre Entradas Externas:**
+     - El precio pactado en el Acuerdo Comercial oficial de FruFresco (`quotes` aprobadas o modelo de precios asignado vía `/api/orders/resolve-agreement-pricing`) **MANDA SOBRE CUALQUIER OTRA FUENTE**.
+     - Queda terminantemente prohibido que textos de correos electrónicos, hojas de cálculo de clientes, o extracciones OCR de PDFs fijen o sobreescriban tarifas en el sistema. Los correos y documentos adjuntos son única y exclusivamente fuentes de **demanda física (cantidades y productos)**, jamás fuentes de tarificación financiera.
+  3. **Soberanía Exclusiva del Módulo de Pedidos en Liquidación de Borradores:**
+     - En `src/app/api/orders/email-drafts/approve/route.ts`, queda prohibido insertar en `order_items` el valor crudo `item.unitPrice || item.price || 0` proveniente del JSON del borrador.
+     - Antes de confirmar la inserción, el endpoint debe resolver las tarifas canónicas del cliente aprobado mediante `resolve-agreement-pricing`. Toda discrepancia entre lo escrito en el correo y el acuerdo de FruFresco se resuelve a favor del acuerdo comercial registrado en el sistema.
+  4. **Estandarización Canónica B2C: Remisión con Precios (`REM-$`) Obligatoria e Inmutable:**
+     - **Regla Fundamental de Negocio:** Ningún consumidor residencial o cliente Hogar (`role === 'b2c_client'`, `type === 'b2c'`, `b2c_wompi` o identificado como Hogar) exige ni debe recibir factura física impresa en muelle expedida por World Office Desktop (`FAC-IMP`). Todo cliente Hogar opera y viaja estrictamente acompañado de su **`Remisión Oficial con Precios` (`REM-$`)**, formalizada mediante `document_type = 'remission'` y `remission_with_prices = true`.
+     - **Poka-Yoke Visual en Consola de Cargue (`/admin/orders/loading`):**
+       * En la columna Cliente/Sede & Canal (junto al teléfono y canal WhatsApp/Web), si el pedido es de tipo Hogar (`order.type === 'b2c'` o `order.profiles?.role === 'b2c_client'`), el renderizador documental **DEBE FORZAR incondicionalmente el badge azul de `Remisión con Precios`** (`bg: #EFF6FF`, `color: #1D4ED8`, `border: #93C5FD`).
+       * Queda terminantemente prohibido desplegar el badge rojo de alarma `Factura Impresa` (`#B91C1C`) en pedidos Hogar por arrastre de datos legados o defaults residuales de base de datos.
+     - **Blindaje Estricto en Altas y Webhooks:**
+       * Queda proscrito asignar el valor por defecto espurio `document_type = 'invoice'` a clientes residenciales en:
+         1. `src/app/admin/orders/create/page.tsx` (alta manual de perfiles B2C y creación de orden).
+         2. `src/app/api/payments/wompi/webhook/route.ts` (webhook de pasarela Wompi al procesar checkout en línea).
+         3. `src/app/api/orders/public/route.ts` (pipeline de pedidos y clientes web).
+         4. `src/components/ClientsModule.tsx` (alta y edición de clientes residenciales en consola comercial).
+     - **Inmunidad en Mesa de Facturación e Impresiones:**
+       * Al estar tipificados como `REM-$`, los pedidos Hogar quedan automáticamente blindados contra la inclusión errónea en los micro-cortes vespertinos de World Office (`Corte Tarde FAC-IMP` en `/admin/commercial/billing`).
+       * Se garantiza su inclusión fluida en el generador masivo de remisiones físicas para ruta (`/admin/orders/contingency-print?mode=remissions`).
+     - **Saneamiento Retroactivo en Base de Datos (`public.profiles`):**
+       * Se ejecuta la normalización de los 82 perfiles residenciales activos (`role IN ('b2c_client', 'client')`) fijando `document_type = 'remission'` y `remission_with_prices = true`, restaurando la coherencia relacional integral.
 

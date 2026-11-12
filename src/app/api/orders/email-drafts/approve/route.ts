@@ -61,6 +61,23 @@ export async function POST(req: Request) {
     const productsMap = new Map((dbProducts || []).map((p: any) => [p.id, p]));
 
     const isGiftRemission = profile.document_type === 'gift_remission';
+    const isB2C = profile.role === 'b2c_client' || clientType === 'b2c_client' || clientType === 'b2c';
+
+    // Escenario 437 SDD: Resolver tarifas del Acuerdo Comercial oficial del cliente
+    let contractPrices: Record<string, number> = {};
+    try {
+      const pricingUrl = new URL('/api/orders/resolve-agreement-pricing', req.url);
+      pricingUrl.searchParams.set('client_id', clientId);
+      if (deliveryDate) pricingUrl.searchParams.set('delivery_date', deliveryDate);
+      pricingUrl.searchParams.set('client_type', isB2C ? 'B2C' : 'B2B');
+      const pricingRes = await fetch(pricingUrl.toString());
+      if (pricingRes.ok) {
+        const pData = await pricingRes.json();
+        contractPrices = pData.contractPrices || {};
+      }
+    } catch (e) {
+      console.warn('Error resolviendo precios de acuerdo en approve route:', e);
+    }
 
     // Calcular subtotales, IVA y Peso acumulado idéntico a create/page.tsx
     let totalTax = 0;
@@ -70,7 +87,19 @@ export async function POST(req: Request) {
     const formattedItems = items.map((item: any) => {
       const pId = item.productId || item.product_id || item.id;
       const dbProd = productsMap.get(pId);
-      const unitPrice = isGiftRemission ? 0 : Number(item.unitPrice || item.price || 0);
+      
+      // Escenario 437 SDD: Prevalencia incondicional del Acuerdo Comercial oficial sobre OCR/texto de correo
+      let unitPrice = 0;
+      if (isGiftRemission) {
+        unitPrice = 0;
+      } else if (contractPrices[pId] !== undefined && contractPrices[pId] !== null && Number(contractPrices[pId]) > 0) {
+        unitPrice = Number(contractPrices[pId]);
+      } else if (dbProd?.base_price && Number(dbProd.base_price) > 0) {
+        unitPrice = Number(dbProd.base_price);
+      } else {
+        unitPrice = Number(item.unitPrice || item.price || 0);
+      }
+
       const qty = Number(item.quantity || item.qty || 1);
       const itemTotal = unitPrice * qty;
       totalGross += itemTotal;
@@ -117,6 +146,8 @@ export async function POST(req: Request) {
     const orderData: any = {
       profile_id: clientId,
       type: (clientType === 'b2c_client' || profile.role === 'b2c') ? 'b2c' : 'b2b',
+      document_type: isB2C ? 'remission' : (profile.document_type || 'remission'),
+      remission_with_prices: isB2C ? true : (profile.remission_with_prices !== false),
       status: 'pending_approval',
       subtotal: subtotal,
       tax: taxes,
