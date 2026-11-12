@@ -1045,7 +1045,8 @@ interface CommittedSaleData {
                 const { data: costMatrixData } = await supabase
                     .from('commercial_cost_matrix')
                     .select('product_id, manual_cost')
-                    .eq('is_active', true);
+                    .eq('is_active', true)
+                    .range(0, 9999);
                 const costMap = new Map<string, number>();
                 (costMatrixData || []).forEach(cm => {
                     if (cm.manual_cost && Number(cm.manual_cost) > 0) {
@@ -1057,28 +1058,44 @@ interface CommittedSaleData {
                 console.warn('Error cargando commercial_cost_matrix en balance diario:', cmErr);
             }
 
-            // 2. Cargar movimientos desde el inicio del día seleccionado hasta el presente (para cálculo retroactivo)
+            // 2. Cargar movimientos desde el inicio del día seleccionado hasta el presente (con paginación exhaustiva anti-corte 1000)
             const startOfDayIso = `${balanceDate}T00:00:00.000Z`;
             const endOfDayIso = `${balanceDate}T23:59:59.999Z`;
 
-            const { data: movData, error: movErr } = await supabase
-                .from('inventory_movements')
-                .select(`
-                    id, product_id, warehouse_id, quantity, type, reference_type, reference_id, notes, evidence_url, created_at
-                `)
-                .gte('created_at', startOfDayIso)
-                .order('created_at', { ascending: false });
+            let allMovData: any[] = [];
+            let fromMov = 0;
+            const movStep = 1000;
+            let hasMoreMov = true;
 
-            if (movErr) throw movErr;
+            while (hasMoreMov) {
+                const { data: movBatch, error: movErr } = await supabase
+                    .from('inventory_movements')
+                    .select(`
+                        id, product_id, warehouse_id, quantity, type, reference_type, reference_id, notes, evidence_url, created_at
+                    `)
+                    .gte('created_at', startOfDayIso)
+                    .order('created_at', { ascending: false })
+                    .range(fromMov, fromMov + movStep - 1);
+
+                if (movErr) throw movErr;
+                if (movBatch && movBatch.length > 0) {
+                    allMovData = allMovData.concat(movBatch);
+                    fromMov += movStep;
+                    if (movBatch.length < movStep) hasMoreMov = false;
+                } else {
+                    hasMoreMov = false;
+                }
+            }
+
             // Blindaje de Entorno: En Producción filtrar estrictamente movimientos de sandbox (SPEC.md §8.8.13)
-            const rawMovsList = (movData as any[] || []);
+            const rawMovsList = allMovData;
             const segregatedMovs = rawMovsList.filter(m => {
                 const isSbMov = (m.reference_type || '').startsWith('sandbox_') || (m.notes || '').includes('[SANDBOX]');
                 return isSandbox ? true : !isSbMov;
             });
             setMovements(segregatedMovs);
 
-            // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
+            // 3. Cargar ventas de órdenes para esta fecha de entrega (incluyendo pedidos pendientes/por aprobar antes de lanzamiento oficial)
             try {
                 const [{ data: cutoffSetting }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
                     supabase.from('app_settings').select('value').eq('key', 'cutoff_hour_admin').maybeSingle(),
@@ -1086,7 +1103,8 @@ interface CommittedSaleData {
                         .from('orders')
                         .select('id, created_at')
                         .eq('delivery_date', balanceDate)
-                        .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered'])
+                        .neq('status', 'cancelled')
+                        .range(0, 4999)
                 ]);
 
                 if (ordersErr) throw ordersErr;
@@ -1108,99 +1126,114 @@ interface CommittedSaleData {
                 const postCutoffMap = new Map<string, number>();
 
                 if (launchedOrderIds.length > 0) {
-                    const batchSize = 100;
+                    const batchSize = 40;
                     for (let i = 0; i < launchedOrderIds.length; i += batchSize) {
                         const batch = launchedOrderIds.slice(i, i + batchSize);
-                        const { data: items, error: itemsErr } = await supabase
-                            .from('order_items')
-                            .select('id, order_id, product_id, quantity, unit, variant_label, selected_options')
-                            .in('order_id', batch);
+                        let fromItem = 0;
+                        const itemStep = 1000;
+                        let hasMoreItems = true;
 
-                        if (itemsErr) {
-                            console.warn('Error cargando order_items de tanda lanzada:', itemsErr);
-                            break;
-                        }
+                        while (hasMoreItems) {
+                            const { data: items, error: itemsErr } = await supabase
+                                .from('order_items')
+                                .select('id, order_id, product_id, quantity, unit, variant_label, selected_options')
+                                .in('order_id', batch)
+                                .range(fromItem, fromItem + itemStep - 1);
 
-                        (items || []).forEach(it => {
-                            if (!it.product_id) return;
-                            const rawQty = Number(it.quantity) || 0;
-                            if (it.order_id && postCutoffOrderIdsSet.has(it.order_id)) {
-                                postCutoffMap.set(it.product_id, (postCutoffMap.get(it.product_id) || 0) + rawQty);
-                                return;
-                            }
-                            const unitStr = (it.unit || '').toLowerCase();
-                            const sel: any = it.selected_options;
-                            const vl = it.variant_label ? String(it.variant_label).trim() : '';
-
-                            let isUnit = false;
-                            let extractedUnits = 0;
-                            let grammageOrDesc = '';
-
-                            // 1. Extraer unidades desde selected_options
-                            if (sel && typeof sel === 'object') {
-                                if (sel._original_unit && ['un', 'und', 'unidad'].includes(String(sel._original_unit).toLowerCase())) {
-                                    isUnit = true;
-                                    extractedUnits = Number(sel._original_qty) || 0;
-                                } else if (sel._original_qty && (sel['Presentación'] || sel._conversion_factor)) {
-                                    isUnit = true;
-                                    extractedUnits = Number(sel._original_qty) || 0;
-                                }
-                                if (sel._physical_instruction) {
-                                    const m = String(sel._physical_instruction).match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
-                                    if (m) grammageOrDesc = m[1];
-                                } else if (sel['Presentación']) {
-                                    grammageOrDesc = String(sel['Presentación']).replace(/unidad\s*/i, '').trim();
-                                }
+                            if (itemsErr) {
+                                console.warn('Error cargando order_items de tanda lanzada:', itemsErr);
+                                break;
                             }
 
-                            // 2. Extraer unidades desde variant_label (ej: "70 Unidades 160 gr", "10 Unidades 160 gr")
-                            if (!isUnit && vl) {
-                                const match = vl.match(/(\d+)\s*(?:unidades|unds?|und)\b/i);
-                                if (match) {
+                            if (!items || items.length === 0) {
+                                hasMoreItems = false;
+                                break;
+                            }
+
+                            fromItem += itemStep;
+                            if (items.length < itemStep) hasMoreItems = false;
+
+                            items.forEach(it => {
+                                if (!it.product_id) return;
+                                const rawQty = Number(it.quantity) || 0;
+                                if (it.order_id && postCutoffOrderIdsSet.has(it.order_id)) {
+                                    postCutoffMap.set(it.product_id, (postCutoffMap.get(it.product_id) || 0) + rawQty);
+                                    return;
+                                }
+                                const unitStr = (it.unit || '').toLowerCase();
+                                const sel: any = it.selected_options;
+                                const vl = it.variant_label ? String(it.variant_label).trim() : '';
+
+                                let isUnit = false;
+                                let extractedUnits = 0;
+                                let grammageOrDesc = '';
+
+                                // 1. Extraer unidades desde selected_options
+                                if (sel && typeof sel === 'object') {
+                                    if (sel._original_unit && ['un', 'und', 'unidad'].includes(String(sel._original_unit).toLowerCase())) {
+                                        isUnit = true;
+                                        extractedUnits = Number(sel._original_qty) || 0;
+                                    } else if (sel._original_qty && (sel['Presentación'] || sel._conversion_factor)) {
+                                        isUnit = true;
+                                        extractedUnits = Number(sel._original_qty) || 0;
+                                    }
+                                    if (sel._physical_instruction) {
+                                        const m = String(sel._physical_instruction).match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                        if (m) grammageOrDesc = m[1];
+                                    } else if (sel['Presentación']) {
+                                        grammageOrDesc = String(sel['Presentación']).replace(/unidad\s*/i, '').trim();
+                                    }
+                                }
+
+                                // 2. Extraer unidades desde variant_label (ej: "70 Unidades 160 gr", "10 Unidades 160 gr")
+                                if (!isUnit && vl) {
+                                    const match = vl.match(/(\d+)\s*(?:unidades|unds?|und)\b/i);
+                                    if (match) {
+                                        isUnit = true;
+                                        extractedUnits = parseInt(match[1], 10);
+                                        const mGram = vl.match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                        if (mGram) grammageOrDesc = mGram[1];
+                                    }
+                                }
+
+                                // 3. Si la unidad del item es Unidad
+                                if (!isUnit && ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes(unitStr)) {
                                     isUnit = true;
-                                    extractedUnits = parseInt(match[1], 10);
-                                    const mGram = vl.match(/(?:de\s*)?([0-9.,]+\s*(?:gr|g|kg|ml))/i);
+                                    extractedUnits = rawQty;
+                                }
+
+                                if (vl && !grammageOrDesc) {
+                                    const mGram = vl.match(/([0-9.,]+\s*(?:gr|g|kg|ml))/i);
                                     if (mGram) grammageOrDesc = mGram[1];
                                 }
-                            }
 
-                            // 3. Si la unidad del item es Unidad
-                            if (!isUnit && ['un', 'und', 'unidad', 'bandeja', 'atado', 'paquete'].includes(unitStr)) {
-                                isUnit = true;
-                                extractedUnits = rawQty;
-                            }
+                                const prev = salesMap.get(it.product_id) || {
+                                    pureKg: 0,
+                                    totalUnits: 0,
+                                    totalUnitWeightKg: 0,
+                                    unitGroups: new Map<string, { units: number; weightKg: number }>()
+                                };
 
-                            if (vl && !grammageOrDesc) {
-                                const mGram = vl.match(/([0-9.,]+\s*(?:gr|g|kg|ml))/i);
-                                if (mGram) grammageOrDesc = mGram[1];
-                            }
+                                if (isUnit) {
+                                    const u = extractedUnits > 0 ? extractedUnits : rawQty;
+                                    const w = (unitStr === 'kg' && rawQty > 0) ? rawQty : 0;
+                                    const keyDesc = grammageOrDesc || (vl ? vl : 'und');
 
-                            const prev = salesMap.get(it.product_id) || {
-                                pureKg: 0,
-                                totalUnits: 0,
-                                totalUnitWeightKg: 0,
-                                unitGroups: new Map<string, { units: number; weightKg: number }>()
-                            };
+                                    const gPrev = prev.unitGroups.get(keyDesc) || { units: 0, weightKg: 0 };
+                                    prev.unitGroups.set(keyDesc, {
+                                        units: gPrev.units + u,
+                                        weightKg: gPrev.weightKg + w
+                                    });
 
-                            if (isUnit) {
-                                const u = extractedUnits > 0 ? extractedUnits : rawQty;
-                                const w = (unitStr === 'kg' && rawQty > 0) ? rawQty : 0;
-                                const keyDesc = grammageOrDesc || (vl ? vl : 'und');
+                                    prev.totalUnits += u;
+                                    prev.totalUnitWeightKg += w;
+                                } else {
+                                    prev.pureKg += rawQty;
+                                }
 
-                                const gPrev = prev.unitGroups.get(keyDesc) || { units: 0, weightKg: 0 };
-                                prev.unitGroups.set(keyDesc, {
-                                    units: gPrev.units + u,
-                                    weightKg: gPrev.weightKg + w
-                                });
-
-                                prev.totalUnits += u;
-                                prev.totalUnitWeightKg += w;
-                            } else {
-                                prev.pureKg += rawQty;
-                            }
-
-                            salesMap.set(it.product_id, prev);
-                        });
+                                salesMap.set(it.product_id, prev);
+                            });
+                        }
                     }
                 }
                 setCommittedSalesMap(salesMap);
