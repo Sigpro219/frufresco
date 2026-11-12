@@ -53,21 +53,21 @@ flowchart LR
   - Se ejecutó la depuración forense en cascada de **1.079 pedidos legacy y pruebas de desarrollo** anteriores al ciclo de hoy (`sequence_id < 1538`).
   - La tabla `orders` y `order_items` quedó en estado prístino, conteniendo **exclusivamente los pedidos vivos montados hoy para entrega del Jueves 12/Nov**.
   - Cero interferencias en consolas, planillas de alistamiento y ruteo con pedidos residuales o históricos de meses previos.
-- [ ] **0.4 Base Oficial de Inventario (`daily_inventory_closings`):** Confirmar que exista cierre oficial previo (`Columna U ➔ Columna E`) para que la ecuación `Compra Neta = max(0, Demanda + StockSeg - Inventario Base)` no parta de saldos flotantes.
-- [ ] **0.5 Hora de Corte y Consecutivos DIAN (`/admin/settings`):** Validar `cutoff_hour_admin` (`20:00`), prefijo `billing_invoice_prefix`, número de resolución `billing_resolution_number` y vigencia DIAN activa.
+- [x] **0.4 Base Oficial de Inventario (`daily_inventory_closings`):** Confirmar que exista cierre oficial previo (`Columna U ➔ Columna E`) para que la ecuación `Compra Neta = max(0, Demanda + StockSeg - Inventario Base)` no parta de saldos flotantes.
+- [x] **0.5 Hora de Corte y Consecutivos DIAN (`/admin/settings`):** Validar `cutoff_hour_admin` (`20:00`), prefijo `billing_invoice_prefix`, número de resolución `billing_resolution_number` y vigencia DIAN activa.
 
 ---
 
 ### BLOQUE 1 — Montaje y Auditoría de Pedidos (Hoy Miércoles ➔ Entrega Jueves 12/Nov)
-- [ ] **1.1 Vaciado de Bandeja de Entrada Email (`/admin/orders/loading` pestaña Bandeja Email):**
+- [x] **1.1 Vaciado de Bandeja de Entrada Email (`/admin/orders/loading` pestaña Bandeja Email):**
   - Revisar el contador `Hoy` (inmutable por fecha de llegada `created_at`) y la píldora centinela `+N en Otras Fechas`.
   - Verificar correos con múltiples adjuntos Excel (ej. múltiples OC en un mismo hilo como Colsubsidio) para aprobar cada OC legítima sin confundirla con duplicado.
   - Si un correo recibido hoy pide entrega para otro día (ej. viernes 13 o martes 17), asignar su `deliveryDate` real y aprobarlo para que pase limpio a la fecha objetivo.
-- [ ] **1.2 Montaje Manual, WhatsApp, PDF/Excel y Portal B2B (`/admin/orders/create`):**
+- [x] **1.2 Montaje Manual, WhatsApp, PDF/Excel y Portal B2B (`/admin/orders/create`):**
   - Confirmar siempre **Sucursal de entrega** (jamás consignar pedidos a la Casa Matriz, Cap. 1 SDD).
   - Validar unidades normalizadas (`Kg = 1.0 kg`, `Lb = 0.5 kg`, `Unidad` por defecto cuando no trae unidad).
   - Verificar especificaciones físicas de alistamiento vs variantes de producto para evitar partidas erróneas.
-- [ ] **1.3 Barrido de Calidad Pre-Corte en Consola de Pedidos del Día (`/admin/orders/loading` filtrando entrega `2026-11-12`):**
+- [x] **1.3 Barrido de Calidad Pre-Corte en Consola de Pedidos del Día (`/admin/orders/loading` filtrando entrega `2026-11-12`):**
   - Ejecutar comando `@sin_gps` en el superbuscador ➔ debe dar **0 pedidos sin coordenadas**.
   - Ejecutar comando `@duplicados` ➔ validar o descartar cualquier posible orden repetida por OC/SOLPED/ítems.
   - Revisar que ningún pedido comercial tenga valor `$0 COP` salvo **Remisiones de Obsequio** autorizadas (`gift_remission`) o ítems expresamente aprobados de consumo abierto.
@@ -77,21 +77,21 @@ flowchart LR
 ### BLOQUE 2 — Generación de Documentos en Modo Manual y Sello de Tanda (8:00 p.m.)
 Abrir el asistente de lanzamiento en Modo Manual (`ManualDispatchWizardModal`) sobre la tanda del **Jueves 12/Nov**:
 
-- [ ] **2.1 Paso 1 — Asignación de Espacios Físicos (`1 a 150`):**
+- [x] **2.1 Paso 1 — Asignación de Espacios Físicos (`1 a 150`):**
   - Pulsar `[Auto-Asignar (LIFO + Clúster)]` y verificar que ningún pedido quede sin espacio (`warehouse_spaces` poblado; prohibido caer en `sequence_id`, Escenario 285).
   - Avanzar con `Continuar a Compras & Recibo ->` para persistir atómicamente los espacios en BD.
-- [ ] **2.2 Emisión y Verificación Física de la Batería de 7 Documentos Oficiales (Cap. 30.2.3):**
-  - [ ] **Doc 1 — Sábana de Alistamiento por Células** (`/admin/orders/alistamiento-print` — *Oficio Horizontal*): revisar legibilidad zebra striping y orden secuencial de espacios.
-  - [ ] **Doc 2 — Planillas de Compras de Plaza por Sublista** (`/admin/procurement/purchases-print` — *Carta*: Papa, Frutas, Plátano, Hortalizas) + descarga de respaldo `compras_2026-11-12.xlsx` (11 columnas).
-  - [ ] **Doc 3 — Control de Llegada / Entrada a Almacén** (`/admin/procurement/receiving-print` — *Carta 2 columnas A-Z* para báscula a ciegas).
-  - [ ] **Doc 4 — Planilla de Conteo Físico de Bodega** (`/admin/inventory/physical-count-print` — *6 Folios Carta* por familias para cierre de turno).
-  - [ ] **Doc 5 — Juegos de Remisión Duplicadas** (`/admin/orders/contingency-print?mode=remissions` — *Carta Duplex*):
+- [x] **2.2 Emisión y Verificación Física de la Batería de 7 Documentos Oficiales (Cap. 30.2.3):**
+  - [x] **Doc 1 — Sábana de Alistamiento por Células** (`/admin/orders/alistamiento-print` — *Oficio Horizontal*): revisar legibilidad zebra striping y orden secuencial de espacios.
+  - [x] **Doc 2 — Planillas de Compras de Plaza por Sublista** (`/admin/procurement/purchases-print` — *Carta*: Papa, Frutas, Plátano, Hortalizas) + descarga de respaldo `compras_2026-11-12.xlsx` (11 columnas).
+  - [x] **Doc 3 — Control de Llegada / Entrada a Almacén** (`/admin/procurement/receiving-print` — *Carta 2 columnas A-Z* para báscula a ciegas).
+  - [x] **Doc 4 — Planilla de Conteo Físico de Bodega** (`/admin/inventory/physical-count-print` — *6 Folios Carta* por familias para cierre de turno).
+  - [x] **Doc 5 — Juegos de Remisión Duplicadas** (`/admin/orders/contingency-print?mode=remissions` — *Carta Duplex*):
     - Verificar `ORIGINAL - CLIENTE` + `COPIA - ARCHIVO Y CONTABILIDAD`.
     - Confirmar respeto a `remission_with_prices` (a ciegas vs valorizada), membrete *Investments Cortés S.A.S.*, espacio físico impreso, recuadro de canastillas y **Código QR dinámico de PQR** legible.
-  - [ ] **Doc 6 — Manifiesto de Despacho / El Rutero** (`/admin/orders/contingency-print?mode=dispatch` — *Carta*): revisar vehículo, conductor, paradas LIFO, peso total y casillas de canastillas entregadas/devueltas.
-  - [ ] **Doc 7 — Etiquetas Térmicas 100×50mm** (`/admin/orders/print-labels`): imprimir rollo Zebra/Xprinter exclusivamente para SKUs procesados/empacados con `requires_label = true` (`#ID` contable + lote + vencimiento + cliente).
-- [ ] **2.3 Excepción Clientes `factura_pre_despacho`:** Si en la tanda viaja alguna cadena que exija factura física en muelle antes de descargar, emitir su factura previa en `/admin/commercial/billing`.
-- [ ] **2.4 Sello Poka-Yoke de Tanda:** Marcar el check de verificación física (`step4Confirmed`) y pulsar `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO` ➔ confirmar que el 100% de pedidos pasen a `status = 'para_compra'` (bloqueados en solo lectura).
+  - [x] **Doc 6 — Manifiesto de Despacho / El Rutero** (`/admin/orders/contingency-print?mode=dispatch` — *Carta*): revisar vehículo, conductor, paradas LIFO, peso total y casillas de canastillas entregadas/devueltas.
+  - [x] **Doc 7 — Etiquetas Térmicas 100×50mm** (`/admin/orders/print-labels`): imprimir rollo Zebra/Xprinter exclusivamente para SKUs procesados/empacados con `requires_label = true` (`#ID` contable + lote + vencimiento + cliente).
+- [x] **2.3 Excepción Clientes `factura_pre_despacho`:** Si en la tanda viaja alguna cadena que exija factura física en muelle antes de descargar, emitir su factura previa en `/admin/commercial/billing`.
+- [x] **2.4 Sello Poka-Yoke de Tanda:** Marcar el check de verificación física (`step4Confirmed`) y pulsar `FINALIZAR Y ENVIAR A PROCESO LOGÍSTICO` ➔ confirmar que el 100% de pedidos pasen a `status = 'para_compra'` (bloqueados en solo lectura).
 
 > [!WARNING]
 > **Pedidos Extemporáneos Post-8:00 p.m.:** Prohibido reabrir o reimprimir la tanda principal sellada. Todo pedido de emergencia posterior al corte se tramita únicamente como **«Venta Adicional»** (impactando **Columna M** de la Sábana de Inventarios).
@@ -99,15 +99,18 @@ Abrir el asistente de lanzamiento en Modo Manual (`ManualDispatchWizardModal`) s
 ---
 
 ### BLOQUE 3 — Ejecución de Madrugada, Rectificación y Salida a Reparto (Jueves 12/Nov)
-- [ ] **3.1 Ingesta de Entradas de Plaza en Columna G (`/admin/inventory`):** Transcribir kilos reales comprados y costos usando Modal Rápido por teclado (`Tab/Enter`), fórmula en celda o importación Excel.
-- [ ] **3.2 Compuerta Shift-Left de Rectificación en Muelle (`/ops/rectificacion` — Cap. 26):**
+- [x] **3.1 Ingesta de Entradas de Plaza en Columna G (`/admin/inventory`):** Transcribir kilos reales comprados y costos usando Modal Rápido por teclado (`Tab/Enter`), fórmula en celda o importación Excel.
+- [x] **3.2 Compuerta Shift-Left de Rectificación en Muelle (`/ops/rectificacion` — Cap. 26):**
   - Antes de cerrar puertas del furgón, verificar faltantes o averías detectadas al cargar.
   - Si un ítem se ajusta en muelle, **regenerar y reimprimir en caliente la remisión física** del cliente afectado para que viaje con cantidades 100% reales (Factura Neta Cero-Discrepancias).
-- [ ] **3.3 Control de Flota y Telemetría (`/admin/transport`):** Confirmar conductor asignado, odómetro de salida y señal GPS activa (satelital M2M o Baliza Móvil PWA en celulares de flota alquilada).
+- [x] **3.3 Control de Flota y Telemetría (`/admin/transport`):** Confirmar conductor asignado, odómetro de salida y señal GPS activa (satelital M2M o Baliza Móvil PWA en celulares de flota alquilada).
 
 ---
 
 ### BLOQUE 4 — Recepción de PQRS en Gestión de Calidad & Conciliación de Remisiones (Jueves 12/Nov Mañana)
+> [!IMPORTANT]
+> **ESTADO VIVO: CONTROL DE DAÑOS Y GESTIÓN DE CALIDAD EN CURSO**  
+> La primera operación ya fue despachada. Nos encontramos actualmente en la atención de novedades de entrega, radicación de PQRS, dictamen de imputabilidad nominal, cuarentena de retornos físicos y conciliación de remisiones.
 - [ ] **4.1 Monitoreo Activo de los 3 Canales de Entrada de PQRS (Cap. 20.9 & Cap. 35):**
   - Escaneo de QR desde la Remisión Física (`/pqrs`), Autogestión en `/b2b/dashboard` y línea asistida WhatsApp SAC / PBX.
   - Vigilar barra SLA de **2 horas (120 min)** en `/admin/customer-service` (Escenario 321).
