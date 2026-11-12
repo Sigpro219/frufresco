@@ -10,6 +10,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { acquireSaveFileHandle, saveWorkbookWithPicker, isSavePickerAborted } from '@/lib/fileSavePicker';
+import { resolveWorldOfficeBranch } from '@/lib/worldOfficeExport';
 
 const MONTH_NAMES_ES = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -86,6 +87,8 @@ export interface RelacionExportOrder {
     id: string;
     sequence_id?: number | string;
     invoice_number?: string | null;
+    projected_invoice_number?: string | null;
+    is_replacement?: boolean;
     status?: string;
     type?: string;
     payment_method?: string;
@@ -96,11 +99,19 @@ export interface RelacionExportOrder {
     subtotal?: number;
     shipping_cost?: number;
     discount_amount?: number;
+    tax?: number;
     total_amount?: number;
+    total?: number;
     warehouse_spaces?: any;
+    admin_notes?: string | null;
+    logistics_data?: any;
+    parent_company_name?: string | null;
+    parent_razon_social?: string | null;
     profiles?: {
+        id?: string;
         company_name?: string | null;
         razon_social?: string | null;
+        contact_name?: string | null;
         full_name?: string | null;
         role?: string | null;
         phone?: string | null;
@@ -108,6 +119,9 @@ export interface RelacionExportOrder {
         document_type?: string | null;
         municipality?: string | null;
         city?: string | null;
+        parent_id?: string | null;
+        is_corporate_parent?: boolean | null;
+        logistics_data?: any;
     } | null;
 }
 
@@ -139,32 +153,69 @@ export function buildRelacionDocumentosSheet(
     // Filas de datos (Row 3 en adelante)
     orders.forEach((o, index) => {
         const prof = o.profiles || {};
-        const isInstitucional = prof.role === 'b2b_client';
+        const isInstitucional = prof.role === 'b2b_client' 
+            || o.type === 'b2b' 
+            || Boolean(prof.parent_id) 
+            || Boolean(o.parent_company_name)
+            || (prof.company_name && /(SAS|S\.A|LTDA|BIC|E\.U\.|CORP|COLSUBSIDIO|ALDIMARK|MONSERRATE|TEQUENDAMA|IRCC|COLEGIO|HOTEL|CLINICA|CAJA DE COMPENSACION|FONDO|WOK)/i.test(prof.company_name));
+        
         const tipo = isInstitucional ? 'Institucional' : 'Hogar';
 
-        // Documento
+        // 1. Verificación de Reposición / Garantía / Obsequio
+        const isReplacement = Boolean(
+            o.is_replacement 
+            || o.logistics_data?.is_replacement 
+            || o.logistics_data?.is_gift_remission
+            || (o.admin_notes || '').includes('REPOSICIÓN') 
+            || (o.admin_notes || '').includes('REMISIÓN DE OBSEQUIO')
+        );
+
+        // 2. Columna Documento
         let documento = '';
-        if (o.invoice_number && String(o.invoice_number).trim()) {
-            documento = String(o.invoice_number).trim();
+        const rawInv = o.invoice_number || o.projected_invoice_number;
+        if (isReplacement) {
+            documento = `REP ${o.sequence_id || '---'}`;
+        } else if (rawInv && String(rawInv).trim() && !/^REP/i.test(String(rawInv))) {
+            const cleanInv = String(rawInv).replace(/^FV-?/i, '').trim();
+            documento = `FV ${cleanInv}`;
         } else if (prof.document_type === 'invoice') {
             documento = `FV ${o.sequence_id || '---'}`;
-        } else if (!isInstitucional) {
-            documento = `REH ${o.sequence_id || '---'}`;
         } else {
             documento = `REM ${o.sequence_id || '---'}`;
         }
 
-        // Cliente y Sucursal
-        const rawName = prof.company_name || prof.razon_social || prof.full_name || o.delivery_name || 'CLIENTE GENERAL';
-        let cliente = rawName;
+        // 3. Cliente (Casa Matriz) y Sucursal (Sede destino)
+        let cliente = '';
         let sucursal = '';
-        if (rawName.includes(' - ')) {
-            const split = rawName.split(' - ');
-            cliente = split[0].trim();
-            sucursal = isInstitucional ? split.slice(1).join(' - ').trim() : '';
+
+        if (!isInstitucional) {
+            cliente = (prof.contact_name || prof.company_name || prof.razon_social || o.delivery_name || 'CLIENTE HOGAR').trim();
+            sucursal = 'Hogar';
+        } else {
+            const parentName = (o.parent_razon_social || o.parent_company_name || '').trim();
+            const rawName = (prof.company_name || prof.razon_social || prof.contact_name || o.delivery_name || 'CLIENTE INSTITUCIONAL').trim();
+
+            if (parentName) {
+                cliente = parentName;
+                const branchResolved = resolveWorldOfficeBranch(prof, { company_name: o.parent_company_name, razon_social: o.parent_razon_social });
+                if (branchResolved && branchResolved !== parentName) {
+                    sucursal = branchResolved;
+                } else if (rawName.includes(' - ')) {
+                    sucursal = rawName.split(' - ').slice(1).join(' - ').trim();
+                } else {
+                    sucursal = rawName !== parentName ? rawName : 'Principal';
+                }
+            } else if (rawName.includes(' - ')) {
+                const split = rawName.split(' - ');
+                cliente = split[0].trim();
+                sucursal = split.slice(1).join(' - ').trim();
+            } else {
+                cliente = rawName;
+                sucursal = resolveWorldOfficeBranch(prof, undefined) || 'Principal';
+            }
         }
 
-        // Espacio en Bodega (Floor Staging)
+        // 4. Espacio en Bodega (Floor Staging)
         let espacioStr = '';
         if (manualSpacesMap && manualSpacesMap[o.id] && manualSpacesMap[o.id].length > 0) {
             espacioStr = manualSpacesMap[o.id].join(', ');
@@ -174,15 +225,25 @@ export function buildRelacionDocumentosSheet(
             } else if (typeof o.warehouse_spaces === 'number' || typeof o.warehouse_spaces === 'string') {
                 espacioStr = String(o.warehouse_spaces);
             }
+        } else if (o.logistics_data?.warehouse_space || o.logistics_data?.warehouse_spaces) {
+            const sp = o.logistics_data?.warehouse_space || o.logistics_data?.warehouse_spaces;
+            espacioStr = Array.isArray(sp) ? sp.join(', ') : String(sp);
         }
 
-        // Valores numéricos
+        // 5. Valores numéricos coherentes (Cero discordancias)
+        const total = Number(o.total_amount ?? o.total ?? 0);
         const shipping = Number(o.shipping_cost || 0);
         const discount = Number(o.discount_amount || 0);
-        const total = Number(o.total_amount || 0);
-        const subtotal = o.subtotal !== undefined && o.subtotal !== null
-            ? Number(o.subtotal)
-            : Math.max(0, total - shipping + discount);
+        const tax = Number(o.tax || 0);
+
+        let subtotal = Number(o.subtotal || 0);
+        if (subtotal <= 0) {
+            subtotal = Math.max(0, total + discount - shipping - tax) || total;
+        }
+
+        const adicionales = shipping + tax;
+        const descuentos = discount;
+        const vrPagar = total;
 
         // Contacto
         const celular = String(prof.phone || o.delivery_phone || '').trim();
@@ -212,9 +273,9 @@ export function buildRelacionDocumentosSheet(
             sucursal,
             espacioStr,
             subtotal,
-            shipping,
-            discount,
-            total,
+            adicionales,
+            descuentos,
+            vrPagar,
             celular,
             direccion,
             formaPago,
@@ -307,28 +368,30 @@ export async function exportRelacionDocumentosWithPicker(options: {
                 payment_method,
                 delivery_date,
                 delivery_address,
-                delivery_phone,
-                delivery_name,
                 subtotal,
-                shipping_cost,
-                discount_amount,
-                total_amount,
+                total,
                 warehouse_spaces,
-                profiles:customer_id (
+                admin_notes,
+                logistics_data,
+                profiles:profile_id (
+                    id,
                     company_name,
                     razon_social,
-                    full_name,
+                    contact_name,
                     role,
                     phone,
                     address,
                     document_type,
                     municipality,
-                    city
+                    city,
+                    parent_id,
+                    is_corporate_parent,
+                    logistics_data
                 )
             `)
             .eq('delivery_date', selectedDate)
             .neq('status', 'cancelled')
-            .order('sequence_id', { ascending: true })
+            .order('sequence_id', { ascending: false })
             .range(0, 4999);
 
         if (error) {
@@ -336,7 +399,27 @@ export async function exportRelacionDocumentosWithPicker(options: {
             throw new Error(`Error al cargar órdenes de la fecha ${selectedDate}: ${error.message}`);
         }
 
-        finalOrders = (data as any[]) || [];
+        // Si hay parent_ids, precargar matrices
+        const parentIds = Array.from(new Set(((data || []) as any[]).map(o => o.profiles?.parent_id).filter(Boolean)));
+        const fallbackParentsMap = new Map<string, any>();
+        if (parentIds.length > 0) {
+            const { data: parents } = await supabase
+                .from('profiles')
+                .select('id, company_name, razon_social')
+                .in('id', parentIds);
+            parents?.forEach(p => fallbackParentsMap.set(p.id, p));
+        }
+
+        finalOrders = ((data as any[]) || []).map(o => {
+            const prof = o.profiles || {};
+            const parent = prof.parent_id ? fallbackParentsMap.get(prof.parent_id) : null;
+            return {
+                ...o,
+                total_amount: o.total,
+                parent_company_name: parent?.company_name || null,
+                parent_razon_social: parent?.razon_social || null,
+            };
+        });
     }
 
     const XLSX = await import('xlsx');

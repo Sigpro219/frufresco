@@ -16804,3 +16804,29 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Acceso por Corte Histórico:** En la tabla de cortes cerrados (`subTab === 'cuts'`), cada fila de corte AM o PM incorpora el botón **`[📊 Relación (.xlsx)]`** al lado de *«Plano World Office (.xlsx)»* e *«Imprimir Documentos»*, permitiendo auditar con exactitud forense la lista cerrada de pedidos y números oficiales de facturación con los que se liquidó dicho corte en su momento.
   3. **Preservación Invariable de Formato:**
      - Ambas pantallas utilizan la misma firma canónica de 16 columnas (*No., Tipo, Documento, Cliente, Sucursal, Espacio, Vr/Total, Adicionales, Descuentos, Vr/Pagar, Celular, Dirección, Forma de pago, Proveedor, Diferencia, Zona*), homologando el estándar físico del Gemba.
+
+
+---
+
+### Escenario 447: Prioridad de Ordenamiento por Documento en Facturación (Facturas Arriba), Asignación Consecutiva Estricta y Estandarización de Relación de Documentos (.xlsx) (SDD v1.9.402)
+- **Given** la pantalla operativa de facturación comercial (`/admin/commercial/billing`), la grilla de pedidos pendientes (`filteredPendingOrders`), el cálculo de consecutivos fiscales (`billing_invoice_next_number`), y la utilidad de exportación oficial de Relación de Documentos (`exportRelacionDocumentosExcel.ts`):
+- **When** el analista comercial y el supervisor de operaciones gestionan la tanda del día, auditan la emisión fiscal y exportan la planilla de despacho:
+- **Then**:
+  1. **Ordenamiento por Defecto con Facturas (FV) Arriba:**
+     - La tabla de facturación se inicializa con el ordenamiento por prioridad documental: **Facturas (FV)** en el bloque superior (prioridad 1), seguidas de **Remisiones (REM)** (prioridad 2), y finalizando con **Reposiciones/Garantías (REP)** y Obsequios (prioridad 3).
+     - Dentro de cada bloque documental, los pedidos se ordenan por `sequence_id` descendente para mantener la trazabilidad de los pedidos más recientes.
+  2. **Telemetría y Filtros Rápidos por Tipo de Documento:**
+     - En la barra de píldoras de filtrado, junto a `Todos`, se incorporan badges interactivos con conteo reactivo:
+       * `[📄 Facturas (N)]` (Azul `#1E40AF`): Filtra exclusivamente los pedidos con documento fiscal FV.
+       * `[📦 Remisiones (N)]` (Ámbar `#92400E`): Filtra pedidos amparados bajo remisión comercial.
+       * `[🔄 Reposiciones (N)]` (Violeta `#6B21A8`, visible si > 0): Filtra despachos de garantía SAC y obsequios a $0.
+     - La píldora `En Gracia` se oculta automáticamente cuando su conteo es 0 para erradicar ruido visual innecesario.
+  3. **Asignación Consecutiva Estricta y Poka-Yoke Anti-Fuga:**
+     - Bajo la lógica de ordenamiento con facturas arriba, los números consecutivos fiscales (`FV-69368`..`FV-69390`) se asignan estrictamente de forma secuencial y continua a las facturas.
+     - Las remisiones comerciales nunca reciben ni consumen números de factura; muestran su identificador limpio `REM-[sequence_id]` con etiqueta de *Remisión Comercial*.
+     - Las reposiciones muestran `REP-[sequence_id]` con etiqueta de *Reposición SAC / Garantía*.
+  4. **Estandarización y Resolución de Columnas en Relación de Documentos (.xlsx):**
+     - **Columna `Documento`:** Si el pedido generó FV, muestra el número oficial/proyectado precedido de `FV` (ej: `FV 69368`). Si fue remisión, muestra `REM [sequence_id]`. Si es reposición/garantía, muestra `REP [sequence_id]`.
+     - **Columnas `Cliente` y `Sucursal`:** Para clientes B2B, `Cliente` refleja invariable y exactamente la Casa Matriz / Razón Social corporativa (ej. `IRCC S.A.S...`, `SERVICIOS ALIMENTICIOS ALDIMARK SAS`, `DIPLOMAT EMBAJADA HOTEL TRYP`), y `Sucursal` la sede de destino (`EL CORRAL PLAZA 127`, `ALDIMARK-COOPIDROGAS`, `TRYP`). Para clientes Hogar (B2C), `Cliente` indica el nombre del cliente y `Sucursal` se marca como `Hogar`.
+     - **Columna `Espacio`:** Resuelve fielmente el espacio físico asignado en bodega (`warehouse_spaces`), garantizando que la columna nunca salga vacía en planillas operativas.
+     - **Valores Financieros Coherentes:** Si el campo legado `subtotal` es $\le 0$, se infiere de la ecuación fundamental `total + discount - shipping - tax` para erradicar celdas de `Vr/Total` en $0$. `Adicionales` incorpora fletes e impuestos, y `Vr/Pagar` coincide con el `total` neto, cumpliendo la invariante `Vr/Total + Adicionales - Descuentos = Vr/Pagar`.

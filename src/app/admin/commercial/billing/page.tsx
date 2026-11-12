@@ -755,8 +755,8 @@ export default function BillingDashboard() {
     const [includeAllStatuses, setIncludeAllStatuses] = useState(true);
     const [graceMinutes, setGraceMinutes] = useState<number>(120);
     const [cutCloseTime, setCutCloseTime] = useState<string>('17:00');
-    const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'ready' | 'grace' | 'in_route' | 'novelties' | 'in_process'>('all');
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'sequence_id', direction: 'desc' });
+    const [pendingStatusFilter, setPendingStatusFilter] = useState<'all' | 'ready' | 'grace' | 'in_route' | 'novelties' | 'in_process' | 'invoices' | 'remissions' | 'replacements'>('all');
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'document_priority', direction: 'asc' });
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
     // Escenario 221: Modal de Asignación de Precios Fuera de Acuerdo ($0 Remisiones del Día)
@@ -1511,7 +1511,7 @@ export default function BillingDashboard() {
             let pOrdersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data,
+                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, warehouse_spaces,
                     profiles:profile_id (
                         id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                     ),
@@ -1572,7 +1572,7 @@ export default function BillingDashboard() {
                 const { data: allUnbilledOrders } = await supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id,
+                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id, warehouse_spaces,
                         profiles:profile_id (
                             id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                         ),
@@ -1989,6 +1989,30 @@ export default function BillingDashboard() {
         }).length;
     }, [pendingOrders, parentProfilesMap]);
 
+    // Conteo oficial de distribución por Tipo de Documento (Facturas, Remisiones, Reposiciones)
+    const { invoicesCount, remissionsCount, replacementsCount } = useMemo(() => {
+        let inv = 0;
+        let rem = 0;
+        let rep = 0;
+        pendingOrders.forEach(o => {
+            if (o.logistics_data?.is_batch_accumulated || o.profiles?.document_type === 'batch_remission') return;
+            const repInfo = getOrderReplacementInfo(o);
+            if (repInfo.isReplacement) {
+                rep++;
+                return;
+            }
+            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+            if (docInfo.type === 'invoice') {
+                inv++;
+            } else if (docInfo.type === 'gift_remission') {
+                rep++;
+            } else {
+                rem++;
+            }
+        });
+        return { invoicesCount: inv, remissionsCount: rem, replacementsCount: rep };
+    }, [pendingOrders, parentProfilesMap]);
+
     // Filter & Sort Pending Orders (Excluye pedidos acumulados en lote)
     const filteredPendingOrders = useMemo(() => {
         let result = pendingOrders.filter(o => !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission');
@@ -2012,9 +2036,15 @@ export default function BillingDashboard() {
             ));
         }
 
-        // 2. Status / Grace Filter
+        // 2. Status / Grace / Document Filter
         if (pendingStatusFilter !== 'all') {
             result = result.filter(order => {
+                const rep = getOrderReplacementInfo(order);
+                const { docInfo } = resolveOrderBillingInfo(order, parentProfilesMap);
+                if (pendingStatusFilter === 'invoices') return docInfo.type === 'invoice' && !rep.isReplacement;
+                if (pendingStatusFilter === 'remissions') return docInfo.type === 'remission' && !rep.isReplacement;
+                if (pendingStatusFilter === 'replacements') return rep.isReplacement || docInfo.type === 'gift_remission';
+
                 const info = getOrderGraceInfo(order, graceMinutes, cutCloseTime);
                 if (pendingStatusFilter === 'ready') return info.statusType === 'ready';
                 if (pendingStatusFilter === 'grace') return info.statusType === 'grace';
@@ -2025,57 +2055,91 @@ export default function BillingDashboard() {
             });
         }
 
-        // 3. Column Sorting
-        if (sortConfig.key) {
-            result = [...result].sort((a, b) => {
-                let valA: any = '';
-                let valB: any = '';
+        // Helper de Prioridad por Documento (1: Facturas FV, 2: Remisiones REM, 3: Reposiciones REP / Obsequios)
+        const getDocPriority = (o: any) => {
+            const rep = getOrderReplacementInfo(o);
+            if (rep.isReplacement) return 3;
+            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+            if (docInfo.type === 'invoice') return 1;
+            if (docInfo.type === 'gift_remission') return 3;
+            return 2;
+        };
 
-                switch (sortConfig.key) {
-                    case 'order_id':
-                        valA = a.created_at ? new Date(a.created_at).getTime() : (a.sequence_id || 0);
-                        valB = b.created_at ? new Date(b.created_at).getTime() : (b.sequence_id || 0);
-                        break;
-                    case 'invoice_seq':
-                        valA = a.billing_invoices?.invoice_number || a.invoice_number || '';
-                        valB = b.billing_invoices?.invoice_number || b.invoice_number || '';
-                        break;
-                    case 'client':
-                        valA = (a.profiles?.company_name || a.profiles?.razon_social || '').toLowerCase();
-                        valB = (b.profiles?.company_name || b.profiles?.razon_social || '').toLowerCase();
-                        break;
-                    case 'items':
-                        valA = a.order_items?.[0]?.count ?? (a.order_items?.length || 0);
-                        valB = b.order_items?.[0]?.count ?? (b.order_items?.length || 0);
-                        break;
-                    case 'novelties':
-                        valA = (a.billing_returns || []).length;
-                        valB = (b.billing_returns || []).length;
-                        break;
-                    case 'document':
-                        valA = resolveOrderBillingInfo(a, parentProfilesMap).docInfo.code;
-                        valB = resolveOrderBillingInfo(b, parentProfilesMap).docInfo.code;
-                        break;
-                    case 'grace_status':
-                        valA = getOrderGraceInfo(a, graceMinutes).statusType;
-                        valB = getOrderGraceInfo(b, graceMinutes).statusType;
-                        break;
-                    case 'total':
-                        valA = Number(a.total || 0);
-                        valB = Number(b.total || 0);
-                        break;
-                    default:
-                        return 0;
+        // 3. Column Sorting (Por defecto: Facturas siempre arriba)
+        result = [...result].sort((a, b) => {
+            if (!sortConfig.key || sortConfig.key === 'document_priority' || sortConfig.key === 'document') {
+                const prioA = getDocPriority(a);
+                const prioB = getDocPriority(b);
+                if (prioA !== prioB) {
+                    return sortConfig.direction === 'desc' ? prioB - prioA : prioA - prioB;
                 }
+                // Desempate dentro del mismo grupo: sequence_id descendente
+                return (Number(b.sequence_id || 0) - Number(a.sequence_id || 0));
+            }
 
-                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
+            let valA: any = '';
+            let valB: any = '';
+
+            switch (sortConfig.key) {
+                case 'sequence_id':
+                case 'order_id':
+                    valA = a.sequence_id || 0;
+                    valB = b.sequence_id || 0;
+                    break;
+                case 'fiscal_consecutive':
+                case 'invoice_seq':
+                    valA = a.billing_invoices?.invoice_number || a.invoice_number || '';
+                    valB = b.billing_invoices?.invoice_number || b.invoice_number || '';
+                    break;
+                case 'client':
+                    valA = (a.profiles?.company_name || a.profiles?.razon_social || '').toLowerCase();
+                    valB = (b.profiles?.company_name || b.profiles?.razon_social || '').toLowerCase();
+                    break;
+                case 'items':
+                    valA = a.order_items?.[0]?.count ?? (a.order_items?.length || 0);
+                    valB = b.order_items?.[0]?.count ?? (b.order_items?.length || 0);
+                    break;
+                case 'novelties':
+                    valA = (a.billing_returns || []).length;
+                    valB = (b.billing_returns || []).length;
+                    break;
+                case 'grace_status':
+                    valA = getOrderGraceInfo(a, graceMinutes).statusType;
+                    valB = getOrderGraceInfo(b, graceMinutes).statusType;
+                    break;
+                case 'total':
+                    valA = Number(a.total || 0);
+                    valB = Number(b.total || 0);
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
 
         return result;
-    }, [pendingOrders, billingSearchQuery, pendingStatusFilter, sortConfig, graceMinutes, parentProfilesMap]);
+    }, [pendingOrders, billingSearchQuery, pendingStatusFilter, sortConfig, graceMinutes, cutCloseTime, parentProfilesMap]);
+
+    // Mapa de consecutivos de Factura Autoasignados en vivo (Estrictamente consecutivo para Facturas)
+    const projectedInvoiceMap = useMemo(() => {
+        const map = new Map<string, { number: string; index: number }>();
+        const invoiceOrders = filteredPendingOrders.filter(o => {
+            const rep = getOrderReplacementInfo(o);
+            if (rep.isReplacement) return false;
+            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+            return docInfo.type === 'invoice';
+        });
+
+        invoiceOrders.forEach((o, index) => {
+            const existingInv = o.billing_invoices?.invoice_number || o.invoice_number;
+            const num = existingInv || `${invoicePrefix}-${invoiceNextNumber + index}`;
+            map.set(o.id, { number: num, index: index + 1 });
+        });
+        return map;
+    }, [filteredPendingOrders, parentProfilesMap, invoicePrefix, invoiceNextNumber]);
 
     // Filter Cuts
     const filteredCuts = useMemo(() => {
@@ -3238,23 +3302,43 @@ export default function BillingDashboard() {
             
             await exportRelacionDocumentosWithPicker({
                 selectedDate: targetDate,
-                orders: targetOrders.map((o: any) => ({
-                    id: o.id,
-                    sequence_id: o.sequence_id,
-                    invoice_number: o.billing_invoices?.invoice_number || o.invoice_number,
-                    status: o.status,
-                    type: o.type,
-                    payment_method: o.payment_method,
-                    delivery_date: o.delivery_date,
-                    delivery_address: o.shipping_address,
-                    delivery_phone: o.customer_phone,
-                    subtotal: o.subtotal,
-                    shipping_cost: 0,
-                    discount_amount: 0,
-                    total_amount: o.total,
-                    warehouse_spaces: o.warehouse_spaces,
-                    profiles: o.profiles
-                }))
+                orders: targetOrders.map((o: any) => {
+                    const rep = getOrderReplacementInfo(o);
+                    const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+                    const isInvoice = docInfo.type === 'invoice';
+                    const invoiceInfo = projectedInvoiceMap.get(o.id);
+                    const finalInvoiceNumber = o.billing_invoices?.invoice_number 
+                        || o.invoice_number 
+                        || (isInvoice ? (invoiceInfo?.number || `${invoicePrefix}-${invoiceNextNumber}`) : null);
+                    
+                    const prof = o.profiles || {};
+                    const parentProf = prof.parent_id ? parentProfilesMap.get(prof.parent_id) : null;
+
+                    return {
+                        id: o.id,
+                        sequence_id: o.sequence_id,
+                        invoice_number: finalInvoiceNumber,
+                        projected_invoice_number: finalInvoiceNumber,
+                        is_replacement: rep.isReplacement,
+                        status: o.status,
+                        type: o.type,
+                        payment_method: o.payment_method,
+                        delivery_date: o.delivery_date,
+                        delivery_address: o.shipping_address,
+                        delivery_phone: o.customer_phone,
+                        subtotal: o.subtotal,
+                        shipping_cost: Number(o.shipping_cost || 0),
+                        discount_amount: Number(o.discount_amount || 0),
+                        tax: Number(o.tax || 0),
+                        total_amount: o.total,
+                        warehouse_spaces: o.warehouse_spaces,
+                        admin_notes: o.admin_notes,
+                        logistics_data: o.logistics_data,
+                        parent_company_name: parentProf?.company_name || null,
+                        parent_razon_social: parentProf?.razon_social || null,
+                        profiles: o.profiles
+                    };
+                })
             });
             showToast({
                 type: 'success',
@@ -3278,19 +3362,34 @@ export default function BillingDashboard() {
                 .from('orders')
                 .select(`
                     id, sequence_id, status, type, payment_method, delivery_date,
-                    shipping_address, customer_phone, total, subtotal, tax, warehouse_spaces,
+                    shipping_address, customer_phone, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
                     billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                     profiles (
                         id, company_name, razon_social, contact_name, role, phone, address,
                         document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
                     )
                 `)
-                .eq('billing_cut_id', cutId);
+                .eq('billing_cut_id', cutId)
+                .order('sequence_id', { ascending: false });
 
             if (cutOrdersErr) throw cutOrdersErr;
             if (!cutOrders || cutOrders.length === 0) {
                 showToast({ type: 'warning', message: 'No se encontraron pedidos asociados a este corte.' });
                 return;
+            }
+
+            // Precargar matrices para cortes
+            const parentIds = Array.from(new Set(cutOrders.map(o => (o.profiles as any)?.parent_id).filter(Boolean))) as string[];
+            const cutParentsMap = new Map<string, any>(parentProfilesMap);
+            if (parentIds.length > 0) {
+                const missingIds = parentIds.filter(id => !cutParentsMap.has(id));
+                if (missingIds.length > 0) {
+                    const { data: parents } = await supabase
+                        .from('profiles')
+                        .select('id, company_name, razon_social, nit, document_type, print_invoice, remission_with_prices, logistics_data')
+                        .in('id', missingIds);
+                    parents?.forEach(p => cutParentsMap.set(p.id, p));
+                }
             }
 
             const cutDate = targetCut?.scheduled_date || cutOrders[0]?.delivery_date || getBogotaDate(0);
@@ -3299,10 +3398,14 @@ export default function BillingDashboard() {
                 selectedDate: cutDate,
                 orders: cutOrders.map((o: any) => {
                     const inv = Array.isArray(o.billing_invoices) ? o.billing_invoices[0] : o.billing_invoices;
+                    const rep = getOrderReplacementInfo(o);
+                    const prof = o.profiles || {};
+                    const parentProf = prof.parent_id ? cutParentsMap.get(prof.parent_id) : null;
                     return {
                         id: o.id,
                         sequence_id: o.sequence_id,
                         invoice_number: inv?.invoice_number || null,
+                        is_replacement: rep.isReplacement,
                         status: o.status,
                         type: o.type,
                         payment_method: o.payment_method,
@@ -3310,10 +3413,15 @@ export default function BillingDashboard() {
                         delivery_address: o.shipping_address,
                         delivery_phone: o.customer_phone,
                         subtotal: o.subtotal,
-                        shipping_cost: 0,
-                        discount_amount: 0,
+                        shipping_cost: Number(o.shipping_cost || 0),
+                        discount_amount: Number(o.discount_amount || 0),
+                        tax: Number(o.tax || 0),
                         total_amount: o.total,
                         warehouse_spaces: o.warehouse_spaces,
+                        admin_notes: o.admin_notes,
+                        logistics_data: o.logistics_data,
+                        parent_company_name: parentProf?.company_name || null,
+                        parent_razon_social: parentProf?.razon_social || null,
                         profiles: o.profiles
                     };
                 })
@@ -4598,7 +4706,7 @@ export default function BillingDashboard() {
                             }}>
                                 {/* Flanco Izquierdo: Píldoras de Filtro Rápido + Selección */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                                    <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: '#F8FAFC', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0', alignItems: 'center' }}>
                                         <button
                                             type="button"
                                             onClick={() => setPendingStatusFilter('all')}
@@ -4615,6 +4723,78 @@ export default function BillingDashboard() {
                                         >
                                             Todos ({pendingOrders.length})
                                         </button>
+
+                                        {/* Distribución de Documentos: Facturas */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingStatusFilter(pendingStatusFilter === 'invoices' ? 'all' : 'invoices')}
+                                            title="Filtrar pedidos con Factura de Venta (FV)"
+                                            style={{
+                                                border: pendingStatusFilter === 'invoices' ? '1px solid #93C5FD' : '1px solid transparent',
+                                                padding: '2px 7px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: pendingStatusFilter === 'invoices' ? '800' : '700',
+                                                backgroundColor: pendingStatusFilter === 'invoices' ? '#1E40AF' : '#EFF6FF',
+                                                color: pendingStatusFilter === 'invoices' ? 'white' : '#1E40AF',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <FileText size={10} /> Facturas ({invoicesCount})
+                                        </button>
+
+                                        {/* Distribución de Documentos: Remisiones */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingStatusFilter(pendingStatusFilter === 'remissions' ? 'all' : 'remissions')}
+                                            title="Filtrar pedidos con Remisión Comercial (REM)"
+                                            style={{
+                                                border: pendingStatusFilter === 'remissions' ? '1px solid #FDE68A' : '1px solid transparent',
+                                                padding: '2px 7px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: pendingStatusFilter === 'remissions' ? '800' : '700',
+                                                backgroundColor: pendingStatusFilter === 'remissions' ? '#92400E' : '#FEF3C7',
+                                                color: pendingStatusFilter === 'remissions' ? 'white' : '#92400E',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '3px'
+                                            }}
+                                        >
+                                            <Package size={10} /> Remisiones ({remissionsCount})
+                                        </button>
+
+                                        {/* Distribución de Documentos: Reposiciones */}
+                                        {replacementsCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter(pendingStatusFilter === 'replacements' ? 'all' : 'replacements')}
+                                                title="Filtrar reposiciones o garantías SAC (REP)"
+                                                style={{
+                                                    border: pendingStatusFilter === 'replacements' ? '1px solid #E9D5FF' : '1px solid transparent',
+                                                    padding: '2px 7px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: pendingStatusFilter === 'replacements' ? '800' : '700',
+                                                    backgroundColor: pendingStatusFilter === 'replacements' ? '#6B21A8' : '#FAF5FF',
+                                                    color: pendingStatusFilter === 'replacements' ? 'white' : '#6B21A8',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
+                                                }}
+                                            >
+                                                <RotateCcw size={10} /> Reposiciones ({replacementsCount})
+                                            </button>
+                                        )}
+
+                                        {/* Divisor vertical */}
+                                        <div style={{ width: '1px', height: '12px', backgroundColor: '#CBD5E1', margin: '0 2px' }} />
+
                                         <button
                                             type="button"
                                             onClick={() => setPendingStatusFilter('ready')}
@@ -4635,26 +4815,28 @@ export default function BillingDashboard() {
                                         >
                                             <Check size={11} /> Listos ({readyCount})
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingStatusFilter('grace')}
-                                            title="Pedidos dentro del margen de 120m de inspección post-entrega"
-                                            style={{
-                                                border: 'none',
-                                                padding: '2px 7px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
-                                                backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
-                                                color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '3px'
-                                            }}
-                                        >
-                                            <Clock size={11} /> En Gracia ({graceCount})
-                                        </button>
+                                        {graceCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingStatusFilter('grace')}
+                                                title="Pedidos dentro del margen de 120m de inspección post-entrega"
+                                                style={{
+                                                    border: 'none',
+                                                    padding: '2px 7px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: pendingStatusFilter === 'grace' ? '800' : '600',
+                                                    backgroundColor: pendingStatusFilter === 'grace' ? '#D97706' : 'transparent',
+                                                    color: pendingStatusFilter === 'grace' ? 'white' : '#92400E',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px'
+                                                }}
+                                            >
+                                                <Clock size={11} /> En Gracia ({graceCount})
+                                            </button>
+                                        )}
                                         {inRouteCount > 0 && (
                                             <button
                                                 type="button"
@@ -5736,45 +5918,83 @@ export default function BillingDashboard() {
                                                                                 display: 'inline-flex',
                                                                                 alignItems: 'center',
                                                                                 gap: '4px',
-                                                                                backgroundColor: '#ECFDF5',
-                                                                                border: '1px solid #A7F3D0',
+                                                                                backgroundColor: '#FAF5FF',
+                                                                                border: '1px solid #E9D5FF',
                                                                                 padding: '0.18rem 0.45rem',
                                                                                 borderRadius: '6px',
                                                                                 fontWeight: '800',
                                                                                 fontSize: '0.70rem',
-                                                                                color: '#065F46'
+                                                                                color: '#6B21A8'
                                                                             }}>
-                                                                                <RotateCcw size={10} style={{ color: '#059669' }} />
-                                                                                <span>REMISIÓN $0 (Garantía)</span>
+                                                                                <RotateCcw size={10} style={{ color: '#7E22CE' }} />
+                                                                                <span>REP-{order.sequence_id}</span>
                                                                             </div>
-                                                                            <div style={{ fontSize: '0.62rem', color: '#047857', fontWeight: '700', marginTop: '2px' }}>
-                                                                                {rep.parentSequenceId ? `Hijo de Pedido #${rep.parentSequenceId}` : 'Garantía SAC'}
+                                                                            <div style={{ fontSize: '0.62rem', color: '#7E22CE', fontWeight: '700', marginTop: '2px' }}>
+                                                                                {rep.parentSequenceId ? `Hijo #${rep.parentSequenceId}` : 'Reposición $0'}
                                                                             </div>
                                                                         </div>
                                                                     );
                                                                 }
+
+                                                                const { docInfo } = resolveOrderBillingInfo(order, parentProfilesMap);
+                                                                const isInvoice = docInfo.type === 'invoice';
+
+                                                                if (isInvoice) {
+                                                                    const invoiceInfo = projectedInvoiceMap.get(order.id);
+                                                                    const isAssigned = Boolean(order.billing_invoices?.invoice_number || order.invoice_number);
+                                                                    const displayNum = order.billing_invoices?.invoice_number 
+                                                                        || order.invoice_number 
+                                                                        || invoiceInfo?.number 
+                                                                        || `${invoicePrefix}-${invoiceNextNumber}`;
+
+                                                                    return (
+                                                                        <>
+                                                                            <div style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '4px',
+                                                                                backgroundColor: isAssigned ? '#ECFDF5' : '#EFF6FF',
+                                                                                border: `1px solid ${isAssigned ? '#A7F3D0' : '#BFDBFE'}`,
+                                                                                padding: '0.18rem 0.45rem',
+                                                                                borderRadius: '6px',
+                                                                                fontVariantNumeric: 'tabular-nums',
+                                                                                fontWeight: '800',
+                                                                                fontSize: '0.74rem',
+                                                                                color: isAssigned ? '#065F46' : '#1E40AF'
+                                                                            }}>
+                                                                                <FileCheck size={11} style={{ color: isAssigned ? '#059669' : '#2563EB' }} />
+                                                                                <span>{displayNum}</span>
+                                                                            </div>
+                                                                            <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
+                                                                                {isAssigned ? 'Asignado en corte' : `Auto-asignado (#${invoiceInfo?.index || 1})`}
+                                                                            </div>
+                                                                        </>
+                                                                    );
+                                                                }
+
+                                                                // Pedido por Remisión
                                                                 return (
-                                                                    <>
+                                                                    <div>
                                                                         <div style={{
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             gap: '4px',
-                                                                            backgroundColor: order.billing_invoices?.invoice_number ? '#ECFDF5' : '#F8FAFC',
-                                                                            border: `1px solid ${order.billing_invoices?.invoice_number ? '#A7F3D0' : '#CBD5E1'}`,
+                                                                            backgroundColor: '#F8FAFC',
+                                                                            border: '1px solid #CBD5E1',
                                                                             padding: '0.18rem 0.45rem',
                                                                             borderRadius: '6px',
                                                                             fontVariantNumeric: 'tabular-nums',
                                                                             fontWeight: '800',
-                                                                            fontSize: '0.74rem',
-                                                                            color: order.billing_invoices?.invoice_number ? '#065F46' : '#0F172A'
+                                                                            fontSize: '0.70rem',
+                                                                            color: '#334155'
                                                                         }}>
-                                                                            <FileCheck size={11} style={{ color: order.billing_invoices?.invoice_number ? '#059669' : '#64748B' }} />
-                                                                            <span>{projectedInvoiceNumber}</span>
+                                                                            <Package size={10} style={{ color: '#64748B' }} />
+                                                                            <span>REM-{order.sequence_id}</span>
                                                                         </div>
                                                                         <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
-                                                                            {order.billing_invoices?.invoice_number ? 'Asignado en corte' : `Auto-asignado (#${idx + 1})`}
+                                                                            Remisión Comercial
                                                                         </div>
-                                                                    </>
+                                                                    </div>
                                                                 );
                                                             })()}
                                                         </td>
@@ -7642,10 +7862,11 @@ export default function BillingDashboard() {
                     const MPayIcon = modalBilling.paymentInfo.icon;
 
                     const isInvoiceIssued = Boolean(selectedOrderDetail.billing_invoices?.invoice_number || selectedOrderDetail.invoice_number);
-                    const orderIndex = filteredPendingOrders.findIndex((o: any) => o.id === selectedOrderDetail.id);
+                    const modalInvoiceInfo = projectedInvoiceMap.get(selectedOrderDetail.id);
                     const projectedInvoiceNumber = selectedOrderDetail.billing_invoices?.invoice_number 
                         || selectedOrderDetail.invoice_number 
-                        || `${invoicePrefix}-${invoiceNextNumber + (orderIndex >= 0 ? orderIndex : 0)}`;
+                        || modalInvoiceInfo?.number
+                        || `${invoicePrefix}-${invoiceNextNumber}`;
 
                     const isB2B = modalBilling.isB2B;
                     const isIvaResponsible = Boolean(selectedOrderDetail.profiles?.iva_responsible);
@@ -7827,22 +8048,67 @@ export default function BillingDashboard() {
                                             </span>
 
                                             {/* Consecutivo Fiscal Asignado / Proyectado */}
-                                            <div style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '5px',
-                                                backgroundColor: isInvoiceIssued ? '#ECFDF5' : '#F8FAFC',
-                                                border: `1px solid ${isInvoiceIssued ? '#A7F3D0' : '#CBD5E1'}`,
-                                                padding: '0.18rem 0.6rem',
-                                                borderRadius: '6px',
-                                                fontVariantNumeric: 'tabular-nums',
-                                                fontWeight: '800',
-                                                fontSize: '0.72rem',
-                                                color: isInvoiceIssued ? '#065F46' : '#0F172A'
-                                            }}>
-                                                <FileCheck size={13} style={{ color: isInvoiceIssued ? '#059669' : '#64748B' }} />
-                                                <span>{isInvoiceIssued ? `Factura Oficial: ${projectedInvoiceNumber}` : `Factura Prevista: ${projectedInvoiceNumber}`}</span>
-                                            </div>
+                                            {(() => {
+                                                const rep = getOrderReplacementInfo(selectedOrderDetail);
+                                                if (rep.isReplacement) {
+                                                    return (
+                                                        <div style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            backgroundColor: '#FAF5FF',
+                                                            border: '1px solid #E9D5FF',
+                                                            padding: '0.18rem 0.6rem',
+                                                            borderRadius: '6px',
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.72rem',
+                                                            color: '#6B21A8'
+                                                        }}>
+                                                            <RotateCcw size={13} style={{ color: '#7E22CE' }} />
+                                                            <span>Reposición SAC: REP-{selectedOrderDetail.sequence_id}</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                if (modalBilling.docInfo.type === 'invoice') {
+                                                    return (
+                                                        <div style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '5px',
+                                                            backgroundColor: isInvoiceIssued ? '#ECFDF5' : '#EFF6FF',
+                                                            border: `1px solid ${isInvoiceIssued ? '#A7F3D0' : '#BFDBFE'}`,
+                                                            padding: '0.18rem 0.6rem',
+                                                            borderRadius: '6px',
+                                                            fontVariantNumeric: 'tabular-nums',
+                                                            fontWeight: '800',
+                                                            fontSize: '0.72rem',
+                                                            color: isInvoiceIssued ? '#065F46' : '#1E40AF'
+                                                        }}>
+                                                            <FileCheck size={13} style={{ color: isInvoiceIssued ? '#059669' : '#2563EB' }} />
+                                                            <span>{isInvoiceIssued ? `Factura Oficial: ${projectedInvoiceNumber}` : `Factura Prevista: ${projectedInvoiceNumber}`}</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        backgroundColor: '#F8FAFC',
+                                                        border: '1px solid #CBD5E1',
+                                                        padding: '0.18rem 0.6rem',
+                                                        borderRadius: '6px',
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.72rem',
+                                                        color: '#334155'
+                                                    }}>
+                                                        <Package size={13} style={{ color: '#64748B' }} />
+                                                        <span>Remisión Comercial: REM-{selectedOrderDetail.sequence_id}</span>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 
                                         <h2 style={{ fontSize: '0.98rem', fontWeight: '900', color: '#0D7A57', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
