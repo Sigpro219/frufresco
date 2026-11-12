@@ -1778,7 +1778,7 @@ function ContingencyPrintContent() {
                                                         </div>
                                                         <div style={{ backgroundColor: '#FFFFFF', padding: '1.5px', borderRadius: '3px', border: '1px solid #E2E8F0', display: 'inline-flex' }}>
                                                             <QRCodeSVG 
-                                                                value={typeof window !== 'undefined' ? `${window.location.origin}/pqrs?order_id=${order.id}` : `https://frufresco.com/pqrs?order_id=${order.id}`} 
+                                                                value={typeof window !== 'undefined' && !window.location.hostname.includes('localhost') ? `${window.location.origin}/pqrs?order_id=${order.id}` : `https://frufresco.com/pqrs?order_id=${order.id}`} 
                                                                 size={48} 
                                                                 level="M" 
                                                             />

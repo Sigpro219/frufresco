@@ -16764,3 +16764,27 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   3. **Poka-Yoke Anti-Huérfanos y Anclaje Físico de Totales:**
      - Si el remanente hacia la última hoja es inferior a cuatro (4) ítems (`MIN_RESIDUAL_ITEMS = 4`), la Página 1 cede proporcionalmente filas para garantizar que la última hoja mantenga un cuerpo mínimo digno de al menos 4 líneas de producto antes de los totales.
      - En la última página, el bloque consolidado de resumen, control de canastillas y firmas receptoras se ancla directamente al final de la tabla mediante espaciado estático (`marginTop: 8px`), erradicando `marginTop: 'auto'` y evitando vacíos flotantes en el centro del albarán.
+
+---
+
+### Escenario 446: Portal Móvil de Garantía y Radicación PQRS de Alto Standing ("Agnóstico, Lujoso y Blindado RLS") (SDD v1.9.401)
+- **Given** el código QR vectorial estampado en el bloque de firmas de las remisiones oficiales (`contingency-print`), los dispositivos móviles de los clientes institucionales en muelle/cocina (chefs, ecónomos, almacenistas, oficiales de policía) operando sin sesión de usuario en FruFresco, y la Torre de Control de Servicio al Cliente (`/admin/customer-service`):
+- **When** el cliente escanea el código QR de garantía de su remisión física con la cámara de su teléfono inteligente para radicar una novedad de producto (avería, maduración, faltante de pesaje o no conformidad):
+- **Then**:
+  1. **Arquitectura Backend Agnóstica y Blindaje Zero-Trust (Erradicación de Bloqueo RLS):**
+     - Se prohíben de forma terminante las consultas e inserciones directas desde el navegador del cliente anónimo con `ANON_KEY` sobre tablas protegidas (`orders`, `order_items`, `customer_service_pqrs`, `billing_returns`).
+     - Se crean dos endpoints backend seguros con `SERVICE_ROLE_KEY`:
+       * `GET /api/pqrs/order?id=<order_id>`: Valida la existencia del pedido y entrega un DTO higienizado y seguro exclusivamente con los datos necesarios para la radicación: número de remisión (`sequence_id`), fecha de entrega, razón social de la sede, y array de productos despachados (`id`, `name`, `accounting_id`, `quantity`, `unit_of_measure`). Queda estrictamente censurada toda exposición de tarifas, costos, márgenes, notas administrativas o datos financieros confidenciales.
+       * `POST /api/pqrs/submit`: Procesa atómicamente el reclamo con validación de esquemas (Zod): comprueba que el producto pertenezca a la orden, que la cantidad afectada sea $\le$ a lo despachado, recibe la imagen en Base64 o Multipart, la almacena de forma segura en el bucket `delivery-evidence` de Supabase Storage mediante credencial de servicio, e inserta sincronizadamente el registro en `billing_returns` y en `customer_service_pqrs` con código de radicado único `PQR-2026-XXXX-XXXX` y estado `'pending'`, disparando la telemetría en tiempo real hacia `/admin/customer-service`.
+  2. **Rediseño UI/UX de Alto Standing por `/disenador-web` (Identidad FruFresco & Silent Luxury):**
+     - **Atmósfera Visual de Excelencia:** Fondo Slate-50 cálido (`#F8FAFC`), contenedor central móvil (`max-w-md mx-auto`) estructurado en tarjetas de vidrio pulido (`.premium-card` con bordes sutiles `border-slate-200/80` y sombras difusas de alta fidelidad), combinando el Verde Esmeralda insignia de FruFresco (`#0D7A57` / `#059669`) con acentos ámbar de precisión técnica (`#D97706`).
+     - **Triplete Tipográfico:** Títulos institucionales en `Space Grotesk` (`tracking-tight font-bold`), cuerpos de texto y microcopy en `Inter` fluido, y códigos de referencia (`#REM-XXXX`, `#ID`) en `font-mono` con `tabular-nums`.
+     - **Iconografía Exclusiva Lucide:** Cero emojis unicode; uso exclusivo de componentes SVG vectoriales (`ShieldCheck`, `PackageCheck`, `Camera`, `Scale`, `AlertCircle`, `CheckCircle2`, `Sparkles`, `Clock`).
+     - **Flujo Ergonómico en 4 Fases Claras:**
+       * *Fase 1: Credencial Institucional de Despacho:* Banner oficial de Garantía Agro-Logística FruFresco, píldora con ID de remisión, nombre de la sede y fecha de recepción.
+       * *Fase 2: Selector Táctil de Producto Afectado:* Grilla/carrusel de tarjetas táctiles de producto con indicación clara de cantidad despachada y unidad de medida oficial.
+       * *Fase 3: Diagnóstico Técnico de Calidad & Cámara:* Píldoras selectoras de patología (Avería física, Fisiopatología/Sobremaduro, Fitopatología/Pudrición, Faltante en pesaje, Calibre/Especificación). Stepper numérico de cantidad afectada respetando el estándar latinoamericano anti-cero a la izquierda (`inputMode="decimal"`). Dropzone de captura fotográfica con activación de cámara nativa y previsualización inmediata.
+       * *Fase 4: Preferencia de Compensación:* Selector instantáneo entre `[ 🔄 Reposición express en próximo despacho ]` y `[ 📄 Nota Crédito comercial directa ]`.
+     - **Comprobante de Radicación Ejecutivo:** Al enviar, se proyecta una tarjeta de certificación digital con el código de ticket `PQR-2026-XXXX-XXXX`, temporizador de compromiso de respuesta (< 15 minutos en horario diurno) y botón de contacto prioritario por WhatsApp con mensaje pre-estructurado.
+  3. **Blindaje de Dominio en Código QR de Contingencia:**
+     - En `contingency-print/page.tsx`, se garantiza que el valor codificado en el componente `QRCodeSVG` apunte invariable e incondicionalmente a `https://frufresco.com/pqrs?order_id=${order.id}` (neutralizando cualquier residuo de `localhost` en impresiones locales o entornos de desarrollo).
