@@ -16538,3 +16538,15 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
        * **Acceso Rápido Nativo:** Input tipo fecha (`<input type="date">`) compacto para salto directo sin fricción a cualquier jornada arbitraria.
   3. **Visualización Panorámica de Métricas Financieras:**
      - Al recuperar los 290 píxeles horizontales, las tablas de **Ventas por Producto** y **Ventas por Cliente** despliegan la totalidad de sus columnas numéricas (`CÓDIGO #ID`, `PRODUCTO`, `CATEGORÍA`, `CANTIDAD TOTAL`, `PEDIDOS`, `PRECIO PROM.`, `COSTO BASE`, `TOTAL VENTA`, `UTILIDAD`, `% MARGEN`) sin compresión forzada de texto ni necesidad de desplazamiento horizontal en resoluciones de escritorio estándar.
+
+
+---
+
+### Escenario 435: Parametrización Comercial Minorista B2C y Expansión Topológica de Sucursales Presto Frayco (SDD v1.9.390)
+- **Given** la operación comercial multicanal de FruFresco y la red de distribución institucional de franquicias:
+- **When** se actualizan tarifas minoristas para consumidor final y se incorporan nuevos puntos de entrega corporativos:
+- **Then** rigen las siguientes reglas de gobierno de datos:
+  1. **Calibración de Precios B2C en `pricing_model_prices`:**
+     - El precio para el modelo *Clientes Hogar* (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) para el producto Arándano jumbo (Cód: 1428 / `d4ae2011-2c35-4d63-a973-e7ced8609427`, presentación bandeja 125 gr) queda formalmente fijado en **$7.250 COP**, sincronizado en `pricing_model_prices` y `products.base_price`.
+  2. **Ingreso de Nueva Sucursal Presto (FRAYCO):**
+     - Se incorpora a la topología de clientes la sucursal `FRANQUICIAS Y CONCESIONES - PRESTO BTA GRAN ESTACION` (UUID: `b941afe6-6630-4d0c-8cc7-9d823b8b0181`), ubicada en la Calle 26 No 62 -47 (Bogotá), adscrita a la matriz corporativa FRAYCO (`parent_id: 9ea8def4-db8d-4da3-98c5-bbd3eccf5c5c`), asignada a Zona 3 logística con esquema de despacho Martes/Jueves/Sábado.
