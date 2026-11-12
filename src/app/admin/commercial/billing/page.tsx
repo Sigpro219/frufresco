@@ -214,11 +214,17 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         (order?.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
         (order?.logistics_data?.is_off_agreement_split && !order?.logistics_data?.off_agreement_priced)
     );
-    const rawDocType = isUnpricedOffAgreement
-        ? 'remission'
-        : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
-            ? order.logistics_data.document_type_override
-            : (prof.document_type || parent?.document_type || (isB2B ? 'remission' : 'invoice')));
+    const clientFiscalDocType = prof.document_type || parent?.document_type || (isB2B ? 'remission' : 'invoice');
+    const isExplicitGift = Boolean(order?.logistics_data?.is_gift_remission || order?.logistics_data?.document_type_override === 'gift_remission');
+    const rawDocType = isExplicitGift
+        ? 'gift_remission'
+        : (isUnpricedOffAgreement
+            ? 'remission'
+            : (clientFiscalDocType === 'invoice'
+                ? 'invoice'
+                : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
+                    ? order.logistics_data.document_type_override
+                    : clientFiscalDocType)));
     const isPrinted = prof.print_invoice !== undefined ? prof.print_invoice : (parent?.print_invoice !== undefined ? parent.print_invoice : true);
     const isWithPrices = isUnpricedOffAgreement
         ? false

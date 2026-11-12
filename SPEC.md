@@ -16728,3 +16728,21 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   3. **Blindaje de Visibilidad de Precios:**
      - El impresor respeta el flag `order.logistics_data.remission_with_prices_override`, habilitando las columnas `VALOR/UM`, `IVA` y `TOTAL` incluso ante discrepancias transitorias en la herencia de perfiles, garantizando la entrega de la remisión valorizada requerida por interventoría.
      - Se vincula `parent:parent_id(..., logistics_data)` en la consulta Supabase para blindar la herencia de configuraciones logísticas hacia sucursales subordinadas.
+
+
+---
+
+### Escenario 444: Poka-Yoke Anti-Degradación Fiscal Involuntaria, Prevalencia del Perfil Tributario (Invoice vs Remission) y Desacople de Excepción Same-Day en Facturación y Mesa Comercial (SDD v1.9.399)
+- **Given** la Creación Manual de Pedidos (`/admin/orders/create`), la Bandeja de Facturación y Conciliación Fiscal (`/admin/commercial/billing`), el Impresor de Contingencia (`/admin/orders/contingency-print`) y el Directorio Corporativo de Clientes (`profiles`).
+- **When** se procesan o radican pedidos para clientes institucionales B2B cuyo perfil tributario y contractual exige Facturación Electrónica (`profiles.document_type === 'invoice'`, ej. IRCC S.A.S. - El Corral Plaza 127 y El Corral Gourmet Floresta):
+- **Then**:
+  1. **Prevalencia Absoluta del Perfil Fiscal en Módulo de Facturación (`billing/page.tsx`):**
+     - En `resolveOrderBillingInfo`, si el cliente (o su matriz corporativa) posee `document_type === 'invoice'`, el documento a generar para World Office y la DIAN se clasifica **invariablemente como Factura** (`FAC-IMP` o `FAC-DIG`), sin importar si el pedido fue despachado bajo contingencia operativa o marcado con flags logísticos transitorios.
+     - Queda terminantemente prohibido que metadatos de emergencia o de transporte (`is_same_day`, `is_extemporaneous`) degraden un pedido con perfil `invoice` al régimen de `Remisión con Valor`, evitando descuadrar los cortes contables de tarde (`Corte Tarde (FAC-IMP)`) y la numeración consecutiva oficial.
+     - La única excepción que fuerza remisión a un cliente facturado es el pedido hijo escindido de producto fuera de acuerdo a costo cero (`is_off_agreement_split` y `!off_agreement_priced`, Escenario 221) o remisión formal de obsequio (`is_gift_remission`).
+  2. **Erradicación del Falso Positivo de Pedido Express en Creación Asistida (`create/page.tsx`):**
+     - Se erradica la evaluación defectuosa `(clientType === 'B2B' && targetDeliveryDate <= minDeliveryDate)` y `(deliveryDate <= minDeliveryDate && isB2BSameDayExpressAvailable(...))`, la cual estampaba por error a todo pedido ordinario agendado para la fecha mínima permitida como si fuera un despacho de emergencia extemporáneo.
+     - El régimen `expressActive` (`is_same_day: true`, `is_extemporaneous: true`) responde **exclusivamente al encendido consciente y manual del botón «Habilitar Hoy / Express Activo» (`isSameDayExpress`)** por parte del operador comercial.
+     - Se prohíbe que pedidos ordinarios carguen en `admin_notes` la leyenda `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo - Solo Remisión Oficial]` a menos que hayan sido deliberadamente radicados como express de emergencia.
+  3. **Blindaje de Consecutivos y Reconciliación en Base de Datos:**
+     - Se sanean las órdenes `#1111_1599` y `#1111_1597` en Supabase eliminando `document_type_override: 'remission'` y limpiando las notas administrativas accidentales, reintegrándolas inmediatamente a su estado soberano de Facturas con preasignación formal (`FV-69368` / `FV-69370` / `FV-69372`).

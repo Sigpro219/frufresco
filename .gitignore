@@ -67,3 +67,5 @@ CREDENCIALES_CORREOS_FRUFRESCO_CO.txt
 node_modules/
 .next/
 
+
+public/exports/

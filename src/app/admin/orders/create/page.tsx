@@ -4184,10 +4184,9 @@ function CreateOrderContent() {
                             remission_with_prices_override: false,
                             is_off_agreement_split: true
                         } : {}),
-                        ...((isSameDayExpress || (clientType === 'B2B' && targetDeliveryDate <= minDeliveryDate)) ? {
+                        ...(isSameDayExpress ? {
                             is_same_day: true,
-                            is_extemporaneous: true,
-                            document_type_override: 'remission'
+                            is_extemporaneous: true
                         } : {})
                     },
                     document_url: finalDocUrl || permanentDocumentUrl || null
@@ -5123,7 +5122,7 @@ function CreateOrderContent() {
                 primaryAdminNotes = `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ${offNames}]\n${primaryAdminNotes}`.trim();
             }
 
-            const expressActive = isSameDayExpress || (clientType === 'B2B' && deliveryDate <= minDeliveryDate && isB2BSameDayExpressAvailable(allowSundaysDelivery, allowHolidaysDelivery, storeVacationConfig).targetDeliveryDate === deliveryDate);
+            const expressActive = isSameDayExpress;
 
             const primaryLogisticsData = {
                 ...(hasOffAgreementItems
@@ -5136,13 +5135,12 @@ function CreateOrderContent() {
                     : baseLogisticsData),
                 ...(expressActive ? {
                     is_same_day: true,
-                    is_extemporaneous: true,
-                    document_type_override: 'remission'
+                    is_extemporaneous: true
                 } : {})
             };
 
             if (expressActive && !primaryAdminNotes.includes('SAME-DAY')) {
-                primaryAdminNotes = `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo - Solo Remisión Oficial]
+                primaryAdminNotes = `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo]
 ${primaryAdminNotes}`.trim();
             }
 
