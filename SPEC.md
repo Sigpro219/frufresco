@@ -16550,3 +16550,24 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - El precio para el modelo *Clientes Hogar* (`f7043ca1-94d5-4d25-bd10-fbf30ce120ee`) para el producto Arándano jumbo (Cód: 1428 / `d4ae2011-2c35-4d63-a973-e7ced8609427`, presentación bandeja 125 gr) queda formalmente fijado en **$7.250 COP**, sincronizado en `pricing_model_prices` y `products.base_price`.
   2. **Ingreso de Nueva Sucursal Presto (FRAYCO):**
      - Se incorpora a la topología de clientes la sucursal `FRANQUICIAS Y CONCESIONES - PRESTO BTA GRAN ESTACION` (UUID: `b941afe6-6630-4d0c-8cc7-9d823b8b0181`), ubicada en la Calle 26 No 62 -47 (Bogotá), adscrita a la matriz corporativa FRAYCO (`parent_id: 9ea8def4-db8d-4da3-98c5-bbd3eccf5c5c`), asignada a Zona 3 logística con esquema de despacho Martes/Jueves/Sábado.
+
+
+---
+
+### Escenario 436: Blindaje Anticolisión Global por OC y Re-Cotización Atómica en Reasignación de Sedes B2B (SDD v1.9.391)
+- **Given** el flujo de ingesta multicanal de pedidos por correo y la mesa de control de órdenes (`/admin/orders/loading`):
+- **When** se procesan órdenes de compra recurrentes (OC) o el operador reasigna clientes y sedes operativas:
+- **Then** rigen las siguientes reglas canónicas de integridad transaccional y protección anti-fraude/glosa:
+  1. **Abolición del Aislamiento por Cubetas en Detección de Duplicados (Soberanía Global de la OC):**
+     - En `src/lib/orderDuplicates.ts`, la función `getOrderDocumentSignature` debe consultar **prioritariamente la columna nativa `orders.purchase_order_number`** y `orders.logistics_data.purchase_order_number`.
+     - La extracción de OC en notas y asuntos debe aceptar dos puntos (`:`) y múltiples prefijos: `/(?:OC|OCC|SC|SOLPED|ORDEN DE COMPRA|PO)[:#\s_-]*([0-9]{4,12})/i`.
+     - **Regla de Coincidencia Global Incondicional:** Si dos pedidos activos (`status !== 'cancelled'`) comparten el mismo `purchase_order_number` para la misma fecha de entrega (`delivery_date`), **constituyen DUPLICADO INNEGOCIABLE**. Queda prohibido descartar la colisión por discrepancias de dirección de entrega, nombres de clientes o divergencias de valor monetario total.
+  2. **Re-Cotización Atómica Obligatoria en Reasignación de Cliente (`handleExecuteReassignment`):**
+     - Queda terminantemente proscrita la reasignación cosmética de `orders.profile_id` que mantenga fosilizados los precios de la lista anterior en `order_items`.
+     - Al reasignar un pedido en `/admin/orders/loading`:
+       * El sistema debe invocar inmediatamente `resolve-agreement-pricing` para el cliente de destino.
+       * Si el nuevo cliente posee un acuerdo maestro activo (`active_master_agreement_id` / `Quote #189`), cada registro de `order_items` debe actualizar su `unit_price` y `total` con la tarifa pactada por contrato.
+       * El campo `orders.total`, `subtotal` e `IVA` deben recalcularse y persistirse atómicamente, impidiendo que cuentas institucionales sean facturadas con listas de catálogo general minorista.
+  3. **Poka-Yoke Anti-Glosa en Homologación de Productos Institucionales:**
+     - En centros de producción de alimentos y cocinas institucionales (Catering, Casinos, Hospitales), la ingesta de texto ambiguo (ej. "ZANAHORIA BABY 1000 GR") debe mapear preferentemente al código institucional estándar (`#778 Zanahoria cero`), restringiendo productos gourmet premium (`#138 Zanahoria baby` a $15.000) a requerimientos con confirmación explícita de mesa de control.
+

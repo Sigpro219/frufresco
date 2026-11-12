@@ -75,6 +75,12 @@ export function getOrderDocumentSignature(order: any): { filename: string | null
     let filename: string | null = null;
     let ocNumber: string | null = null;
 
+    // 0. Prioridad Absoluta: Lectura directa de purchase_order_number nativo de BD (Escenario 436 SDD)
+    const rawDirectOc = String(order.purchase_order_number || order.logistics_data?.purchase_order_number || '').trim();
+    if (rawDirectOc && rawDirectOc.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(rawDirectOc)) {
+        ocNumber = rawDirectOc;
+    }
+
     // 1. A partir de document_url o evidence_url
     const docUrl = order.document_url || order.evidence_url || '';
     if (docUrl && typeof docUrl === 'string') {
@@ -108,11 +114,16 @@ export function getOrderDocumentSignature(order: any): { filename: string | null
         }
     }
 
-    // 3. Extracción de número de Orden de Compra (OC / OCC / SC)
-    const searchCorpus = `${filename || ''} ${notes}`;
-    const ocMatch = searchCorpus.match(/(?:OC|OCC|SC|SOLPED)[#\s_-]*([0-9]{4,12})/i);
-    if (ocMatch) {
-        ocNumber = ocMatch[1];
+    // 3. Extracción de número de Orden de Compra (OC / OCC / SC / ORDEN DE COMPRA / PO) si no venía en columna nativa
+    if (!ocNumber) {
+        const searchCorpus = `${filename || ''} ${notes}`;
+        const ocMatch = searchCorpus.match(/(?:OC|OCC|SC|SOLPED|ORDEN\s+DE\s+COMPRA|PO)[:#\s_-]*([0-9]{4,12})/i);
+        if (ocMatch) {
+            const candidate = ocMatch[1]?.trim();
+            if (candidate && candidate.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(candidate)) {
+                ocNumber = candidate;
+            }
+        }
     }
 
     return { filename, ocNumber };
@@ -193,8 +204,77 @@ export function detectDuplicateOrders(orders: any[]): Map<string, DuplicateColli
     const resultMap = new Map<string, DuplicateCollision>();
     if (!orders || orders.length === 0) return resultMap;
 
-    // 1. Agrupar órdenes activas por cliente + fecha + sede
     const activeOrders = orders.filter(o => o.status !== 'cancelled');
+
+    // 0. FASE DE SOBERANÍA GLOBAL DE LA OC (Escenario 436 SDD & Guardrail 1 Goldfish)
+    // Pedidos activos que compartan el mismo número de Orden de Compra válido (>= 4 dígitos)
+    // para la misma fecha de entrega constituyen colisión global inmediata, sin importar
+    // discrepancias de OCR en direcciones o perfiles de cliente no homologados.
+    const globalOcGroups = new Map<string, any[]>();
+    for (const order of activeOrders) {
+        const dateKey = order.delivery_date ? String(order.delivery_date).split('T')[0] : 'nodate';
+        if (dateKey === 'nodate') continue;
+
+        const docSig = getOrderDocumentSignature(order);
+        if (docSig.ocNumber && docSig.ocNumber.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(docSig.ocNumber)) {
+            const ocKey = docSig.ocNumber.toLowerCase() + '___' + dateKey;
+            if (!globalOcGroups.has(ocKey)) {
+                globalOcGroups.set(ocKey, []);
+            }
+            globalOcGroups.get(ocKey)!.push(order);
+        }
+    }
+
+    for (const [ocKey, ocOrders] of globalOcGroups.entries()) {
+        if (ocOrders.length <= 1) continue;
+        const ocVal = ocKey.split('___')[0].toUpperCase();
+
+        for (const order of ocOrders) {
+            const siblings = ocOrders.filter(s => s.id !== order.id);
+            const otherOrderIds = siblings.map(s => s.id);
+            const otherFriendlyIds = siblings.map(s => getFriendlyOrderId(s));
+            const friendlySiblingsStr = otherFriendlyIds.map(f => `#${f}`).join(', ');
+
+            const orderTotal = parseFloat(order.total || order.total_amount || 0);
+            const orderWeight = parseFloat(order.total_weight_kg || 0);
+
+            const hasExactSameTotal = siblings.every(s => Math.abs(orderTotal - parseFloat(s.total || s.total_amount || 0)) < 1);
+            const hasExactSameWeight = siblings.every(s => Math.abs(orderWeight - parseFloat(s.total_weight_kg || 0)) < 0.1);
+
+            let hasExactSameItems = false;
+            if (order.order_items && siblings.every(s => Array.isArray(s.order_items))) {
+                const getItemsSig = (items: any[]) => items
+                    .map((i: any) => (i.product_id || i.products?.id || i.nickname || '') + '_' + (parseFloat(i.quantity) || 0))
+                    .sort()
+                    .join(';');
+                const mySig = getItemsSig(order.order_items);
+                hasExactSameItems = siblings.every(s => getItemsSig(s.order_items) === mySig);
+            }
+
+            const clientDisplayName = order.customer_name || order.profiles?.company_name || order.profile?.company_name || 'Cliente';
+
+            resultMap.set(order.id, {
+                isDuplicate: true,
+                groupKey: `oc_${ocVal}_${order.delivery_date || 'nodate'}`,
+                collisionCount: siblings.length + 1,
+                otherOrderIds,
+                otherFriendlyIds,
+                otherOrders: siblings,
+                matchingCriteria: {
+                    client: clientDisplayName,
+                    deliveryDate: order.delivery_date,
+                    address: order.shipping_address || order.profiles?.address || ''
+                },
+                hasExactSameTotal,
+                hasExactSameWeight,
+                hasExactSameItems,
+                hasExactSameDocument: true,
+                alertMessage: `Colisión Global por Orden de Compra: Misma OC (${ocVal}) coincide con ${friendlySiblingsStr} para la misma fecha de entrega.`
+            });
+        }
+    }
+
+    // 1. Agrupar órdenes activas por cliente + fecha + sede (Cubetas locales para órdenes sin OC)
     const groups = new Map<string, any[]>();
 
     for (const order of activeOrders) {
@@ -226,6 +306,16 @@ export function detectDuplicateOrders(orders: any[]): Map<string, DuplicateColli
 
             // Si no tiene colisiones de duplicado real con ningún hermano, no se marca como duplicado
             if (trueDuplicateSiblings.length === 0) {
+                continue;
+            }
+
+            if (resultMap.has(order.id)) {
+                // Ya detectado por Colisión Global de OC (Escenario 436 SDD): enriquecer datos sin perder alerta
+                const existing = resultMap.get(order.id)!;
+                const otherOrderIds = trueDuplicateSiblings.map(s => s.id);
+                const otherFriendlyIds = trueDuplicateSiblings.map(s => getFriendlyOrderId(s));
+                existing.otherOrderIds = Array.from(new Set([...existing.otherOrderIds, ...otherOrderIds]));
+                existing.otherFriendlyIds = Array.from(new Set([...existing.otherFriendlyIds, ...otherFriendlyIds]));
                 continue;
             }
 
