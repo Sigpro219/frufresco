@@ -733,10 +733,14 @@ function ContingencyPrintContent() {
                     productName: prodName
                 }) || '';
 
-                const key = `${prodName}_${variant}_${unit}`.toLowerCase();
+                // Escenario 439 SDD: Agrupación canónica por accounting_id o product_id para evitar fragmentación por texto
+                const key = accountingId 
+                    ? `acc_${accountingId}_${unit}`.toLowerCase()
+                    : (item.product_id ? `prod_${item.product_id}_${unit}`.toLowerCase() : `${prodName}_${variant}_${unit}`.toLowerCase());
+
                 if (!map.has(key)) {
                     map.set(key, {
-                        name: prodName,
+                        name: item.products?.name || prodName,
                         accounting_id: accountingId,
                         variant_label: variant || undefined,
                         unit,
@@ -1352,7 +1356,6 @@ function ContingencyPrintContent() {
                     const b2cGift = extractB2CGiftDetails(order);
                     const { parentName, branchName } = extractParentAndBranch(order);
                     const orderNum = getFriendlyOrderId(order);
-                    const subtotal = order.subtotal || order.total || 0;
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
                     const isObsequio = !isReposicion && (b2cGift.isB2CGift || rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
                     const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || (order.admin_notes || '').includes('FUERA DE ACUERDO - DESPACHADO SIN PRECIO'));
@@ -1378,6 +1381,9 @@ function ContingencyPrintContent() {
                         const nameB = (b.products?.name || b.nickname || '').trim();
                         return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
                     });
+                    // Escenario 439 SDD: Reconciliación aritmética dinámica (la suma de ítems manda sobre el subtotal estático de cabecera)
+                    const itemsCalculatedSubtotal = items.reduce((sum: number, itm: any) => sum + (Number(itm.quantity || 0) * Number(itm.unit_price || 0)), 0);
+                    const subtotal = itemsCalculatedSubtotal > 0 ? itemsCalculatedSubtotal : (order.subtotal || order.total || 0);
                     const itemsCount = items.length;
                     const crateBalance = typeof order.profiles?.crate_balance === 'number' ? order.profiles.crate_balance : 0;
 
@@ -1547,7 +1553,9 @@ function ContingencyPrintContent() {
                                                         const previousPagesOffset = remissionPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
                                                         const globalIdx = previousPagesOffset + itemIdx + 1;
                                                         const pName = itm.products?.name || itm.nickname || 'Producto';
-                                                        const rawUom = (itm.products?.unit_of_measure || itm.unit || 'Kg').trim();
+                                                        const accId = itm.products?.accounting_id;
+                                                        // Escenario 439 SDD: Prevalencia incondicional de la unidad solicitada por el cliente (itm.unit)
+                                                        const rawUom = (itm.unit || itm.products?.unit_of_measure || 'Kg').trim();
                                                         const unit = (() => {
                                                             const u = rawUom.toLowerCase();
                                                             if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') return 'Kg';
@@ -1580,9 +1588,23 @@ function ContingencyPrintContent() {
                                                             <tr key={globalIdx} style={{ backgroundColor: bg }}>
                                                                 <td style={{ textAlign: 'center', fontSize: smallFontSize, color: '#64748B', fontWeight: 'bold', padding: rowPad, lineHeight: lineH }}>{globalIdx}</td>
                                                                 <td style={{ wordBreak: 'break-word', overflowWrap: 'break-word', padding: prodPad, lineHeight: lineH }}>
-                                                                    <strong style={{ fontSize: prodFontSize, color: '#0F172A', lineHeight: lineH }}>
-                                                                        {pName}
-                                                                    </strong>
+                                                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                                                                        {accId !== undefined && accId !== null && String(accId).trim() !== '' && (
+                                                                            <span style={{
+                                                                                fontSize: smallFontSize,
+                                                                                color: '#475569',
+                                                                                fontWeight: '700',
+                                                                                fontFamily: 'monospace',
+                                                                                letterSpacing: '0.02em',
+                                                                                userSelect: 'none'
+                                                                            }}>
+                                                                                #{accId}
+                                                                            </span>
+                                                                        )}
+                                                                        <strong style={{ fontSize: prodFontSize, color: '#0F172A', lineHeight: lineH }}>
+                                                                            {pName}
+                                                                        </strong>
+                                                                    </div>
                                                                 </td>
                                                                 <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: bodyFontSize, color: '#0F172A', fontVariantNumeric: 'tabular-nums', padding: rowPad, lineHeight: lineH }}>
                                                                     {displayQty.toLocaleString('es-CO')}

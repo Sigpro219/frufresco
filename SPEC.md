@@ -16621,4 +16621,25 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Barrera Estricta de Grado (AA vs A vs AAA):** Si la solicitud del cliente o el texto contiene explícitamente `\b(?:tipo\s+)?aa\b`, queda estrictamente prohibido mapear al producto base `tipo a` (ej. `#1112 Cubeta huevos tipo a`). El motor descarta automáticamente cualquier producto que no contenga `aa`. Del mismo modo, si la solicitud pide `tipo a`, se vetan los productos `tipo aa` y `tipo aaa`.
      - **Saneamiento de Memoria Histórica (`document_learning_memory`):** Se audita y corrige cualquier registro envenenado donde calificadores de mayor grado (`huevo aa`) estuviesen enlazados erróneamente a códigos de menor calibre.
 
+---
+
+### Escenario 439: Soberanía Relacional del Accounting ID en Documentos Impresos y Poka-Yoke Anti-Contaminación en Memoria de Ingesta (SDD v1.9.394)
+- **Given** la generación e impresión de documentos logísticos (`/admin/orders/contingency-print`), el consolidado de compras de Corabastos y el motor de matching de órdenes (`order-parser-engine.ts`):
+- **When** se generan remisiones físicas (cliente/transportador), se consolida la demanda para compras o se resuelven productos desde memorias previas:
+- **Then** el sistema asegura la integridad operativa y contractual mediante las siguientes reglas vinculantes:
+  1. **Prevalencia Incondicional de la Unidad Solicitada por el Cliente (`itm.unit`):**
+     - En `contingency-print/page.tsx` (remisiones de entrega), la unidad de medida a imprimir debe respetar de forma estricta: `const rawUom = (itm.unit || itm.products?.unit_of_measure || 'Kg').trim()`.
+     - Queda prohibido que la unidad maestra del catálogo (`products.unit_of_measure`) anule o sobreescriba la unidad contractual convenida y registrada en la orden (ej. 15 Unidades de Coliflor no deben transformarse jamás en 15 Kg).
+  2. **Renderizado Mandatorio del ID Contable (`#ID`) en Remisiones Impresas:**
+     - En la columna "DESCRIPCIÓN DEL PRODUCTO" de la remisión física, si el ítem está vinculado a un producto con `accounting_id`, se debe anteponer el identificador en formato `[#${accounting_id}] {pName}`.
+     - Cumple con la Regla 4 de Gobernanza FruFresco garantizando trazabilidad física en piso de bodega, cotejo con etiquetas térmicas de bulto y recepción en muelles de clientes institucionales.
+  3. **Consolidación de Compras Corabastos por Identificador Único (`accounting_id`):**
+     - En la pestaña "Compras" de `contingency-print/page.tsx`, la clave de agrupación (`key`) debe generarse a partir de `accounting_id` o `product_id` (`${accId}_${unit}`), impidiendo que variaciones ortográficas de texto o nicknames fragmenten la demanda del mismo producto en múltiples filas.
+  4. **Reconciliación Aritmética Dinámica del Pie de Remisión:**
+     - En `contingency-print/page.tsx`, el `subtotal` impreso en el resumen debe calcularse a partir de la sumatoria viva de los ítems renderizados (`items.reduce((sum, itm) => sum + (Number(itm.quantity || 0) * Number(itm.unit_price || 0)), 0)`), con fallback a `order.subtotal`. Esto blinda la remisión contra desajustes entre la suma de filas y el total del documento.
+  5. **Poka-Yoke Anti-Contaminación en Memoria Histórica (`order-parser-engine.ts`):**
+     - En `findBestProductMatchDetails`, la búsqueda en `learnedMemory` debe restringir la coincidencia a igualdad estricta (`memText === cleanInput || memText === strippedInput`) o por igualdad exacta de tokens.
+     - Se deroga la condición laxa `cleanInput.includes(memText) || memText.includes(cleanInput)` que provocaba que memorias genéricas cortas (ej. "cubeta huevos") secuestraran productos calificados de grado superior ("cubeta huevos tipo aa").
+
+
 

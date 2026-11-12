@@ -355,11 +355,11 @@ export function findBestProductMatchDetails(
       if (!m) return false;
       const memText = sanitizeDocText(m.normalized_text || m.nickname || m.raw_pdf_text || m.alias || '');
       if (!memText) return false;
+      // Escenario 439 SDD: Poka-Yoke Anti-Contaminación en Memoria Histórica
+      // Coincidencia estricta exacta o sin unidades (evita que 'huevos' se trague 'huevos tipo aa')
       return (
         memText === cleanInput || 
-        (strippedInput && memText === strippedInput) ||
-        cleanInput.includes(memText) ||
-        memText.includes(cleanInput)
+        (strippedInput && memText === strippedInput)
       );
     });
     if (memMatch) {
