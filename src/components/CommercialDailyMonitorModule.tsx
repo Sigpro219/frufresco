@@ -899,256 +899,278 @@ export default function CommercialDailyMonitorModule() {
 
     return (
         <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 0' }}>
-            {/* CABECERA INDUSTRIAL DEL SUBMÓDULO */}
+            {/* CABECERA INDUSTRIAL UNIFICADA & CONTROL TEMPORAL COMPACTO (Alta Densidad - Escenario 434) */}
             <div style={{
                 backgroundColor: 'white',
                 borderRadius: THEME.radius.lg,
-                padding: '1.25rem 1.75rem',
                 border: `1px solid ${THEME.colors.border}`,
                 boxShadow: THEME.shadow.sm,
-                marginBottom: '1.25rem',
+                padding: '0.65rem 1rem',
+                marginBottom: '0.85rem',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '1rem'
+                flexDirection: 'column',
+                gap: '0.5rem'
             }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                {/* LÍNEA 1: Título, Badge Fecha Activa, Selector de Mes, Datepicker y Botones de Acción */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.65rem'
+                }}>
+                    {/* Izquierda: Título y Badge Fecha */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{
                             backgroundColor: '#E0F2FE',
                             color: '#0369A1',
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.70rem',
                             fontWeight: '800',
-                            letterSpacing: '0.05em'
+                            letterSpacing: '0.04em'
                         }}>
-                            BUSINESS INTELLIGENCE • DESPACHO & PRECIOS FACTURADOS
+                            BI DESPACHOS
                         </span>
-                        <span style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
-                            Política de Boxing: 6 Meses (180 Días)
-                        </span>
-                    </div>
-                    <h1 style={{
-                        fontSize: '1.45rem',
-                        fontWeight: '800',
-                        color: THEME.colors.textMain,
-                        margin: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}>
-                        Monitor Diario de Pedidos, Productos & Márgenes
+                        <h1 style={{
+                            fontSize: '1.05rem',
+                            fontWeight: '800',
+                            color: THEME.colors.textMain,
+                            margin: 0,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                            Monitor Diario de Precios & Márgenes
+                        </h1>
                         {selectedDate && (
                             <span style={{
                                 backgroundColor: THEME.colors.primaryLight,
                                 color: THEME.colors.primary,
-                                fontSize: '0.9rem',
-                                padding: '3px 10px',
-                                borderRadius: '8px',
-                                fontWeight: '700',
+                                fontSize: '0.78rem',
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                fontWeight: '800',
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '4px'
                             }}>
-                                <Calendar size={15} /> {selectedDate}
+                                <Calendar size={13} /> {selectedDate}
                             </span>
                         )}
-                    </h1>
+                    </div>
+
+                    {/* Centro/Derecha: Selector de Mes, Ir a Fecha, Actualizar y Descargar Excel */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+                        {/* Selector de Mes */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <select
+                                value={selectedMonthOffset}
+                                onChange={(e) => setSelectedMonthOffset(Number(e.target.value))}
+                                style={{
+                                    padding: '0.3rem 0.55rem',
+                                    borderRadius: THEME.radius.sm,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    color: THEME.colors.textMain,
+                                    backgroundColor: '#F8FAFC',
+                                    cursor: 'pointer',
+                                    outline: 'none'
+                                }}
+                            >
+                                {monthOptions.map(m => (
+                                    <option key={m.offset} value={m.offset}>{m.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Input Fecha Directa */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: '700', color: THEME.colors.textSecondary }}>
+                                Ir a:
+                            </span>
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => {
+                                    if (e.target.value) setSelectedDate(e.target.value);
+                                }}
+                                title="Ir a fecha directa"
+                                style={{
+                                    padding: '0.25rem 0.45rem',
+                                    borderRadius: THEME.radius.sm,
+                                    border: `1px solid ${THEME.colors.border}`,
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    color: THEME.colors.textMain,
+                                    backgroundColor: '#F8FAFC',
+                                    cursor: 'pointer',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        {/* Botón Actualizar */}
+                        <button
+                            onClick={() => fetchDayOrders(selectedDate)}
+                            disabled={loadingDayData}
+                            style={{
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: THEME.radius.sm,
+                                backgroundColor: '#F8FAFC',
+                                border: `1px solid ${THEME.colors.border}`,
+                                color: THEME.colors.textMain,
+                                fontWeight: '700',
+                                fontSize: '0.78rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px'
+                            }}
+                            title="Actualizar datos del día"
+                        >
+                            <RefreshCw size={13} className={loadingDayData ? 'animate-spin' : ''} />
+                            Actualizar
+                        </button>
+
+                        {/* Split Button Exportar Excel */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'stretch',
+                            borderRadius: THEME.radius.sm,
+                            boxShadow: '0 1px 3px rgba(13, 122, 87, 0.2)',
+                            overflow: 'hidden'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => handleExportExcel('day')}
+                                disabled={isExporting}
+                                style={{
+                                    padding: '0.35rem 0.75rem',
+                                    backgroundColor: '#0D7A57',
+                                    border: 'none',
+                                    borderRight: '1px solid rgba(255,255,255,0.25)',
+                                    color: 'white',
+                                    fontWeight: '700',
+                                    fontSize: '0.78rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                                title="Descargar Excel de la jornada activa"
+                            >
+                                <FileSpreadsheet size={14} />
+                                {isExporting ? 'Generando...' : 'Descargar Excel'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsExportModalOpen(true)}
+                                disabled={isExporting}
+                                style={{
+                                    padding: '0.35rem 0.5rem',
+                                    backgroundColor: '#0A6346',
+                                    border: 'none',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700'
+                                }}
+                                title="Seleccionar período: Día, Mes o Rango"
+                            >
+                                <CalendarRange size={13} />
+                                <ChevronDown size={11} />
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <button
-                        onClick={() => fetchDayOrders(selectedDate)}
-                        disabled={loadingDayData}
-                        style={{
-                            padding: '0.55rem 0.95rem',
-                            borderRadius: THEME.radius.md,
-                            backgroundColor: '#F8FAFC',
-                            border: `1px solid ${THEME.colors.border}`,
-                            color: THEME.colors.textMain,
-                            fontWeight: '700',
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <RefreshCw size={15} className={loadingDayData ? 'animate-spin' : ''} />
-                        Actualizar
-                    </button>
-
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'stretch',
-                        borderRadius: THEME.radius.md,
-                        boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        <button
-                            type="button"
-                            onClick={() => handleExportExcel('day')}
-                            disabled={isExporting}
-                            style={{
-                                padding: '0.55rem 1rem',
-                                backgroundColor: '#0D7A57',
-                                border: 'none',
-                                borderRight: '1px solid rgba(255,255,255,0.25)',
-                                color: 'white',
-                                fontWeight: '700',
-                                fontSize: '0.85rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                transition: 'background-color 0.15s ease'
-                            }}
-                            title="Descargar de inmediato la jornada seleccionada en pantalla"
-                        >
-                            <FileSpreadsheet size={16} />
-                            {isExporting ? 'Generando...' : (activeView === 'clients' ? 'Descargar Relación (.xlsx)' : 'Descargar Excel (.xlsx)')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsExportModalOpen(true)}
-                            disabled={isExporting}
-                            style={{
-                                padding: '0.55rem 0.75rem',
-                                backgroundColor: '#0A6346',
-                                border: 'none',
-                                color: 'white',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.78rem',
-                                fontWeight: '700',
-                                transition: 'background-color 0.15s ease'
-                            }}
-                            title="Seleccionar período: Día, Mes Completo o Rango Personalizado"
-                        >
-                            <CalendarRange size={14} />
-                            <span>Período</span>
-                            <ChevronDown size={13} />
-                        </button>
-                    </div>
+                {/* LÍNEA 2: Tira Horizontal Compacta de Días Despachados */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    borderTop: '1px solid #F1F5F9',
+                    paddingTop: '0.45rem'
+                }} className="custom-scrollbar">
+                    {loadingDates ? (
+                        <div style={{ padding: '0.2rem 0.5rem', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600' }}>
+                            Cargando fechas...
+                        </div>
+                    ) : visibleDates.length === 0 ? (
+                        <div style={{ padding: '0.2rem 0.5rem', color: THEME.colors.textSecondary, fontSize: '0.75rem', fontWeight: '600' }}>
+                            No hay despachos en este mes.
+                        </div>
+                    ) : (
+                        visibleDates.map(item => {
+                            const isSelected = selectedDate === item.date;
+                            return (
+                                <button
+                                    key={item.date}
+                                    type="button"
+                                    onClick={() => setSelectedDate(item.date)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '0.3rem 0.65rem',
+                                        borderRadius: '6px',
+                                        border: isSelected ? '1px solid #065F46' : '1px solid #E2E8F0',
+                                        backgroundColor: isSelected ? '#0D7A57' : '#F8FAFC',
+                                        color: isSelected ? 'white' : THEME.colors.textMain,
+                                        boxShadow: isSelected ? '0 1px 4px rgba(13, 122, 87, 0.25)' : 'none',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0,
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.backgroundColor = '#F1F5F9';
+                                            e.currentTarget.style.borderColor = '#CBD5E1';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isSelected) {
+                                            e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                            e.currentTarget.style.borderColor = '#E2E8F0';
+                                        }
+                                    }}
+                                >
+                                    <span style={{ fontSize: '0.78rem', fontWeight: '800' }}>
+                                        {item.date}
+                                    </span>
+                                    <span style={{
+                                        fontSize: '0.72rem',
+                                        fontWeight: '700',
+                                        opacity: isSelected ? 0.95 : 0.8
+                                    }}>
+                                        {formatMoney(item.totalSales)}
+                                    </span>
+                                    <span style={{
+                                        backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
+                                        color: isSelected ? 'white' : '#475569',
+                                        padding: '1px 5px',
+                                        borderRadius: '999px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800'
+                                    }}>
+                                        {item.orderCount} {item.orderCount === 1 ? 'ped' : 'peds'}
+                                    </span>
+                                </button>
+                            );
+                        })
+                    )}
                 </div>
             </div>
 
-            {/* LAYOUT PRINCIPAL: SIDEBAR DE FECHAS (280px) + CONTENIDO ANALÍTICO */}
-            <div style={{ display: 'grid', gridTemplateColumns: '290px minmax(0, 1fr)', gap: '1.25rem', alignItems: 'start' }}>
-                
-                {/* SIDEBAR DE FECHAS DE ENTREGA CON BOXING DE 6 MESES */}
-                <div style={{
-                    backgroundColor: 'white',
-                    borderRadius: THEME.radius.lg,
-                    border: `1px solid ${THEME.colors.border}`,
-                    boxShadow: THEME.shadow.sm,
-                    overflow: 'hidden',
-                    position: 'sticky',
-                    top: '90px'
-                }}>
-                    <div style={{
-                        padding: '1rem',
-                        backgroundColor: '#F8FAFC',
-                        borderBottom: `1px solid ${THEME.colors.border}`
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Calendar size={14} /> Fechas de Entrega
-                            </span>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0369A1', backgroundColor: '#E0F2FE', padding: '1px 6px', borderRadius: '4px' }}>
-                                6 Meses
-                            </span>
-                        </div>
-
-                        {/* Selector de Mes (Boxing Filter) */}
-                        <select
-                            value={selectedMonthOffset}
-                            onChange={(e) => setSelectedMonthOffset(Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                padding: '0.45rem 0.6rem',
-                                borderRadius: THEME.radius.sm,
-                                border: `1px solid ${THEME.colors.border}`,
-                                fontSize: '0.82rem',
-                                fontWeight: '700',
-                                color: THEME.colors.textMain,
-                                backgroundColor: 'white'
-                            }}
-                        >
-                            {monthOptions.map(m => (
-                                <option key={m.offset} value={m.offset}>{m.label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Lista Vertical de Días */}
-                    <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }} className="custom-scrollbar">
-                        {loadingDates ? (
-                            <div style={{ padding: '2rem 1rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                Cargando calendario de entregas...
-                            </div>
-                        ) : visibleDates.length === 0 ? (
-                            <div style={{ padding: '2rem 1rem', textAlign: 'center', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
-                                No hay despachos registrados en este mes.
-                            </div>
-                        ) : (
-                            visibleDates.map(item => {
-                                const isSelected = selectedDate === item.date;
-                                return (
-                                    <button
-                                        key={item.date}
-                                        onClick={() => setSelectedDate(item.date)}
-                                        style={{
-                                            width: '100%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '0.75rem 1rem',
-                                            border: 'none',
-                                            borderBottom: `1px solid #F1F5F9`,
-                                            backgroundColor: isSelected ? '#F0FDF4' : 'white',
-                                            borderLeft: isSelected ? `4px solid ${THEME.colors.primary}` : '4px solid transparent',
-                                            cursor: 'pointer',
-                                            textAlign: 'left',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        <div>
-                                            <div style={{
-                                                fontSize: '0.88rem',
-                                                fontWeight: isSelected ? '800' : '600',
-                                                color: isSelected ? THEME.colors.primary : THEME.colors.textMain
-                                            }}>
-                                                {item.date}
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>
-                                                {formatMoney(item.totalSales)}
-                                            </div>
-                                        </div>
-
-                                        <span style={{
-                                            backgroundColor: isSelected ? THEME.colors.primary : '#F1F5F9',
-                                            color: isSelected ? 'white' : '#475569',
-                                            padding: '3px 8px',
-                                            borderRadius: '999px',
-                                            fontSize: '0.72rem',
-                                            fontWeight: '800'
-                                        }}>
-                                            {item.orderCount} {item.orderCount === 1 ? 'pedido' : 'pedidos'}
-                                        </span>
-                                    </button>
-                                );
-                            })
-                        )}
-                    </div>
-                </div>
-
-                {/* CONTENIDO PRINCIPAL: KPIS + BANNERS POKA-YOKE + TABLAS */}
-                <div>
+            {/* CONTENIDO PRINCIPAL: KPIS + BANNERS POKA-YOKE + TABLAS (ANCHO COMPLETO 1600px) */}
+            <div style={{ width: '100%' }}>
                     {/* TARJETAS RESUMEN KPIS DEL DÍA */}
                     <div style={{
                         display: 'grid',
@@ -2096,7 +2118,6 @@ export default function CommercialDailyMonitorModule() {
                         </div>
                     )}
                 </div>
-            </div>
             {/* MODAL DE SELECCIÓN DE PERÍODO PARA EXPORTACIÓN EXCEL */}
             {isExportModalOpen && (
                 <div style={{

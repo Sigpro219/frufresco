@@ -16519,3 +16519,22 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - Se prohibe expresamente la activación del escalamiento por mínimo de venta (`minSaleKg`) sobre ítems con cantidad cero o nula, eliminando la mutación artificial que convertía productos vacíos como Piña en 2 unidades.
   4. **Cumplimiento Estricto del Escenario 416:**
      - El visor de hojas de cálculo de `EmailDraftsModule.tsx` inicializa `excelFilterOnlyWithQty = true` por defecto, aislando únicamente los ítems con pedido y evitando la navegación innecesaria por matrices vacías.
+
+
+---
+
+### Escenario 434: Rediseño Espacial Horizontal del Monitor Diario BI: Liberación de Ancho Completo a 1600px, Barra Superior Docked de Fechas y Desmantelamiento de Sidebar Restrictivo (SDD v1.9.389)
+- **Given** el módulo de Business Intelligence comercial y análisis diario de despachos (`/admin/commercial?tab=daily-monitor`, componente `CommercialDailyMonitorModule.tsx`):
+- **When** el auditor comercial, líder de cartera o administrador analiza los márgenes, precios facturados y demanda por cliente o producto:
+- **Then** rigen las siguientes reglas canónicas de diseño industrial y aprovechamiento espacial:
+  1. **Erradicación del Sidebar Vertical Restrictivo (Regla Anti-Secuestro de Ancho X):**
+     - Queda formalmente desmantelado el layout dividido en dos columnas con barra lateral fija (`gridTemplateColumns: '290px minmax(0, 1fr)'`).
+     - Ninguna barra de selección o filtro temporal puede restar ancho fijo permanente a la galería de datos. El contenedor principal de la galería se expande al **100% del ancho útil del estándar maestro de 1600px** (`maxWidth: '1600px'`, centrado con `mx-auto`).
+  2. **Barra Superior Horizontal de Fechas y Períodos (Docked Date Strip):**
+     - La selección temporal se traslada a una barra de control horizontal superior integrada en el flujo natural antes de los KPIs y tablas:
+       * **Selector de Mes (Boxing de 6 Meses):** Menú desplegable compacto para conmutar entre los últimos 180 días de operación.
+       * **Tira Horizontal de Días (Horizontal Scrollable Strip):** Carrusel de píldoras interactivas con deslizamiento fluido en X. Cada píldora visualiza la fecha de entrega, el total facturado formateado y el badge de conteo de pedidos (`N pedidos`).
+       * **Feedback Cromático Inmediato:** El día activo se resalta en verde esmeralda institucional (`#0D7A57`) con tipografía blanca y contraste WCAG AAA; los días alternos conservan fondo neutro `#F8FAFC` con bordes nítidos `#E2E8F0`.
+       * **Acceso Rápido Nativo:** Input tipo fecha (`<input type="date">`) compacto para salto directo sin fricción a cualquier jornada arbitraria.
+  3. **Visualización Panorámica de Métricas Financieras:**
+     - Al recuperar los 290 píxeles horizontales, las tablas de **Ventas por Producto** y **Ventas por Cliente** despliegan la totalidad de sus columnas numéricas (`CÓDIGO #ID`, `PRODUCTO`, `CATEGORÍA`, `CANTIDAD TOTAL`, `PEDIDOS`, `PRECIO PROM.`, `COSTO BASE`, `TOTAL VENTA`, `UTILIDAD`, `% MARGEN`) sin compresión forzada de texto ni necesidad de desplazamiento horizontal en resoluciones de escritorio estándar.
