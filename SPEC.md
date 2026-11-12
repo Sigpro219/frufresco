@@ -16688,3 +16688,22 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
 
 
 
+
+
+---
+
+### Escenario 442: Soberanía Operativa de la Torre de Control (`loading/page.tsx`), Habilitación de Reposiciones Same-Day ($D+0$) y Emisión Inmediata de Remisión Oficial (SDD v1.9.397)
+- **Given** la Torre de Control y Cargue de Pedidos (`/admin/orders/loading`), el módulo de Gestión de Calidad & PQRS (`PqrAuditModal.tsx`), el generador de remisiones contingentes (`/admin/orders/contingency-print`) y la doctrina de Garantía $0 COP (§7.5.8):
+- **When** un operador logístico, supervisor de despacho o agente de SAC gestiona una orden de reposición, emergencia operativa o ajuste en la fecha de entrega de un pedido existente:
+- **Then**:
+  1. **Desacople de Reglas B2C en Consola Administrativa (Soberanía Operativa):**
+     - Se declara contractualmente que la restricción de corte de la tienda virtual pública (la cual fuerza despachos mínimos en $D+1$ o $D+2$) **no aplica** a la Torre de Control ni a la edición de pedidos por operadores autorizados en `/admin/orders/loading`.
+     - La fecha mínima operativa permitida (`minDeliveryDate`) en la consola de cargue se fija soberanamente en **hoy mismo** (`todayBogota` = `formatDateToYYYYMMDD(getBogotaNow())`).
+     - El Poka-Yoke anti-retroactividad restringe exclusivamente fechas en el **pasado** (`delivery_date < hoy`), garantizando que jamás se programen entregas con fecha anterior al día calendario vigente.
+  2. **Habilitación de Reposiciones y Despachos Same-Day ($D+0$):**
+     - En el asistente de radicación de PQRS (`PqrAuditModal.tsx`), se incorpora la píldora de 1 clic **«Hoy (Urgente)»**, permitiendo que las reposiciones nazcan agendadas para el mismo día del reclamo.
+     - En el modal de edición de pedidos (`loading/page.tsx`), se reconoce el estado de reposición mediante `getOrderReplacementInfo(order).isReplacement`, desplegando el badge visual verde `REPOSICIÓN` y permitiendo fijar la fecha para la jornada activa.
+     - Si la fecha seleccionada corresponde a un domingo o festivo no habilitado, el sistema no bloquea a ciegas, sino que solicita confirmación consciente del operador (`window.confirm`) para autorizar la excepción de garantía o emergencia B2B.
+  3. **Acceso Inmediato a la Remisión Oficial (Documento 5 Duplex):**
+     - En la cabecera superior derecha del modal de detalle de pedido en `/admin/orders/loading`, se consagra el botón permanente **`[🖨️ Imprimir Remisión]`** con enlace directo a `/admin/orders/contingency-print?mode=remissions&orderIds=${order.id}`.
+     - Dicho botón permite emitir en tiempo real el juego Duplex (`ORIGINAL - CLIENTE` y `COPIA - ARCHIVO Y CONTABILIDAD`) con membrete oficial de *Investments Cortés S.A.S.*, recuadro de canastillas y código QR dinámico de PQRS, sin depender de lanzamientos nocturnos ni selecciones por lote.
