@@ -16905,3 +16905,39 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   4. **Renderizado Universal de Contingencia para Clientes con Factura DIAN (`FAC-IMP`):**
      - En la pantalla de contingencia se renderiza el 100% de los pedidos de la jornada (58 de 58 pedidos completos), erradicando discrepancias entre el botón de tanda (`Hoy 58`) y los documentos disponibles en muelle.
      - Los clientes amparados bajo Factura Impresa DIAN (`document_type = 'invoice'`, ej. *Hotel Tequendama Suites*, *IRCC El Corral*) se renderizan como **`GUÍA DE ENTREGA / CONTINGENCIA`**, portando el badge distintivo `[ ORIGINAL - FACTURA IMPRESA (FAC-IMP) ]` y el banner normativo de soporte para firma y verificación en muelle mientras se adjunta la factura definitiva expedida en World Office.
+
+
+---
+
+### Escenario 451: Saneamiento Integral de Facturación por Lotes, Soberanía de Consecutivos DIAN y Blindaje Goldfish (SDD v1.9.406)
+- **Given** el módulo de Facturación Comercial (`/admin/commercial/billing`) con sus bandejas `Pedidos por Facturar` (`subTab = 'pending'`) y `Acumulados por Lote` (`subTab = 'batch_accumulated'`):
+- **When** el operador desplaza pedidos del ejercicio diario a `Acumulados por Lote`, los retorna a pendientes, exporta planillas World Office o ejecuta la facturación diferida (`Facturar 1 a 1` o `Unificar en 1 Sola Factura`):
+- **Then** el sistema cumple estrictamente las siguientes reglas contractuales:
+  1. **Separación Hermética de Ejercicios (`Hoy` vs. `Lotes`):**
+     - Todo pedido enviado a `Acumulados por Lote` (`logistics_data.is_batch_accumulated = true`) sale de inmediato de `Pedidos por Facturar` (actualización optimista + persistencia verificada en `orders`), desaparece de los contadores diarios y queda **estrictamente excluido** de `handleOpenPreview` (Cortes AM/PM) y de las exportaciones diarias.
+     - La consulta de `allUnbilledOrders` filtra estrictamente por estados operativos válidos (`['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']`), excluyendo pedidos `cancelled` o rechazados.
+     - La regla de enrutamiento para clientes con `document_type === 'batch_remission'` respeta un override explícito cuando el operador retorna un pedido a pendientes (`logistics_data.is_batch_accumulated === false`).
+  2. **Soberanía del Consecutivo DIAN (Cero Reservas Fantasma, Cero Huecos):**
+     - Mientras un pedido permanece en `Acumulados por Lote`, **no reserva ni consume número de factura**.
+     - Al retirar un pedido de `Pedidos por Facturar` hacia `Lotes`, `projectedInvoiceMap` recalcula en vivo y corre automáticamente los números proyectados (`FV-XXXXX`) al resto de pedidos del día sin quemar consecutivos.
+     - Si un pedido ya posee `invoice_id` o `billing_cut_id`, queda bloqueado contra acumulación directa hasta que el corte sea revertido formalmente en Historial.
+     - Antes de emitir facturas en lote (`Facturar 1 a 1` o `Unificar en 1 Sola Factura`), se realiza una relectura en caliente de `app_settings.billing_invoice_next_number`.
+  3. **Trazabilidad Formal en `billing_cuts`:**
+     - Toda emisión desde `Acumulados por Lote` (ya sea `1 a 1` o `Unificada N-a-1`) crea un registro oficial en `billing_cuts` (`status = 'closed'`, `cut_slot = 'BATCH'`) y vincula tanto `orders.invoice_id` como `orders.billing_cut_id`, garantizando visibilidad en el Historial de Cortes y reversibilidad atómica mediante `[ ↺ Revertir ]`.
+  4. **Poka-Yokes Obligatorios & Aislamiento de Selección:**
+     - Al cambiar de pestaña (`pending` ↔ `batch_accumulated` ↔ `cuts` ↔ `returns`), `selectedOrderIds` se limpia automáticamente para evitar facturación cruzada accidental.
+     - Tanto `Facturar 1 a 1` como `Unificar en 1 Sola Factura` validan: ausencia de ítems en `$0` (`DESPACHADO SIN PRECIO`), ausencia de PQRS abiertas y exclusión de obsequios/reposiciones. Además, `Unificar` exige $N \ge 2$ pedidos, mismo NIT receptor (resolviendo `parent_id` de casa matriz) y homogeneidad de `% de descuento comercial`.
+  5. **Coherencia de Exportadores Excel:**
+     - `handleExportPendingToWorldOffice` y `handleExportRelacionByDate` operan contextualmente sobre `filteredBatchAccumulatedOrders` cuando `subTab === 'batch_accumulated'` y calculan consecutivos proyectados independientes de `filteredPendingOrders`, evitando duplicación de `FV-XXXXX` en el archivo plano de World Office.
+
+
+---
+
+### Escenario 452: Blindaje de Jerarquía Tarifaria (Sucursal > Matriz > Lista General) y Etiquetado Veraz en Edición de Órdenes (`/admin/orders/loading`) (SDD v1.9.407)
+- **Given** el modal de edición de pedido en la mesa de operaciones (`/admin/orders/loading`), el buscador de productos y el endpoint canónico `/api/orders/resolve-agreement-pricing`:
+- **When** el operador consulta o agrega productos a una orden perteneciente a una sucursal con acuerdo comercial propio (ej. *CESAP* bajo Cotización #205, con `parent_id` apuntando a *Policía Nacional*):
+- **Then**:
+  1. **Prioridad Absoluta de Sucursal (Nivel 1):** `effectiveClientId` envía estrictamente `profileObj?.id || profileObj?.parent_id` al resolvedor de acuerdos para evaluar primero los acuerdos de la sucursal y hacer fallback automático a la casa matriz en el servidor solo si la sucursal carece de convenio propio.
+  2. **Separación Hermética `Convenio` vs. `Lista General`:** El badge verde `Convenio` se renderiza única y exclusivamente cuando `agreementProductIds.has(prod.id)` es verdadero. Los productos liquidados con tarifas de respaldo (`Lista General` / modelo dinámico) muestran el badge `Lista General` sin inducir falsos positivos al operador.
+  3. **Integridad del Candado `Restringido a Convenio`:** Cuando `allowOffAgreement === false`, el filtro de búsqueda en vivo valida estrictamente `agreementProductIds.has(p.id)`, impidiendo que productos fuera del acuerdo se filtren desde el diccionario de precios de respaldo.
+  4. **Cumplimiento de Identificadores en UI:** El desplegable de resultados etiqueta los códigos de producto como `ID: #[accounting_id]` (erradicando `SKU:`).

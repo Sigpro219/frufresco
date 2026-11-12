@@ -688,6 +688,9 @@ export default function BillingDashboard() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'invoicing' | 'cadena_radian' | 'portfolio' | 'configuration'>('invoicing');
     const [subTab, setSubTab] = useState<'pending' | 'batch_accumulated' | 'cuts' | 'returns'>('pending');
+    useEffect(() => {
+        setSelectedOrderIds([]);
+    }, [subTab]);
     const [returnsViewMode, setReturnsViewMode] = useState<'credit_notes' | 'pending_review' | 'all'>('credit_notes');
     const [batchAccumulatedOrders, setBatchAccumulatedOrders] = useState<any[]>([]);
     const [batchAccumulatedCount, setBatchAccumulatedCount] = useState<number>(0);
@@ -1532,7 +1535,7 @@ export default function BillingDashboard() {
             let pOrdersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, warehouse_spaces,
+                    id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, warehouse_spaces, invoice_id, billing_cut_id,
                     profiles:profile_id (
                         id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                     ),
@@ -1548,6 +1551,7 @@ export default function BillingDashboard() {
                     )
                 `)
                 .is('billing_cut_id', null)
+                .is('invoice_id', null)
                 .order('created_at', { ascending: false });
 
             if (includeAllStatuses) {
@@ -1589,11 +1593,11 @@ export default function BillingDashboard() {
                     }
                 }
 
-                // Escenario 252: Separar pedidos por Lote Acumulado vs Pendientes Diarios
+                // Escenario 252 & 451: Separar pedidos por Lote Acumulado vs Pendientes Diarios
                 const { data: allUnbilledOrders } = await supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id, warehouse_spaces,
+                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id, billing_cut_id, warehouse_spaces,
                         profiles:profile_id (
                             id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                         ),
@@ -1610,22 +1614,27 @@ export default function BillingDashboard() {
                     `)
                     .is('billing_cut_id', null)
                     .is('invoice_id', null)
+                    .in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'])
                     .order('delivery_date', { ascending: false });
 
-                const accumulatedOrders = (allUnbilledOrders || []).filter((o: any) => 
-                    o.logistics_data?.is_batch_accumulated === true || o.profiles?.document_type === 'batch_remission'
-                );
+                const isOrderBatchAccumulated = (o: any) => {
+                    if (o.logistics_data?.is_batch_accumulated === false) return false;
+                    return o.logistics_data?.is_batch_accumulated === true || o.profiles?.document_type === 'batch_remission';
+                };
+
+                const accumulatedOrders = (allUnbilledOrders || []).filter(isOrderBatchAccumulated);
                 setBatchAccumulatedOrders(accumulatedOrders);
                 setBatchAccumulatedCount(accumulatedOrders.length);
 
-                const dailyOrders = (pOrdersData || []).filter((o: any) => 
-                    !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission'
-                );
+                const dailyOrders = (pOrdersData || []).filter((o: any) => !isOrderBatchAccumulated(o));
                 setPendingOrders(dailyOrders as any[]);
                 setPendingOrdersCount(dailyOrders.length);
 
-                // Fetch parent profiles for branch inheritance
-                const parentIds = Array.from(new Set((pOrdersData as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
+                // Fetch parent profiles for branch inheritance (incluyendo Lotes)
+                const parentIds = Array.from(new Set([
+                    ...(pOrdersData as any[]),
+                    ...((allUnbilledOrders || []) as any[])
+                ].map((o: any) => o.profiles?.parent_id).filter(Boolean)));
                 if (parentIds.length > 0) {
                     const { data: parentsData } = await supabase
                         .from('profiles')
@@ -2034,9 +2043,12 @@ export default function BillingDashboard() {
         return { invoicesCount: inv, remissionsCount: rem, replacementsCount: rep };
     }, [pendingOrders, parentProfilesMap]);
 
-    // Filter & Sort Pending Orders (Excluye pedidos acumulados en lote)
+    // Filter & Sort Pending Orders (Excluye pedidos acumulados en lote, respetando override explícito is_batch_accumulated === false)
     const filteredPendingOrders = useMemo(() => {
-        let result = pendingOrders.filter(o => !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission');
+        let result = pendingOrders.filter(o => {
+            if (o.logistics_data?.is_batch_accumulated === false) return true;
+            return !o.logistics_data?.is_batch_accumulated && o.profiles?.document_type !== 'batch_remission';
+        });
 
         // 1. Universal Search Query
         if (billingSearchQuery) {
@@ -2466,6 +2478,13 @@ export default function BillingDashboard() {
             if (ordersError) throw ordersError;
 
             let targetOrders = rawOrders || [];
+            if (slot !== 'ADJ') {
+                // Escenario 252 / Poka-Yoke: Excluir estrictamente pedidos acumulados por lote del ejercicio diario (AM / PM)
+                targetOrders = targetOrders.filter(o => {
+                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
+                    return !o.logistics_data?.is_batch_accumulated && prof.document_type !== 'batch_remission';
+                });
+            }
             if (slot === 'PM') {
                 // Escenario 432 / SDD v1.9.386: Corte Pre-Despacho Tarde (FAC-IMP).
                 // Filtra estrictamente los pedidos cuya configuración documental exige factura impresa en muelle (World Office)
@@ -3375,9 +3394,10 @@ export default function BillingDashboard() {
 
     // Direct Export of Pending Orders to World Office (.xlsx)
     const handleExportPendingToWorldOffice = async () => {
+        const sourceList = subTab === 'batch_accumulated' ? filteredBatchAccumulatedOrders : filteredPendingOrders;
         const targetOrders = selectedOrderIds.length > 0
-            ? filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id))
-            : filteredPendingOrders;
+            ? sourceList.filter(o => selectedOrderIds.includes(o.id))
+            : sourceList;
 
         if (targetOrders.length === 0) {
             showToast({ type: 'warning', message: 'No hay pedidos seleccionados o disponibles para exportar.' });
@@ -3409,9 +3429,9 @@ export default function BillingDashboard() {
                 return;
             }
 
-            // Mapeo canónico de números de factura fiscal según la posición en la vista de Facturación
+            // Mapeo canónico de números de factura fiscal según la posición en la vista activa (Pendientes o Lotes)
             const pendingInvoiceMap = new Map<string, { docNum: number; projected: string }>();
-            filteredPendingOrders.forEach((o, idx) => {
+            sourceList.forEach((o, idx) => {
                 const proj = o.billing_invoices?.invoice_number || o.invoice_number || `${invoicePrefix}-${invoiceNextNumber + idx}`;
                 const clean = parseInt(String(proj).replace(/\D/g, ''), 10) || (invoiceNextNumber + idx);
                 pendingInvoiceMap.set(o.id, { docNum: clean, projected: proj });
@@ -3532,25 +3552,26 @@ export default function BillingDashboard() {
         }
     };
 
-    // Export Relación de Documentos (.xlsx) por Fecha Activa
+    // Export Relación de Documentos (.xlsx) por Fecha Activa (contextual a Pendientes o Lotes)
     const handleExportRelacionByDate = async () => {
         const targetDate = selectedBillingDate !== 'all' ? selectedBillingDate : getBogotaDate(0);
         setIsProcessing(true);
         try {
+            const sourceList = subTab === 'batch_accumulated' ? filteredBatchAccumulatedOrders : filteredPendingOrders;
             const targetOrders = selectedOrderIds.length > 0 
-                ? filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id))
-                : filteredPendingOrders;
+                ? sourceList.filter(o => selectedOrderIds.includes(o.id))
+                : sourceList;
             
             await exportRelacionDocumentosWithPicker({
                 selectedDate: targetDate,
-                orders: targetOrders.map((o: any) => {
+                orders: targetOrders.map((o: any, idx: number) => {
                     const rep = getOrderReplacementInfo(o);
                     const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
-                    const isInvoice = docInfo.type === 'invoice';
-                    const invoiceInfo = projectedInvoiceMap.get(o.id);
+                    const isInvoice = docInfo.type === 'invoice' || subTab === 'batch_accumulated';
+                    const invoiceInfo = subTab === 'batch_accumulated' ? null : projectedInvoiceMap.get(o.id);
                     const finalInvoiceNumber = o.billing_invoices?.invoice_number 
                         || o.invoice_number 
-                        || (isInvoice ? (invoiceInfo?.number || `${invoicePrefix}-${invoiceNextNumber}`) : null);
+                        || (isInvoice ? (invoiceInfo?.number || `${invoicePrefix}-${invoiceNextNumber + idx}`) : null);
                     
                     const prof = o.profiles || {};
                     const parentProf = prof.parent_id ? parentProfilesMap.get(prof.parent_id) : null;
@@ -3871,23 +3892,59 @@ export default function BillingDashboard() {
     // Acciones para Acumulados por Lote (Escenario 252)
     const handleAccumulateOrdersForBatch = async (targetOrderIds: string[]) => {
         if (!targetOrderIds || targetOrderIds.length === 0) return;
+
+        // Poka-Yoke: Verificar si alguno ya tiene factura oficial o corte emitido
+        const alreadyInvoiced = pendingOrders.filter(
+            o => targetOrderIds.includes(o.id) && (o.invoice_id || o.billing_cut_id)
+        );
+        if (alreadyInvoiced.length > 0) {
+            showToast({
+                type: 'error',
+                title: 'Pedidos ya Facturados',
+                message: 'Uno o más pedidos ya tienen corte/factura asignada. Primero revierte el corte en Historial para liberar el consecutivo DIAN.'
+            });
+            return;
+        }
+
         setIsProcessing(true);
         try {
+            const movedOrders: any[] = [];
             for (const orderId of targetOrderIds) {
                 const ord = pendingOrders.find(o => o.id === orderId);
                 const nextLogistics = {
                     ...(ord?.logistics_data || {}),
-                    is_batch_accumulated: true
+                    is_batch_accumulated: true,
+                    batch_accumulated_at: new Date().toISOString()
                 };
-                await supabase
+                const { error: updateErr } = await supabase
                     .from('orders')
                     .update({ logistics_data: nextLogistics })
                     .eq('id', orderId);
+                if (updateErr) throw updateErr;
+                if (ord) {
+                    movedOrders.push({ ...ord, logistics_data: nextLogistics });
+                }
             }
+
+            // Actualización optimista inmediata: sale del ejercicio diario y libera el consecutivo proyectado
+            setPendingOrders(prev => {
+                const next = prev.filter(o => !targetOrderIds.includes(o.id));
+                setPendingOrdersCount(next.length);
+                return next;
+            });
+            if (movedOrders.length > 0) {
+                setBatchAccumulatedOrders(prev => {
+                    const existingIds = new Set(prev.map(o => o.id));
+                    const next = [...movedOrders.filter(o => !existingIds.has(o.id)), ...prev];
+                    setBatchAccumulatedCount(next.length);
+                    return next;
+                });
+            }
+
             showToast({
                 type: 'success',
-                title: 'Pedidos Acumulados p/ Lote',
-                message: `Se enviaron ${targetOrderIds.length} pedidos a la pestaña "Acumulados por Lote".`
+                title: 'Pedidos Pasados a Lote',
+                message: `${targetOrderIds.length} pedido(s) retirado(s) del corte de hoy y enviado(s) a "Acumulados por Lote". Los consecutivos proyectados se corrieron automáticamente.`
             });
             clearOrderSelection();
             await fetchData();
@@ -3903,17 +3960,30 @@ export default function BillingDashboard() {
         if (!targetOrderIds || targetOrderIds.length === 0) return;
         setIsProcessing(true);
         try {
+            const restoredOrders: any[] = [];
             for (const orderId of targetOrderIds) {
                 const ord = batchAccumulatedOrders.find(o => o.id === orderId);
                 const nextLogistics = {
                     ...(ord?.logistics_data || {}),
                     is_batch_accumulated: false
                 };
-                await supabase
+                const { error: updateErr } = await supabase
                     .from('orders')
                     .update({ logistics_data: nextLogistics })
                     .eq('id', orderId);
+                if (updateErr) throw updateErr;
+                if (ord) {
+                    restoredOrders.push({ ...ord, logistics_data: nextLogistics });
+                }
             }
+
+            // Actualización optimista inmediata
+            setBatchAccumulatedOrders(prev => {
+                const next = prev.filter(o => !targetOrderIds.includes(o.id));
+                setBatchAccumulatedCount(next.length);
+                return next;
+            });
+
             showToast({
                 type: 'info',
                 title: 'Pedidos Regresados a Pendientes',
@@ -3929,40 +3999,139 @@ export default function BillingDashboard() {
         }
     };
 
+    // Helpers compartidos de validación Poka-Yoke y emisión atómica de lotes (Escenario 451)
+    const resolveOrderEffectiveNit = (o: any): string => {
+        const prof = o.profiles || {};
+        const parent = prof.parent_id ? parentProfilesMap.get(prof.parent_id) : null;
+        return (parent?.nit || prof.nit || prof.id || o.profile_id || '').toString().trim();
+    };
+
+    const validateBatchOrdersPokaYoke = (selected: any[], isUnified: boolean): boolean => {
+        if (isUnified && selected.length < 2) {
+            showToast({
+                type: 'warning',
+                title: 'Selección Insuficiente',
+                message: 'Para unificar en 1 sola factura debes seleccionar al menos 2 pedidos.'
+            });
+            return false;
+        }
+
+        if (isUnified) {
+            const firstNit = resolveOrderEffectiveNit(selected[0]);
+            const isSingleClient = selected.every(o => resolveOrderEffectiveNit(o) === firstNit);
+            if (!isSingleClient) {
+                showToast({
+                    type: 'error',
+                    title: 'NIT / Clientes Diferentes',
+                    message: 'Para unificar en 1 sola factura, todos los pedidos seleccionados deben pertenecer al mismo cliente / NIT.'
+                });
+                return false;
+            }
+
+            const firstDiscount = Number(selected[0].logistics_data?.agreement_discount_pct || selected[0].profiles?.logistics_data?.agreement_discount_pct || 0);
+            const sameDiscount = selected.every(o => Number(o.logistics_data?.agreement_discount_pct || o.profiles?.logistics_data?.agreement_discount_pct || 0) === firstDiscount);
+            if (!sameDiscount) {
+                showToast({
+                    type: 'error',
+                    title: 'Descuento Comercial Heterogéneo',
+                    message: 'Todos los pedidos a unificar deben tener el mismo % de descuento comercial.'
+                });
+                return false;
+            }
+        }
+
+        const hasUnpriced = selected.some(o =>
+            o.admin_notes?.includes('DESPACHADO SIN PRECIO') ||
+            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') ||
+            (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced) ||
+            Number(o.total || 0) <= 0
+        );
+        if (hasUnpriced) {
+            showToast({
+                type: 'warning',
+                title: 'Remisiones con Ítems en $0',
+                message: 'No es posible facturar pedidos en $0 o sin tarifa comercial. El área Comercial debe asignar el precio previamente.'
+            });
+            return false;
+        }
+
+        const hasOpenPqrs = selected.some(o => {
+            const pqrsList = o.customer_service_pqrs || [];
+            return pqrsList.some((p: any) => p.status && !['resolved', 'closed', 'rejected', 'cancelled'].includes(String(p.status).toLowerCase()));
+        });
+        if (hasOpenPqrs) {
+            showToast({
+                type: 'warning',
+                title: 'PQRS Abierta Detectada',
+                message: 'Uno o más pedidos tienen una PQRS abierta. Resuelve la novedad antes de emitir factura.'
+            });
+            return false;
+        }
+
+        const hasGiftOrRep = selected.some(o => {
+            const rep = getOrderReplacementInfo(o);
+            const docType = o.document_type || o.profiles?.document_type;
+            return rep.isReplacement || o.origin_source === 'customer_service' || docType === 'gift_remission';
+        });
+        if (hasGiftOrRep) {
+            showToast({
+                type: 'warning',
+                title: 'Obsequio o Reposición SAC',
+                message: 'Las reposiciones de garantía y remisiones obsequio no son facturables como venta.'
+            });
+            return false;
+        }
+
+        return true;
+    };
+
+    const readLiveNextInvoiceNumber = async (): Promise<{ nextNum: number; prefix: string }> => {
+        const { data: liveSettings } = await supabase
+            .from('app_settings')
+            .select('key, value')
+            .in('key', ['billing_invoice_next_number', 'billing_invoice_prefix']);
+        let nextNum = invoiceNextNumber;
+        let prefix = invoicePrefix;
+        (liveSettings || []).forEach((s: any) => {
+            if (s.key === 'billing_invoice_next_number' && s.value) nextNum = Number(s.value);
+            if (s.key === 'billing_invoice_prefix' && s.value) prefix = s.value;
+        });
+        return { nextNum, prefix };
+    };
+
+    const createBatchBillingCut = async (totalOrders: number, totalAmount: number) => {
+        const { data: cutNumberData } = await supabase
+            .from('billing_cuts')
+            .select('cut_number')
+            .order('cut_number', { ascending: false })
+            .limit(1);
+        const nextCutNum = (cutNumberData?.[0]?.cut_number || 0) + 1;
+        const { data: newCut, error: cutErr } = await supabase
+            .from('billing_cuts')
+            .insert({
+                cut_number: nextCutNum,
+                scheduled_date: getBogotaDate(0),
+                cut_slot: 'BATCH',
+                status: 'closed',
+                total_orders: totalOrders,
+                total_amount: totalAmount
+            })
+            .select()
+            .single();
+        if (cutErr) throw cutErr;
+        return newCut;
+    };
+
     const handleUnifyOrdersIntoSingleInvoice = async (targetOrderIds: string[]) => {
         if (!targetOrderIds || targetOrderIds.length === 0) return;
         const allKnown = [...pendingOrders, ...batchAccumulatedOrders];
         const selected = allKnown.filter(o => targetOrderIds.includes(o.id));
         if (selected.length === 0) return;
 
-        // 1. Validar que todos los pedidos pertenezcan al mismo cliente / NIT
-        const firstNit = selected[0].profiles?.nit || selected[0].profile_id;
-        const isSingleClient = selected.every(o => (o.profiles?.nit || o.profile_id) === firstNit);
-        if (!isSingleClient) {
-            showToast({
-                type: 'error',
-                title: 'NIT / Clientes Diferentes',
-                message: 'Para unificar en 1 sola factura, todos los pedidos seleccionados deben pertenecer al mismo cliente / NIT.'
-            });
-            return;
-        }
-
-        // 2. Validar que ninguno tenga ítems en $0 sin tarifa comercial
-        const hasUnpriced = selected.some(o => 
-            o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
-            o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') ||
-            (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced)
-        );
-        if (hasUnpriced) {
-            showToast({
-                type: 'warning',
-                title: 'Remisiones con Ítems en $0',
-                message: 'No es posible facturar pedidos con ítems en $0. El área Comercial debe asignar la tarifa previamente.'
-            });
-            return;
-        }
+        if (!validateBatchOrdersPokaYoke(selected, true)) return;
 
         setIsProcessing(true);
+        let createdCutId: string | null = null;
         try {
             const { data: fullOrders, error: fullErr } = await supabase
                 .from('orders')
@@ -3977,12 +4146,17 @@ export default function BillingDashboard() {
             const totalTax = (fullOrders || []).reduce((acc, o) => acc + Number(o.tax || 0), 0);
             const totalFinal = (fullOrders || []).reduce((acc, o) => acc + Number(o.total || 0), 0);
 
-            const invoiceNum = `${invoicePrefix}-${invoiceNextNumber}`;
+            const { nextNum: liveStartNum, prefix: livePrefix } = await readLiveNextInvoiceNumber();
+            const invoiceNum = `${livePrefix}-${liveStartNum}`;
             const primaryOrderId = selected[0].id;
+
+            const newCut = await createBatchBillingCut(selected.length, totalFinal);
+            createdCutId = newCut.id;
 
             const { data: newInvoice, error: invErr } = await supabase
                 .from('billing_invoices')
                 .insert({
+                    cut_id: newCut.id,
                     order_id: primaryOrderId,
                     invoice_number: invoiceNum,
                     total_base: totalBase,
@@ -4002,17 +4176,19 @@ export default function BillingDashboard() {
                     unified_invoice_id: newInvoice.id,
                     unified_invoice_number: newInvoice.invoice_number
                 };
-                await supabase
+                const { error: ordErr } = await supabase
                     .from('orders')
                     .update({
                         invoice_id: newInvoice.id,
+                        billing_cut_id: newCut.id,
                         logistics_data: nextLogistics
                     })
                     .eq('id', ord.id);
+                if (ordErr) throw ordErr;
             }
 
-            const nextNum = invoiceNextNumber + 1;
-            await supabase
+            const nextNum = liveStartNum + 1;
+            const { error: setErr } = await supabase
                 .from('app_settings')
                 .upsert({
                     key: 'billing_invoice_next_number',
@@ -4020,17 +4196,25 @@ export default function BillingDashboard() {
                     description: 'Próximo consecutivo numérico Facturas de Venta',
                     updated_at: new Date().toISOString()
                 });
+            if (setErr) throw setErr;
             setInvoiceNextNumber(nextNum);
 
             showToast({
                 type: 'success',
                 title: 'Factura Unificada Generada',
-                message: `Se unificaron ${selected.length} pedidos en la factura ${invoiceNum} por un total de ${formatMoney(totalFinal)}.`
+                message: `Se unificaron ${selected.length} pedidos en el Corte #${newCut.cut_number} (${invoiceNum}) por ${formatMoney(totalFinal)}.`
             });
 
             clearOrderSelection();
             await fetchData();
         } catch (err: any) {
+            if (createdCutId) {
+                try {
+                    await supabase.from('orders').update({ billing_cut_id: null, invoice_id: null }).eq('billing_cut_id', createdCutId);
+                    await supabase.from('billing_invoices').delete().eq('cut_id', createdCutId);
+                    await supabase.from('billing_cuts').delete().eq('id', createdCutId);
+                } catch {}
+            }
             console.error('Error unifying orders:', err);
             showToast({ type: 'error', message: `Error al unificar factura: ${err.message}` });
         } finally {
@@ -4044,12 +4228,20 @@ export default function BillingDashboard() {
         const selected = allKnown.filter(o => targetOrderIds.includes(o.id));
         if (selected.length === 0) return;
 
+        if (!validateBatchOrdersPokaYoke(selected, false)) return;
+
         setIsProcessing(true);
+        let createdCutId: string | null = null;
         try {
-            let currentNext = invoiceNextNumber;
+            const { nextNum: currentNext, prefix: livePrefix } = await readLiveNextInvoiceNumber();
+            const totalAmount = selected.reduce((acc, o) => acc + Number(o.total || 0), 0);
+
+            const newCut = await createBatchBillingCut(selected.length, totalAmount);
+            createdCutId = newCut.id;
+
             for (let i = 0; i < selected.length; i++) {
                 const ord = selected[i];
-                const invNum = `${invoicePrefix}-${currentNext + i}`;
+                const invNum = `${livePrefix}-${currentNext + i}`;
                 const sub = Number(ord.subtotal || ord.total || 0);
                 const tx = Number(ord.tax || 0);
                 const tot = Number(ord.total || 0);
@@ -4057,6 +4249,7 @@ export default function BillingDashboard() {
                 const { data: newInv, error: invErr } = await supabase
                     .from('billing_invoices')
                     .insert({
+                        cut_id: newCut.id,
                         order_id: ord.id,
                         invoice_number: invNum,
                         total_base: sub,
@@ -4069,16 +4262,18 @@ export default function BillingDashboard() {
 
                 if (invErr) throw invErr;
 
-                await supabase
+                const { error: ordErr } = await supabase
                     .from('orders')
                     .update({
-                        invoice_id: newInv.id
+                        invoice_id: newInv.id,
+                        billing_cut_id: newCut.id
                     })
                     .eq('id', ord.id);
+                if (ordErr) throw ordErr;
             }
 
             const nextNum = currentNext + selected.length;
-            await supabase
+            const { error: setErr } = await supabase
                 .from('app_settings')
                 .upsert({
                     key: 'billing_invoice_next_number',
@@ -4086,17 +4281,25 @@ export default function BillingDashboard() {
                     description: 'Próximo consecutivo numérico Facturas de Venta',
                     updated_at: new Date().toISOString()
                 });
+            if (setErr) throw setErr;
             setInvoiceNextNumber(nextNum);
 
             showToast({
                 type: 'success',
                 title: 'Facturas Individuales Generadas',
-                message: `Se generaron ${selected.length} facturas individuales (${invoicePrefix}-${currentNext} a ${invoicePrefix}-${nextNum - 1}).`
+                message: `Corte #${newCut.cut_number}: se generaron ${selected.length} facturas (${livePrefix}-${currentNext} a ${livePrefix}-${nextNum - 1}).`
             });
 
             clearOrderSelection();
             await fetchData();
         } catch (err: any) {
+            if (createdCutId) {
+                try {
+                    await supabase.from('orders').update({ billing_cut_id: null, invoice_id: null }).eq('billing_cut_id', createdCutId);
+                    await supabase.from('billing_invoices').delete().eq('cut_id', createdCutId);
+                    await supabase.from('billing_cuts').delete().eq('id', createdCutId);
+                } catch {}
+            }
             console.error('Error billing 1-to-1:', err);
             showToast({ type: 'error', message: `Error facturando 1 a 1: ${err.message}` });
         } finally {
@@ -5394,8 +5597,8 @@ export default function BillingDashboard() {
                                             {(() => {
                                                 const selectedOrdersList = filteredPendingOrders.filter(o => selectedOrderIds.includes(o.id));
                                                 if (selectedOrdersList.length < 2) return null;
-                                                const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
-                                                const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
+                                                const firstClient = resolveOrderEffectiveNit(selectedOrdersList[0]);
+                                                const isSameClient = selectedOrdersList.every(o => resolveOrderEffectiveNit(o) === firstClient);
                                                 if (!isSameClient) return null;
                                                 return (
                                                     <button
@@ -5791,9 +5994,9 @@ export default function BillingDashboard() {
                                                 {/* Botón Unificar en 1 Sola Factura (si son del mismo cliente) */}
                                                 {(() => {
                                                     const selectedOrdersList = filteredBatchAccumulatedOrders.filter(o => selectedOrderIds.includes(o.id));
-                                                    if (selectedOrdersList.length === 0) return null;
-                                                    const firstClient = selectedOrdersList[0].profiles?.nit || selectedOrdersList[0].profile_id;
-                                                    const isSameClient = selectedOrdersList.every(o => (o.profiles?.nit || o.profile_id) === firstClient);
+                                                    if (selectedOrdersList.length < 2) return null;
+                                                    const firstClient = resolveOrderEffectiveNit(selectedOrdersList[0]);
+                                                    const isSameClient = selectedOrdersList.every(o => resolveOrderEffectiveNit(o) === firstClient);
                                                     if (!isSameClient) {
                                                         return (
                                                             <span style={{ fontSize: '0.68rem', color: '#DC2626', fontWeight: '800', backgroundColor: '#FEF2F2', padding: '3px 8px', borderRadius: '6px', border: '1px solid #FECACA' }}>
