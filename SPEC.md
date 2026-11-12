@@ -16746,3 +16746,21 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - Se prohíbe que pedidos ordinarios carguen en `admin_notes` la leyenda `[EXCEPCIÓN B2B SAME-DAY: Despacho Extemporáneo - Solo Remisión Oficial]` a menos que hayan sido deliberadamente radicados como express de emergencia.
   3. **Blindaje de Consecutivos y Reconciliación en Base de Datos:**
      - Se sanean las órdenes `#1111_1599` y `#1111_1597` en Supabase eliminando `document_type_override: 'remission'` y limpiando las notas administrativas accidentales, reintegrándolas inmediatamente a su estado soberano de Facturas con preasignación formal (`FV-69368` / `FV-69370` / `FV-69372`).
+
+---
+
+### Escenario 445: Estandarización Geométrica Editorial, Tipografía Única Institucional y Llenado Físico Continuo en Remisión de Contingencia (SDD v1.9.400)
+- **Given** el motor de renderizado e impresión de remisiones oficiales de despacho (`/admin/orders/contingency-print`), las especificaciones de papel Carta estándar (215.9 mm × 279.4 mm), el bloque institucional de encabezado (`UniversalLetterhead`) y el pie legal de recibo de mercancía:
+- **When** se generan remisiones impresas o descargables en formato PDF para pedidos de cualquier volumen (desde despachos pequeños de 1 a 15 ítems hasta pedidos institucionales masivos de 50 o más ítems):
+- **Then**:
+  1. **Unificación Tipográfica Soberana (Erradicación de Escalas Variables):**
+     - Se eliminan de forma perentoria los cuatro niveles arbitrarios de densidad tipográfica (`Spacious`, `Standard`, `Dense`, `UltraDense`).
+     - Todas las remisiones del sistema adoptan una **escala tipográfica única institucional de 7.5pt** en celdas de tabla, con interlineado de 1.15 y padding vertical uniforme de `2px 4px` (altura de fila regular de ~4.0 mm).
+     - Queda estrictamente prohibido inflar la tipografía en pedidos pequeños o encogerla a niveles microscópicos ilegibles en pedidos grandes, garantizando sobriedad, consistencia y dignidad editorial en todos los documentos entregados a clientes institucionales.
+  2. **Llenado Geométrico Continuo de la Primera Hoja (Cero Huecos Blancos):**
+     - En pedidos multi-página, la Página 1 (que no aloja el bloque de firmas ni totales) aprovecha la totalidad de su área vertical disponible (205 mm útiles), admitiendo una capacidad física real de **hasta 50 filas efectivas**.
+     - La función de paginación (`paginateRemissionItems`) evalúa el peso vertical de cada ítem: los productos con descripciones largas (> 32 caracteres) que efectúan salto de línea se ponderan con factor de altura proporcional para evitar desbordamientos accidentales.
+     - La Página 2 recibe de forma natural únicamente el residuo de ítems (filas 51 en adelante).
+  3. **Poka-Yoke Anti-Huérfanos y Anclaje Físico de Totales:**
+     - Si el remanente hacia la última hoja es inferior a cuatro (4) ítems (`MIN_RESIDUAL_ITEMS = 4`), la Página 1 cede proporcionalmente filas para garantizar que la última hoja mantenga un cuerpo mínimo digno de al menos 4 líneas de producto antes de los totales.
+     - En la última página, el bloque consolidado de resumen, control de canastillas y firmas receptoras se ancla directamente al final de la tabla mediante espaciado estático (`marginTop: 8px`), erradicando `marginTop: 'auto'` y evitando vacíos flotantes en el centro del albarán.
