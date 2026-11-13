@@ -14684,6 +14684,13 @@ La **Sábana Oficial de Balance Diario de Inventarios** (23 columnas activas en 
 ```
 *(Nota: Col J se ha integrado en Col I en la interfaz para máxima ergonomía visual).*
 
+### Regla Transversal de Identidad y Jerarquía de SKUs (Dualidad Padre/Hijo y Matching por `#ID`)
+1. **Dualidad Padre `[P]` e Hijo Base `(Base / Estándar)` `[H]`:** Un mismo `#ID` contable (`accounting_id`) puede actuar simultáneamente como nodo Padre `[P]` (fila resumen agregada de familia) y como su propio Hijo Base `[H]` (`(Base / Estándar)`). Al exportar o listar filas expandidas sin columna `#ID`, los pares con igual nombre corresponden legítimamente a la fila `[P]` y su `[H]` base, no a duplicados erróneos.
+2. **Matching Obligatorio por `#ID` (`accounting_id`):** Toda plantilla oficial de conteo físico, conciliación o carga masiva debe homologarse por `#ID` (`accounting_id`), prohibiendo depender del nombre textual cuando existen variantes o homónimos. En cargas manuales heredadas sin columna `#ID`:
+   - Se prefiere siempre el SKU con **estado activo (`is_active = true`)** frente a registros inactivos o archivados.
+   - Si múltiples filas de la misma planilla mapean al mismo `product_id` activo (ej. dos ubicaciones físicas del mismo producto como `Esparragos`), sus cantidades se consolidan sumándose en staging antes de persistir en `Col T`.
+   - Rigen las homologaciones canónicas validadas: `Sal` $\to$ `#866 Sal refisal`, `Arandano Mediano` $\to$ `#90 Arándano`, `Cubeta Huevos Tipo A A x 30 Unds.` $\to$ `#663`, `Ahuyma Zacata` $\to$ `#92`, `Calabazin Verde` $\to$ `#15` y `Germinados x 100 GR` $\to$ `#1104` (`unit_of_measure = 'Unidad'`).
+
 La información ingresa a través de **tres mecanismos complementarios**:
 1. **Sincronización Automática en Tiempo Real por Triggers de Negocio:**
    * **Ventas (Cols H, I, J):** Se disparan automáticamente en el momento exacto en que los pedidos pasan a `para_compra` en `/admin/orders/loading`.

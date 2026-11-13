@@ -162,10 +162,29 @@ export function extractCoreProductNameForMatch(rawProductName: string): string {
   return res || norm;
 }
 
+const CANONICAL_NAME_TO_ACCOUNTING_ID: Record<string, number> = {
+  'sal': 866,
+  'arandano mediano': 90,
+  'cubeta huevos tipo a a x 30 unds': 663,
+  'cubeta huevos tipo a a x 30 unds.': 663,
+  'ahuyma zacata': 92,
+  'calabazin verde': 15,
+  'germinados x 100 gr': 1104,
+};
+
 export function matchProductAgainstCatalog(rawProductName: string, catalog: CatalogProductOption[]): { product: CatalogProductOption | null; confidence: number } {
   if (!rawProductName || catalog.length === 0) return { product: null, confidence: 0 };
   const fullNorm = normalizeProductToken(rawProductName);
   const coreNorm = extractCoreProductNameForMatch(rawProductName);
+
+  // 1. Prioridad absoluta por #ID (accounting_id) explícito o alias canónico SDD
+  const idMatch = rawProductName.match(/#(\d{1,6})\b/);
+  const explicitId = idMatch ? parseInt(idMatch[1], 10) : (CANONICAL_NAME_TO_ACCOUNTING_ID[fullNorm] ?? CANONICAL_NAME_TO_ACCOUNTING_ID[coreNorm]);
+  if (explicitId) {
+    const byId = catalog.find(item => Number(item.accounting_id) === explicitId);
+    if (byId) return { product: byId, confidence: 100 };
+  }
+
   let bestMatch: CatalogProductOption | null = null;
   let bestScore = 0;
 
