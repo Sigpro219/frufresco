@@ -16975,3 +16975,13 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   2. **Sanitización D+1 en Ingesta (`sanitizeIngestedDeliveryDate`):** Toda fecha extraída (`targetDeliveryDate`, `att.deliveryDate` e `itm.deliveryDate`) con valor `<= todayBogotaStr` se descarta (`null`) automáticamente salvo solicitud explícita de entrega el mismo día en asunto/cuerpo (`para hoy`, `entrega hoy`, `mismo día`).
   3. **Hidratación D+1 por Defecto en `EmailDraftsModule`:** `initialDateStr` valida `docDate >= minDeliveryDate` (regla `D+1` / `calculateStandardMinDeliveryDate`) en lugar de `todayBogotaStr`, y los ítems del borrador con `item.deliveryDate < minDeliveryDate` se normalizan a `null` para heredar `deliveryDate`. La entrega `HOY` (`D+0`) queda exclusivamente como excepción manual explícita del operador en el selector de fecha.
   4. **Exclusión de NIT/Nombre Propio del Proveedor:** El emparejamiento difuso en `email-ingest` excluye el NIT propio de la empresa (`901393217` / *Investments Cortes*) cuando proviene de encabezados de proveedor en OCs externas.
+
+---
+
+### Escenario 455: Blindaje Golden Print Vectorial y Exportación Limpia World Office (SDD v1.9.410)
+- **Given** los módulos de impresión operativa (`DirectPdfSaveButton.tsx`, `printViaNewWindow.ts`, `alistamiento-print/page.tsx`) y la exportación contable (`worldOfficeExport.ts`):
+- **Then**:
+  1. **PDF Vectorial Nativo (`DirectPdfSaveButton.tsx`):** El botón `Guardar PDF` delega en `printViaNewWindow` propagando `paperSize`, `orientation` y `margin` del documento anfitrión (prohibido rasterizar el DOM como imagen).
+  2. **Cero Truncado de Remisiones (`printViaNewWindow.ts`):** `.letterhead-container` fija `min-height: 250mm` (Carta) / `330mm` (Oficio) sin `break-inside: avoid` para evitar recorte en remisiones extensas.
+  3. **Márgenes de Alistamiento (`alistamiento-print/page.tsx`):** `@page` fija `size: legal landscape; margin: 0.45cm 0.9cm;` para evitar salto del pie de página a hoja adicional.
+  4. **Celdas Vacías Reales en World Office (`worldOfficeExport.ts`):** Las columnas opcionales sin dato emiten `undefined` (jamás `''`), evitando celdas fantasma de texto vacío en Excel.
