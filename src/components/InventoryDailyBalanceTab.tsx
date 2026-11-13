@@ -84,7 +84,7 @@ const renderCellLucideIcon = (cell?: WorkCell | null, size = 12) => {
     if (iconKey === 'wheat' || iconKey === '' || name.includes('grano')) return <Wheat size={size} />;
     return <Package size={size} />;
 };
-import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
+import { INVENTORY_MOVEMENT_SUBTYPES, OPERATIONAL_STATUSES } from '@/lib/constants';
 import InventoryWasteModal from '@/components/InventoryWasteModal';
 import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
@@ -645,7 +645,7 @@ interface CommittedSaleData {
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
     const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
-    const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, number>>(new Map());
+    const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number }>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
@@ -1097,33 +1097,38 @@ interface CommittedSaleData {
 
             // 3. Cargar ventas de órdenes lanzadas a operación para esta fecha de entrega (SDD Escenarios 375 & 389 / DT-14)
             try {
-                const [{ data: cutoffSetting }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
-                    supabase.from('app_settings').select('value').eq('key', 'cutoff_hour_admin').maybeSingle(),
+                const [{ data: cutoffSettings }, { data: launchedOrders, error: ordersErr }] = await Promise.all([
+                    supabase.from('app_settings').select('key, value').in('key', ['cutoff_hour_admin', 'enable_cutoff_rules']),
                     supabase
                         .from('orders')
                         .select('id, created_at')
                         .eq('delivery_date', balanceDate)
-                        .in('status', ['para_compra', 'approved', 'picking', 'shipped', 'delivered'])
+                        .in('status', [...OPERATIONAL_STATUSES])
                         .range(0, 4999)
                 ]);
 
                 if (ordersErr) throw ordersErr;
 
-                const cutoffHour = Math.min(23, Math.max(0, parseInt(String(cutoffSetting?.value || '20'), 10) || 20));
-                const dMinus1 = new Date(`${balanceDate}T12:00:00-05:00`);
-                dMinus1.setDate(dMinus1.getDate() - 1);
-                const dMinus1Str = dMinus1.toISOString().split('T')[0];
+                const settingsMap = new Map((cutoffSettings || []).map(s => [s.key, s.value]));
+                const enableCutoffRules = settingsMap.get('enable_cutoff_rules') !== 'false';
+                const parsedHour = parseInt(String(settingsMap.get('cutoff_hour_admin') ?? '20'), 10);
+                const cutoffHour = Math.min(23, Math.max(0, Number.isNaN(parsedHour) ? 20 : parsedHour));
+                const [bYear, bMonth, bDay] = balanceDate.split('-').map(Number);
+                const dMinus1Utc = new Date(Date.UTC(bYear, bMonth - 1, bDay - 1));
+                const dMinus1Str = `${dMinus1Utc.getUTCFullYear()}-${String(dMinus1Utc.getUTCMonth() + 1).padStart(2, '0')}-${String(dMinus1Utc.getUTCDate()).padStart(2, '0')}`;
                 const cutoffTimestampMs = new Date(`${dMinus1Str}T${String(cutoffHour).padStart(2, '0')}:00:00-05:00`).getTime();
 
                 const launchedOrderIds = (launchedOrders || []).map(o => o.id);
                 const postCutoffOrderIdsSet = new Set<string>(
-                    (launchedOrders || [])
-                        .filter(o => o.created_at && new Date(o.created_at).getTime() > cutoffTimestampMs)
-                        .map(o => o.id)
+                    enableCutoffRules
+                        ? (launchedOrders || [])
+                            .filter(o => o.created_at && new Date(o.created_at).getTime() > cutoffTimestampMs)
+                            .map(o => o.id)
+                        : []
                 );
 
                 const salesMap = new Map<string, CommittedSaleData>();
-                const postCutoffMap = new Map<string, number>();
+                const postCutoffMap = new Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number }>();
 
                 if (launchedOrderIds.length > 0) {
                     const batchSize = 40;
@@ -1156,10 +1161,7 @@ interface CommittedSaleData {
                             items.forEach(it => {
                                 if (!it.product_id) return;
                                 const rawQty = Number(it.quantity) || 0;
-                                if (it.order_id && postCutoffOrderIdsSet.has(it.order_id)) {
-                                    postCutoffMap.set(it.product_id, (postCutoffMap.get(it.product_id) || 0) + rawQty);
-                                    return;
-                                }
+                                const isPostCutoff = Boolean(it.order_id && postCutoffOrderIdsSet.has(it.order_id));
                                 const unitStr = (it.unit || '').toLowerCase();
                                 const sel: any = it.selected_options;
                                 const vl = it.variant_label ? String(it.variant_label).trim() : '';
@@ -1205,6 +1207,27 @@ interface CommittedSaleData {
                                 if (vl && !grammageOrDesc) {
                                     const mGram = vl.match(/([0-9.,]+\s*(?:gr|g|kg|ml))/i);
                                     if (mGram) grammageOrDesc = mGram[1];
+                                }
+
+                                if (isPostCutoff) {
+                                    const prevPost = postCutoffMap.get(it.product_id) || { pureKg: 0, totalUnits: 0, totalUnitWeightKg: 0 };
+                                    if (isUnit) {
+                                        const u = extractedUnits > 0 ? extractedUnits : rawQty;
+                                        let w = (unitStr === 'kg' && rawQty > 0) ? rawQty : 0;
+                                        if (w === 0 && grammageOrDesc) {
+                                            const gMatch = grammageOrDesc.match(/([0-9.,]+)\s*(gr|g|kg)/i);
+                                            if (gMatch) {
+                                                const gVal = parseFloat(gMatch[1].replace(',', '.')) || 0;
+                                                w = gMatch[2].toLowerCase() === 'kg' ? gVal * u : (gVal / 1000) * u;
+                                            }
+                                        }
+                                        prevPost.totalUnits += u;
+                                        prevPost.totalUnitWeightKg += w;
+                                    } else {
+                                        prevPost.pureKg += rawQty;
+                                    }
+                                    postCutoffMap.set(it.product_id, prevPost);
+                                    return;
                                 }
 
                                 const prev = salesMap.get(it.product_id) || {
@@ -1459,8 +1482,15 @@ interface CommittedSaleData {
 
             // DT-17: Columna G (COMPRAS (+)) se alimenta exclusivamente de Recepción de Bodega (/ops/recepcion -> purchase_reception) o planilla física/manual; se excluye /ops/compras (opsPurchasesMap) para no inflar con compras aún no recibidas en bodega.
 
-            // DT-14 (SDD Escenario 389): Sumar pedidos extemporáneos post-corte en Columna M (Venta Adicional)
-            m_additionalSales += (postCutoffSalesMap.get(p.id) || 0);
+            // DT-14 (SDD Escenario 389): Sumar masa neta (Kg) de pedidos extemporáneos post-corte en Columna M (Venta Adicional)
+            const postCutoffData = postCutoffSalesMap.get(p.id);
+            if (postCutoffData) {
+                const fallbackUnitWeightKg = Number(p.weight_kg) || (isProductBaseUnit ? 1 : 0.16);
+                const postCutoffUnitKg = postCutoffData.totalUnitWeightKg > 0
+                    ? postCutoffData.totalUnitWeightKg
+                    : postCutoffData.totalUnits * fallbackUnitWeightKg;
+                m_additionalSales += postCutoffData.pureKg + postCutoffUnitKg;
+            }
 
             // Inventario Inicial (Col E):
             // 1. Si existe Cierre Oficial previo (D-1), se hereda su saldo de Columna U (Inventario en bodega [devoluciones]) de forma inmutable

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { CATEGORY_MAP } from '@/lib/constants';
+import { CATEGORY_MAP, OPERATIONAL_STATUSES } from '@/lib/constants';
 import {
     Calendar,
     ChevronUp,
@@ -251,7 +251,7 @@ export default function CommercialDailyMonitorModule() {
                 .from('orders')
                 .select('delivery_date, total')
                 .gte('delivery_date', minDateIso)
-                .neq('status', 'cancelled')
+                .in('status', [...OPERATIONAL_STATUSES])
                 .order('delivery_date', { ascending: false });
 
             if (error) throw error;
@@ -302,7 +302,7 @@ export default function CommercialDailyMonitorModule() {
                 .from('orders')
                 .select('*')
                 .eq('delivery_date', date)
-                .neq('status', 'cancelled')
+                .in('status', [...OPERATIONAL_STATUSES])
                 .order('created_at', { ascending: true });
 
             if (ordersErr) throw ordersErr;
@@ -864,7 +864,7 @@ export default function CommercialDailyMonitorModule() {
                 .select('*')
                 .gte('delivery_date', startIso)
                 .lte('delivery_date', endIso)
-                .neq('status', 'cancelled')
+                .in('status', [...OPERATIONAL_STATUSES])
                 .order('delivery_date', { ascending: true })
                 .order('sequence_id', { ascending: true })
                 .range(0, 4999);

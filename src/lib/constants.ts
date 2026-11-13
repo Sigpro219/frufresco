@@ -15,6 +15,19 @@ export const CATEGORY_MAP: Record<string, string> = {
 export const DEFAULT_CUTOFF_HOUR = 17; // 5:00 PM - Fallback tienda web pública para entrega mañana
 export const ADMIN_EDIT_CUTOFF_HOUR = 20; // 8:00 PM - Fallback toma manual Admin / B2B para entrega mañana
 
+// Estados operativos canónicos compartidos entre Monitor Diario, Compras y Sábana de Inventarios
+export const OPERATIONAL_STATUSES = [
+    'pending_approval',
+    'pending',
+    'recibido',
+    'para_compra',
+    'approved',
+    'picking',
+    'shipped',
+    'delivered',
+    'completed',
+] as const;
+
 
 export const REVERSE_CATEGORY_MAP: Record<string, string> = {
     'Frutas': 'FR',

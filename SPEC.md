@@ -14028,10 +14028,11 @@ Para garantizar el control total de los supervisores y jefes de inventario antes
 Previamente, la **Sábana Oficial de Balance Diario de 24 Columnas** (`src/components/InventoryDailyBalanceTab.tsx`) poblaba las columnas de ventas únicamente si existían asientos previos en la tabla `inventory_movements` con `reference_type = 'order_item'`. En consecuencia, al confirmarse el lanzamiento de la tanda en `/admin/orders/loading` (transición masiva de pedidos a `para_compra`), las columnas **VENTA (KG)** (Col H) y **VENTA (UND)** (Cols I/J) permanecían en guiones (`-`), obligando al usuario a digitar manualmente o importar archivos externos.
 
 #### 2. Contrato de Ingesta Reactiva en Tiempo Real
-1. **Trigger Vinculante de Demanda:**
-   - En el instante en que los pedidos de una fecha de entrega (`delivery_date`) son enviados a compras y bodega (`orders.status IN ('para_compra', 'approved', 'picking', 'shipped', 'delivered')`), la totalidad de sus líneas de detalle (`order_items`) queda consolidada como la **demanda comercial oficial** de esa jornada.
+1. **Trigger Vinculante de Demanda y Paridad con Monitor Diario (`OPERATIONAL_STATUSES`):**
+   - La lista canónica de estados operativos activos (`OPERATIONAL_STATUSES` en `src/lib/constants.ts`: `'pending_approval'`, `'pending'`, `'recibido'`, `'para_compra'`, `'approved'`, `'picking'`, `'shipped'`, `'delivered'`, `'completed'`) gobierna de forma unificada la **Sábana de Inventarios**, el **Monitor Diario de Precios & Márgenes** y los módulos operativos de **Compras**, excluyendo exclusivamente órdenes anuladas (`cancelled`) o borradores no confirmados.
+   - Toda orden con `delivery_date = balanceDate` y `status IN OPERATIONAL_STATUSES` consolida la totalidad de sus líneas de detalle (`order_items`) como la **demanda comercial oficial** de esa jornada.
 2. **Motor de Agregación Determinista (`committedSalesMap`):**
-   - Durante la carga del balance (`loadDailyData`), el sistema consulta los pedidos con `delivery_date = balanceDate` en estado operativo activo.
+   - Durante la carga del balance (`loadDailyData`), el sistema consulta los pedidos con `delivery_date = balanceDate` y `status IN OPERATIONAL_STATUSES`, gobernados por la configuración viva de corte en `app_settings` (`enable_cutoff_rules` y `cutoff_hour_admin` desde `/admin/settings`).
    - En lotes controlados (batch size 100), extrae `order_items (product_id, quantity)` y totaliza la demanda física en un mapa indexado $O(1)$ por `product_id`.
 3. **Distribución Canónica en las Columnas de Venta:**
    - **Productos por Peso (Kg):** La cantidad total se suma a la **Columna H (`colH_salesKg`)**.
@@ -14482,12 +14483,14 @@ interface RouteReturnResolutionPayload {
      Para una fecha de entrega $D$, el límite de la tanda ordinaria es:
      $$\text{Timestamp Corte} = (D - 1\text{ día}) \text{ a las } \text{cutoff\_hour\_admin (ej. 20:00:00)}$$
   2. **Enrutamiento Determinista a Columnas:**
+     - **Gobernanza Maestra desde `/admin/settings` (`app_settings`):**
+       El parámetro `Timestamp Corte` se construye dinámicamente con `cutoff_hour_admin` (por defecto `20:00` hora Bogotá si no existe) en `D-1` respecto a `balanceDate`. Si `enable_cutoff_rules === 'false'`, la regla de corte estricto queda desactivada y ningún pedido se desvía a `Col M (VENTA ADICIONAL)`.
      - **Caso A (Venta Ordinaria en Tanda):**
-       $$\text{orders.created\_at} \le \text{Timestamp Corte} \implies \text{Col H (Kg)} \text{ o } \text{Col I (Und)}$$
+       $$\text{enable\_cutoff\_rules} = \text{false} \;\lor\; \text{orders.created\_at} \le \text{Timestamp Corte} \implies \text{Col H (Kg)} \text{ o } \text{Col I (Und)}$$
      - **Caso B (Venta Adicional Extemporánea Post-Corte):**
-       $$\text{orders.created\_at} > \text{Timestamp Corte} \implies \text{Col M (VENTA ADICIONAL)}$$
+       $$\text{enable\_cutoff\_rules} \neq \text{false} \;\land\; \text{orders.created\_at} > \text{Timestamp Corte} \implies \text{Col M (VENTA ADICIONAL)}$$
   3. **Jerarquía y Sumatoria de Masa:**
-     - Para cada SKU específico, la Columna M suma la masa en kilogramos de todos los pedidos extemporáneos de esa fecha.
+     - Para cada SKU específico, la Columna M suma la **masa neta en kilogramos** (nunca unidades brutas sin factor de peso) de todos los pedidos extemporáneos de esa fecha, aplicando la conversión por gramaje/unidad (`unit === 'kg'`, gramaje en `selected_options`/`variant_label` o `products.weight_kg`) antes de consolidar en `m_additionalSales`.
      - Las familias padre consolidan la sumatoria de sus ventas adicionales propias más las de sus calibres hijos.
      - Coexiste con registros manuales en celda M o vía `InventoryAdditionalSalesModal` (`inventory_movements` con `reference_type = 'additional_sale'`).
   4. **Ecuación de Conservación de Masa:**
