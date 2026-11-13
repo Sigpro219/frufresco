@@ -60,6 +60,22 @@ export async function POST(req: Request) {
       .in('id', productIds);
     const productsMap = new Map((dbProducts || []).map((p: any) => [p.id, p]));
 
+    // Consultar características y notas de alistamiento maestras del cliente/matriz (product_nicknames)
+    const nicknameClientIds = [clientId, profile.parent_id].filter(Boolean);
+    const nicknamesMap = new Map<string, { picking_note?: string | null; preferred_options?: Record<string, any> | null }>();
+    if (nicknameClientIds.length > 0 && productIds.length > 0) {
+      const { data: excRows } = await supabaseAdmin
+        .from('product_nicknames')
+        .select('customer_id, product_id, picking_note, preferred_options')
+        .in('customer_id', nicknameClientIds)
+        .in('product_id', productIds);
+      (excRows || []).forEach((row: any) => {
+        if (row.customer_id && row.product_id) {
+          nicknamesMap.set(`${row.customer_id}::${row.product_id}`, row);
+        }
+      });
+    }
+
     const isGiftRemission = profile.document_type === 'gift_remission';
     const isB2C = profile.role === 'b2c_client' || clientType === 'b2c_client' || clientType === 'b2c';
 
@@ -126,12 +142,31 @@ export async function POST(req: Request) {
       }
       totalWeightKg += qty * weightFactor;
 
+      const exc = nicknamesMap.get(`${clientId}::${pId}`)
+        || (profile.parent_id ? nicknamesMap.get(`${profile.parent_id}::${pId}`) : undefined);
+      const mergedSelectedOpts: Record<string, any> = {
+        ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}),
+        ...(item.selected_options && typeof item.selected_options === 'object' ? item.selected_options : {})
+      };
+      if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+        const hasPicking =
+          mergedSelectedOpts.nota_alistamiento ||
+          mergedSelectedOpts['Nota alistamiento'] ||
+          mergedSelectedOpts['Nota de alistamiento'] ||
+          mergedSelectedOpts.picking_note ||
+          mergedSelectedOpts.nota_picking;
+        if (!hasPicking) {
+          mergedSelectedOpts.nota_alistamiento = exc.picking_note.trim();
+        }
+      }
+
       return {
         product_id: pId,
         quantity: qty,
         unit: item.unit || item.unit_of_measure || dbProd?.unit_of_measure || 'Kg',
         unit_price: unitPrice,
-        variant_label: item.observations || item.notes || item.variant_label || null
+        variant_label: item.observations || item.notes || item.variant_label || null,
+        selected_options: Object.keys(mergedSelectedOpts).length > 0 ? mergedSelectedOpts : null
       };
     });
 

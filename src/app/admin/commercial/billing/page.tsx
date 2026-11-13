@@ -3558,9 +3558,47 @@ export default function BillingDashboard() {
         setIsProcessing(true);
         try {
             const sourceList = subTab === 'batch_accumulated' ? filteredBatchAccumulatedOrders : filteredPendingOrders;
-            const targetOrders = selectedOrderIds.length > 0 
+            let targetOrders = selectedOrderIds.length > 0 
                 ? sourceList.filter(o => selectedOrderIds.includes(o.id))
-                : sourceList;
+                : [...sourceList];
+
+            // Incluir también pedidos ya facturados del día cuando no hay selección manual
+            if (selectedOrderIds.length === 0 && subTab !== 'batch_accumulated') {
+                const { data: invoicedDayOrders } = await supabase
+                    .from('orders')
+                    .select(`
+                        id, sequence_id, status, type, payment_method, delivery_date,
+                        shipping_address, customer_phone, total, subtotal, shipping_cost, discount_amount, tax,
+                        warehouse_spaces, admin_notes, logistics_data, invoice_number,
+                        billing_invoices!billing_invoices_order_id_fkey(invoice_number),
+                        profiles (
+                            id, company_name, razon_social, contact_name, role, phone, address,
+                            document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
+                        )
+                    `)
+                    .eq('delivery_date', targetDate)
+                    .neq('status', 'cancelled')
+                    .not('billing_invoices', 'is', null);
+
+                if (invoicedDayOrders && invoicedDayOrders.length > 0) {
+                    const existingIds = new Set(targetOrders.map(o => o.id));
+                    for (const invOrder of invoicedDayOrders) {
+                        if (!existingIds.has(invOrder.id)) {
+                            const invObj = Array.isArray((invOrder as any).billing_invoices)
+                                ? (invOrder as any).billing_invoices[0]
+                                : (invOrder as any).billing_invoices;
+                            if (invObj?.invoice_number || (invOrder as any).invoice_number) {
+                                targetOrders.push({
+                                    ...invOrder,
+                                    billing_invoices: invObj
+                                });
+                                existingIds.add(invOrder.id);
+                            }
+                        }
+                    }
+                    targetOrders.sort((a: any, b: any) => Number(b.sequence_id || 0) - Number(a.sequence_id || 0));
+                }
+            }
             
             await exportRelacionDocumentosWithPicker({
                 selectedDate: targetDate,

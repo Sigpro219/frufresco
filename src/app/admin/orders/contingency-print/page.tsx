@@ -2094,7 +2094,13 @@ function ContingencyPrintContent() {
                                                         </div>
                                                         <div style={{ backgroundColor: '#FFFFFF', padding: '1.5px', borderRadius: '3px', border: '1px solid #E2E8F0', display: 'inline-flex' }}>
                                                             <QRCodeSVG 
-                                                                value={`https://frufresco.com/pqrs?order_id=${order.id}`} 
+                                                                value={`${
+                                                                    typeof window !== 'undefined' &&
+                                                                    window.location.hostname !== 'localhost' &&
+                                                                    window.location.hostname !== '127.0.0.1'
+                                                                        ? window.location.origin
+                                                                        : (process.env.NEXT_PUBLIC_SITE_URL || 'https://frufresco-liard.vercel.app')
+                                                                }/pqrs?order_id=${order.id}`} 
                                                                 size={48} 
                                                                 level="M" 
                                                             />

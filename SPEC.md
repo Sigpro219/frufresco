@@ -5690,7 +5690,8 @@ El módulo `/admin/settings` centraliza los parámetros maestros operativos, com
 
 ### 1. Canal 1: Código QR Dinámico en Remisión Física Duplex (`contingency-print?mode=remissions`)
 - **Génesis:** Al generarse la Remisión de Despacho física en papel carta duplex, el motor de impresión renderiza en el bloque legal inferior un código QR vectorial de alta legibilidad (mínimo 28x28 mm):
-  $$\text{QR URL} = \text{https://frufresco.com/pqrs?order\_id=} \langle \text{order.id} \rangle \& \text{sig=} \langle \text{token} \rangle$$
+  $$\text{QR URL} = \langle \text{origin\_dinámico} \rangle\text{/pqrs?order\_id=} \langle \text{order.id} \rangle$$
+  *(Resuelve dinámicamente `window.location.origin` en producción —ej. `frufresco-liard.vercel.app` hoy o `frufresco.com` cuando apunte el dominio definitivo— con respaldo `NEXT_PUBLIC_SITE_URL || https://frufresco-liard.vercel.app` en local/SSR).*
 - **Experiencia Gemba en Muelle (Mobile-First):**
   1. El ecónomo o chef detecta mermas o rechazos al momento del descargue (05:30 AM).
   2. Escanea el QR con la cámara de su teléfono móvil (iOS / Android).
