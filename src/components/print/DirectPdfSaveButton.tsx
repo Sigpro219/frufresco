@@ -5,7 +5,7 @@ import { Download, Loader2 } from 'lucide-react';
 import {
     DirectPdfDocKey,
 } from './savePdfDirect';
-import { printViaNewWindow } from './printViaNewWindow';
+import { printViaNewWindow, PrintViaNewWindowOptions } from './printViaNewWindow';
 
 interface DirectPdfSaveButtonProps {
     docType: DirectPdfDocKey;
@@ -13,6 +13,9 @@ interface DirectPdfSaveButtonProps {
     suggestedName?: string;
     containerRef?: React.RefObject<HTMLElement | null>;
     label?: string;
+    paperSize?: PrintViaNewWindowOptions['paperSize'];
+    orientation?: 'portrait' | 'landscape';
+    margin?: string;
 }
 
 export default function DirectPdfSaveButton({
@@ -21,6 +24,9 @@ export default function DirectPdfSaveButton({
     suggestedName,
     containerRef,
     label = 'Guardar PDF',
+    paperSize,
+    orientation,
+    margin,
 }: DirectPdfSaveButtonProps) {
     const [saving, setSaving] = useState(false);
     const [progressText, setProgressText] = useState<string | null>(null);
@@ -39,6 +45,9 @@ export default function DirectPdfSaveButton({
             printViaNewWindow({
                 element: targetEl,
                 title,
+                ...(paperSize ? { paperSize } : {}),
+                ...(orientation ? { orientation } : {}),
+                ...(margin ? { margin } : {}),
             });
         } catch (err: any) {
             console.error('[DirectPdfSaveButton] Error abriendo vista PDF vectorial:', err);

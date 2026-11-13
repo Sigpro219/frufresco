@@ -447,7 +447,7 @@ export default function PurchasesPrintPage() {
                         <FileSpreadsheet size={14} /> Excel (10 cols)
                     </button>
 
-                    <DirectPdfSaveButton docType="purchases" selectedDate={selectedDate} containerRef={printDocRef} />
+                    <DirectPdfSaveButton docType="purchases" selectedDate={selectedDate} containerRef={printDocRef} paperSize="oficio" orientation="portrait" margin="0.8cm 1.0cm" />
 
                     {/* Print */}
                     <button
