@@ -901,6 +901,65 @@ export default function BillingDashboard() {
     const [previewSlot, setPreviewSlot] = useState<'AM' | 'PM' | 'ADJ'>('AM');
     const [previewOrders, setPreviewOrders] = useState<CutPreviewOrder[]>([]);
     const [loadingPreview, setLoadingPreview] = useState(false);
+    const [previewSearchQuery, setPreviewSearchQuery] = useState('');
+    const [previewSortConfig, setPreviewSortConfig] = useState<{
+        key: 'route' | 'remission' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber' | null;
+        direction: 'asc' | 'desc';
+    }>({ key: null, direction: 'asc' });
+
+    const handlePreviewSort = (key: 'route' | 'remission' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber') => {
+        setPreviewSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const displayedPreviewOrders = useMemo(() => {
+        const q = previewSearchQuery.trim();
+        const filtered = q
+            ? previewOrders.filter(ord => {
+                const searchable = [
+                    `REM-${ord.sequence_id}`,
+                    `#${ord.sequence_id}`,
+                    String(ord.sequence_id || ''),
+                    ord.profile?.company_name || '',
+                    ord.profile?.razon_social || '',
+                    ord.profile?.nit || '',
+                    ord.routeCode || '',
+                    ord.projectedInvoiceNumber || ''
+                ].join(' ');
+                return matchesUniversalSearch(searchable, q);
+            })
+            : previewOrders;
+
+        if (!previewSortConfig.key) return filtered;
+
+        const dir = previewSortConfig.direction === 'asc' ? 1 : -1;
+        return [...filtered].sort((a, b) => {
+            switch (previewSortConfig.key) {
+                case 'route': {
+                    const rA = `${a.routeCode || 'ZZZZ'}-${String(a.stopSequence || 9999).padStart(4, '0')}`;
+                    const rB = `${b.routeCode || 'ZZZZ'}-${String(b.stopSequence || 9999).padStart(4, '0')}`;
+                    return rA.localeCompare(rB) * dir;
+                }
+                case 'remission': {
+                    const cA = (a.profile?.company_name || '').localeCompare(b.profile?.company_name || '');
+                    if (cA !== 0) return cA * dir;
+                    return ((Number(a.sequence_id) || 0) - (Number(b.sequence_id) || 0)) * dir;
+                }
+                case 'originalTotal':
+                    return ((a.originalTotal || 0) - (b.originalTotal || 0)) * dir;
+                case 'qualityDeduction':
+                    return ((a.qualityDeduction || 0) - (b.qualityDeduction || 0)) * dir;
+                case 'netTotal':
+                    return ((a.netTotal || 0) - (b.netTotal || 0)) * dir;
+                case 'projectedInvoiceNumber':
+                    return (a.projectedInvoiceNumber || '').localeCompare(b.projectedInvoiceNumber || '', undefined, { numeric: true }) * dir;
+                default:
+                    return 0;
+            }
+        });
+    }, [previewOrders, previewSearchQuery, previewSortConfig]);
 
     // Order Detail Inspection Modal State (COM-26)
     const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(null);
@@ -8238,7 +8297,7 @@ export default function BillingDashboard() {
                 {/* CUT PREVIEW MODAL */}
                 {isPreviewModalOpen && (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '1rem' }}>
-                        <div style={{ backgroundColor: 'white', borderRadius: '20px', border: `1px solid ${THEME.colors.border}`, padding: '1.4rem', maxWidth: '1200px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', position: 'relative' }}>
+                        <div style={{ backgroundColor: 'white', borderRadius: '20px', border: `1px solid ${THEME.colors.border}`, padding: '1.4rem', maxWidth: '1600px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', position: 'relative' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.9rem' }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -8270,65 +8329,152 @@ export default function BillingDashboard() {
                                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
                                         {previewSlot === 'PM'
                                             ? 'Pre-Despacho (D-1): Pedidos programados que viajan mañana y exigen Factura DIAN física impresa en muelle (hoteles, colegios, grandes superficies). Genera plano World Office sin alterar alistamiento en bodega.'
-                                            : 'Post-Entrega (D): Pedidos entregados bajo remisión con margen de gracia de 120m cumplido, pesos reales de báscula auditados y deducciones de SAC liquidadas.'}
+                                            : 'Post-Entrega (D): Remisiones entregadas con margen de gracia de 120m cumplido, pesos reales de báscula auditados y deducciones de SAC liquidadas.'}
                                     </p>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setIsPreviewModalOpen(false)}
+                                    onClick={() => {
+                                        setIsPreviewModalOpen(false);
+                                        setPreviewSearchQuery('');
+                                        setPreviewSortConfig({ key: null, direction: 'asc' });
+                                    }}
                                     style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '4px' }}
                                 >
                                     <X size={20} />
                                 </button>
                             </div>
 
-                            <div style={{ padding: '1rem 0', overflowY: 'auto', flex: 1 }}>
+                            {/* TOOLBAR OMNIBOX DEL MODAL (ESTÁNDAR GALERÍAS 1600px) */}
+                            {!loadingPreview && previewOrders.length > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.75rem 0', borderBottom: `1px solid ${THEME.colors.border}`, flexWrap: 'wrap' }}>
+                                    <div style={{ flex: '1 1 320px', maxWidth: '460px' }}>
+                                        <GalleryOmnibox
+                                            value={previewSearchQuery}
+                                            onChange={setPreviewSearchQuery}
+                                            placeholder="Buscar por REM-xxxx, cliente, NIT, ruta o FV..."
+                                            filteredCount={displayedPreviewOrders.length}
+                                            totalCount={previewOrders.length}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        {previewSortConfig.key && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewSortConfig({ key: null, direction: 'asc' })}
+                                                style={{ backgroundColor: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '0.35rem 0.7rem', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}
+                                            >
+                                                Restablecer orden de ruta
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div style={{ padding: '0 0 0.5rem 0', overflowY: 'auto', flex: 1 }}>
                                 {loadingPreview ? (
                                     <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>Cargando auditoría del corte...</div>
                                 ) : previewOrders.length === 0 ? (
-                                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No hay pedidos listos para procesar en este corte.</div>
+                                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No hay remisiones listas para procesar en este corte.</div>
+                                ) : displayedPreviewOrders.length === 0 ? (
+                                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No hay remisiones que coincidan con la búsqueda.</div>
                                 ) : (
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.74rem' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.74rem' }}>
                                         <thead>
-                                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary }}>Orden / Ruta</th>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary }}>Pedido & Cliente</th>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary, textAlign: 'right' }}>Total Original</th>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary, textAlign: 'right' }}>Deducción Calidad (-)</th>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary, textAlign: 'right' }}>Factura Neta (=)</th>
-                                                <th style={{ padding: '0.5rem 0.75rem', fontWeight: '800', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.colors.textSecondary, textAlign: 'center' }}>Factura Asignada</th>
+                                            <tr>
+                                                <th
+                                                    onClick={() => handlePreviewSort('route')}
+                                                    title="Ordenar por ruta y secuencia de parada"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'route' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>Ruta</span>
+                                                        {previewSortConfig.key === 'route' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('remission')}
+                                                    title="Ordenar por cliente y número de remisión"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'remission' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>Remisión &amp; Cliente</span>
+                                                        {previewSortConfig.key === 'remission' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('originalTotal')}
+                                                    title="Ordenar por total original"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'originalTotal' ? '#0D7A57' : '#0F172A', textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', width: '100%' }}>
+                                                        <span>Total Original</span>
+                                                        {previewSortConfig.key === 'originalTotal' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('qualityDeduction')}
+                                                    title="Ordenar por deducción de calidad"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'qualityDeduction' ? '#0D7A57' : '#0F172A', textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', width: '100%' }}>
+                                                        <span>Deducción Calidad (-)</span>
+                                                        {previewSortConfig.key === 'qualityDeduction' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('netTotal')}
+                                                    title="Ordenar por factura neta"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'netTotal' ? '#0D7A57' : '#0F172A', textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', width: '100%' }}>
+                                                        <span>Factura Neta (=)</span>
+                                                        {previewSortConfig.key === 'netTotal' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('projectedInvoiceNumber')}
+                                                    title="Ordenar por consecutivo de factura asignada"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'projectedInvoiceNumber' ? '#0D7A57' : '#0F172A', textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%' }}>
+                                                        <span>Factura Asignada</span>
+                                                        {previewSortConfig.key === 'projectedInvoiceNumber' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {previewOrders.map((ord, idx) => (
-                                                <tr key={ord.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                                                    <td style={{ padding: '0.6rem 0.85rem' }}>
+                                            {displayedPreviewOrders.map((ord, idx) => (
+                                                <tr key={ord.id} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F1F5F9', padding: '3px 7px', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', color: '#334155' }}>
                                                             <Truck size={12} style={{ color: THEME.colors.primary }} />
                                                             <span>{ord.routeCode}</span>
                                                             {ord.stopSequence > 0 && <span style={{ color: THEME.colors.primary }}>• #{ord.stopSequence}</span>}
                                                         </div>
                                                     </td>
-                                                    <td style={{ padding: '0.6rem 0.85rem' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
                                                             {ord.profile?.company_name || 'Cliente'}
                                                         </div>
-                                                        <div style={{ fontSize: '0.66rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <span>Ped #{ord.sequence_id}</span>
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ fontWeight: '700', color: '#0F172A' }}>REM-{ord.sequence_id}</span>
                                                             <span>·</span>
                                                             <span>NIT: {ord.profile?.nit || 'N/A'}</span>
                                                         </div>
                                                     </td>
-                                                    <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'right', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>
                                                         {formatMoney(ord.originalTotal)}
                                                     </td>
-                                                    <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: ord.qualityDeduction > 0 ? '#DC2626' : '#94A3B8', fontWeight: ord.qualityDeduction > 0 ? '800' : '500' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: ord.qualityDeduction > 0 ? '#DC2626' : '#94A3B8', fontWeight: ord.qualityDeduction > 0 ? '800' : '500' }}>
                                                         {ord.qualityDeduction > 0 ? `-${formatMoney(ord.qualityDeduction)}` : '$0'}
                                                     </td>
-                                                    <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'right', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
                                                         {formatMoney(ord.netTotal)}
                                                     </td>
-                                                    <td style={{ padding: '0.6rem 0.85rem', textAlign: 'center' }}>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'center' }}>
                                                         <span style={{ backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: '800', fontVariantNumeric: 'tabular-nums', fontSize: '0.74rem' }}>
                                                             {ord.projectedInvoiceNumber}
                                                         </span>
