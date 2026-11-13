@@ -918,7 +918,10 @@ export default function BillingDashboard() {
         const q = previewSearchQuery.trim();
         const filtered = q
             ? previewOrders.filter(ord => {
+                const friendlyId = getFriendlyOrderId(ord);
                 const searchable = [
+                    `REM-${friendlyId}`,
+                    friendlyId,
                     `REM-${ord.sequence_id}`,
                     `#${ord.sequence_id}`,
                     String(ord.sequence_id || ''),
@@ -8468,8 +8471,8 @@ export default function BillingDashboard() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, whiteSpace: 'nowrap' }}>
-                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800', fontVariantNumeric: 'tabular-nums', fontSize: '0.74rem' }}>
-                                                            REM-{ord.sequence_id}
+                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: '800', fontVariantNumeric: 'tabular-nums', fontSize: '0.74rem' }}>
+                                                            REM-{getFriendlyOrderId(ord)}
                                                         </span>
                                                     </td>
                                                     <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
