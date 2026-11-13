@@ -6,6 +6,7 @@ import Toast from '@/components/Toast';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { parseBlindCountQuantity } from '@/lib/pricingUtils';
+import { getBogotaDayRangeUtcIso, getBogotaDateString } from '@/lib/dateUtils';
 import { parseSpecificCountAccountingIds, isProductWasteSusceptible } from '@/lib/inventory/wasteSusceptibleCatalog';
 import { 
     Truck, 
@@ -364,20 +365,21 @@ export default function OpsInventoryPage() {
             } else if (data) {
                 setProducts(data as ProductWithStock[]);
 
-                // Cargar conteos a ciegas ya ejecutados hoy en bodega (Single-Write Poka-Yoke) + todos los movimientos del día + lista específica (SDD DT-17)
-                const todayStr = new Date().toISOString().split('T')[0];
+                // Cargar conteos a ciegas ya ejecutados hoy en bodega (Single-Write Poka-Yoke) + todos los movimientos del día (hora Bogotá -05:00) + lista específica (SDD DT-17)
+                const todayStr = getBogotaDateString();
+                const { startUtcIso: todayStartIso, endUtcIso: todayEndIso } = getBogotaDayRangeUtcIso(todayStr);
                 const [todayMovsRes, allDayMovsRes, specSettingsRes, todayOrdersRes] = await Promise.all([
                     supabase
                         .from('inventory_movements')
                         .select('product_id, quantity, notes, created_at')
                         .in('reference_type', ['blind_count_shift_close', 'blind_count'])
-                        .gte('created_at', `${todayStr}T00:00:00.000Z`)
-                        .lte('created_at', `${todayStr}T23:59:59.999Z`),
+                        .gte('created_at', todayStartIso)
+                        .lte('created_at', todayEndIso),
                     supabase
                         .from('inventory_movements')
                         .select('product_id')
-                        .gte('created_at', `${todayStr}T00:00:00.000Z`)
-                        .lte('created_at', `${todayStr}T23:59:59.999Z`),
+                        .gte('created_at', todayStartIso)
+                        .lte('created_at', todayEndIso),
                     supabase
                         .from('app_settings')
                         .select('key, value')

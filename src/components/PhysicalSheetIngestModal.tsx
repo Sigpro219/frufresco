@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { X, UploadCloud, Sparkles, Truck, ClipboardCheck, Trash2, AlertTriangle, ZoomIn, ZoomOut, RotateCw, FileText, RefreshCw, ArrowRight, ShieldCheck, CheckCircle2, MessageSquare, Zap, Maximize2, Loader2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
+import { getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
@@ -608,9 +609,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       });
 
       const validItems = Array.from(grouped.values()).filter(item => item.totalQuantity > 0);
-      const startIso = `${balanceDate}T00:00:00.000Z`;
-      const endIso = `${balanceDate}T23:59:59.999Z`;
-      const timestampIso = `${balanceDate}T12:00:00.000Z`;
+      const { startUtcIso: startIso, endUtcIso: endIso } = getBogotaDayRangeUtcIso(balanceDate);
+      const timestampIso = new Date(`${balanceDate}T12:00:00.000-05:00`).toISOString();
 
       const getRefType = (col: TargetBalanceColumn): string =>
         col === 'G'

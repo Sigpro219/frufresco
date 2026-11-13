@@ -14575,11 +14575,11 @@ interface RouteReturnResolutionPayload {
 
 #### 3. Protocolo Canónico de Coexistencia y No Colisión con OPS (Las 4 Reglas Innegociables)
 Para garantizar que la carga asistida por IA de documentos físicos y las operaciones digitales en tiempo real (`/ops/*`) jamás entren en colisión o generen duplicidades contables, se establecen las siguientes reglas:
-1. **Regla 1: Trazabilidad Inmutable por `origin_source` en Base de Datos:**
-   Cada registro en `inventory_movements` preserva su linaje de origen:
+1. **Regla 1: Trazabilidad Inmutable de Origen en `inventory_movements.notes`:**
+   Cada registro en `inventory_movements` preserva su linaje de origen dentro del campo estructurado `notes` (la columna SQL `origin_source` reside exclusivamente en `orders`):
    - `origin_source = 'ops_system'`: Originado por flujos automáticos de la app (`/ops/compras`, `/ops/picking`, `/admin/customer-service`).
-   - `origin_source = 'physical_sheet_ocr'`: Originado por la ingesta multimodal de planillas físicas, indexando el identificador del lote de escaneo y el archivo fuente.
-   - `origin_source = 'manual_override'`: Modificación directa celda a celda en Modo Edición.
+   - `origin_source = 'physical_sheet_ocr'`: Originado por la ingesta multimodal de planillas físicas (`[ORIGEN: PHYSICAL_SHEET_OCR - ...]` y dentro de `[BLIND_COUNT_META]` en `Col T`).
+   - `origin_source = 'manual_override'`: Modificación directa celda a celda en Modo Edición (`[AJUSTE AUTORIZADO - ...]`).
 2. **Regla 2: Mesa de Arbitraje con Semáforo de Contraste en Staging:**
    Antes de confirmar la escritura en base de datos, el staging compara los datos extraídos contra el estado actual de OPS para la fecha:
    - **Caso 2.1 (Sin registro previo en OPS - Valor 0):** La planilla física puebla limpiamente la celda de la sábana.
@@ -14596,11 +14596,11 @@ Para garantizar que la carga asistida por IA de documentos físicos y las operac
 1. **Contrato y UI:** Botón `[ 📷 Cargar Planillas Físicas (IA) ]` disponible en `src/components/InventoryDailyBalanceTab.tsx` en Modo Edición.
 2. **Modal Modular Especializado:** Implementado en `src/components/PhysicalSheetIngestModal.tsx` (<= 1.400 líneas, incluyendo la mesa de trabajo multimodal y la pantalla de resumen ejecutivo post-inyección `commitSummary`) con selector de tipo de documento, visor de imágenes/PDF y tabla de reconciliación staging.
 3. **Endpoint de Extracción:** `POST /api/commercial/inventory/extract-physical-sheet` consumiendo Gemini con heurística de Corabastos y homologación de 663 SKUs.
-4. **Cero Colisión Verificada:** Las escrituras en `inventory_movements` registran `origin_source: 'physical_sheet_ocr'` y respetan el arbitraje de discrepancias sin duplicar compras ni conteos.
+4. **Cero Colisión Verificada:** Las escrituras en `inventory_movements` registran el linaje `physical_sheet_ocr` en `notes` (y en `[BLIND_COUNT_META]` para `Col T`) y respetan el arbitraje de discrepancias sin duplicar compras ni conteos.
 5. **Refresco Reactivo:** Al pulsar `[ Aprobar y Aplicar a la Sábana ]`, las columnas G, T, Q y R se actualizan instantáneamente en la interfaz sin necesidad de recargar la página.
 6. **Conmutación Reactiva Instantánea de Columna Destino (`0 ms` sin Re-análisis IA):** Al cambiar entre cualquiera de las 5 pestañas de tipo de documento en `PhysicalSheetIngestModal.tsx` (`1. Planilla Compras -> Col G`, `2. Conteo Físico -> Col T`, `3. Formato Pedidos -> Cols Q/R`, `4. Desperdicio/Basura -> Cols Q/R`, `5. Donaciones -> Col X`), los renglones en staging re-mapean automáticamente su `targetColumn` en memoria sin requerir re-invocación del motor OCR.
 7. **Inyección Paralela por Lote (`< 1s`) y Resumen Ejecutivo Post-Inyección (`commitSummary`):** La confirmación de planillas físicas ejecuta las llamadas `onCommitCell` en paralelo (`Promise.all`) seguidas de un único refresco consolidado y despliega una pantalla de éxito con el desglose exacto de productos, kilogramos y unidades cargados por columna destino (`Col G`, `Col T`, `Col Q`, `Col R`, `Col X`).
-8. **Invariante de Alineación Geométrica del Bloque Sticky Izquierdo (`Cols A–D`):** En `InventoryDailyBalanceTab.tsx`, la Columna D (`PRODUCTO`) mantiene un ancho estricto de `190px` (`box-sizing: border-box`, `overflow: hidden`) sincronizado entre `<thead>`, la fila de filtros y `<tbody>`, mientras el `<tfoot>` (`colSpan={4}`) ajusta dinámicamente su ancho a `389px` (con `Col C` colapsada a `28px`) o `475px` (con `Col C` expandida a `114px`), garantizando una línea divisoria vertical continua sin escalones frente a las columnas desplazables `E..X`.
+8. **Invariante de Alineación Geométrica del Bloque Sticky Izquierdo (`Cols A–D`):** En `InventoryDailyBalanceTab.tsx`, el bloque sticky izquierdo (`thead`, fila de filtros, `tbody` y `<tfoot>`) mantiene alineación vertical sin escalones usando `240px` en modo compacto (`Cols A–D`) y `529px` (célula colapsada) / `615px` (célula expandida) en modo tradicional. Además, todas las consultas de `inventory_movements` utilizan límites de jornada Bogotá (`-05:00`) convertidos a ISO UTC (`D T05:00:00.000Z` a `D+1 T04:59:59.999Z`).
 
 
 ---
@@ -14623,7 +14623,7 @@ Se incorpora de manera íntegra e inmutable al contrato maestro `SPEC.md` el lev
 | **E** | **INV. INICIAL** | $+$ | **Cascada Resiliente ($E_D = T_{D-1}$):** Hereda automáticamente el Conteo Físico ($T$) de la noche anterior o `inventory_stocks` para $D+1$. | **Solo Lectura (Poka-Yoke).** No editable a mano; cualquier ajuste inicial se hace en Col F. | `daily_inventory_closings` / `blind_count` | `[ OK / SDD 376 ]` |
 | **F** | **CORRECCIÓN** | $\pm$ | Ajustes de auditoría de inventario autorizados. | Digitación directa en celda con soporte de fórmulas (`=15+2.5`) y firma de supervisor. | `inventory_movements` (`'correction'`) | `[ OK ]` |
 | **G** | **COMPRAS** | $+$ | **Módulo de Recepción (`/ops/recepcion`):** Sumatoria de productos que entran efectivamente a bodega desde `http://localhost:3001/ops/recepcion`. | **Planilla Física `Entrada/` (IA) o Excel:** Cantidad directa en unidad de compra (`Kg` o `Unidad`, sin recálculos). | `inventory_movements` (`'purchase_reception'`) | `[ DT-12 / SDD 387 ]` |
-| **H** | **VENTA (KG)** | $-$ | **Módulo de Pedidos (`/admin/orders/loading`):** Trigger automático al pasar pedidos a `para_compra` (antes de hora de corte) formulados en Kg puros. | Ajuste manual en Modo Edición o Excel. | `orders` + `order_items` (`unit = 'Kg'`) | `[ OK / SDD 375 ]` |
+| **H** | **VENTA (KG)** | $-$ | **Módulo de Pedidos (`/admin/orders/loading`):** Trigger automático para órdenes activas (`OPERATIONAL_STATUSES`, antes de hora de corte) formuladas en Kg puros. | **Solo Lectura (Poka-Yoke).** Salidas adicionales se registran en Col M. | `orders` + `order_items` (`unit = 'Kg'`) | `[ OK / SDD 375 ]` |
 | **I** | **VENTA (UND)** | $-$ | **Módulo de Pedidos (`/admin/orders/loading`):** Pedidos en `para_compra` formulados en unidades; muestra el peso equivalente en Kg y micro-badge de unidades/gramaje. | Ajuste manual en Modo Edición o Excel. | `orders` + `order_items` (unidades convertidas a Kg) | `[ OK / SDD 385 ]` |
 | **J** | **PESO VENTA UND** | $-$ | **Suprimida en UI (Integrada en Col I):** Mantiene su cálculo interno para la ecuación de masa ($S$) y exportación Excel World Office. | Transparente (calculada automáticamente desde Col I). | Motor interno / Exportador XLSX | `[ SUPRIMIDA UI / SDD 385 ]` |
 | **K** | **PRODUCTO ESCASO** | $-$ | **Submódulo de Compras (`/ops/compras`):** Única autoridad de escritura (*Single-Write Authority*) cuando hay desabastecimiento en plaza. Picking no duplica este registro. | Edición directa en celda en Modo Edición o Excel. | `inventory_movements` (`'order_shortage'`) | `[ OK / SDD 383 ]` |
@@ -14746,7 +14746,7 @@ La información ingresa a través de **tres mecanismos complementarios**:
 * **Mecanismo de Carga (Sincronización en Tiempo Real SDD Escenario 375 y 383):**
   * **El Trigger:** En `/admin/orders/loading`, al confirmar el envío a operación y transicionar los pedidos a **`para_compra`** (Punto de No Retorno).
   * **La Sumatoria:** Suma automáticamente todos los `order_items` de los pedidos formulados en kilos estándar. Si no hay pedidos en kilos puros, muestra guión neutro (`-`).
-  * **Modo Manual:** El supervisor puede ingresar o ajustar cantidades directamente en celda si hay salidas adicionales no contempladas en pedidos.
+  * **Solo Lectura (Poka-Yoke):** La Columna H es no editable en UI (`EDITABLE_COLUMNS` la excluye) para preservar la conciliación 1:1 contra `orders`; cualquier salida adicional o extemporánea se canaliza por `Col M (VENTA ADICIONAL)`.
 
 #### Columna I: `VENTA (UND) (-)` — *Estado: `[ OK ]` (Consolidada Opción 1)*
 * **Naturaleza:** Salidas facturadas bajo especificación de unidades (bandejas, atados, paquetes, cubetas, o frutas formuladas por unidades de gramaje específico, ej. 80 bananos de 160 gr).

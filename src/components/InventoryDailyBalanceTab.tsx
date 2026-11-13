@@ -85,6 +85,7 @@ const renderCellLucideIcon = (cell?: WorkCell | null, size = 12) => {
     return <Package size={size} />;
 };
 import { INVENTORY_MOVEMENT_SUBTYPES, OPERATIONAL_STATUSES } from '@/lib/constants';
+import { getBogotaDayRangeUtcIso, getBogotaDateString } from '@/lib/dateUtils';
 import InventoryWasteModal from '@/components/InventoryWasteModal';
 import InventoryPayrollModal from '@/components/InventoryPayrollModal';
 import InventoryAdditionalSalesModal from '@/components/InventoryAdditionalSalesModal';
@@ -912,6 +913,7 @@ interface CommittedSaleData {
             // 0.1 & 0.2 Cargar saldo inicial oficial desde el Conteo Físico (Col T) de la última jornada previa (D-1)
             const prevClosingSnapshots: Record<string, number> = {};
             try {
+                const { startUtcIso: balanceStartUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
                 const [{ data: prevCloseData }, { data: prevPhysicalMovs }] = await Promise.all([
                     supabase
                         .from('daily_inventory_closings')
@@ -924,14 +926,14 @@ interface CommittedSaleData {
                         .from('inventory_movements')
                         .select('product_id, quantity, notes, created_at')
                         .in('reference_type', ['blind_count', 'blind_count_shift_close'])
-                        .lt('created_at', `${balanceDate}T00:00:00.000Z`)
+                        .lt('created_at', balanceStartUtcIso)
                         .order('created_at', { ascending: false })
                         .limit(5000)
                 ]);
 
                 const latestCloseDate = prevCloseData?.closing_date || null;
                 const latestMovDate = (prevPhysicalMovs && prevPhysicalMovs.length > 0 && prevPhysicalMovs[0].created_at)
-                    ? prevPhysicalMovs[0].created_at.slice(0, 10)
+                    ? getBogotaDateString(prevPhysicalMovs[0].created_at)
                     : null;
 
                 // Determinar la jornada D-1 más reciente con datos de cierre o conteo físico (SPEC.md §8.6.2)
@@ -994,7 +996,7 @@ interface CommittedSaleData {
                         prevClosingSnapshots['__HAS_BASELINE__'] = 1;
                         const seenMovProducts = new Set<string>();
                         (prevPhysicalMovs as Array<{ product_id?: string | null; notes?: string | null; created_at?: string | null }>).forEach((m) => {
-                            if (!m.product_id || !m.created_at?.startsWith(targetDMinus1Date)) return;
+                            if (!m.product_id || !m.created_at || getBogotaDateString(m.created_at) !== targetDMinus1Date) return;
                             if (seenMovProducts.has(m.product_id)) return;
                             const counted = parseBlindCountQuantity(m.notes ?? null);
                             if (counted !== null) {
@@ -1058,9 +1060,8 @@ interface CommittedSaleData {
                 console.warn('Error cargando commercial_cost_matrix en balance diario:', cmErr);
             }
 
-            // 2. Cargar movimientos desde el inicio del día seleccionado hasta el presente (con paginación exhaustiva anti-corte 1000)
-            const startOfDayIso = `${balanceDate}T00:00:00.000Z`;
-            const endOfDayIso = `${balanceDate}T23:59:59.999Z`;
+            // 2. Cargar movimientos desde el inicio del día seleccionado (hora Bogotá -05:00) hasta el presente (con paginación exhaustiva anti-corte 1000)
+            const { startUtcIso: startOfDayIso } = getBogotaDayRangeUtcIso(balanceDate);
 
             let allMovData: any[] = [];
             let fromMov = 0;
@@ -1291,20 +1292,22 @@ interface CommittedSaleData {
 
     // Procesar las 24 columnas para cada producto
     const dailyRows: InventoryDailyRow[] = useMemo(() => {
-        const startOfDayIso = `${balanceDate}T00:00:00.000Z`;
-        const endOfDayIso = `${balanceDate}T23:59:59.999Z`;
+        const { startUtcIso, endUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
+        const startMs = new Date(startUtcIso).getTime();
+        const endMs = new Date(endUtcIso).getTime();
 
-        // Agrupar movimientos por producto que ocurrieron en el día específico
+        // Agrupar movimientos por producto que ocurrieron en el día específico (hora Bogotá -05:00)
         const dayMovementsByProduct = new Map<string, RawMovement[]>();
         // Agrupar movimientos ocurridos DESPUÉS del final del día (para retroactividad en fechas pasadas)
         const laterMovementsByProduct = new Map<string, RawMovement[]>();
 
         movements.forEach(m => {
-            if (m.created_at >= startOfDayIso && m.created_at <= endOfDayIso) {
+            const createdMs = new Date(m.created_at).getTime();
+            if (createdMs >= startMs && createdMs <= endMs) {
                 const list = dayMovementsByProduct.get(m.product_id) || [];
                 list.push(m);
                 dayMovementsByProduct.set(m.product_id, list);
-            } else if (m.created_at > endOfDayIso) {
+            } else if (createdMs > endMs) {
                 const list = laterMovementsByProduct.get(m.product_id) || [];
                 list.push(m);
                 laterMovementsByProduct.set(m.product_id, list);
@@ -1473,7 +1476,8 @@ interface CommittedSaleData {
                     if (m.evidence_url) evidenceX.push(m.evidence_url);
                 }
                 // T: Conteo Agregado Bodega (Cruce a ciegas) — Lectura estructurada tipada con fallback (SDD §351-352 / DT-04)
-                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT || (m.notes && m.notes.includes('Cruce a ciegas'))) {
+                // dayMovs viene ordenado DESC por created_at: se respeta el conteo más reciente (!hasPhysical)
+                else if (!hasPhysical && (ref === INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT || ref === 'blind_count' || (m.notes && m.notes.includes('Cruce a ciegas')))) {
                     hasPhysical = true;
                     const resolvedCount = parseBlindCountQuantity(m.notes);
                     physicalCount = resolvedCount !== null ? resolvedCount : currentStock;
@@ -2885,14 +2889,15 @@ interface CommittedSaleData {
             const effectiveRefType = isSandbox ? `sandbox_${refType}` : refType;
             const effectiveNote = isSandbox ? `[SANDBOX] ${noteDesc}` : noteDesc;
 
+            const { startUtcIso: dayStartUtcIso, endUtcIso: dayEndUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
             if (Math.abs(newVal) < 0.0001) {
                 const { error: delErr } = await supabase
                     .from('inventory_movements')
                     .delete()
                     .eq('product_id', productId)
                     .eq('reference_type', effectiveRefType)
-                    .gte('created_at', `${balanceDate}T00:00:00.000Z`)
-                    .lte('created_at', `${balanceDate}T23:59:59.999Z`);
+                    .gte('created_at', dayStartUtcIso)
+                    .lte('created_at', dayEndUtcIso);
 
                 if (delErr) throw delErr;
                 (window as any).showToast?.(`Columna ${colKey} restablecida a 0,00`, 'info');
@@ -2902,8 +2907,8 @@ interface CommittedSaleData {
                     .select('id')
                     .eq('product_id', productId)
                     .eq('reference_type', effectiveRefType)
-                    .gte('created_at', `${balanceDate}T00:00:00.000Z`)
-                    .lte('created_at', `${balanceDate}T23:59:59.999Z`);
+                    .gte('created_at', dayStartUtcIso)
+                    .lte('created_at', dayEndUtcIso);
 
                 if (existingMovs && existingMovs.length > 0) {
                     const targetId = existingMovs[0].id;
