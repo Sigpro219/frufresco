@@ -494,6 +494,29 @@ export default function AlistamientoSabanaPrintPage() {
                 );
             }
 
+            // Consultar características y notas de alistamiento maestras por cliente/matriz (product_nicknames)
+            const allNicknameClientIds = Array.from(new Set(
+                (rawOrders || []).flatMap((o: any) => [
+                    o.profile_id,
+                    o.profiles?.id,
+                    o.profiles?.parent_id
+                ]).filter(Boolean)
+            )) as string[];
+
+            const nicknamesMap: Record<string, { picking_note?: string | null; preferred_options?: Record<string, any> | null }> = {};
+            if (allNicknameClientIds.length > 0) {
+                const { data: nicknameRows } = await supabase
+                    .from('product_nicknames')
+                    .select('customer_id, product_id, picking_note, preferred_options')
+                    .in('customer_id', allNicknameClientIds);
+
+                (nicknameRows || []).forEach((row: any) => {
+                    if (row.customer_id && row.product_id) {
+                        nicknamesMap[`${row.customer_id}::${row.product_id}`] = row;
+                    }
+                });
+            }
+
             // Recolectar parent_ids únicos para mapear el nombre de la Familia
             const parentIdSet = new Set<string>();
             (rawOrders || []).forEach((o: any) => {
@@ -555,16 +578,38 @@ export default function AlistamientoSabanaPrintPage() {
                     special_attention: pid ? (attentionMap[pid] || null) : null
                 });
 
+                const parentPid = o.profiles?.parent_id;
+
                 (o.order_items || []).forEach((it: any) => {
+                    const resolvedProdId = it.product_id || it.products?.id;
+                    const exc = (pid && resolvedProdId ? nicknamesMap[`${pid}::${resolvedProdId}`] : undefined)
+                        || (parentPid && resolvedProdId ? nicknamesMap[`${parentPid}::${resolvedProdId}`] : undefined);
+
+                    const mergedOpts: Record<string, any> = {
+                        ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}),
+                        ...(it.selected_options && typeof it.selected_options === 'object' ? it.selected_options : {})
+                    };
+                    if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+                        const hasPicking =
+                            mergedOpts.nota_alistamiento ||
+                            mergedOpts['Nota alistamiento'] ||
+                            mergedOpts['Nota de alistamiento'] ||
+                            mergedOpts.picking_note ||
+                            mergedOpts.nota_picking;
+                        if (!hasPicking) {
+                            mergedOpts.nota_alistamiento = exc.picking_note.trim();
+                        }
+                    }
+
                     parsedItems.push({
                         id: it.id,
                         order_id: o.id,
-                        product_id: it.product_id || it.products?.id,
+                        product_id: resolvedProdId,
                         quantity: Number(it.quantity) || 0,
                         unit: (it.unit || it.products?.unit_of_measure || 'KG').toUpperCase(),
                         nickname: it.nickname,
                         variant_label: it.variant_label,
-                        selected_options: it.selected_options ?? null,
+                        selected_options: Object.keys(mergedOpts).length > 0 ? mergedOpts : null,
                         product: it.products ? {
                             id: it.products.id,
                             name: it.products.name,
@@ -851,7 +896,7 @@ export default function AlistamientoSabanaPrintPage() {
                 @media print {
                     @page {
                         size: legal landscape !important;
-                        margin: 0.8cm 1.0cm !important;
+                        margin: 0.45cm 0.9cm !important;
                     }
                     html, body {
                         background-color: #FFFFFF !important;
