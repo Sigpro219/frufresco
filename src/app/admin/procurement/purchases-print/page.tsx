@@ -447,30 +447,6 @@ export default function PurchasesPrintPage() {
                         <FileSpreadsheet size={14} /> Excel (10 cols)
                     </button>
 
-                    {/* Relación de Documentos (.xlsx) */}
-                    <button
-                        onClick={handleExportRelacionDocumentos}
-                        disabled={isExportingRelacion}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '4px 10px',
-                            backgroundColor: '#0284C7',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '0.76rem',
-                            fontWeight: '700',
-                            whiteSpace: 'nowrap',
-                            opacity: isExportingRelacion ? 0.7 : 1
-                        }}
-                        title="Descargar Relación de Documentos (.xlsx) con 16 columnas estándar y desglose de despacho"
-                    >
-                        <FileSpreadsheet size={14} /> {isExportingRelacion ? 'Generando...' : 'Relación Doc. (.xlsx)'}
-                    </button>
-
                     <DirectPdfSaveButton docType="purchases" selectedDate={selectedDate} containerRef={printDocRef} />
 
                     {/* Print */}
