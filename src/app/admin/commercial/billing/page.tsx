@@ -903,11 +903,11 @@ export default function BillingDashboard() {
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [previewSearchQuery, setPreviewSearchQuery] = useState('');
     const [previewSortConfig, setPreviewSortConfig] = useState<{
-        key: 'route' | 'remission' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber' | null;
+        key: 'route' | 'remission' | 'client' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber' | null;
         direction: 'asc' | 'desc';
     }>({ key: null, direction: 'asc' });
 
-    const handlePreviewSort = (key: 'route' | 'remission' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber') => {
+    const handlePreviewSort = (key: 'route' | 'remission' | 'client' | 'originalTotal' | 'qualityDeduction' | 'netTotal' | 'projectedInvoiceNumber') => {
         setPreviewSortConfig(prev => ({
             key,
             direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
@@ -942,7 +942,9 @@ export default function BillingDashboard() {
                     const rB = `${b.routeCode || 'ZZZZ'}-${String(b.stopSequence || 9999).padStart(4, '0')}`;
                     return rA.localeCompare(rB) * dir;
                 }
-                case 'remission': {
+                case 'remission':
+                    return ((Number(a.sequence_id) || 0) - (Number(b.sequence_id) || 0)) * dir;
+                case 'client': {
                     const cA = (a.profile?.company_name || '').localeCompare(b.profile?.company_name || '');
                     if (cA !== 0) return cA * dir;
                     return ((Number(a.sequence_id) || 0) - (Number(b.sequence_id) || 0)) * dir;
@@ -8395,12 +8397,22 @@ export default function BillingDashboard() {
                                                 </th>
                                                 <th
                                                     onClick={() => handlePreviewSort('remission')}
-                                                    title="Ordenar por cliente y número de remisión"
-                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'remission' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none' }}
+                                                    title="Ordenar por número de remisión / pedido"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'remission' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                                                 >
                                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <span>Remisión &amp; Cliente</span>
+                                                        <span>Remisión</span>
                                                         {previewSortConfig.key === 'remission' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
+                                                    </div>
+                                                </th>
+                                                <th
+                                                    onClick={() => handlePreviewSort('client')}
+                                                    title="Ordenar alfabéticamente por cliente"
+                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'client' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none' }}
+                                                >
+                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>Cliente</span>
+                                                        {previewSortConfig.key === 'client' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
                                                     </div>
                                                 </th>
                                                 <th
@@ -8455,14 +8467,17 @@ export default function BillingDashboard() {
                                                             {ord.stopSequence > 0 && <span style={{ color: THEME.colors.primary }}>• #{ord.stopSequence}</span>}
                                                         </div>
                                                     </td>
+                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, whiteSpace: 'nowrap' }}>
+                                                        <span style={{ backgroundColor: '#F1F5F9', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800', fontVariantNumeric: 'tabular-nums', fontSize: '0.74rem' }}>
+                                                            REM-{ord.sequence_id}
+                                                        </span>
+                                                    </td>
                                                     <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                         <div style={{ fontWeight: '800', color: '#0F172A', fontSize: '0.78rem' }}>
                                                             {ord.profile?.company_name || 'Cliente'}
                                                         </div>
-                                                        <div style={{ fontSize: '0.68rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <span style={{ fontWeight: '700', color: '#0F172A' }}>REM-{ord.sequence_id}</span>
-                                                            <span>·</span>
-                                                            <span>NIT: {ord.profile?.nit || 'N/A'}</span>
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                                            NIT: {ord.profile?.nit || 'N/A'}
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, textAlign: 'right', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>
