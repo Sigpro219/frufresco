@@ -3569,7 +3569,7 @@ export default function BillingDashboard() {
                     .select(`
                         id, sequence_id, status, type, payment_method, delivery_date,
                         shipping_address, customer_phone, total, subtotal, shipping_cost, discount_amount, tax,
-                        warehouse_spaces, admin_notes, logistics_data, invoice_number,
+                        warehouse_spaces, admin_notes, logistics_data,
                         billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                         profiles (
                             id, company_name, razon_social, contact_name, role, phone, address,

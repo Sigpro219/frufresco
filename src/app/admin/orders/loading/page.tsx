@@ -6829,10 +6829,15 @@ useEffect(() => {
                                                          </div>
                                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
                                                              {(() => {
+                                                                 const exc = clientExceptions.find(e => e.product_id === (item.product_id || item.products?.id));
+                                                                 const mergedOptions = {
+                                                                     ...(exc?.preferred_options || {}),
+                                                                     ...(item.selected_options || {})
+                                                                 };
                                                                  const badges = resolveProductCharacteristicsBadges({
                                                                      variant_label: item.variant_label,
                                                                      nickname: item.nickname,
-                                                                     selected_options: item.selected_options,
+                                                                     selected_options: mergedOptions,
                                                                      unit: item.unit || item.products?.unit_of_measure,
                                                                      products: item.products,
                                                                      product_name: item.products?.name
