@@ -112,10 +112,8 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
         }
 
         .letterhead-container main {
-            flex-grow: 1 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
+            flex-grow: 0 !important;
+            display: block !important;
         }
 
         /* Tipografía legible para el encabezado corporativo */
