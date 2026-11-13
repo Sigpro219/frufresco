@@ -349,11 +349,13 @@ export default function GoldenPrintStyles({
                     font-size: 7.2pt;
                     padding: 1px 4px;
                 }
-                .page-break {
+                .page-break,
+                .letterhead-container.page-break {
                     page-break-after: always !important;
                     break-after: page !important;
                 }
-                .page-break:last-child {
+                .print-doc-wrapper > .page-break:last-child,
+                .order-remission-group:last-of-type .page-break:last-of-type {
                     page-break-after: avoid !important;
                     break-after: avoid !important;
                 }
