@@ -100,7 +100,7 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '335mm' : '260mm'} !important;
+            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '330mm' : '250mm'} !important;
             height: auto !important;
             overflow: visible !important;
             position: relative !important;
@@ -109,8 +109,6 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             flex-direction: column !important;
             justify-content: space-between !important;
             box-sizing: border-box !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
         }
 
         .letterhead-container main {
