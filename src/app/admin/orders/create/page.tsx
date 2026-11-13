@@ -881,11 +881,13 @@ function CreateOrderContent() {
         const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
         const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
+        const isB2CHogarMode = clientType === 'B2C' && !isGiftRemissionClient;
+        const basePool = isB2CHogarMode ? products.filter(p => (p as any).show_on_web !== false) : products;
         const eligibleProducts = isStrictAgreement
-            ? products.filter(p => agreementProductIds.has(p.id))
-            : products;
+            ? basePool.filter(p => agreementProductIds.has(p.id))
+            : basePool;
 
-        const cacheKey = `${cleanQuery}_${extractedId}_${eligibleProducts.length}_${clientExceptions.length}_${isStrictAgreement ? 'strict' : 'open'}`;
+        const cacheKey = `${cleanQuery}_${extractedId}_${eligibleProducts.length}_${clientExceptions.length}_${isStrictAgreement ? 'strict' : 'open'}_${isB2CHogarMode ? 'hogar' : 'b2b'}`;
         if (searchQueryCacheRef.current.has(cacheKey)) {
             return searchQueryCacheRef.current.get(cacheKey)!;
         }
@@ -3495,9 +3497,11 @@ function CreateOrderContent() {
 
             // Intentamos encontrar el mejor SKU sugerido usando el Motor Unificado (Memoria + Catalog + Tokens)
             const isStrictAgreement = !effectiveAllowOff && !isGiftRemissionClient && effectiveAgrIds.size > 0;
+            const isB2CHogarMode = clientType === 'B2C' && !isGiftRemissionClient;
+            const basePool = isB2CHogarMode ? products.filter(p => (p as any).show_on_web !== false) : products;
             const candidateProductPool = isStrictAgreement
-                ? products.filter(p => effectiveAgrIds.has(p.id))
-                : products;
+                ? basePool.filter(p => effectiveAgrIds.has(p.id))
+                : basePool;
 
             const suggested = rawItems.map((item: any) => {
                 if (!item) return null;
