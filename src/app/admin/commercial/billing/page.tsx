@@ -8303,7 +8303,7 @@ export default function BillingDashboard() {
                 {isPreviewModalOpen && (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 120, padding: '1rem' }}>
                         <div style={{ backgroundColor: 'white', borderRadius: '20px', border: `1px solid ${THEME.colors.border}`, padding: '1.4rem', maxWidth: '1600px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', position: 'relative' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.9rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.9rem', flexShrink: 0 }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                         <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -8350,9 +8350,9 @@ export default function BillingDashboard() {
                                 </button>
                             </div>
 
-                            {/* TOOLBAR OMNIBOX DEL MODAL (ESTÁNDAR GALERÍAS 1600px) */}
+                            {/* TOOLBAR OMNIBOX DEL MODAL (ESTÁNDAR GALERÍAS 1600px - NIVEL 2 STICKY) */}
                             {!loadingPreview && previewOrders.length > 0 && (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.75rem 0', borderBottom: `1px solid ${THEME.colors.border}`, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.65rem 0', backgroundColor: '#FFFFFF', zIndex: 40, flexShrink: 0, flexWrap: 'wrap' }}>
                                     <div style={{ flex: '1 1 320px', maxWidth: '460px' }}>
                                         <GalleryOmnibox
                                             value={previewSearchQuery}
@@ -8377,7 +8377,7 @@ export default function BillingDashboard() {
                                 </div>
                             )}
 
-                            <div style={{ padding: '0 0 0.5rem 0', overflowY: 'auto', flex: 1 }}>
+                            <div style={{ padding: 0, overflowY: 'auto', flex: 1, position: 'relative', borderTop: '1px solid #CBD5E1' }}>
                                 {loadingPreview ? (
                                     <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>Cargando auditoría del corte...</div>
                                 ) : previewOrders.length === 0 ? (
@@ -8386,7 +8386,7 @@ export default function BillingDashboard() {
                                     <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>No hay remisiones que coincidan con la búsqueda.</div>
                                 ) : (
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.74rem' }}>
-                                        <thead>
+                                        <thead style={{ position: 'sticky', top: 0, zIndex: 30, boxShadow: '0 2px 4px -1px rgba(15, 23, 42, 0.08)' }}>
                                             <tr>
                                                 <th
                                                     onClick={() => handlePreviewSort('route')}
