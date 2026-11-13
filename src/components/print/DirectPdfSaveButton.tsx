@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import {
     DirectPdfDocKey,
-    saveCurrentPageAsPdfDirect,
 } from './savePdfDirect';
+import { printViaNewWindow } from './printViaNewWindow';
 
 interface DirectPdfSaveButtonProps {
     docType: DirectPdfDocKey;
@@ -28,20 +28,13 @@ export default function DirectPdfSaveButton({
     const handleSavePdf = async () => {
         if (saving) return;
         setSaving(true);
-        setProgressText('Preparando...');
+        setProgressText('Abriendo PDF vectorial...');
         try {
-            await saveCurrentPageAsPdfDirect({
-                docType,
-                selectedDate,
-                suggestedName,
-                rootElement: containerRef?.current || document,
-                onProgress: (curr, total) => {
-                    setProgressText(`PDF (${curr}/${total})...`);
-                },
-            });
+            const title = suggestedName || `${docType}_${selectedDate || 'documento'}`;
+            printViaNewWindow({ title });
         } catch (err: any) {
-            console.error('[DirectPdfSaveButton] Error generando PDF directo:', err);
-            alert(err?.message || 'Error al generar el archivo PDF.');
+            console.error('[DirectPdfSaveButton] Error abriendo vista PDF vectorial:', err);
+            alert(err?.message || 'Error al abrir la vista PDF.');
         } finally {
             setSaving(false);
             setProgressText(null);
