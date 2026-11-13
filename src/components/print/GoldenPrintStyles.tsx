@@ -285,12 +285,12 @@ export default function GoldenPrintStyles({
                 }
                 .letterhead-container {
                     width: 100% !important;
-                    min-height: ${pageSize.includes('legal') ? '335mm' : '260mm'} !important;
+                    min-height: auto !important;
                     height: auto !important;
                     overflow: visible !important;
                     display: flex !important;
                     flex-direction: column !important;
-                    justify-content: space-between !important;
+                    justify-content: flex-start !important;
                     position: relative !important;
                     margin: 0 !important;
                     padding: 0 !important;
@@ -299,14 +299,10 @@ export default function GoldenPrintStyles({
                     box-sizing: border-box !important;
                     page-break-after: auto !important;
                     break-after: auto !important;
-                    page-break-inside: avoid !important;
-                    break-inside: avoid !important;
                 }
                 .letterhead-container main {
-                    flex-grow: 1 !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    justify-content: space-between !important;
+                    flex-grow: 0 !important;
+                    display: block !important;
                 }
                 .letterhead-header {
                     width: 100% !important;
