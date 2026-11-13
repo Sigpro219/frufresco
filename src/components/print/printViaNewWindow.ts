@@ -100,14 +100,14 @@ export function printViaNewWindow(options: PrintViaNewWindowOptions): Window | n
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            min-height: ${paperSize === 'oficio' || paperSize === 'legal' ? '330mm' : '250mm'} !important;
+            min-height: auto !important;
             height: auto !important;
             overflow: visible !important;
             position: relative !important;
             background: transparent !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             box-sizing: border-box !important;
         }
 
