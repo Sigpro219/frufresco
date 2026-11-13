@@ -31,7 +31,15 @@ export default function DirectPdfSaveButton({
         setProgressText('Abriendo PDF vectorial...');
         try {
             const title = suggestedName || `${docType}_${selectedDate || 'documento'}`;
-            printViaNewWindow({ title });
+            const targetEl = containerRef?.current || (document.querySelector('.print-container') as HTMLElement | null);
+            if (!targetEl) {
+                window.print();
+                return;
+            }
+            printViaNewWindow({
+                element: targetEl,
+                title,
+            });
         } catch (err: any) {
             console.error('[DirectPdfSaveButton] Error abriendo vista PDF vectorial:', err);
             alert(err?.message || 'Error al abrir la vista PDF.');
