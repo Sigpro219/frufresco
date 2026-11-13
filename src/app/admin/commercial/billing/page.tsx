@@ -3564,11 +3564,11 @@ export default function BillingDashboard() {
 
             // Incluir también pedidos ya facturados del día cuando no hay selección manual
             if (selectedOrderIds.length === 0 && subTab !== 'batch_accumulated') {
-                const { data: invoicedDayOrders } = await supabase
+                const { data: invoicedDayOrders, error: invErr } = await supabase
                     .from('orders')
                     .select(`
                         id, sequence_id, status, type, payment_method, delivery_date,
-                        shipping_address, customer_phone, total, subtotal, shipping_cost, discount_amount, tax,
+                        shipping_address, total, subtotal, tax,
                         warehouse_spaces, admin_notes, logistics_data,
                         billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                         profiles (
@@ -3577,8 +3577,9 @@ export default function BillingDashboard() {
                         )
                     `)
                     .eq('delivery_date', targetDate)
-                    .neq('status', 'cancelled')
-                    .not('billing_invoices', 'is', null);
+                    .neq('status', 'cancelled');
+
+                if (invErr) console.error('Error cargando facturas del día:', invErr);
 
                 if (invoicedDayOrders && invoicedDayOrders.length > 0) {
                     const existingIds = new Set(targetOrders.map(o => o.id));
@@ -5260,11 +5261,11 @@ export default function BillingDashboard() {
                                                 <span>Excel Rápido WO {selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${filteredPendingOrders.length})`}</span>
                                             </button>
 
-                                            {/* Relación de Documentos (.xlsx) */}
+                                            {/* Relación de pedidos (.xlsx) */}
                                             <button
                                                 type="button"
                                                 onClick={handleExportRelacionByDate}
-                                                disabled={isProcessing || filteredPendingOrders.length === 0}
+                                                disabled={isProcessing}
                                                 style={{
                                                     backgroundColor: '#F0FDF4',
                                                     color: '#166534',
@@ -5273,18 +5274,18 @@ export default function BillingDashboard() {
                                                     borderRadius: '5px',
                                                     fontWeight: '700',
                                                     fontSize: '0.68rem',
-                                                    cursor: isProcessing || filteredPendingOrders.length === 0 ? 'not-allowed' : 'pointer',
-                                                    opacity: filteredPendingOrders.length === 0 ? 0.6 : 1,
+                                                    cursor: isProcessing ? 'not-allowed' : 'pointer',
+                                                    opacity: isProcessing ? 0.6 : 1,
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
                                                     gap: '4px',
                                                     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
                                                     transition: 'all 0.15s ease'
                                                 }}
-                                                title="Descargar planilla oficial de Relación de Documentos (.xlsx) de 16 columnas para la fecha seleccionada"
+                                                title="Descargar planilla oficial de Relación de pedidos (.xlsx) con todos los pedidos del día (pendientes + facturados)"
                                             >
                                                 <FileSpreadsheet size={11} style={{ color: '#166534' }} />
-                                                <span>Relación Doc (.xlsx)</span>
+                                                <span>Relación de pedidos (.xlsx)</span>
                                             </button>
 
                                             {/* 🌙 Corte Tarde (Pre-Despacho FAC-IMP) */}
