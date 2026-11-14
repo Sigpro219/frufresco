@@ -153,7 +153,7 @@ export async function fetchGeminiExtraction(
  * Capa 1: NIT -> Capa 2: Emails / Aliases -> Capa 3: Razón Social -> Capa 4: Texto de Firma
  */
 export function resolveClientProfile(
-  clientInfo: { nit?: string; email?: string; name?: string; address?: string; signatureText?: string; phone?: string },
+  clientInfo: { nit?: string; email?: string; name?: string; address?: string; signatureText?: string; phone?: string; branchCode?: string },
   profiles: any[]
 ): any | null {
   if (!profiles || profiles.length === 0) return null;
@@ -162,8 +162,9 @@ export function resolveClientProfile(
   const cleanPhone = (clientInfo.phone || '').replace(/[^0-9]/g, '');
   const cleanName = sanitizeDocText(clientInfo.name || '');
   const cleanAddress = sanitizeDocText(clientInfo.address || '');
+  const cleanBranchCode = sanitizeDocText(clientInfo.branchCode || '');
   const sigText = sanitizeDocText(clientInfo.signatureText || '');
-  const fullSearchContext = `${cleanName} ${cleanAddress} ${sigText}`.toLowerCase();
+  const fullSearchContext = `${cleanName} ${cleanAddress} ${cleanBranchCode} ${sigText}`.toLowerCase();
 
   const stopWords = ['caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 's.a.s', 's.a.', 'ltda', 'sociedad', 'sede', 'sucursal', 'restaurante', 'empresa', 'cliente'];
   const nameKeywords = cleanName
@@ -178,6 +179,17 @@ export function resolveClientProfile(
     const compName = sanitizeDocText(p.company_name || '');
     const contactName = sanitizeDocText(p.contact_name || '');
     const pAddress = sanitizeDocText(p.address || '');
+
+    // 0. Coincidencia exacta por código de centro SAP / sucursal (ej. CAA9, 351)
+    if (cleanBranchCode) {
+      const sapCode = sanitizeDocText(p.logistics_data?.sap_center_code || '');
+      const branchIdNorm = sanitizeDocText(p.branch_id || '');
+      const addrCompNorm = sanitizeDocText(p.address_complement || '');
+      if (sapCode && (sapCode === cleanBranchCode || cleanBranchCode.includes(sapCode))) score += 100;
+      if (branchIdNorm && (branchIdNorm === cleanBranchCode || cleanBranchCode.includes(branchIdNorm))) score += 80;
+      if (addrCompNorm && addrCompNorm.includes(cleanBranchCode)) score += 70;
+      if (compName.includes(cleanBranchCode)) score += 60;
+    }
 
     // 1. Coincidencia de Dirección exacta o parcial
     if (cleanAddress && pAddress) {
@@ -207,6 +219,15 @@ export function resolveClientProfile(
 
     return score;
   };
+
+  // Capa 0: Coincidencia exacta por código de centro SAP (ej. CAA9) cuando es unívoco
+  if (cleanBranchCode && cleanBranchCode.length >= 3) {
+    const sapCandidates = profiles.filter(p => {
+      const sapCode = sanitizeDocText(p.logistics_data?.sap_center_code || '');
+      return sapCode && sapCode === cleanBranchCode;
+    });
+    if (sapCandidates.length === 1) return sapCandidates[0];
+  }
 
   // Capa 1: Coincidencia por NIT (con Desambiguación Multisede)
   if (cleanNit && cleanNit.length >= 6) {

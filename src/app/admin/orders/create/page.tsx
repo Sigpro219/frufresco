@@ -1450,7 +1450,7 @@ function CreateOrderContent() {
             // 1. Clientes B2B & B2C (Parallel Fetch)
             const fetchB2B = supabase
                 .from('profiles')
-                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, is_corporate_parent, allow_off_agreement_purchases, override_parent_off_agreement, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, payment_days')
+                .select('id, company_name, contact_name, nit, address, contact_phone, latitude, longitude, email, city, municipality, parent_id, is_corporate_parent, branch_id, address_complement, allow_off_agreement_purchases, override_parent_off_agreement, logistics_data, delivery_restrictions, document_type, remission_with_prices, pricing_model_id, payment_days')
                 .eq('role', 'b2b_client')
                 .eq('is_active', true)
                 .order('company_name', { ascending: true });
@@ -3374,13 +3374,34 @@ function CreateOrderContent() {
                     nit: data.nitInDocument,
                     name: data.clientInDocument,
                     address: data.addressInDocument,
-                    phone: data.phoneInDocument
+                    phone: data.phoneInDocument,
+                    branchCode: data.branchCodeInDocument
                 }, clients);
 
-                if (autoMatchedProfile) {
+                const currentSelectedB2B = selectedClient ? clients.find(c => c.id === selectedClient) : null;
+                const isKeepingChosenChildBranch = Boolean(
+                    autoMatchedProfile &&
+                    currentSelectedB2B &&
+                    currentSelectedB2B.parent_id &&
+                    autoMatchedProfile.is_corporate_parent &&
+                    currentSelectedB2B.parent_id === autoMatchedProfile.id
+                );
+
+                if (isKeepingChosenChildBranch) {
+                    autoMatchedProfile = currentSelectedB2B;
+                    showToast(`Sucursal conservada (${currentSelectedB2B.company_name}): el documento solo mencionaba la Casa Matriz.`, 'info');
+                } else if (autoMatchedProfile) {
+                    const matchedHasBranches = Boolean(
+                        autoMatchedProfile.is_corporate_parent &&
+                        clients.some(c => c.parent_id === autoMatchedProfile.id)
+                    );
                     setSelectedClient(autoMatchedProfile.id);
                     setClientSearch(autoMatchedProfile.company_name || autoMatchedProfile.contact_name || '');
-                    showToast(`Empresa detectada y seleccionada: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                    if (matchedHasBranches) {
+                        showToast(`⚠️ Se detectó Casa Matriz (${autoMatchedProfile.company_name}). Debes seleccionar la sucursal destino antes de crear el pedido.`, 'error');
+                    } else {
+                        showToast(`Empresa detectada y seleccionada: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}`, 'success');
+                    }
                 }
             } else if (clientType === 'B2C' && b2cClients && b2cClients.length > 0) {
                 autoMatchedProfile = resolveClientProfile({
@@ -4490,6 +4511,11 @@ function CreateOrderContent() {
             showToast('Debes seleccionar una empresa cliente antes de crear los pedidos.', 'error');
             return;
         }
+        const multiSelectedB2B = clients.find(c => c.id === selectedClient);
+        if (multiSelectedB2B?.is_corporate_parent && clients.some(c => c.parent_id === selectedClient)) {
+            showToast(`⚠️ "${multiSelectedB2B.company_name}" es Casa Matriz. Selecciona la sucursal destino antes de crear los pedidos.`, 'error');
+            return;
+        }
 
         const group1Items = stagedItems.filter(i => !i.deliverySchedule && i.suggestedProduct);
         const group2Items = stagedItems.filter(i => i.deliverySchedule && i.suggestedProduct);
@@ -5033,6 +5059,10 @@ function CreateOrderContent() {
 
             if (clientType === 'B2B') {
                 const b2bDetails = getSelectedClientDetails();
+                if (b2bDetails?.is_corporate_parent && clients.some(c => c.parent_id === b2bDetails.id)) {
+                    showToast(`⚠️ "${b2bDetails.company_name}" es Casa Matriz. Selecciona la sucursal destino antes de crear el pedido.`, 'error');
+                    return;
+                }
                 if (b2bDetails) {
                     finalDocumentType = (b2bDetails as any).document_type || 'invoice';
                     finalRemissionWithPrices = (b2bDetails as any).remission_with_prices !== undefined ? (b2bDetails as any).remission_with_prices : true;

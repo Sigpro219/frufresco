@@ -171,6 +171,7 @@ export async function POST(req: Request) {
       TAREA:
       1. Identifica el nombre del CLIENTE mencionado en el documento.
          - NOMBRE DEL CLIENTE PRINCIPAL: Identifica la compañía matriz, institución o razón social que emite el documento (frecuentemente en el encabezado, logo o parte superior, ej. "Colsubsidio", "Colegio San Jorge de Inglaterra"). NUNCA uses nombres de sucursales, centros de costos (ej. "CC33 Centro de Producción...") o dependencias internas como el nombre principal del cliente. Prioriza siempre el nombre de la entidad corporativa principal. NUNCA uses nombres de ciudades o países.
+         - CÓDIGO DE CENTRO / SUCURSAL (branchCodeInDocument): Si el documento o pantallazo SAP/ZEUS muestra un código de centro, sede, sucursal o centro de costo (ej. columna "Ce." con valor "CAA9", "CC33", código de sucursal "351", o nombre específico de restaurante/sede como "Cafe de Letras"), extráelo en el campo branchCodeInDocument (si no existe, devuelve null).
          - GUÍA DE FIRMA/PIE DE PÁGINA: Si el documento es un correo o tiene pie de página, guíate por esa sección para ubicar el nombre de la empresa matriz, la dirección y el número de teléfono.
       2. Extrae todos los productos solicitados junto con su cantidad numérica y su UNIDAD DE MEDIDA O PRESENTACIÓN exacta que aparezca en la columna (ej. "Presentación", "Unidad", "Medida", "U.M." -> ej. "KG", "UND", "UNIDAD", "CUBETA", "BOLSA", "LBS", "DOCENA", etc.) o en la descripción.
       3. Identifica si hay una DIRECCIÓN de entrega o envío mencionada de forma limpia. Extrae únicamente la nomenclatura geográfica (ej. "Carrera 15 # 134A 25, Apartamento 802, Barrio Cedritos, Bogotá"). NUNCA incluyas comentarios, solicitudes de disponibilidad, firmas o textos adicionales del documento en este campo.
@@ -194,6 +195,7 @@ export async function POST(req: Request) {
       FORMATO DE RESPUESTA ESPERADO:
       {
         "clientInDocument": "Nombre del Cliente Detectado",
+        "branchCodeInDocument": "Código de centro SAP / sede / sucursal (ej. CAA9) o null",
         "poNumber": "Número de Orden de Compra o null",
         "solpedNumber": "Número de SOLPED / Solicitud de Pedido o null",
         "orderTypeLabel": "ORDEN DE COMPRA / SOLICITUD DE PEDIDO / ORDEN DE PEDIDO / OTRO",

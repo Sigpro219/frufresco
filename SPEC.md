@@ -16987,3 +16987,15 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   2. **Cero Truncado de Remisiones (`printViaNewWindow.ts`):** `.letterhead-container` fija `min-height: 250mm` (Carta) / `330mm` (Oficio) sin `break-inside: avoid` para evitar recorte en remisiones extensas.
   3. **Márgenes de Alistamiento (`alistamiento-print/page.tsx`):** `@page` fija `size: legal landscape; margin: 0.45cm 0.9cm;` para evitar salto del pie de página a hoja adicional.
   4. **Celdas Vacías Reales en World Office (`worldOfficeExport.ts`):** Las columnas opcionales sin dato emiten `undefined` (jamás `''`), evitando celdas fantasma de texto vacío en Excel.
+
+
+---
+
+### Escenario 456: Extracción de Centro SAP (`branchCodeInDocument`), Anti-Pisotón de Casa Matriz y Bloqueo de Radicación sin Sucursal (`/admin/orders/create`) (SDD v1.9.411)
+- **Given** una carga de archivo o captura SAP/ZEUS en `/admin/orders/create` (`/api/ai/extract-order`) para una entidad corporativa con sucursales (ej. *Colsubsidio* y su sede *RESTAURANTE CAFÉ DE LETRAS* con centro SAP `CAA9`):
+- **When** el motor de extracción IA procesa el documento y `resolveClientProfile` evalúa los candidatos B2B:
+- **Then**:
+  1. **Extracción de Centro / Sucursal (`branchCodeInDocument`):** `/api/ai/extract-order` incluye `branchCodeInDocument: string | null` para capturar códigos de centro SAP (`Ce.`: ej. `CAA9`), códigos de sucursal o nombres de sede sin mezclarlos con el nombre matriz.
+  2. **Resolución Prioritaria por Código SAP (`resolveClientProfile`):** `clientInfo.branchCode` se evalúa en Capa 0 (`logistics_data.sap_center_code`) y en `scoreCandidateBranch` (`sap_center_code`, `branch_id`, `address_complement`). `create/page.tsx` incluye `branch_id` y `address_complement` en la carga maestra de clientes B2B.
+  3. **Invariante Anti-Pisotón de Sucursal:** Si el operador ya seleccionó una sucursal hija (`currentSelectedB2B.parent_id === autoMatchedProfile.id`), la IA tiene prohibido sobreescribir `selectedClient` con la Casa Matriz.
+  4. **Candado Obligatorio de Casa Matriz en Radicación:** Si el perfil detectado o seleccionado tiene `is_corporate_parent === true` y posee sucursales hijas, el sistema emite alerta explícita y bloquea la creación del pedido (`handleCreateMultiOrders` y submit principal) hasta que el operador seleccione la sucursal destino.
