@@ -51,9 +51,10 @@ function buildPromptForSheetType(sheetType: PhysicalSheetType, balanceDate: stri
          - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla de cantidad, asígnale quantityKg: 0 y rawQuantityText: "0".`
       : sheetType === 'inv_manual'
       ? `PLANILLA DE CONTEO FÍSICO DE BODEGA ("Inventario de bodega - fin de turno" -> Columna T):
-         - Es un formato impreso con lista de productos numerados (ej. "1. #12 Acelga" o "1 - Acelga #12") y columna "KG" diligenciada a mano al cierre del turno.
-         - Extrae todos los productos de la planilla limpiando el prefijo secuencial de fila (ej. de "1. #12 Acelga" -> rawProductName: "Acelga", accountingId: "12").
-         - OJO CRÍTICO: El número secuencial de la izquierda (1, 2, 3...) NO es el accountingId. El accountingId SOLO es el número precedido por "#" (ej. "#106", "#1682"). Si una fila no tiene "#ID" legible, omite accountingId.
+         - Es un formato impreso de 4 columnas por bloque: "N°" | "ID" | "Producto" | "KG" (diligenciada a mano al cierre del turno).
+         - La columna "N°" (1, 2, 3...) es SOLO el consecutivo marginal de fila: IGNÓRALO.
+         - La columna "ID" contiene el código contable exacto (accountingId, ej. "106", "1582"). Extráelo SIEMPRE en el campo "accountingId" (solo dígitos).
+         - La columna "Producto" contiene el nombre limpio del producto ("rawProductName"). Si es un formato antiguo sin columna "ID" separada y trae "#ID" dentro del texto, extráelo igual en "accountingId" y limpia "rawProductName".
          - Si la casilla "KG" tiene una línea horizontal atravesada ("—", "-", raya) o está en blanco / sin valor escrito, asigna obligatoriamente quantityKg: 0 y rawQuantityText: "0".
          - Si una celda tiene una suma escrita a mano (ej. "408 + 70"), suma los valores (478) en "quantityKg" y guarda la expresión original en "rawQuantityText".`
       : sheetType === 'pedidos_desperdicio'

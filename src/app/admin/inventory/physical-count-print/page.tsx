@@ -434,8 +434,10 @@ export default function PhysicalCountPrintPage() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '75%', textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '25%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '8%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold', color: '#64748B', fontSize: '5.5pt' }}>N°</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: '900', color: '#000000' }}>ID</th>
+                                                    <th style={{ width: '56%', textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '22%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -444,18 +446,14 @@ export default function PhysicalCountPrintPage() {
                                                     const itemNum = idx + 1;
                                                     return (
                                                         <tr key={it ? it.id : `empty-left-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
-                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={it ? it.name : ''}>
-                                                                {it ? (
-                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', maxWidth: '100%' }}>
-                                                                        <span style={{ color: '#64748B', fontWeight: '600', fontSize: '5.8pt', flexShrink: 0 }}>{itemNum}.</span>
-                                                                        {it.accounting_id && (
-                                                                            <span style={{ fontSize: '6.3pt', fontWeight: '900', color: '#000000', backgroundColor: '#E2E8F0', border: '0.5px solid #94A3B8', borderRadius: '2px', padding: '0 2.5px', fontFamily: 'monospace', flexShrink: 0 }}>
-                                                                                #{it.accounting_id}
-                                                                            </span>
-                                                                        )}
-                                                                        <span style={{ fontWeight: '600', color: '#000000', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
-                                                                    </span>
-                                                                ) : null}
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#64748B', fontSize: '5.2pt', fontWeight: '600', backgroundColor: '#FFFFFF' }}>
+                                                                {it ? itemNum : ''}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: '#FFFFFF', letterSpacing: '0.02em' }}>
+                                                                {it?.accounting_id ? it.accounting_id : ''}
+                                                            </td>
+                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000' }} title={it ? it.name : ''}>
+                                                                {it ? it.name : ''}
                                                             </td>
                                                             <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>
                                                         </tr>
@@ -468,8 +466,10 @@ export default function PhysicalCountPrintPage() {
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '6.5pt' }}>
                                             <thead>
                                                 <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                                                    <th style={{ width: '75%', textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
-                                                    <th style={{ width: '25%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
+                                                    <th style={{ width: '8%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold', color: '#64748B', fontSize: '5.5pt' }}>N°</th>
+                                                    <th style={{ width: '14%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: '900', color: '#000000' }}>ID</th>
+                                                    <th style={{ width: '56%', textAlign: 'left', padding: '1.5px 4px', border: '1px solid #000000', fontWeight: 'bold' }}>Producto</th>
+                                                    <th style={{ width: '22%', textAlign: 'center', padding: '1.5px 2px', border: '1px solid #000000', fontWeight: 'bold' }}>KG</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -478,18 +478,14 @@ export default function PhysicalCountPrintPage() {
                                                     const itemNum = midPoint + idx + 1;
                                                     return (
                                                         <tr key={it ? it.id : `empty-right-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
-                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={it ? it.name : ''}>
-                                                                {it ? (
-                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', maxWidth: '100%' }}>
-                                                                        <span style={{ color: '#64748B', fontWeight: '600', fontSize: '5.8pt', flexShrink: 0 }}>{itemNum}.</span>
-                                                                        {it.accounting_id && (
-                                                                            <span style={{ fontSize: '6.3pt', fontWeight: '900', color: '#000000', backgroundColor: '#E2E8F0', border: '0.5px solid #94A3B8', borderRadius: '2px', padding: '0 2.5px', fontFamily: 'monospace', flexShrink: 0 }}>
-                                                                                #{it.accounting_id}
-                                                                            </span>
-                                                                        )}
-                                                                        <span style={{ fontWeight: '600', color: '#000000', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
-                                                                    </span>
-                                                                ) : null}
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#64748B', fontSize: '5.2pt', fontWeight: '600', backgroundColor: '#FFFFFF' }}>
+                                                                {it ? itemNum : ''}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: '#FFFFFF', letterSpacing: '0.02em' }}>
+                                                                {it?.accounting_id ? it.accounting_id : ''}
+                                                            </td>
+                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000' }} title={it ? it.name : ''}>
+                                                                {it ? it.name : ''}
                                                             </td>
                                                             <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>
                                                         </tr>
