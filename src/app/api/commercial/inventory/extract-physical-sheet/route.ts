@@ -50,8 +50,9 @@ function buildPromptForSheetType(sheetType: PhysicalSheetType, balanceDate: stri
          - Captura también el Precio pagado si aparece ("unitCostPaid") y el Nombre del Proveedor ("supplierName").
          - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla de cantidad, asígnale quantityKg: 0 y rawQuantityText: "0".`
       : sheetType === 'inv_manual'
-      ? `PLANILLA DE CONTEO FÍSICO DE BODEGA ("Inventario de bodega - fin de turno" -> Columna T):
-         - Es un formato impreso de 4 columnas por bloque: "N°" | "ID" | "Producto" | "KG" (diligenciada a mano al cierre del turno).
+      ? `PLANILLA DE CONTEO FÍSICO DE BODEGA EN DOS BLOQUES PARALELOS ("Inventario de bodega - fin de turno" -> Columna T):
+         - Es un formato impreso de DOS TABLAS lado a lado por página, cada una con 4 columnas: "N°" | "ID" | "Producto" | "KG" (diligenciada a mano al cierre del turno).
+         - REGLA ESPACIAL INVIOLABLE (CERO CRUCE DE COLUMNAS): La cantidad manuscrita de un producto SIEMPRE está en la casilla "KG" inmediatamente A LA DERECHA de su nombre en la MISMA fila. JAMÁS tomes un número o nota escrita a la IZQUIERDA del nombre del producto (eso pertenece a la columna "KG" del bloque izquierdo, NO al bloque derecho).
          - La columna "N°" (1, 2, 3...) es SOLO el consecutivo marginal de fila: IGNÓRALO.
          - La columna "ID" contiene el código contable exacto (accountingId, ej. "106", "1582"). Extráelo SIEMPRE en el campo "accountingId" (solo dígitos).
          - La columna "Producto" contiene el nombre limpio del producto ("rawProductName"). Si es un formato antiguo sin columna "ID" separada y trae "#ID" dentro del texto, extráelo igual en "accountingId" y limpia "rawProductName".
