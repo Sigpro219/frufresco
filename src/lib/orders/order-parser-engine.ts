@@ -180,15 +180,22 @@ export function resolveClientProfile(
     const contactName = sanitizeDocText(p.contact_name || '');
     const pAddress = sanitizeDocText(p.address || '');
 
-    // 0. Coincidencia exacta por código de centro SAP / sucursal (ej. CAA9, 351)
+    // 0. Coincidencia exacta por código de centro SAP / sucursal (ej. CAA9, 351) con frontera de palabra
     if (cleanBranchCode) {
       const sapCode = sanitizeDocText(p.logistics_data?.sap_center_code || '');
       const branchIdNorm = sanitizeDocText(p.branch_id || '');
       const addrCompNorm = sanitizeDocText(p.address_complement || '');
-      if (sapCode && (sapCode === cleanBranchCode || cleanBranchCode.includes(sapCode))) score += 100;
-      if (branchIdNorm && (branchIdNorm === cleanBranchCode || cleanBranchCode.includes(branchIdNorm))) score += 80;
-      if (addrCompNorm && addrCompNorm.includes(cleanBranchCode)) score += 70;
-      if (compName.includes(cleanBranchCode)) score += 60;
+      const hasWordMatch = (haystack: string, needle: string): boolean => {
+        if (!haystack || !needle) return false;
+        if (haystack === needle) return true;
+        if (needle.length < 3) return false;
+        const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`\\b${escaped}\\b`, 'i').test(haystack);
+      };
+      if (sapCode && (sapCode === cleanBranchCode || hasWordMatch(cleanBranchCode, sapCode))) score += 100;
+      if (branchIdNorm && (branchIdNorm === cleanBranchCode || hasWordMatch(cleanBranchCode, branchIdNorm))) score += 80;
+      if (addrCompNorm && hasWordMatch(addrCompNorm, cleanBranchCode)) score += 70;
+      if (cleanBranchCode.length >= 3 && hasWordMatch(compName, cleanBranchCode)) score += 60;
     }
 
     // 1. Coincidencia de Dirección exacta o parcial
@@ -220,13 +227,18 @@ export function resolveClientProfile(
     return score;
   };
 
-  // Capa 0: Coincidencia exacta por código de centro SAP (ej. CAA9) cuando es unívoco
+  // Capa 0: Coincidencia exacta por código de centro SAP (ej. CAA9) o branch_id (>= 3 chars) cuando es unívoco
   if (cleanBranchCode && cleanBranchCode.length >= 3) {
     const sapCandidates = profiles.filter(p => {
       const sapCode = sanitizeDocText(p.logistics_data?.sap_center_code || '');
       return sapCode && sapCode === cleanBranchCode;
     });
     if (sapCandidates.length === 1) return sapCandidates[0];
+    const branchIdCandidates = profiles.filter(p => {
+      const bId = sanitizeDocText(p.branch_id || '');
+      return bId && bId === cleanBranchCode;
+    });
+    if (branchIdCandidates.length === 1) return branchIdCandidates[0];
   }
 
   // Capa 1: Coincidencia por NIT (con Desambiguación Multisede)

@@ -47,6 +47,7 @@ export async function POST(req: Request) {
         TAREA:
         1. Identifica el nombre del CLIENTE / SUCURSAL mencionado en el texto:
            - Si se menciona un restaurante, hotel, empresa o punto de entrega específico (ej. "Tesoro Zona G", "Colsubsidio", "San Bartolomé"), extráelo en "clientInDocument".
+           - Si se menciona un código de centro SAP, sede o sucursal (ej. "Ce. CAA9", "CC33", "351", "Cafe de Letras"), extráelo en "branchCodeInDocument" (o null si no aparece).
            - Si es una persona natural (hogar), extrae el nombre de la persona. Si no aparece, deja null.
         2. Extrae todos los productos solicitados junto con su cantidad numérica y su UNIDAD DE MEDIDA O PRESENTACIÓN exacta:
            - REGLAS DE NORMALIZACIÓN DE UNIDADES Y JERGA EN COLOMBIA / CORABASTOS:
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
         FORMATO DE RESPUESTA ESPERADO:
         {
           "clientInDocument": "Nombre del Cliente o Sucursal o null",
+          "branchCodeInDocument": "Código de centro SAP / sede / sucursal (ej. CAA9) o null",
           "poNumber": "Número de Orden de Compra o null",
           "solpedNumber": "Número de SOLPED o null",
           "orderTypeLabel": "WHATSAPP / CHAT",
