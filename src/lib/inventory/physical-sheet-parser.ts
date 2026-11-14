@@ -21,6 +21,7 @@ export interface CatalogProductOption {
 }
 
 export interface RawExtractedSheetRow {
+  rawAccountingId?: string | number | null;
   rawProductName: string;
   rawQuantityText?: string;
   quantityKg: number;
@@ -99,6 +100,7 @@ export function parseHandwrittenQuantity(rawText: string | number | null | undef
 }
 
 export interface RawGeminiItemInput {
+  accountingId?: string | number | null;
   rawProductName?: string | null;
   rawQuantityText?: string | number | null;
   quantityKg?: number | string | null;
@@ -130,6 +132,7 @@ export function normalizeGeminiItems(rawItems: RawGeminiItemInput[]): RawExtract
         ? `Desp:${wasteQty} / Bas:${garbageQty}`
         : String(finalQty);
       return {
+        rawAccountingId: it.accountingId ?? null,
         rawProductName: cleanPhysicalSheetProductName(it.rawProductName || ''),
         rawQuantityText: resolvedRawText,
         quantityKg: finalQty,
@@ -172,8 +175,23 @@ const CANONICAL_NAME_TO_ACCOUNTING_ID: Record<string, number> = {
   'germinados x 100 gr': 1104,
 };
 
-export function matchProductAgainstCatalog(rawProductName: string, catalog: CatalogProductOption[]): { product: CatalogProductOption | null; confidence: number } {
-  if (!rawProductName || catalog.length === 0) return { product: null, confidence: 0 };
+export function matchProductAgainstCatalog(
+  rawProductName: string,
+  catalog: CatalogProductOption[],
+  rawAccountingId?: string | number | null
+): { product: CatalogProductOption | null; confidence: number } {
+  if (catalog.length === 0) return { product: null, confidence: 0 };
+
+  // 0. Prioridad máxima: accounting_id explícito extraído de la planilla (#ID)
+  if (rawAccountingId !== undefined && rawAccountingId !== null && String(rawAccountingId).trim() !== '') {
+    const cleanId = parseInt(String(rawAccountingId).replace(/\D/g, ''), 10);
+    if (!Number.isNaN(cleanId) && cleanId > 0) {
+      const byExplicitId = catalog.find(item => Number(item.accounting_id) === cleanId);
+      if (byExplicitId) return { product: byExplicitId, confidence: 100 };
+    }
+  }
+
+  if (!rawProductName) return { product: null, confidence: 0 };
   const fullNorm = normalizeProductToken(rawProductName);
   const coreNorm = extractCoreProductNameForMatch(rawProductName);
 
@@ -226,7 +244,7 @@ export function buildReconciledSheetRows(
   const result: ReconciledSheetRow[] = [];
 
   extractedRows.forEach((raw, idx) => {
-    const { product, confidence } = matchProductAgainstCatalog(raw.rawProductName, catalog);
+    const { product, confidence } = matchProductAgainstCatalog(raw.rawProductName, catalog, raw.rawAccountingId);
     const opsMetrics = product ? opsCurrentByProductAndCol.get(product.id) : undefined;
 
     const pushRow = (qty: number, targetCol: TargetBalanceColumn, subIdx: string, noteOverride?: string) => {

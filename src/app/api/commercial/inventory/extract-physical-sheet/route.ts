@@ -51,8 +51,9 @@ function buildPromptForSheetType(sheetType: PhysicalSheetType, balanceDate: stri
          - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla de cantidad, asígnale quantityKg: 0 y rawQuantityText: "0".`
       : sheetType === 'inv_manual'
       ? `PLANILLA DE CONTEO FÍSICO DE BODEGA ("Inventario de bodega - fin de turno" -> Columna T):
-         - Es un formato impreso con lista de productos numerados (ej. "1 - Ahuyama") y columna "KG" diligenciada a mano al cierre del turno.
-         - Extrae todos los productos de la planilla limpia el prefijo numérico (ej. de "1 - Ahuyama" extrae "Ahuyama").
+         - Es un formato impreso con lista de productos numerados (ej. "1. #12 Acelga" o "1 - Acelga #12") y columna "KG" diligenciada a mano al cierre del turno.
+         - Extrae todos los productos de la planilla limpiando el prefijo secuencial de fila (ej. de "1. #12 Acelga" -> rawProductName: "Acelga", accountingId: "12").
+         - OJO CRÍTICO: El número secuencial de la izquierda (1, 2, 3...) NO es el accountingId. El accountingId SOLO es el número precedido por "#" (ej. "#106", "#1682"). Si una fila no tiene "#ID" legible, omite accountingId.
          - Si la casilla "KG" tiene una línea horizontal atravesada ("—", "-", raya) o está en blanco / sin valor escrito, asigna obligatoriamente quantityKg: 0 y rawQuantityText: "0".
          - Si una celda tiene una suma escrita a mano (ej. "408 + 70"), suma los valores (478) en "quantityKg" y guarda la expresión original en "rawQuantityText".`
       : sheetType === 'pedidos_desperdicio'
@@ -83,7 +84,7 @@ REGLAS ESTRICTAS DE EXTRACCIÓN:
 3. En números con coma o punto decimal (ej. "9,9", "8,50" o "184,7"), conviértelos siempre a número flotante estándar con punto (9.9, 8.5, 184.7).
 4. En cantidades de peso, la letra "K" significa Kilogramos (NO significa mil): "170K" = 170, "55K" = 55.
 5. PROHIBIDO hacer recálculos mayoristas: respeta el valor numérico directo escrito en la columna KG (no dupliques un mismo renglón si tiene una nota lateral; toma el valor de la columna KG).
-6. Remueve el número de orden inicial del nombre del producto (ej. "1 - Ahuyama" -> "Ahuyama", "10 - Arracacha" -> "Arracacha").
+6. Remueve el número de orden inicial y el badge "#ID" del nombre del producto (ej. "1. #106 Cebolla cabezona blanca" -> rawProductName: "Cebolla cabezona blanca", accountingId: "106"). Nunca confundas el consecutivo de fila (1, 2, 3...) con el accountingId (#ID).
 
 ESTRUCTURA JSON EXACTA REQUERIDA (Omite campos que sean null para máxima velocidad):
 {
@@ -91,6 +92,7 @@ ESTRUCTURA JSON EXACTA REQUERIDA (Omite campos que sean null para máxima veloci
   "dateDetected": "YYYY-MM-DD",
   "items": [
     {
+      "accountingId": "106",
       "rawProductName": "Nombre del producto",
       "rawQuantityText": "Texto de la cantidad escrita",
       "quantityKg": 478

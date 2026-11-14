@@ -12,7 +12,9 @@ import {
   ArrowDown,
   ArrowUpDown,
   Search,
-  X
+  X,
+  Filter,
+  ArrowUpToLine
 } from 'lucide-react';
 import {
   PhysicalSheetType,
@@ -86,6 +88,8 @@ export default function PhysicalSheetStagingTable({
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [rowFilterQuery, setRowFilterQuery] = useState<string>('');
+  const [onlyPositiveRows, setOnlyPositiveRows] = useState<boolean>(false);
+  const [pinPositiveFirst, setPinPositiveFirst] = useState<boolean>(false);
   const [showFormulaTooltip, setShowFormulaTooltip] = useState<boolean>(false);
   const [activeDropdownRowIndex, setActiveDropdownRowIndex] = useState<number | null>(null);
   const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
@@ -125,9 +129,11 @@ export default function PhysicalSheetStagingTable({
       }
     }
 
-    if (!sortField) return base;
+    if (onlyPositiveRows) {
+      base = base.filter(r => Number(r.quantity) > 0);
+    }
 
-    return [...base].sort((a, b) => {
+    const sortComparator = (a: ReconciledSheetRow, b: ReconciledSheetRow) => {
       if (sortField === 'quantity') {
         const numA = Number(a.quantity) || 0;
         const numB = Number(b.quantity) || 0;
@@ -143,8 +149,26 @@ export default function PhysicalSheetStagingTable({
           : b.matchedProductName || b.rawProductName || '';
       const cmp = valA.localeCompare(valB, 'es', { sensitivity: 'base', numeric: true });
       return sortOrder === 'asc' ? cmp : -cmp;
-    });
-  }, [reconciledRows, rowFilterQuery, sortField, sortOrder]);
+    };
+
+    if (pinPositiveFirst) {
+      const positives = base.filter(r => Number(r.quantity) > 0);
+      const zeros = base.filter(r => Number(r.quantity) <= 0);
+      if (sortField) {
+        positives.sort(sortComparator);
+        zeros.sort(sortComparator);
+      }
+      return [...positives, ...zeros];
+    }
+
+    if (!sortField) return base;
+    return [...base].sort(sortComparator);
+  }, [reconciledRows, rowFilterQuery, onlyPositiveRows, pinPositiveFirst, sortField, sortOrder]);
+
+  const positiveQtyCount = useMemo(
+    () => reconciledRows.filter(r => Number(r.quantity) > 0).length,
+    [reconciledRows]
+  );
 
   const eligiblePositiveRows = reconciledRows.filter(r => r.quantity > 0 && Boolean(r.matchedProductId));
   const allSelected =
@@ -201,7 +225,7 @@ export default function PhysicalSheetStagingTable({
 
   const stickyThBase: React.CSSProperties = {
     position: 'sticky',
-    top: 0,
+    top: '36px',
     zIndex: 30,
     backgroundColor: '#F8FAFC',
     borderBottom: '2px solid #E2E8F0',
@@ -218,6 +242,72 @@ export default function PhysicalSheetStagingTable({
       id="physical-staged-scroll-container"
       style={{ flex: 1, minWidth: '460px', padding: 0, overflowY: 'auto', height: '100%', position: 'relative', scrollBehavior: 'smooth', backgroundColor: '#FFFFFF' }}
     >
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 35,
+          height: '36px',
+          padding: '0 0.75rem',
+          backgroundColor: '#F1F5F9',
+          borderBottom: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <button
+            type="button"
+            onClick={() => setOnlyPositiveRows(prev => !prev)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: onlyPositiveRows ? '1.5px solid #059669' : '1px solid #CBD5E1',
+              backgroundColor: onlyPositiveRows ? '#059669' : '#FFFFFF',
+              color: onlyPositiveRows ? '#FFFFFF' : '#334155',
+              transition: 'all 0.12s ease'
+            }}
+          >
+            <Filter size={11} />
+            <span>Solo con cantidad ({positiveQtyCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPinPositiveFirst(prev => !prev)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: pinPositiveFirst ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+              backgroundColor: pinPositiveFirst ? '#0284C7' : '#FFFFFF',
+              color: pinPositiveFirst ? '#FFFFFF' : '#334155',
+              transition: 'all 0.12s ease'
+            }}
+          >
+            <ArrowUpToLine size={11} />
+            <span>Detectados arriba</span>
+          </button>
+        </div>
+
+        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B' }}>
+          {positiveQtyCount} con cantidad · {reconciledRows.length - positiveQtyCount} en cero
+        </div>
+      </div>
+
       <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', position: 'relative' }}>
         <thead>
           <tr>
@@ -334,6 +424,7 @@ export default function PhysicalSheetStagingTable({
           {displayRows.map((row, idx) => {
             const isConfidenceHigh = row.confidence >= 90;
             const isActiveRow = activeDropdownRowIndex === idx;
+            const hasQty = Number(row.quantity) > 0;
             const currentInputVal =
               isActiveRow && activeRowSearchQuery !== null
                 ? activeRowSearchQuery
@@ -348,7 +439,28 @@ export default function PhysicalSheetStagingTable({
               <tr
                 key={row.rowId}
                 id={`physical-staged-row-${idx}`}
-                style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: isActiveRow ? '#FFFFFF' : row.conciliationStatus === 'discrepancy' ? '#FFFBEB' : row.matchedProductId ? isConfidenceHigh ? '#FFFFFF' : '#FEFCE8' : '#FFF7ED', boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.16)' : 'none', borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent', zIndex: isActiveRow ? 20 : 1, position: 'relative', transition: 'all 0.15s ease' }}
+                style={{
+                  borderBottom: '1px solid #E2E8F0',
+                  backgroundColor: isActiveRow
+                    ? '#FFFFFF'
+                    : row.conciliationStatus === 'discrepancy'
+                    ? '#FFFBEB'
+                    : !row.matchedProductId
+                    ? '#FFF7ED'
+                    : hasQty
+                    ? '#ECFDF5'
+                    : '#FAFAFA',
+                  boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.16)' : 'none',
+                  borderLeft: isActiveRow
+                    ? '4px solid #2563EB'
+                    : hasQty
+                    ? '4px solid #059669'
+                    : '4px solid transparent',
+                  opacity: isActiveRow || hasQty || !row.matchedProductId ? 1 : 0.48,
+                  zIndex: isActiveRow ? 20 : 1,
+                  position: 'relative',
+                  transition: 'all 0.15s ease'
+                }}
               >
                 <td style={{ padding: '0.45rem 0.45rem', textAlign: 'center', width: '36px', borderBottom: '1px solid #F1F5F9' }}>
                   <input
@@ -378,7 +490,14 @@ export default function PhysicalSheetStagingTable({
                   </div>
                   <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                     <span
-                      style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', padding: '1px 7px', borderRadius: '6px', fontWeight: 900 }}
+                      style={{
+                        backgroundColor: hasQty ? '#059669' : '#F1F5F9',
+                        color: hasQty ? '#FFFFFF' : '#64748B',
+                        border: hasQty ? '1.5px solid #047857' : '1px solid #E2E8F0',
+                        padding: '1px 7px',
+                        borderRadius: '6px',
+                        fontWeight: 900
+                      }}
                     >
                       {row.rawQuantityText || `${row.quantity} ${row.matchedUnit}`}
                     </span>

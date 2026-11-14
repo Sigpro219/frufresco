@@ -446,14 +446,15 @@ export default function PhysicalCountPrintPage() {
                                                         <tr key={it ? it.id : `empty-left-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
                                                             <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={it ? it.name : ''}>
                                                                 {it ? (
-                                                                    <>
-                                                                        <span style={{ fontWeight: '600', color: '#000000' }}>{itemNum} - {it.name}</span>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', maxWidth: '100%' }}>
+                                                                        <span style={{ color: '#64748B', fontWeight: '600', fontSize: '5.8pt', flexShrink: 0 }}>{itemNum}.</span>
                                                                         {it.accounting_id && (
-                                                                            <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
+                                                                            <span style={{ fontSize: '6.3pt', fontWeight: '900', color: '#000000', backgroundColor: '#E2E8F0', border: '0.5px solid #94A3B8', borderRadius: '2px', padding: '0 2.5px', fontFamily: 'monospace', flexShrink: 0 }}>
                                                                                 #{it.accounting_id}
                                                                             </span>
                                                                         )}
-                                                                    </>
+                                                                        <span style={{ fontWeight: '600', color: '#000000', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
+                                                                    </span>
                                                                 ) : null}
                                                             </td>
                                                             <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>
@@ -479,14 +480,15 @@ export default function PhysicalCountPrintPage() {
                                                         <tr key={it ? it.id : `empty-right-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
                                                             <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={it ? it.name : ''}>
                                                                 {it ? (
-                                                                    <>
-                                                                        <span style={{ fontWeight: '600', color: '#000000' }}>{itemNum} - {it.name}</span>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', maxWidth: '100%' }}>
+                                                                        <span style={{ color: '#64748B', fontWeight: '600', fontSize: '5.8pt', flexShrink: 0 }}>{itemNum}.</span>
                                                                         {it.accounting_id && (
-                                                                            <span style={{ fontSize: '5.5pt', color: '#94A3B8', marginLeft: '3px', fontFamily: 'monospace' }}>
+                                                                            <span style={{ fontSize: '6.3pt', fontWeight: '900', color: '#000000', backgroundColor: '#E2E8F0', border: '0.5px solid #94A3B8', borderRadius: '2px', padding: '0 2.5px', fontFamily: 'monospace', flexShrink: 0 }}>
                                                                                 #{it.accounting_id}
                                                                             </span>
                                                                         )}
-                                                                    </>
+                                                                        <span style={{ fontWeight: '600', color: '#000000', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
+                                                                    </span>
                                                                 ) : null}
                                                             </td>
                                                             <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>

@@ -815,8 +815,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const docTypeLabel = isActiveExcel ? 'Excel' : isActivePdf ? 'PDF' : 'Imagen';
   const isCompactMode = collapseTitleBar && (collapseStatsBar || !isStaging);
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isStaging ? '0.4rem 0.65rem' : '1rem' }}>
-      <div style={{ width: '100%', maxWidth: '1600px', height: isStaging ? '96.5vh' : '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: isStaging ? '18px' : '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isStaging ? '0.25rem 0.35rem' : '1rem' }}>
+      <div style={{ width: '100%', maxWidth: isStaging ? '99vw' : '1600px', height: isStaging ? '97.5vh' : '93vh', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: isStaging ? '14px' : '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
         {/* FILA 1 (COLAPSIBLE): CABECERA PRINCIPAL */}
         {!collapseTitleBar && (
           <div style={{ padding: '0.7rem 1.25rem', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1231,7 +1231,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
             {/* CUERPO SPLIT-SCREEN: DOCUMENTO ORIGINAL A LA IZQUIERDA + TABLA IA A LA DERECHA */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
               {showSideDocPreview && (
-                <div style={{ width: '48%', minWidth: '420px', borderRight: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', padding: '0.45rem 0.65rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ width: '54%', minWidth: '460px', borderRight: '2px solid #E2E8F0', backgroundColor: '#F8FAFC', padding: '0.35rem 0.5rem', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', gap: '6px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '0.71rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
