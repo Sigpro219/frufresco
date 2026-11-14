@@ -39,6 +39,14 @@ import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } fr
 import { DirectPdfDocKey, saveRemotePrintUrlAsPdfDirect } from '@/components/print/savePdfDirect';
 import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
+import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { getBogotaDateString } from '@/lib/dateUtils';
+import {
+    resolveInitialInventory,
+    evaluateInventoryGateStatus,
+    recordInventoryGateOverride,
+    type InventoryGateStatus
+} from '@/lib/inventory/resolveInitialInventory';
 
 interface ManualDispatchWizardModalProps {
     isOpen: boolean;
@@ -65,6 +73,28 @@ export default function ManualDispatchWizardModal({
     const [pdfBusyDoc, setPdfBusyDoc] = useState<DirectPdfDocKey | null>(null);
     const [pdfProgressText, setPdfProgressText] = useState<string>('');
     const [isExportingRelacion, setIsExportingRelacion] = useState<boolean>(false);
+    const { user, profile } = useAuth();
+    const [gateStatus, setGateStatus] = useState<InventoryGateStatus | null>(null);
+    const [emergencyChecked, setEmergencyChecked] = useState<boolean>(false);
+    const [emergencyReason, setEmergencyReason] = useState<string>('');
+
+    const canAuthorizeOverride = Boolean(
+        profile?.role === 'admin' ||
+        profile?.role === 'sys_admin' ||
+        profile?.role === 'supervisor' ||
+        profile?.custom_permissions?.includes('*') ||
+        checkUserPermission(profile, 'admin.orders') ||
+        checkUserPermission(profile, 'admin.inventory')
+    );
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setEmergencyChecked(false);
+        setEmergencyReason('');
+        evaluateInventoryGateStatus({ supabase, targetDate: getBogotaDateString() })
+            .then(setGateStatus)
+            .catch(err => console.warn('[ManualDispatchWizardModal] Error evaluando compuerta de inventario:', err));
+    }, [isOpen]);
 
     // Checklist de Conformidad por Bloque
     const [step1Confirmed, setStep1Confirmed] = useState<boolean>(false);
@@ -484,9 +514,31 @@ export default function ManualDispatchWizardModal({
             alert('Debes confirmar la verificación de los rótulos térmicos y documentos físicos antes de finalizar.');
             return;
         }
+        if (gateStatus && gateStatus.level !== 'green') {
+            if (!canAuthorizeOverride) {
+                alert(`Inventario pendiente de cierre (${gateStatus.lastOperatedDate || ''}). Solo un Administrador o Supervisor puede autorizar el lanzamiento de emergencia.`);
+                return;
+            }
+            if (!emergencyChecked || emergencyReason.trim().length < 8) {
+                alert('Debes marcar la autorización de emergencia y escribir un motivo válido (mínimo 8 caracteres).');
+                return;
+            }
+        }
 
         setFinalizingLoading(true);
         try {
+            if (gateStatus && gateStatus.level !== 'green') {
+                await recordInventoryGateOverride({
+                    supabase,
+                    targetOperationDate: deliveryDate || getBogotaDateString(),
+                    pendingClosingDate: gateStatus.lastOperatedDate,
+                    sourceKind: gateStatus.sourceKind,
+                    reason: emergencyReason,
+                    authorizedBy: user?.id || null,
+                    authorizedByName: profile?.contact_name || profile?.company_name || user?.email || 'Administrador',
+                });
+            }
+
             const { error } = await supabase
                 .from('orders')
                 .update({ status: 'para_compra' })
@@ -524,7 +576,7 @@ export default function ManualDispatchWizardModal({
     // Generador oficial del Excel Maestro de Compras (11 Columnas) idéntico a compras_YYYY-MM-DD.xlsx
     const handleExportMasterPurchasesExcel = async () => {
         try {
-            const cleanDateStr = deliveryDate || new Date().toISOString().split('T')[0];
+            const cleanDateStr = deliveryDate || getBogotaDateString();
             const fileName = `compras_${cleanDateStr}.xlsx`;
             let fileHandle: any = null;
             try {
@@ -538,24 +590,14 @@ export default function ManualDispatchWizardModal({
                 if (isSavePickerAborted(pickerErr)) return;
             }
 
-            // 0. Cargar Inventario Base Oficial desde daily_inventory_closings en tiempo real (SPEC.md §30.2)
-            const targetDate = deliveryDate || new Date().toISOString().split('T')[0];
+            // 0. Cargar Inventario Base Oficial mediante Motor Canónico Único (SPEC.md Escenario 438 & 457: < targetDate)
+            const targetDate = deliveryDate || getBogotaDateString();
             const inventoryStockMap = new Map<string, number>();
             try {
-                const { data: closings } = await supabase
-                    .from('daily_inventory_closings')
-                    .select('closing_date, snapshot_items')
-                    .lte('closing_date', targetDate)
-                    .order('closing_date', { ascending: false })
-                    .limit(1);
-
-                if (closings && closings[0]?.snapshot_items && Array.isArray(closings[0].snapshot_items)) {
-                    closings[0].snapshot_items.forEach((it: any) => {
-                        const stockVal = Number(it.physicalCount !== undefined && it.physicalCount !== null ? it.physicalCount : (it.calculatedStock || 0));
-                        if (it.productId) inventoryStockMap.set(`ID_${it.productId}`, stockVal);
-                        if (it.accountingId) inventoryStockMap.set(`ACC_${it.accountingId}`, stockVal);
-                    });
-                }
+                const resolvedInv = await resolveInitialInventory({ supabase, targetDate });
+                Object.entries(resolvedInv.stockMap).forEach(([prodId, qty]) => {
+                    inventoryStockMap.set(`ID_${prodId}`, qty);
+                });
             } catch (invErr) {
                 console.warn('[handleExportMasterPurchasesExcel] Error cargando inventario oficial:', invErr);
             }
@@ -1821,13 +1863,71 @@ export default function ManualDispatchWizardModal({
                             </label>
 
                             {step4Confirmed ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', maxWidth: '520px' }}>
+                                    {gateStatus && gateStatus.level !== 'green' && (
+                                        <div style={{
+                                            width: '100%',
+                                            backgroundColor: gateStatus.level === 'red' ? '#FEF2F2' : '#FFFBEB',
+                                            border: `1.5px solid ${gateStatus.level === 'red' ? '#FCA5A5' : '#FCD34D'}`,
+                                            borderRadius: '10px',
+                                            padding: '10px 12px',
+                                            fontSize: '0.74rem',
+                                            color: gateStatus.level === 'red' ? '#991B1B' : '#92400E'
+                                        }}>
+                                            <div style={{ fontWeight: 900, marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                <span>{gateStatus.headline}</span>
+                                                <Link
+                                                    href={`/admin/commercial/inventory?date=${gateStatus.lastOperatedDate || ''}`}
+                                                    target="_blank"
+                                                    style={{ color: '#0F172A', textDecoration: 'underline', fontWeight: 800, whiteSpace: 'nowrap' }}
+                                                >
+                                                    Ir a Cerrar Inventario ↗
+                                                </Link>
+                                            </div>
+                                            <div style={{ fontSize: '0.70rem', marginBottom: '6px' }}>{gateStatus.detail}</div>
+                                            {canAuthorizeOverride ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={emergencyChecked}
+                                                            onChange={(e) => setEmergencyChecked(e.target.checked)}
+                                                        />
+                                                        Autorizar lanzamiento de emergencia (auditado)
+                                                    </label>
+                                                    {emergencyChecked && (
+                                                        <input
+                                                            type="text"
+                                                            value={emergencyReason}
+                                                            onChange={(e) => setEmergencyReason(e.target.value)}
+                                                            placeholder="Motivo obligatorio (mín. 8 caracteres)..."
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '6px 8px',
+                                                                borderRadius: '6px',
+                                                                border: '1px solid #CBD5E1',
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#0F172A',
+                                                                fontSize: '0.72rem'
+                                                            }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div style={{ fontWeight: 800 }}>Solo Admin/Supervisor puede autorizar emergencia.</div>
+                                            )}
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handleFinalizeLaunch}
-                                        disabled={finalizingLoading || selectedOrderIds.size === 0}
+                                        disabled={
+                                            finalizingLoading ||
+                                            selectedOrderIds.size === 0 ||
+                                            Boolean(gateStatus && gateStatus.level !== 'green' && (!canAuthorizeOverride || !emergencyChecked || emergencyReason.trim().length < 8))
+                                        }
                                         style={{
                                             padding: '12px 24px',
-                                            backgroundColor: selectedOrderIds.size === 0 ? '#94A3B8' : '#059669',
+                                            backgroundColor: (selectedOrderIds.size === 0 || Boolean(gateStatus && gateStatus.level !== 'green' && (!canAuthorizeOverride || !emergencyChecked || emergencyReason.trim().length < 8))) ? '#94A3B8' : '#059669',
                                             color: '#FFFFFF',
                                             border: 'none',
                                             borderRadius: '12px',

@@ -11,6 +11,7 @@ import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveB
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
+import { resolveInitialInventory, type InventorySourceKind } from '@/lib/inventory/resolveInitialInventory';
 
 interface OrderItem {
     id: string;
@@ -410,6 +411,7 @@ export default function AlistamientoSabanaPrintPage() {
     const [loading, setLoading] = useState(true);
     const [generationTime, setGenerationTime] = useState<string>('');
     const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({});
+    const [invSourceMeta, setInvSourceMeta] = useState<{ sourceDate: string | null; sourceKind: InventorySourceKind }>({ sourceDate: null, sourceKind: 'none' });
     const [parentNames, setParentNames] = useState<Record<string, string>>({});
     const printDocRef = useRef<HTMLDivElement>(null);
 
@@ -628,50 +630,13 @@ export default function AlistamientoSabanaPrintPage() {
             // Ordenar pedidos por número de bahía física en suelo
             parsedOrders.sort((a, b) => a.first_space - b.first_space);
 
-            // Fetch existencias de inventario inicial para la fecha seleccionada (SDD v1.9.307 Escenario 325):
-            // 1. Priorizar el Conteo Físico Real (bodegaPost10am ?? physicalCount) del último cierre oficial previo o igual a selectedDate.
-            // 2. En modo marcha blanca / transición, si no hubo conteo físico (null), respaldar con calculatedStock.
-            const newInventoryMap: Record<string, number> = {};
-            let loadedFromClosing = false;
-            try {
-                const { data: prevClosing } = await supabase
-                    .from('daily_inventory_closings')
-                    .select('snapshot_items, closing_date')
-                    .lte('closing_date', selectedDate)
-                    .order('closing_date', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (prevClosing?.snapshot_items && Array.isArray(prevClosing.snapshot_items) && prevClosing.snapshot_items.length > 0) {
-                    prevClosing.snapshot_items.forEach((item: any) => {
-                        if (!item.productId || newInventoryMap[item.productId] !== undefined) return;
-                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
-                            ? Number(item.bodegaPost10am)
-                            : (item.physicalCount !== null && item.physicalCount !== undefined
-                                ? Number(item.physicalCount)
-                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
-                                    ? Number(item.calculatedStock)
-                                    : 0));
-                        newInventoryMap[item.productId] = Math.max(0, finalStock);
-                    });
-                    loadedFromClosing = true;
-                }
-            } catch (closeErr) {
-                console.warn('Error consultando daily_inventory_closings en alistamiento-print:', closeErr);
-            }
-
-            if (!loadedFromClosing) {
-                const { data: stockRows } = await supabase
-                    .from('inventory_stocks')
-                    .select('product_id, quantity')
-                    .eq('status', 'available')
-                    .limit(5000);
-
-                (stockRows || []).forEach((row: { product_id: string; quantity: number }) => {
-                    newInventoryMap[row.product_id] = (newInventoryMap[row.product_id] ?? 0) + row.quantity;
-                });
-            }
-            setInventoryMap(newInventoryMap);
+            // Fetch existencias de inventario inicial mediante Motor Canónico Único (SPEC.md Escenario 457: < selectedDate)
+            const resolvedInv = await resolveInitialInventory({
+                supabase,
+                targetDate: selectedDate,
+            });
+            setInventoryMap(resolvedInv.stockMap);
+            setInvSourceMeta({ sourceDate: resolvedInv.sourceDate, sourceKind: resolvedInv.sourceKind });
 
             setOrders(parsedOrders);
             setItems(parsedItems);
@@ -1151,7 +1116,14 @@ export default function AlistamientoSabanaPrintPage() {
                                             INVESTMENTS CORTES SAS
                                         </div>
                                         <div style={{ fontSize: '6.5pt', color: '#475569', fontWeight: 600, marginTop: '1px' }}>
-                                            GENERADO EL: {generationTime}
+                                            GENERADO EL: {generationTime} ·{' '}
+                                            <span style={{ color: invSourceMeta.sourceKind === 'official_closing' ? '#065F46' : '#B91C1C', fontWeight: 800 }}>
+                                                {invSourceMeta.sourceKind === 'official_closing'
+                                                    ? `BASE INV: CIERRE OFICIAL ${invSourceMeta.sourceDate}`
+                                                    : invSourceMeta.sourceDate
+                                                        ? `BASE INV: CONTEO SIN CIERRE (${invSourceMeta.sourceDate})`
+                                                        : 'BASE INV: SIN CIERRE PREVIO (0)'}
+                                            </span>
                                         </div>
                                         <div style={{ fontSize: '9.2pt', fontWeight: 900, color: '#0D7A57', marginTop: '1px', textTransform: 'uppercase' }}>
                                             FECHA {formatDisplayDate(selectedDate)} - {cellName}. Página: {chunkIdx + 1} de {totalChunksForCell}

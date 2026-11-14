@@ -18,6 +18,8 @@ import {
     Info
 } from 'lucide-react';
 import { INVENTORY_MOVEMENT_SUBTYPES } from '@/lib/constants';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
+import { replaceBlindCountMovementsForDate } from '@/lib/inventory/resolveInitialInventory';
 import { formatNumber } from '@/lib/adminTheme';
 
 interface ProductItem {
@@ -73,7 +75,7 @@ export default function DailyBalanceExcelImportModal({
     currentDate,
     products
 }: DailyBalanceExcelImportModalProps) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
     const [targetDate, setTargetDate] = useState<string>(currentDate || todayStr);
     const [fileName, setFileName] = useState<string | null>(null);
     const [parsedRows, setParsedRows] = useState<ParsedOperationRow[]>([]);
@@ -594,6 +596,20 @@ export default function DailyBalanceExcelImportModal({
                 throw new Error('No se generaron movimientos. Verifique que el archivo contenga valores numéricos en compras, ventas o conteos.');
             }
 
+            const blindCountProductIds = Array.from(new Set(
+                movementsToInsert
+                    .filter((m) => m.reference_type === 'blind_count_shift_close' || m.reference_type === 'blind_count')
+                    .map((m) => String(m.product_id))
+                    .filter(Boolean)
+            ));
+            if (blindCountProductIds.length > 0) {
+                await replaceBlindCountMovementsForDate({
+                    supabase,
+                    productIds: blindCountProductIds,
+                    targetDate,
+                });
+            }
+
             const batchSize = 200;
             for (let i = 0; i < movementsToInsert.length; i += batchSize) {
                 const batch = movementsToInsert.slice(i, i + batchSize);
@@ -606,7 +622,7 @@ export default function DailyBalanceExcelImportModal({
             if (rowsWithInitial.length > 0) {
                 const targetD = new Date(`${targetDate}T12:00:00-05:00`);
                 targetD.setDate(targetD.getDate() - 1);
-                const prevDateStr = targetD.toISOString().split('T')[0];
+                const prevDateStr = getBogotaDateString(targetD);
 
                 const snapshotItems = rowsToInsert.filter(r => r.productId).map(r => ({
                     sku: r.matchedProduct?.sku || '',
@@ -640,7 +656,7 @@ export default function DailyBalanceExcelImportModal({
 
                 const closingPayload = {
                     closing_date: prevDateStr,
-                    closed_at: `${prevDateStr}T23:59:59.000Z`,
+                    closed_at: `${prevDateStr}T23:59:59-05:00`,
                     closed_by_name: 'Carga Masiva Excel (Línea Base Inicial)',
                     notes: `Cierre Oficial de Línea Base establecido a partir del cargue masivo Excel (${fileName || 'archivo'})`,
                     total_calculated: totalInitial,
@@ -679,8 +695,7 @@ export default function DailyBalanceExcelImportModal({
         setSuccessMessage(null);
 
         try {
-            const startOfDayIso = `${targetDate}T00:00:00.000Z`;
-            const endOfDayIso = `${targetDate}T23:59:59.999Z`;
+            const { startUtcIso: startOfDayIso, endUtcIso: endOfDayIso } = getBogotaDayRangeUtcIso(targetDate);
 
             const { error: delError } = await supabase
                 .from('inventory_movements')
@@ -694,7 +709,7 @@ export default function DailyBalanceExcelImportModal({
             // Limpiar cierre de línea base D-1 si fue creado por carga masiva Excel
             const targetD = new Date(`${targetDate}T12:00:00-05:00`);
             targetD.setDate(targetD.getDate() - 1);
-            const prevDateStr = targetD.toISOString().split('T')[0];
+            const prevDateStr = getBogotaDateString(targetD);
             await supabase
                 .from('daily_inventory_closings')
                 .delete()

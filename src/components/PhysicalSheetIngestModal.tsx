@@ -8,6 +8,7 @@ import PdfCanvasViewer from '@/components/PdfCanvasViewer';
 import ExcelTableViewer from '@/components/ExcelTableViewer';
 import PhysicalSheetStagingTable from '@/components/PhysicalSheetStagingTable';
 import { PhysicalSheetType, TargetBalanceColumn, CatalogProductOption, ReconciledSheetRow, RawExtractedSheetRow, ArbitrationResolution, buildReconciledSheetRows, classifyWasteTargetColumn } from '@/lib/inventory/physical-sheet-parser';
+import { replaceBlindCountMovementsForDate, getDailyManualChecklistStatus, saveDailyNovedadZero, type DailyChecklistStatus, type NovedadColumnKey } from '@/lib/inventory/resolveInitialInventory';
 
 interface PdfJsViewport {
   width: number;
@@ -80,6 +81,8 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
   const [collapseTitleBar, setCollapseTitleBar] = useState<boolean>(false);
   const [collapseStatsBar, setCollapseStatsBar] = useState<boolean>(false);
   const [commitSummary, setCommitSummary] = useState<CommitSummaryData | null>(null);
+  const [checklistStatus, setChecklistStatus] = useState<DailyChecklistStatus | null>(null);
+  const [savingNovedadCol, setSavingNovedadCol] = useState<NovedadColumnKey | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendFileInputRef = useRef<HTMLInputElement>(null);
   const previewUrlsRef = useRef<string[]>([]);
@@ -91,6 +94,36 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
       previewUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || !balanceDate) return;
+    let cancelled = false;
+    getDailyManualChecklistStatus(supabase, balanceDate)
+      .then((res) => { if (!cancelled) setChecklistStatus(res); })
+      .catch((err) => console.warn('Checklist modal fetch warning:', err));
+    return () => { cancelled = true; };
+  }, [isOpen, balanceDate, commitSummary]);
+
+  const handleToggleNovedadZero = async (colKey: NovedadColumnKey) => {
+    if (!balanceDate || savingNovedadCol) return;
+    const currentlyMarked = Boolean(checklistStatus?.novedades?.[colKey]?.marked);
+    setSavingNovedadCol(colKey);
+    try {
+      await saveDailyNovedadZero({
+        supabase,
+        balanceDate,
+        colKey,
+        marked: !currentlyMarked,
+        operatorName: supervisorName || 'Operador',
+      });
+      const refreshed = await getDailyManualChecklistStatus(supabase, balanceDate);
+      setChecklistStatus(refreshed);
+    } catch (err) {
+      console.error('Error toggling novedad zero:', err);
+    } finally {
+      setSavingNovedadCol(null);
+    }
+  };
 
   // Si un PDF escaneado supera 3.2 MB (ej. CamScanner pesado), desglosar sus páginas en imágenes JPEG ligeras (~220 KB c/u) usando el mismo motor PDF.js 3.11.174 de PdfCanvasViewer
   const sliceHeavyPdfIntoPageJpegs = async (file: File): Promise<{ pages: File[]; warning: string | null }> => {
@@ -623,6 +656,18 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
           ? INVENTORY_MOVEMENT_SUBTYPES.FOOD_BANK
           : INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT;
 
+      // 0. Antiduplicado Col T: limpiar tanto blind_count como blind_count_shift_close de la jornada antes de insertar
+      const blindCountProductIds = Array.from(new Set(
+        validItems.filter(i => i.targetColumn === 'T').map(i => i.productId)
+      ));
+      if (blindCountProductIds.length > 0) {
+        await replaceBlindCountMovementsForDate({
+          supabase,
+          productIds: blindCountProductIds,
+          targetDate: balanceDate,
+        });
+      }
+
       // 1. Consultar en 1 sola petición todos los movimientos existentes de la jornada para los productos afectados
       const uniqueProductIds = Array.from(new Set(validItems.map(i => i.productId)));
       const { data: allExistingDayMovs } = await supabase
@@ -678,7 +723,7 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
               })}]`
             : '';
         const noteDesc = `[ORIGEN: PHYSICAL_SHEET_OCR - ${supervisorName}]${replaceTag} Col ${item.targetColumn}: ${item.totalQuantity.toFixed(2)} (${item.rawDetails.join(' + ')}) [Archivo: ${item.files.join(', ')}]${blindMeta}`;
-        const existingIds = existingByProdAndRef.get(`${item.productId}__${refType}`) || [];
+        const existingIds = item.targetColumn === 'T' ? [] : (existingByProdAndRef.get(`${item.productId}__${refType}`) || []);
         const isUpdate = existingIds.length > 0;
 
         if (isUpdate) {
@@ -851,6 +896,37 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
               <button type="button" onClick={handleCloseModal} title="Cerrar ventana" style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#64748B', borderRadius: '9px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={16} />
               </button>
+            </div>
+          </div>
+        )}
+        {/* CHECKLIST 5 PASOS DEL CIERRE MANUAL */}
+        {checklistStatus && (
+          <div style={{ padding: '0.35rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 900, color: '#334155' }}>
+                Checklist {balanceDate} ({checklistStatus.completedCount}/{checklistStatus.totalSteps}):
+              </span>
+              {[
+                { key: 'G' as const, label: 'Col G (Entradas)', done: checklistStatus.counts.G > 0 || Boolean(checklistStatus.novedades.G?.marked), novedad: Boolean(checklistStatus.novedades.G?.marked), canZero: true },
+                { key: 'QR' as const, label: 'Cols Q-R (Desperdicio)', done: checklistStatus.counts.QR > 0 || Boolean(checklistStatus.novedades.QR?.marked), novedad: Boolean(checklistStatus.novedades.QR?.marked), canZero: true },
+                { key: 'X' as const, label: 'Col X (Donaciones)', done: checklistStatus.counts.X > 0 || Boolean(checklistStatus.novedades.X?.marked), novedad: Boolean(checklistStatus.novedades.X?.marked), canZero: true },
+                { key: 'T' as const, label: 'Col T (Físico)', done: checklistStatus.counts.T > 0, novedad: false, canZero: false },
+                { key: 'LOCK' as const, label: 'Cierre Oficial', done: checklistStatus.isClosingLocked, novedad: false, canZero: false },
+              ].map(step => (
+                <div key={step.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '999px', fontSize: '0.66rem', fontWeight: 800, backgroundColor: step.done ? '#DCFCE7' : '#FEF3C7', color: step.done ? '#166534' : '#92400E', border: `1px solid ${step.done ? '#86EFAC' : '#FDE68A'}` }}>
+                  <span>{step.done ? '✓' : '○'} {step.label}{step.novedad ? ' (0)' : ''}</span>
+                  {step.canZero && (checklistStatus.counts[step.key as NovedadColumnKey] === 0) && (
+                    <button
+                      type="button"
+                      disabled={savingNovedadCol === step.key}
+                      onClick={() => void handleToggleNovedadZero(step.key as NovedadColumnKey)}
+                      style={{ border: 'none', background: step.novedad ? '#166534' : '#FFFFFF', color: step.novedad ? '#FFFFFF' : '#92400E', borderRadius: '6px', padding: '1px 5px', fontSize: '0.6rem', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      {step.novedad ? 'Quitar 0' : 'Sin novedad (0)'}
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

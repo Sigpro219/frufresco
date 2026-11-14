@@ -12,6 +12,7 @@ import { formatStructuredSpecification } from '@/lib/orderUtils';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
+import { resolveInitialInventory, type InventorySourceKind } from '@/lib/inventory/resolveInitialInventory';
 
 
 
@@ -45,6 +46,7 @@ export default function PurchasesPrintPage() {
     const [selectedSublist, setSelectedSublist] = useState<string>('ALL');
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<PurchaseItem[]>([]);
+    const [invSourceMeta, setInvSourceMeta] = useState<{ sourceDate: string | null; sourceKind: InventorySourceKind }>({ sourceDate: null, sourceKind: 'none' });
     const [isExportingRelacion, setIsExportingRelacion] = useState(false);
     const printDocRef = useRef<HTMLDivElement>(null);
 
@@ -61,12 +63,6 @@ export default function PurchasesPrintPage() {
     const fetchPurchasesData = async () => {
         setLoading(true);
         try {
-            // Cargar inventario disponible completo (paginado para superar límite de 1000 de Supabase)
-            let allStocks: Array<{ product_id: string; quantity: number }> = [];
-            let fromStock = 0;
-            const stepStock = 1000;
-            let hasMoreStock = true;
-
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
@@ -98,57 +94,13 @@ export default function PurchasesPrintPage() {
                     .eq('delivery_date', selectedDate)
             ]);
 
-            // SDD v1.9.87 §30.2.2: La línea base oficial de stock para neteo proviene del último Cierre Oficial de Bodega
-            const stockMap: Record<string, number> = {};
-            let hasOfficialClosing = false;
-
-            try {
-                const { data: latestClosing } = await supabase
-                    .from('daily_inventory_closings')
-                    .select('snapshot_items, closing_date')
-                    .lte('closing_date', selectedDate)
-                    .order('closing_date', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (latestClosing?.snapshot_items && Array.isArray(latestClosing.snapshot_items) && latestClosing.snapshot_items.length > 0) {
-                    latestClosing.snapshot_items.forEach((item: any) => {
-                        if (!item.productId || stockMap[item.productId] !== undefined) return;
-                        const finalStock = item.bodegaPost10am !== null && item.bodegaPost10am !== undefined
-                            ? Number(item.bodegaPost10am)
-                            : (item.physicalCount !== null && item.physicalCount !== undefined
-                                ? Number(item.physicalCount)
-                                : (item.calculatedStock !== null && item.calculatedStock !== undefined
-                                    ? Number(item.calculatedStock)
-                                    : 0));
-                        stockMap[item.productId] = Math.max(0, finalStock);
-                    });
-                    hasOfficialClosing = true;
-                }
-            } catch (closeErr) {
-                console.warn('daily_inventory_closings no disponible para neteo de compras, aplicando fallback:', closeErr);
-            }
-
-            // Fallback de resiliencia operativa: si no existe cierre oficial previo, consultar inventory_stocks
-            if (!hasOfficialClosing) {
-                while (hasMoreStock) {
-                    const { data, error } = await supabase
-                        .from('inventory_stocks')
-                        .select('product_id, quantity')
-                        .eq('status', 'available')
-                        .range(fromStock, fromStock + stepStock - 1);
-                    if (error || !data || data.length === 0) {
-                        hasMoreStock = false;
-                    } else {
-                        allStocks = allStocks.concat(data);
-                        if (data.length < stepStock) hasMoreStock = false;
-                        else fromStock += stepStock;
-                    }
-                }
-                allStocks.forEach((s: any) => {
-                    stockMap[s.product_id] = (stockMap[s.product_id] || 0) + (Number(s.quantity) || 0);
-                });
-            }
+            // Motor Canónico Único de Inventario Inicial (SPEC.md Escenario 457: < selectedDate, cero fallback a calculatedStock/inventory_stocks)
+            const resolvedInv = await resolveInitialInventory({
+                supabase,
+                targetDate: selectedDate,
+            });
+            const stockMap = resolvedInv.stockMap;
+            setInvSourceMeta({ sourceDate: resolvedInv.sourceDate, sourceKind: resolvedInv.sourceKind });
 
             const ordersWithItems = ordersRes.data || [];
             const rawTasks = tasksRes.data || [];
@@ -540,7 +492,12 @@ export default function PurchasesPrintPage() {
 
                         return sublistPages.map(({ items: pageItems, usedUnits: pageUsedUnits }, pageIdx) => {
                             const isLastPage = pageIdx === sublistPages.length - 1;
-                            const pageSubtitle = `NEGOCIACIÓN EN PLAZA · CENTRAL CORABASTOS${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''}`;
+                            const baseInvLabel = invSourceMeta.sourceKind === 'official_closing'
+                                ? `BASE INV: CIERRE OFICIAL ${invSourceMeta.sourceDate}`
+                                : invSourceMeta.sourceDate
+                                    ? `BASE INV: CONTEO SIN CIERRE (${invSourceMeta.sourceDate})`
+                                    : 'BASE INV: SIN CIERRE PREVIO (0)';
+                            const pageSubtitle = `NEGOCIACIÓN EN PLAZA · CENTRAL CORABASTOS · ${baseInvLabel}${sublistPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${sublistPages.length}` : ''}`;
                             const planRef = `PLC-${selectedDate.replace(/-/g, '')}`;
 
                             return (

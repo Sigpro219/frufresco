@@ -3,6 +3,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { parseBlindCountQuantity } from '@/lib/pricingUtils';
+import {
+    resolveInitialInventory,
+    getDailyManualChecklistStatus,
+    saveDailyNovedadZero,
+    type DailyChecklistStatus,
+    type NovedadColumnKey,
+    type InventorySourceKind
+} from '@/lib/inventory/resolveInitialInventory';
 import { 
     FileSpreadsheet, 
     Calendar, 
@@ -562,9 +570,45 @@ export default function InventoryDailyBalanceTab({
         );
     }, [profile, user]);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
     const balanceDateDefault = externalDate || todayStr;
     const [balanceDate, setBalanceDate] = useState<string>(balanceDateDefault);
+    const [checklistStatus, setChecklistStatus] = useState<DailyChecklistStatus | null>(null);
+    const [savingNovedadCol, setSavingNovedadCol] = useState<NovedadColumnKey | null>(null);
+    const [initialResolutionMeta, setInitialResolutionMeta] = useState<{
+        sourceDate: string | null;
+        sourceKind: InventorySourceKind;
+        hasConflicts: boolean;
+        conflictCount: number;
+    } | null>(null);
+
+    const handleToggleNovedadZero = async (colKey: NovedadColumnKey) => {
+        if (!canEditSheet || savingNovedadCol) return;
+        const currentlyMarked = Boolean(checklistStatus?.novedades?.[colKey]?.marked);
+        setSavingNovedadCol(colKey);
+        try {
+            await saveDailyNovedadZero({
+                supabase,
+                balanceDate,
+                colKey,
+                marked: !currentlyMarked,
+                operatorName: profile?.contact_name || user?.email || 'Jefatura de Inventarios',
+            });
+            const refreshed = await getDailyManualChecklistStatus(supabase, balanceDate);
+            setChecklistStatus(refreshed);
+            notify(
+                !currentlyMarked
+                    ? `Columna ${colKey} marcada "Sin novedad hoy (0)" para ${balanceDate}.`
+                    : `Marca "Sin novedad hoy (0)" removida en Columna ${colKey}.`,
+                'success'
+            );
+        } catch (err: any) {
+            console.error('Error toggling novedad zero:', err);
+            notify('Error guardando estado sin novedad: ' + (err?.message || err), 'error');
+        } finally {
+            setSavingNovedadCol(null);
+        }
+    };
 
     useEffect(() => {
         if (externalDate && externalDate !== balanceDate) {
@@ -910,102 +954,28 @@ interface CommittedSaleData {
                 setClosingRecord(null);
             }
 
-            // 0.1 & 0.2 Cargar saldo inicial oficial desde el Conteo Físico (Col T) de la última jornada previa (D-1)
+            // 0.1 & 0.2 Cargar saldo inicial canónico desde resolveInitialInventory + checklist manual de la jornada
             const prevClosingSnapshots: Record<string, number> = {};
             try {
-                const { startUtcIso: balanceStartUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
-                const [{ data: prevCloseData }, { data: prevPhysicalMovs }] = await Promise.all([
-                    supabase
-                        .from('daily_inventory_closings')
-                        .select('snapshot_items, closing_date')
-                        .lt('closing_date', balanceDate)
-                        .order('closing_date', { ascending: false })
-                        .limit(1)
-                        .maybeSingle(),
-                    supabase
-                        .from('inventory_movements')
-                        .select('product_id, quantity, notes, created_at')
-                        .in('reference_type', ['blind_count', 'blind_count_shift_close'])
-                        .lt('created_at', balanceStartUtcIso)
-                        .order('created_at', { ascending: false })
-                        .limit(5000)
+                const [resolvedInitial, checklist] = await Promise.all([
+                    resolveInitialInventory({ supabase, targetDate: balanceDate, isSandbox }),
+                    getDailyManualChecklistStatus(supabase, balanceDate),
                 ]);
 
-                const latestCloseDate = prevCloseData?.closing_date || null;
-                const latestMovDate = (prevPhysicalMovs && prevPhysicalMovs.length > 0 && prevPhysicalMovs[0].created_at)
-                    ? getBogotaDateString(prevPhysicalMovs[0].created_at)
-                    : null;
-
-                // Determinar la jornada D-1 más reciente con datos de cierre o conteo físico (SPEC.md §8.6.2)
-                const targetDMinus1Date = latestMovDate && (!latestCloseDate || latestMovDate > latestCloseDate)
-                    ? latestMovDate
-                    : latestCloseDate;
-
-                // En Sandbox, verificar si existe cierre D-1 en sandbox_daily_closing_*
-                if (isSandbox) {
-                    try {
-                        const { data: sbClosings } = await supabase
-                            .from('app_settings')
-                            .select('key, value')
-                            .like('key', 'sandbox_daily_closing_%');
-                        if (sbClosings && sbClosings.length > 0) {
-                            const validPastClosings = sbClosings
-                                .map(c => {
-                                    const d = c.key.replace('sandbox_daily_closing_', '');
-                                    const parsedVal = typeof c.value === 'string' ? JSON.parse(c.value) : c.value;
-                                    return { date: d, val: parsedVal };
-                                })
-                                .filter(c => c.date < balanceDate)
-                                .sort((a, b) => b.date.localeCompare(a.date));
-
-                            if (validPastClosings.length > 0) {
-                                const latestPrev = validPastClosings[0].val;
-                                if (latestPrev?.snapshot_items && Array.isArray(latestPrev.snapshot_items)) {
-                                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
-                                    latestPrev.snapshot_items.forEach((item: any) => {
-                                        if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
-                                        const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
-                                            ? Number(item.physicalCount)
-                                            : 0;
-                                        prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
-                                    });
-                                }
-                            }
-                        }
-                    } catch (sbPrevErr) {
-                        console.warn('Error cargando D-1 de Sandbox:', sbPrevErr);
-                    }
+                if (resolvedInitial.sourceKind !== 'none') {
+                    prevClosingSnapshots['__HAS_BASELINE__'] = 1;
+                    Object.entries(resolvedInitial.stockMap).forEach(([pid, qty]) => {
+                        prevClosingSnapshots[pid] = Math.max(0, Number(qty) || 0);
+                    });
                 }
 
-                if (targetDMinus1Date) {
-                    // 1. Si existe snapshot de cierre formal en la jornada D-1 objetivo, cargarlo como línea base
-                    if (latestCloseDate === targetDMinus1Date && prevCloseData?.snapshot_items && Array.isArray(prevCloseData.snapshot_items)) {
-                        prevClosingSnapshots['__HAS_BASELINE__'] = 1;
-                        (prevCloseData.snapshot_items as Array<{ productId?: string; physicalCount?: number | string | null }>).forEach((item) => {
-                            if (!item.productId || prevClosingSnapshots[item.productId] !== undefined) return;
-                            // Regla Canónica: El Inventario Inicial (Col E) de D+1 toma estrictamente la columna CONTEO (physicalCount / Col T), jamás el Cálculo (Col S)
-                            const finalStock = item.physicalCount !== null && item.physicalCount !== undefined
-                                ? Number(item.physicalCount)
-                                : 0;
-                            prevClosingSnapshots[item.productId] = Math.max(0, finalStock);
-                        });
-                    }
-
-                    // 2. Si existen conteos físicos (Col T) en la misma jornada D-1 objetivo (o más reciente), superponerlos sobre la línea base
-                    if (latestMovDate === targetDMinus1Date && prevPhysicalMovs) {
-                        prevClosingSnapshots['__HAS_BASELINE__'] = 1;
-                        const seenMovProducts = new Set<string>();
-                        (prevPhysicalMovs as Array<{ product_id?: string | null; notes?: string | null; created_at?: string | null }>).forEach((m) => {
-                            if (!m.product_id || !m.created_at || getBogotaDateString(m.created_at) !== targetDMinus1Date) return;
-                            if (seenMovProducts.has(m.product_id)) return;
-                            const counted = parseBlindCountQuantity(m.notes ?? null);
-                            if (counted !== null) {
-                                seenMovProducts.add(m.product_id);
-                                prevClosingSnapshots[m.product_id] = Math.max(0, counted);
-                            }
-                        });
-                    }
-                }
+                setInitialResolutionMeta({
+                    sourceDate: resolvedInitial.sourceDate,
+                    sourceKind: resolvedInitial.sourceKind,
+                    hasConflicts: resolvedInitial.hasConflicts,
+                    conflictCount: resolvedInitial.conflictProductIds.length,
+                });
+                setChecklistStatus(checklist);
             } catch (prevErr) {
                 console.warn('No se pudo cargar conteo previo del día anterior:', prevErr);
             }
@@ -1501,25 +1471,9 @@ interface CommittedSaleData {
             // 2. Si es una fecha futura (balanceDate > todayStr) sin cierre, el saldo inicial es 0 (no proyectar stock vivo al futuro)
             // 3. Si es la jornada actual en curso (balanceDate === todayStr), se calcula: Stock Actual - movimientos de hoy
             // 4. Si es una fecha pasada sin cierre formal previo, solo si hubo movimientos registrados en ese día o posteriores se computa el delta, de lo contrario 0
-            const sumDeltasSinceStart = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0) +
-                                       laterMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
-            
-            let initialStock = 0;
-            if (previousClosingMap[p.id] !== undefined) {
-                initialStock = previousClosingMap[p.id];
-            } else if (previousClosingMap['__HAS_BASELINE__'] !== undefined) {
-                // Si existe corte previo (Cierre Oficial o Conteo Físico D-1), los SKUs sin conteo en D-1 inician estrictamente en 0
-                initialStock = 0;
-            } else if (balanceDate > todayStr) {
-                // Fecha futura o de mañana: si no hay cierre previo, hereda el stock vivo disponible en bodega
-                initialStock = Math.max(0, currentStock);
-            } else if (balanceDate === todayStr) {
-                const todayDeltas = dayMovs.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0);
-                initialStock = Math.max(0, currentStock - todayDeltas);
-            } else {
-                const hasAnyMovements = dayMovs.length > 0 || laterMovs.length > 0;
-                initialStock = hasAnyMovements ? Math.max(0, currentStock - sumDeltasSinceStart) : 0;
-            }
+            const initialStock = previousClosingMap[p.id] !== undefined
+                ? previousClosingMap[p.id]
+                : 0;
 
             // S: Inventario Calculado (SDD DT-17 & DT-19)
             // S = E + F + G - H - J - K + L - M - N + O - O2 - P - Q - R - X
@@ -2415,6 +2369,27 @@ interface CommittedSaleData {
                 return;
             }
 
+            // Respaldo histórico en app_settings antes de sobreescribir un cierre previo de la misma fecha
+            if (closingRecord?.snapshot_items) {
+                try {
+                    await supabase.from('app_settings').insert({
+                        key: `closing_history_${balanceDate}_${Date.now()}`,
+                        value: JSON.stringify({
+                            closing_date: balanceDate,
+                            previous_closed_at: closingRecord.closed_at,
+                            previous_closed_by: closingRecord.closed_by_name,
+                            previous_notes: closingRecord.notes,
+                            snapshot_items: closingRecord.snapshot_items,
+                            archived_at: new Date().toISOString(),
+                        }),
+                        description: `Respaldo histórico antes de recerrar jornada ${balanceDate}`,
+                        updated_at: new Date().toISOString(),
+                    });
+                } catch (bkErr) {
+                    console.warn('No se pudo archivar historial de cierre previo:', bkErr);
+                }
+            }
+
             const { data, error } = await supabase
                 .from('daily_inventory_closings')
                 .upsert({
@@ -2438,6 +2413,7 @@ interface CommittedSaleData {
             setClosingRecord(data);
             setIsClosingModalOpen(false);
             setClosingNotes('');
+            getDailyManualChecklistStatus(supabase, balanceDate).then(setChecklistStatus).catch(() => {});
             notify(`Jornada del ${balanceDate} cerrada oficialmente y congelada para contabilidad.`, 'success');
         } catch (err: any) {
             console.error('Error al realizar cierre oficial:', err);
@@ -5204,6 +5180,85 @@ interface CommittedSaleData {
                     </div>
                 </div>
             </div>
+
+            {/* BARRA CHECKLIST DE 5 PASOS + TRAZABILIDAD DE HERENCIA (ESCENARIO 457) */}
+            {checklistStatus && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.6rem',
+                    flexWrap: 'wrap',
+                    padding: '0.45rem 0.85rem',
+                    marginBottom: '0.55rem',
+                    backgroundColor: checklistStatus.isClosingLocked ? '#F0FDF4' : '#FFFBEB',
+                    border: `1px solid ${checklistStatus.isClosingLocked ? '#BBF7D0' : '#FDE68A'}`,
+                    borderRadius: '10px',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 900, color: checklistStatus.isClosingLocked ? '#166534' : '#92400E', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={14} />
+                            <span>Checklist Cierre ({checklistStatus.completedCount}/{checklistStatus.totalSteps}):</span>
+                        </span>
+                        {[
+                            { key: 'G' as const, label: 'Col G Entradas', done: checklistStatus.counts.G > 0 || Boolean(checklistStatus.novedades.G?.marked), count: checklistStatus.counts.G, novedad: Boolean(checklistStatus.novedades.G?.marked), canZero: true },
+                            { key: 'QR' as const, label: 'Cols Q-R Desperdicio', done: checklistStatus.counts.QR > 0 || Boolean(checklistStatus.novedades.QR?.marked), count: checklistStatus.counts.QR, novedad: Boolean(checklistStatus.novedades.QR?.marked), canZero: true },
+                            { key: 'X' as const, label: 'Col X Donaciones', done: checklistStatus.counts.X > 0 || Boolean(checklistStatus.novedades.X?.marked), count: checklistStatus.counts.X, novedad: Boolean(checklistStatus.novedades.X?.marked), canZero: true },
+                            { key: 'T' as const, label: 'Col T Físico', done: checklistStatus.counts.T > 0, count: checklistStatus.counts.T, novedad: false, canZero: false },
+                            { key: 'LOCK' as const, label: 'Cierre Diario Oficial', done: checklistStatus.isClosingLocked, count: checklistStatus.isClosingLocked ? 1 : 0, novedad: false, canZero: false },
+                        ].map(step => (
+                            <div
+                                key={step.key}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    backgroundColor: step.done ? '#DCFCE7' : '#FFFFFF',
+                                    color: step.done ? '#166534' : '#92400E',
+                                    border: `1px solid ${step.done ? '#86EFAC' : '#FCD34D'}`,
+                                }}
+                            >
+                                <span>{step.done ? '✓' : '○'} {step.label}</span>
+                                {step.count > 0 && step.key !== 'LOCK' && (
+                                    <span style={{ opacity: 0.8 }}>({step.count})</span>
+                                )}
+                                {step.novedad && (
+                                    <span style={{ fontSize: '0.62rem', backgroundColor: '#166534', color: '#FFFFFF', padding: '0 4px', borderRadius: '4px' }}>0</span>
+                                )}
+                                {canEditSheet && step.canZero && step.count === 0 && !checklistStatus.isClosingLocked && (
+                                    <button
+                                        type="button"
+                                        disabled={savingNovedadCol === step.key}
+                                        onClick={() => void handleToggleNovedadZero(step.key as NovedadColumnKey)}
+                                        style={{
+                                            border: '1px solid #CBD5E1',
+                                            backgroundColor: step.novedad ? '#166534' : '#F8FAFC',
+                                            color: step.novedad ? '#FFFFFF' : '#334155',
+                                            borderRadius: '6px',
+                                            padding: '1px 5px',
+                                            fontSize: '0.62rem',
+                                            fontWeight: 800,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {step.novedad ? 'Quitar 0' : 'Sin novedad hoy (0)'}
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {initialResolutionMeta && (
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: initialResolutionMeta.hasConflicts ? '#B91C1C' : '#475569' }}>
+                            Base Col E: {initialResolutionMeta.sourceDate ? `${initialResolutionMeta.sourceDate} (${initialResolutionMeta.sourceKind})` : 'Sin línea base previa (0)'}
+                            {initialResolutionMeta.hasConflicts ? ` • ${initialResolutionMeta.conflictCount} conflicto(s) Col T` : ''}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* TABLA DE 24 COLUMNAS LEAN ENTERPRISE */}
             <div style={{

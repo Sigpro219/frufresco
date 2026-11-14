@@ -8,6 +8,8 @@ import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
 import { getCanonicalProcurementSpec, normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
+import { getBogotaDateString } from '@/lib/dateUtils';
+import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
 import { 
   Calendar, 
   BookOpen, 
@@ -378,26 +380,22 @@ export default function ProcurementPage() {
 
       // If rules are disabled, we return TODAY so it usually matches the header, 
       // but the fetch logic will ignore it.
+      const todayBogota = getBogotaDateString();
       if (!cutoffEnabled) {
-        return now.toISOString().split("T")[0];
+        return todayBogota;
       }
 
       const currentHour = now.getHours();
 
       if (currentHour >= DEFAULT_CUTOFF_HOUR) {
-        // After 5 PM, start tomorrow's operation
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
+        return getBogotaDateString(new Date(Date.now() + 24 * 60 * 60 * 1000));
       } else {
-        // Before 5 PM, keep working today's operation
-        return now.toISOString().split("T")[0];
+        return todayBogota;
       }
     } catch (e) {
       if (isAbortError(e)) return "";
       console.error("Error reading cutoff settings", e);
-      const now = new Date();
-      return now.toISOString().split("T")[0];
+      return getBogotaDateString();
     }
   };
 
@@ -449,17 +447,13 @@ export default function ProcurementPage() {
         const productIds = Array.from(new Set(rawTasks.map(t => t.product_id)));
 
         // 2. Fetch details in parallel to eliminate sequential round-trip latency
-        const [productsRes, stocksRes, purchasesRes, noveltiesRes] = await Promise.all([
+        const [productsRes, resolvedInv, purchasesRes, noveltiesRes] = await Promise.all([
           supabase
             .from("products")
             .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure")
             .in("id", productIds)
             .abortSignal(signal as any),
-          supabase
-            .from("inventory_stocks")
-            .select("product_id, quantity")
-            .eq("status", "available")
-            .abortSignal(signal as any),
+          resolveInitialInventory({ supabase, targetDate }),
           supabase
             .from("purchases")
             .select(`
@@ -500,12 +494,7 @@ export default function ProcurementPage() {
           });
         }
 
-        const stocksData = stocksRes.data;
-        const stockMap: Record<string, number> = {};
-        (stocksData || []).forEach(s => {
-          const q = parseFloat(s.quantity as any) || 0;
-          stockMap[s.product_id] = (stockMap[s.product_id] || 0) + q;
-        });
+        const stockMap: Record<string, number> = resolvedInv.stockMap;
 
         const purchasesData = purchasesRes.data;
         const currentPurchases = purchasesData || [];

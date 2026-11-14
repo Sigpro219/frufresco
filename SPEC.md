@@ -1716,8 +1716,8 @@ Cualquier operario o auxiliar puede registrar mermas en Col Q (Desperdicio) y Co
 
 #### 2. Protocolo de Cierre Diario y Congelación Contable
 - **Botón Manual de "Cierre Diario Oficial":** La jornada contable no se congela por cron ciego; requiere la ejecución explícita del botón de Cierre Diario por parte del Administrador o Supervisor de Operaciones.
-- **Congelación Estricta:** Al ejecutar el cierre, los registros de la fecha se persisten atómicamente en la tabla `daily_inventory_closings` en estado `is_locked = true`, capturando el snapshot completo de ítems auditados y bloqueando modificaciones retroactivas no auditadas salvo autorización de superadmin.
-- **Herencia Estricta de Saldos (Col T Conteo Físico $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente el saldo de la **Columna T (`Conteo Físico` / `physicalCount`)** de la última jornada operada anterior a dicha fecha ($D-1$), comparando cronológicamente la fecha del último cierre oficial (`daily_inventory_closings.closing_date`) frente a la fecha de los últimos conteos físicos registrados en movimientos (`inventory_movements` con `blind_count` / `blind_count_shift_close`). Si para la misma fecha $D-1$ coexisten tanto un registro en `daily_inventory_closings` como movimientos `blind_count` en `inventory_movements`, se carga el snapshot base de `daily_inventory_closings` y los movimientos `blind_count` de $D-1$ sobreponen su valor sobre dicho snapshot base. Jamás cae en fallback a la columna `Cálculo (Col S)`, y los SKUs no contados en $D-1$ inician en cero ($0$).
+- **Congelación Estricta y Reapertura Auditada:** Al ejecutar el cierre, los registros de la fecha se persisten atómicamente en la tabla `daily_inventory_closings` en estado `is_locked = true`, capturando el snapshot completo de ítems auditados. Únicamente los registros con `is_locked = true` cuentan como cierre oficial sellado; si una jornada se reabre (`is_locked = false`, permitido exclusivamente a `admin`, `sys_admin` o jefatura de inventarios), deja de contar como cierre oficial cerrado hasta su nuevo sellado y al volver a cerrarse preserva copia del snapshot anterior en historial (`closing_history`).
+- **Herencia Estricta de Saldos (Col T Conteo Físico $\rightarrow$ Col E del día siguiente):** El Inventario Inicial (Col E) de una jornada $D$ hereda obligatoriamente mediante el **Motor Canónico Único (`resolveInitialInventory`, ver Escenario 457)** el saldo `bodegaPost10am ?? physicalCount ?? 0` de la última jornada previa ($< D$), comparando cronológicamente la fecha del último cierre oficial (`daily_inventory_closings.closing_date`) frente a la fecha de los últimos conteos físicos registrados en movimientos (`inventory_movements` con `blind_count` / `blind_count_shift_close`). Jamás cae en fallback a la columna `Cálculo (Col S)` ni a `inventory_stocks`, y los SKUs no contados en la jornada base inician en cero ($0$).
 - **Trazabilidad:** Se registra en auditoría: `closed_at`, `closed_by_name`, `total_calculated`, `total_physical`, `total_missing`, `total_surplus` y snapshot JSON inmutable.
 
 #### 3. Política de Desvío en Auditoría Cíclica: Tolerancia Cero (0%)
@@ -11896,7 +11896,7 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 - **Then** el motor de inventario aplica las siguientes reglas innegociables:
   1. **Prohibición Absoluta de Fallback a `calculatedStock` (`Col S`):** El saldo inicial heredado de un cierre previo (`D-1`) se obtiene **exclusivamente** del conteo físico real en bodega (`item.bodegaPost10am ?? item.physicalCount ?? 0`). Si un SKU tiene `physicalCount === null` y `bodegaPost10am === null` al cierre del turno, su inventario físico inicial para el día siguiente es estrictamente **`0`** (`INV[0]`), jamás el saldo teórico calculado.
   2. **Protección contra Filas Resumen de Familia en `snapshot_items`:** Al iterar `snapshot_items` de `daily_inventory_closings`, se respeta únicamente la primera aparición individual de cada `productId` (`if (map[item.productId] === undefined)`), impidiendo que una fila totalizadora de familia al final de la hoja sobrescriba el stock individual del producto padre (ej. garantizando `Mandarina arrayana = 130` en lugar del consolidado familiar `153`).
-  3. **Sincronización Histórica por Fecha en Sábana de Alistamiento (`/admin/orders/alistamiento-print`):** La sábana consulta `daily_inventory_closings` con `.lt('closing_date', selectedDate).order('closing_date', { ascending: false }).limit(1)` para poblar `inventoryMap`, garantizando que `INV[...]` refleje el inventario inicial exacto del día operativo consultado (`selectedDate`), usando `inventory_stocks` únicamente como respaldo cuando no exista cierre previo.
+  3. **Sincronización Histórica por Fecha en Sábana de Alistamiento (`/admin/orders/alistamiento-print`):** La sábana delega en el **Motor Canónico Único (`resolveInitialInventory`, Escenario 457)** consultando estrictamente fechas `< selectedDate` (en `America/Bogota`) entre `daily_inventory_closings` y `inventory_movements` (`blind_count` / `blind_count_shift_close`), prohibiendo `.lte` y derogando cualquier respaldo en `inventory_stocks` o `calculatedStock`.
 
 ---
 
@@ -12820,14 +12820,10 @@ Para erradicar la dispersión, la pérdida de contexto entre sesiones y la apert
      - **Trazabilidad Contable:** La letra técnica, bloque y fórmula matemática permanecen accesibles vía tooltip interactivo (`title`) para auditoría y soporte.
   2. **Formulación Dinámica de Salida (Columna U - Inv. Bodega):**
      - En condiciones de planta con conteo físico, la salida es la suma física verificada: `U = T + O` (`physicalCount + colO_returns`).
-     - En Modo Transición / Marcha Blanca, cuando un SKU no ha sido pesado en suelo (`physicalCount === null`), la columna U conmuta limpiamente al Cálculo Final teórico: `U = calculatedStock` (Columna S), garantizando que las existencias no se desplomen a cero ni dejen en blanco la entrada del día siguiente (`Col E_{D+1}`).
-  3. **Gobernanza Dual de Impresión de Alistamiento y Abastecimiento:**
-     - **Modo Transición / Pilotaje Suave (`transicion_pilotaje` — Activo en Pruebas):**
-       - **Lookback Flexible de Cierre:** El sistema consulta el último cierre registrado (`lte('closing_date', selectedDate)` ordenado descendentemente) y rescata el saldo disponible en `bodegaPost10am ?? physicalCount ?? calculatedStock`, evitando que la sábana de alistamiento imprima `INV[0]` durante pruebas paralelas.
-     - **Modo Régimen Estricto / Switch-Off (`estricto_produccion` — Día del Go-Live Definitivo):**
-       - **Cierre Diario Obligatorio:** Se activa el candado formal que exige que el turno tarde registre el balance físico del día antes de emitir la sábana.
-       - **Inmutabilidad de Báscula:** Solo se reconoce como saldo inicial el conteo físico verificado (`bodegaPost10am ?? physicalCount ?? 0`). Lo que no fue contado en suelo se clasifica estrictamente como inventario cero (`INV[0]`).
-       - **Alerta de Bloqueo de Alistamiento:** Si se intenta generar la sábana sin el cierre formal de la jornada, la mesa de operaciones bloquea la emisión con advertencia perentoria de gobernanza.
+     - *(Nota de Derogación — Escenario 457):* El antiguo modo `transicion_pilotaje` (fallback a `calculatedStock` cuando `physicalCount === null` y consulta `.lte`) queda **DEROGADO**. Rige únicamente la Inmutabilidad de Báscula (`bodegaPost10am ?? physicalCount ?? 0`, estrictamente `< selectedDate`).
+  3. **Gobernanza de Impresión de Alistamiento y Abastecimiento:**
+     - *(Modo `transicion_pilotaje` DEROGADO por Escenario 457; rige régimen estricto unificado mediante `resolveInitialInventory` + Badge Andon con override auditado).*
+     - **Inmutabilidad de Báscula:** Solo se reconoce como saldo inicial el conteo físico verificado (`bodegaPost10am ?? physicalCount ?? 0`). Lo que no fue contado en suelo se clasifica estrictamente como inventario cero (`INV[0]`).
 
 
 ---
@@ -14065,11 +14061,8 @@ Para garantizar que el balance de masa sea ininterrumpido y resiliente ante omis
    Si existe un registro formal previo en `daily_inventory_closings` para la fecha anterior ($D-1$), hereda su valor oficial congelado (`bodegaPost10am` o `physicalCount`).
 2. **Prioridad 2 — Conteo Físico Auditado en Kardex ($T_{D-1}$):**  
    Si no hubo cierre oficial formal, busca directamente en `inventory_movements` el último conteo físico registrado (`reference_type IN ('blind_count', 'blind_count_shift_close')` o metadatos `[BLIND_COUNT_META]`) previo a la fecha consultada, y asigna dicho valor como la apertura ($E$).
-3. **Prioridad 3 — Apertura Operativa de Fecha Activa / Futura:**  
-   Si la fecha consultada corresponde a la jornada siguiente ($D+1$, ej: mañana `2026-11-05`) y aún no se ha consolidado el conteo de cierre de hoy, el Inventario Inicial hereda el stock físico disponible en bodega (`inventory_stocks`), evitando que la pantalla amanezca vacía y permitiendo a Compras y Logística operar sobre existencias reales.
-4. **Prioridad 4 — Reconstrucción Retroactiva para Fechas Pasadas:**  
-   Para fechas históricas sin cierre ni conteo registrado, el inventario inicial se reconstruye matemáticamente:  
-   $$\text{Inventario Inicial} = \max(0, \text{Stock Actual} - \sum \Delta_{\text{posteriores}})$$
+3. **Prioridad 3 y Prioridad 4 (DEROGADAS por Escenario 457):**  
+   Queda **derogada** la herencia automática desde `inventory_stocks` para fechas futuras/activas y la reconstrucción retroactiva `Stock Actual - ∑Δ`. Si un producto no tiene cierre ni conteo físico en la última jornada operada previa (`< targetDate`), su inventario inicial es estrictamente `0`.
 
 ---
 
@@ -14724,8 +14717,7 @@ La información ingresa a través de **tres mecanismos complementarios**:
 * **Mecanismo de Carga (Cascada Resiliente SDD Escenario 376):**
   1. **Prioridad 1 (Cierre Oficial Congelado):** Si en la fecha previa ($D-1$) se ejecutó el Cierre Oficial en `daily_inventory_closings`, lee directamente su snapshot de Col U ($T + O$) o $T$.
   2. **Prioridad 2 (Conteo Físico Directo en Kardex $T_{D-1}$):** Si no hubo cierre oficial formal, busca en `inventory_movements` el **Conteo Físico ($T$) registrado en la jornada anterior** (`reference_type IN ('blind_count', 'blind_count_shift_close')`). Lo que se contó anoche con las manos y la báscula en estiba es la apertura de hoy.
-  3. **Prioridad 3 (Apertura de Jornada Futura / Mañana):** Si la fecha es de mañana ($D+1$, ej: `05/11/2026`) y aún no se ha contado el fin de turno de hoy, hereda el **stock vivo disponible en bodega (`inventory_stocks`)** para que Compras y Bodega operen sobre existencias reales en lugar de ver guiones vacíos.
-  4. **Prioridad 4 (Reconstrucción Retroactiva):** Para fechas pasadas sin registro de conteo, calcula: $\text{Stock Actual} - \sum \Delta_{\text{posteriores}}$.
+  3. *(Prioridad 3 y 4 — DEROGADAS por Escenario 457):* Se prohíbe heredar de `inventory_stocks` o reconstruir por deltas; todo SKU sin conteo físico o cierre previo inicia en `0`.
 * **¿Editable en Celda?:** **No (Solo Lectura con candado).**
   > *Regla Poka-Yoke:* El inventario inicial no se altera a mano para no falsear el saldo de apertura. Cualquier descuadre físico se asienta en la **Columna F (Corrección)**.
 
@@ -16622,9 +16614,9 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
 - **Given** la exportación del Consolidado Maestro de Compras en Excel (`compras_YYYY-MM-DD.xlsx`) en el Paso 2 del Asistente Guiado de Despacho Manual (`ManualDispatchWizardModal.tsx`) y el motor unificado de concordancia semántica de productos (`order-parser-engine.ts`):
 - **When** el operador logístico emite la matriz de compras para Corabastos o se procesan pedidos multicanal (correo, OCR, WhatsApp):
 - **Then** el sistema asegura la integridad operativa mediante las siguientes reglas vinculantes:
-  1. **Inyección en Tiempo Real del Cierre de Inventario en Columna A:**
-     - En `ManualDispatchWizardModal.tsx` (`handleExportMasterPurchasesExcel`), el sistema consulta obligatoriamente la tabla `daily_inventory_closings` buscando el último cierre oficial bloqueado (`is_locked = true`) a la fecha de la tanda (`lte('closing_date', targetDate)`).
-     - La **Columna A (`Inventario`)** se puebla automáticamente con las existencias oficiales auditadas (`physicalCount` con fallback a `calculatedStock`) cruzando por `productId` y `accounting_id`.
+  1. **Inyección en Tiempo Real del Cierre de Inventario en Columna A *(Actualizado por Escenario 457)*:**
+     - En `ManualDispatchWizardModal.tsx` (`handleExportMasterPurchasesExcel`), el sistema delega obligatoriamente en el **Motor Canónico Único (`resolveInitialInventory`, Escenario 457)** buscando estrictamente `< targetDate` (en `America/Bogota`) entre `daily_inventory_closings` y `inventory_movements` (`blind_count` / `blind_count_shift_close`).
+     - La **Columna A (`Inventario`)** se puebla automáticamente con el campo canónico `bodegaPost10am ?? physicalCount ?? 0` (prohibido fallback a `calculatedStock` o `inventory_stocks`) cruzando por `productId` y `accounting_id`.
      - Queda estrictamente derogada la plantilla en blanco con inventario vacío (`''`), garantizando visibilidad inmediata del stock en piso para compras netas.
   2. **Supresión Operativa de Observaciones en Columna I:**
      - Por directriz operativa y para evitar ruido visual o desvíos en compras, la **Columna I (`Observación`)** se mantiene completamente limpia (`''`), impidiendo el volcado desordenado de nicknames o variaciones de texto de los pedidos.
@@ -16999,3 +16991,59 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
   2. **Resolución Prioritaria por Código SAP (`resolveClientProfile`):** `clientInfo.branchCode` se evalúa en Capa 0 (`logistics_data.sap_center_code`, y fallback unívoco a `branch_id` si tiene longitud `>= 3`) y en `scoreCandidateBranch` (`sap_center_code`, `branch_id`, `address_complement`) exigiendo igualdad exacta o delimitación por frontera de palabra (prohibido `.includes()` sobre códigos de `< 3` caracteres). `create/page.tsx` incluye `branch_id` y `address_complement` en la carga maestra de clientes B2B.
   3. **Invariante Anti-Pisotón de Sucursal:** Si el operador ya seleccionó una sucursal hija (`currentSelectedB2B.parent_id === autoMatchedProfile.id`), independientemente del flag `is_corporate_parent`, la IA tiene prohibido sobreescribir `selectedClient` con la Casa Matriz.
   4. **Candado Obligatorio de Casa Matriz en Radicación:** Si el perfil detectado o seleccionado tiene `is_corporate_parent === true` o posee sucursales hijas activas (`parent_id === profile.id`), el sistema emite alerta explícita y bloquea la creación del pedido (`handleCreateMultiOrders` y submit principal, ejecutando la compuerta antes de subir archivos a Storage) hasta que el operador seleccione la sucursal destino.
+
+
+---
+
+### Escenario 457: Motor Canónico Único de Inventario Inicial, Badge Pulsante Andon con Fricción Consciente y Checklist Anti-Olvido de Columnas Manuales (SDD v1.9.412)
+
+- **Given** las múltiples pantallas consumidoras de inventario inicial (`InventoryDailyBalanceTab.tsx`, `/admin/orders/alistamiento-print`, `/admin/procurement/purchases-print`, `ManualDispatchWizardModal.tsx` Excel Maestro y `/ops/compras`), la consola de lanzamiento de operación (`/admin/orders/loading`) y el flujo humano de cargue manual de planillas físicas (`PhysicalSheetIngestModal.tsx`):
+- **When** el sistema determina el **Inventario Inicial** de una fecha operativa `targetDate` o evalúa si la última jornada operada quedó cerrada antes de lanzar pedidos a `para_compra`:
+- **Then** rigen de forma unificada e innegociable las siguientes reglas contractuales:
+
+  1. **Definición Única de Jornada Operada y Zona Horaria (`America/Bogota`):**
+     - Toda fecha de negocio (`targetDate`, `closing_date`, "hoy" del badge y rangos de movimientos) es estrictamente `YYYY-MM-DD` en **`America/Bogota`** mediante `getBogotaDateString` y `getBogotaDayRangeUtcIso`. Queda prohibido calcular `D-1` o rangos diarios en UTC (`toISOString().split('T')[0]`), corrigiendo explícitamente `DailyBalanceExcelImportModal.tsx` (cálculo de `D-1` y timestamp de cierre).
+     - Se define **Jornada Operada (`operatedDate`)** de manera única para Motor y Badge como cualquier fecha `YYYY-MM-DD` Bogotá que cumpla **al menos una** de estas condiciones:
+       1. Posee al menos 1 pedido en `orders` con `delivery_date = operatedDate` en alguno de los estados operativos literales: `['para_compra', 'approved', 'picking', 'shipped', 'delivered', 'completed']`; **o**
+       2. Posee al menos 1 movimiento en `inventory_movements` (excluyendo prefijos `sandbox_`) cuyo `reference_type` pertenezca a las columnas operativas manuales/físicas: `['purchase_reception', 'waste_damage', 'waste_cleaning', 'food_bank', 'blind_count', 'blind_count_shift_close']`.
+     - **Festivos y Domingos sin Operación:** No existe tabla o calendario externo de festivos; el sistema salta automáticamente cualquier domingo o festivo sin operación al evaluar exclusivamente la última `operatedDate < hoyBogota` (ej. Sábado cerrado $\to$ Domingo y Lunes festivo sin movimientos $\to$ Martes hereda Sábado sin falsos bloqueos).
+
+  2. **Motor Canónico Único (`src/lib/inventory/resolveInitialInventory.ts`):**
+     - **Firma y Retorno Tipado:**
+       - `resolveInitialInventory({ supabase, targetDate, isSandbox? })` retorna `{ stockMap: Record<string, number>, sourceDate: string | null, sourceKind: 'official_closing' | 'unclosed_counts' | 'reopened_closing' | 'excel_baseline' | 'none', isOfficialLocked: boolean, hasConflicts: boolean, conflictProductIds: string[], lastOperatedDate: string | null }`.
+     - **Consulta en 2 Pasos (Cero Truncado `.limit(5000)`):**
+       - *Paso A:* Consulta el último cierre en `daily_inventory_closings` con `.lt('closing_date', targetDate).order('closing_date', { ascending: false }).limit(1)` (jamás `.lte`), identificando si `is_locked === true` y si proviene de carga sintética Excel (`closed_by_name` que contenga `'Carga Masiva Excel'`, clasificado como `'excel_baseline'`).
+       - *Paso B:* Obtiene primero la fecha Bogotá máxima `< targetDate` de movimientos Col T (`reference_type IN ('blind_count', 'blind_count_shift_close')`, excluyendo `sandbox_`) mediante `.order('created_at', { ascending: false }).limit(1)`, y luego consulta **únicamente** las filas comprendidas dentro del rango Bogotá (`getBogotaDayRangeUtcIso`) de esa única fecha máxima, paginando sin truncado de 1000/5000 filas.
+     - **Regla de Precedencia y Campo Canónico Único:**
+       - Campo canónico único al leer `snapshot_items`: `Number(item.bodegaPost10am ?? item.physicalCount ?? 0)`. Queda estrictamente prohibido leer `calculatedStock` o `inventory_stocks`. Todo SKU ausente inicia en `0`.
+       - Si la fecha del movimiento Col T es **estrictamente menor** que `closing_date` del último cierre: los movimientos Col T antiguos se ignoran y prevalece el cierre (`sourceKind`: `'official_closing'` si `is_locked === true` y no es Excel baseline; `'reopened_closing'` si `is_locked === false`; `'excel_baseline'` si es carga masiva Excel).
+       - Si la fecha del movimiento Col T es **igual** a `closing_date`: se carga el cierre como línea base y los conteos Col T de esa misma fecha se superponen encima (conforme a §8.6.2).
+       - Si la fecha del movimiento Col T es **estrictamente mayor** que `closing_date` (o no existe cierre): los conteos Col T de esa fecha más reciente constituyen la fuente principal (`sourceKind: 'unclosed_counts'`) — **jamás retrocede** a un cierre anterior (`D-2`).
+     - **Desempate Determinista en Empate de `created_at`:**
+       - Cuando coexisten múltiples filas Col T para el mismo `product_id` en la misma fecha Bogotá, la precedencia determinista es:
+         1. `reference_type === 'blind_count_shift_close'` sobre `'blind_count'`;
+         2. `created_at DESC`;
+         3. `id DESC`.
+       - Si los valores parseados (`parseBlindCountQuantity`) de dos filas del mismo producto en esa fecha difieren en `> 0.001`, se marca `hasConflicts = true` y se agrega `product_id` a `conflictProductIds` para alerta visual.
+     - **Consumidores Obligatorios:** `alistamiento-print/page.tsx`, `purchases-print/page.tsx`, `ManualDispatchWizardModal.tsx` (incluyendo Excel Maestro), `/ops/compras/page.tsx` e `InventoryDailyBalanceTab.tsx`.
+     - **Fuera de Alcance:** `InventoryUnifiedDashboard.tsx` queda explícitamente fuera de alcance (consulta KPIs históricos agregados, no inventario inicial de operación).
+
+  3. **Badge Pulsante Andon + Fricción Consciente en `/admin/orders/loading` y `ManualDispatchWizardModal`:**
+     - En la barra superior de `/admin/orders/loading/page.tsx` (junto al widget `Cierre de Operación`) se renderiza en tiempo real el **Badge Andon de Cierre de Inventario** evaluando `lastOperatedDate` (`< hoyBogota`):
+       - **🟢 Verde (`Inv. Cerrado DD/MM`):** `sourceKind === 'official_closing'` (`is_locked === true`, no Excel baseline) cubriendo `lastOperatedDate` (o sin `lastOperatedDate` previa).
+       - **🟡 Ámbar Pulsante (`OJO: Pendiente Cierre Oficial DD/MM`):** `sourceKind` es `'unclosed_counts'`, `'reopened_closing'` o `'excel_baseline'`, o `hasConflicts === true`, o faltan columnas manuales sin marcar `"Sin novedad hoy"`. Clicable directo a `/admin/commercial/inventory?date=YYYY-MM-DD`.
+       - **🔴 Rojo Pulsante (`OJO: Inventario SIN cerrar DD/MM`):** `lastOperatedDate` existe pero no tiene ni cierre oficial ni conteos Col T (`sourceKind === 'none'`, o último cierre/conteo es anterior a `lastOperatedDate`).
+     - **Fricción Consciente (Sin Parálisis de Planta):**
+       - Al pulsar **Lanzar Operación (`para_compra`)** en `loading/page.tsx` (`handleBulkAction`) o finalizar/abrir documentos críticos en `ManualDispatchWizardModal.tsx` mientras el estado sea **🟡 o 🔴**:
+         - Se abre compuerta modal obligatoria indicando exactamente qué fecha (`lastOperatedDate`) y qué columnas están pendientes.
+         - **Acción primaria:** `Ir a Completar y Cerrar Inventario` (navega a `/admin/commercial/inventory?date=...`).
+         - **Acción secundaria (Emergencia):** `Autorizar Lanzamiento de Emergencia` (habilitada exclusivamente para roles `admin`, `sys_admin`, `supervisor` o permiso `admin.orders`), exigiendo checkbox de responsabilidad + motivo escrito (`reason.trim().length >= 8`), persistiendo el registro antes de ejecutar `para_compra`.
+     - **Persistencia de Emergencia (`public.inventory_gate_overrides`):**
+       - Nueva tabla `public.inventory_gate_overrides` con columnas: `id (uuid PK)`, `target_operation_date (date NOT NULL)`, `pending_closing_date (date nullable)`, `source_kind (text NOT NULL)`, `reason (text NOT NULL)`, `authorized_by (uuid nullable)`, `authorized_by_name (text NOT NULL)`, `created_at (timestamptz DEFAULT now())`. RLS habilitada: lectura autenticada; inserción restringida a usuarios autenticados con rol/autoridad operativa.
+     - **Trazabilidad en Impresos:** `alistamiento-print` y `purchases-print` imprimen en cabecera el origen (`Base Inv: Cierre Oficial DD/MM` en verde o `Base Inv: Conteo Sin Cierre DD/MM` / `Sin Base` en rojo/ámbar).
+
+  4. **Checklist Anti-Olvido de Columnas Manuales, `"Sin novedad hoy"`, Re-Cierre con Historial y Anti-Duplicado Col T:**
+     - **Checklist en `InventoryDailyBalanceTab.tsx` y `PhysicalSheetIngestModal.tsx`:** Barra de progreso del día con los 5 hitos: `1. Entradas (Col G)`, `2. Desperdicio/Basura (Col Q-R)`, `3. Donaciones (Col X)`, `4. Conteo Físico (Col T)`, `5. 🔒 Cierre Diario Oficial`, mostrando `Cargado (N)`, `Pendiente` o `Sin novedad hoy (0)`.
+     - **Persistencia `"Sin novedad hoy"`:** Almacenada en `app_settings` bajo llave `daily_inventory_novedad_${balanceDate}` como JSON `{ [colKey in 'G' | 'QR' | 'X']: { marked: true, by: string, at: string } }`. Editable únicamente por usuarios con `canEditSheet === true`.
+     - **Reapertura y Re-Cierre con Versionado:** `handleReopenClosing` verifica estrictamente rol autorizado (`admin`, `sys_admin` o jefatura de inventarios), cambia `is_locked = false` (lo que cambia el badge Andon a 🟡 `reopened_closing`), y al volver a ejecutar `handleOfficialClosing`, si ya existía un `snapshot_items` previo para esa fecha, respalda la versión anterior en `app_settings` (`closing_history_${balanceDate}_${timestamp}`) antes de actualizar `daily_inventory_closings`.
+     - **Antiduplicado Col T en Todos los Escritores:** Al persistir Col T (`PhysicalSheetIngestModal.tsx`, `ops/inventory/page.tsx` y `DailyBalanceExcelImportModal.tsx`) para un `(product_id, fecha Bogotá)`, los escritores deben eliminar/reemplazar cualquier movimiento previo del mismo producto y fecha cuyo `reference_type` sea `'blind_count'` **o** `'blind_count_shift_close'` (evitando coexistencia de ambos tipos). *(Nota operativa: los registros históricos ya existentes del `2026-11-13` no se purgan automáticamente).*

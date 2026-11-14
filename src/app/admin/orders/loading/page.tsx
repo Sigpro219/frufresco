@@ -18,6 +18,8 @@ import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { getDocumentBadgeStyle } from '@/components/ClientsModule';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
+import { getBogotaDateString } from '@/lib/dateUtils';
+import { evaluateInventoryGateStatus, recordInventoryGateOverride, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import { 
     MessageSquare, 
     Phone, 
@@ -248,6 +250,28 @@ function OrderLoadingContent() {
     const hasPermission = (permission: string) => {
         return checkUserPermission(profile, permission, roles);
     };
+
+    const [inventoryGateStatus, setInventoryGateStatus] = useState<InventoryGateStatus | null>(null);
+    const [showInventoryGateModal, setShowInventoryGateModal] = useState(false);
+    const [gateOverrideConfirmed, setGateOverrideConfirmed] = useState(false);
+    const [gateOverrideReason, setGateOverrideReason] = useState('');
+    const [isRecordingOverride, setIsRecordingOverride] = useState(false);
+
+    const canAuthorizeInventoryOverride = useMemo(() => {
+        if (!profile) return false;
+        const role = (profile.role || '').toLowerCase();
+        if (role === 'admin' || role === 'sys_admin' || role === 'supervisor') return true;
+        if (profile.custom_permissions?.includes('*')) return true;
+        return checkUserPermission(profile, 'admin.orders', roles);
+    }, [profile, roles]);
+
+    useEffect(() => {
+        let cancelled = false;
+        evaluateInventoryGateStatus({ supabase, targetDate: getBogotaDateString() })
+            .then((res) => { if (!cancelled) setInventoryGateStatus(res); })
+            .catch((err) => console.warn('Inventory gate status fetch warning:', err));
+        return () => { cancelled = true; };
+    }, [refreshTrigger]);
 
     const canView = hasPermission('admin.orders');
 
@@ -3243,10 +3267,16 @@ useEffect(() => {
         setShowConfirmModal(true);
     };
 
-    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false) => {
+    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false, skipInventoryGate: boolean = false) => {
         if (selectedOrders.size === 0) return;
         
         if (targetStatus === 'para_compra') {
+            if (!skipInventoryGate && inventoryGateStatus && inventoryGateStatus.level !== 'green') {
+                setGateOverrideConfirmed(false);
+                setGateOverrideReason('');
+                setShowInventoryGateModal(true);
+                return;
+            }
             const tomorrowStr = getTomorrowDateStr();
             const selectedList = orders.filter(o => selectedOrders.has(o.id));
             const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
@@ -3635,6 +3665,60 @@ useEffect(() => {
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                        {/* BADGE ANDON DE CIERRE DE INVENTARIO (ESCENARIO 457) */}
+                        {inventoryGateStatus && (
+                            <Link
+                                href={`/admin/commercial/inventory${inventoryGateStatus.lastOperatedDate ? `?date=${inventoryGateStatus.lastOperatedDate}` : ''}`}
+                                title={inventoryGateStatus.detail}
+                                className={inventoryGateStatus.level !== 'green' ? 'animate-pulse' : ''}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '7px',
+                                    padding: '5px 12px',
+                                    borderRadius: '8px',
+                                    textDecoration: 'none',
+                                    backgroundColor:
+                                        inventoryGateStatus.level === 'green'
+                                            ? '#ECFDF5'
+                                            : inventoryGateStatus.level === 'amber'
+                                                ? '#FFFBEB'
+                                                : '#FEF2F2',
+                                    border: `1px solid ${
+                                        inventoryGateStatus.level === 'green'
+                                            ? '#86EFAC'
+                                            : inventoryGateStatus.level === 'amber'
+                                                ? '#FCD34D'
+                                                : '#FCA5A5'
+                                    }`,
+                                    color:
+                                        inventoryGateStatus.level === 'green'
+                                            ? '#065F46'
+                                            : inventoryGateStatus.level === 'amber'
+                                                ? '#92400E'
+                                                : '#991B1B',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        backgroundColor:
+                                            inventoryGateStatus.level === 'green'
+                                                ? '#10B981'
+                                                : inventoryGateStatus.level === 'amber'
+                                                    ? '#F59E0B'
+                                                    : '#EF4444',
+                                    }}
+                                />
+                                <span>{inventoryGateStatus.headline}</span>
+                            </Link>
                         )}
 
                         {/* COUNTDOWN WIDGET / TELEMETRÍA EN VIVO DE CORTE OPERATIVO */}
@@ -5501,10 +5585,17 @@ useEffect(() => {
                                     type="button"
                                     disabled={updateLoading}
                                     onClick={async () => {
+                                        if (inventoryGateStatus && inventoryGateStatus.level !== 'green') {
+                                            setShowLockWarningModal(false);
+                                            setGateOverrideConfirmed(false);
+                                            setGateOverrideReason('');
+                                            setShowInventoryGateModal(true);
+                                            return;
+                                        }
                                         const ids = Array.from(selectedOrders);
                                         setLastLaunchedOrderIds(ids);
                                         setShowLockWarningModal(false);
-                                        await handleBulkAction('para_compra', true);
+                                        await handleBulkAction('para_compra', true, true);
                                         setShowPostLaunchModal(true);
                                     }}
                                     style={{
@@ -5536,6 +5627,182 @@ useEffect(() => {
                                         </>
                                     )}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL FRICCIÓN CONSCIENTE: INVENTARIO SIN CERRAR ANTES DE LANZAR OPERACIÓN (ESCENARIO 457) */}
+                {showInventoryGateModal && inventoryGateStatus && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                            backdropFilter: 'blur(3px)',
+                            zIndex: 10050,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '1rem',
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: '100%',
+                                maxWidth: '540px',
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: '16px',
+                                border: `2px solid ${inventoryGateStatus.level === 'red' ? '#EF4444' : '#F59E0B'}`,
+                                boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    padding: '1rem 1.25rem',
+                                    backgroundColor: inventoryGateStatus.level === 'red' ? '#FEF2F2' : '#FFFBEB',
+                                    borderBottom: `1px solid ${inventoryGateStatus.level === 'red' ? '#FECACA' : '#FDE68A'}`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                }}
+                            >
+                                <ShieldAlert size={22} color={inventoryGateStatus.level === 'red' ? '#DC2626' : '#D97706'} />
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: '#0F172A' }}>
+                                        {inventoryGateStatus.headline}
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '0.76rem', fontWeight: 600, color: '#475569' }}>
+                                        {inventoryGateStatus.detail}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                {inventoryGateStatus.pendingColumns.length > 0 && (
+                                    <div style={{ padding: '0.65rem 0.85rem', borderRadius: '10px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#334155', marginBottom: '4px' }}>
+                                            Pasos pendientes en Sábana Diaria ({inventoryGateStatus.lastOperatedDate}):
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {inventoryGateStatus.pendingColumns.map(col => (
+                                                <span key={col} style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+                                                    {col}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Link
+                                    href={`/admin/commercial/inventory${inventoryGateStatus.lastOperatedDate ? `?date=${inventoryGateStatus.lastOperatedDate}` : ''}`}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '0.7rem 1rem',
+                                        borderRadius: '10px',
+                                        backgroundColor: '#0D7A57',
+                                        color: '#FFFFFF',
+                                        fontWeight: 900,
+                                        fontSize: '0.82rem',
+                                        textDecoration: 'none',
+                                        boxShadow: '0 4px 12px rgba(13, 122, 87, 0.28)',
+                                    }}
+                                >
+                                    <span>Ir a Completar y Cerrar Inventario ({inventoryGateStatus.lastOperatedDate || 'Hoy'})</span>
+                                </Link>
+
+                                {canAuthorizeInventoryOverride ? (
+                                    <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#FFF7ED', border: '1px solid #FDBA74', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.75rem', fontWeight: 800, color: '#9A3412', cursor: 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={gateOverrideConfirmed}
+                                                onChange={(e) => setGateOverrideConfirmed(e.target.checked)}
+                                                style={{ marginTop: '2px' }}
+                                            />
+                                            <span>Autorizo lanzar la operación asumiendo el inventario heredado actual (override de emergencia auditado).</span>
+                                        </label>
+                                        <textarea
+                                            value={gateOverrideReason}
+                                            onChange={(e) => setGateOverrideReason(e.target.value)}
+                                            placeholder="Motivo obligatorio (mín. 8 caracteres)..."
+                                            rows={2}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.5rem 0.65rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid #FDBA74',
+                                                fontSize: '0.76rem',
+                                                resize: 'vertical',
+                                            }}
+                                        />
+                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowInventoryGateModal(false)}
+                                                style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride}
+                                                onClick={async () => {
+                                                    setIsRecordingOverride(true);
+                                                    try {
+                                                        await recordInventoryGateOverride({
+                                                            supabase,
+                                                            targetOperationDate: getBogotaDateString(),
+                                                            pendingClosingDate: inventoryGateStatus.lastOperatedDate,
+                                                            sourceKind: inventoryGateStatus.sourceKind,
+                                                            reason: gateOverrideReason,
+                                                            authorizedBy: currentUser?.id || profile?.id || null,
+                                                            authorizedByName: profile?.contact_name || currentUser?.email || 'Administrador',
+                                                        });
+                                                        const ids = Array.from(selectedOrders);
+                                                        setLastLaunchedOrderIds(ids);
+                                                        setShowInventoryGateModal(false);
+                                                        await handleBulkAction('para_compra', true, true);
+                                                        setShowPostLaunchModal(true);
+                                                    } catch (ovErr: any) {
+                                                        alert('Error registrando autorización de emergencia: ' + (ovErr?.message || ovErr));
+                                                    } finally {
+                                                        setIsRecordingOverride(false);
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: '7px 14px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    backgroundColor: (!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride) ? '#CBD5E1' : '#DC2626',
+                                                    color: '#FFFFFF',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 900,
+                                                    cursor: (!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride) ? 'not-allowed' : 'pointer',
+                                                }}
+                                            >
+                                                {isRecordingOverride ? 'Autorizando...' : 'Autorizar Lanzamiento de Emergencia'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '0.72rem', color: '#991B1B', fontWeight: 700 }}>
+                                            Solo Administración / Jefatura puede autorizar un lanzamiento de emergencia.
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowInventoryGateModal(false)}
+                                            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
+                                        >
+                                            Cerrar
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -149,3 +149,15 @@ La radiografía forense E2E revela que el mega-módulo de pedidos (`orders/creat
 - **Índice de Madurez E2E del Módulo:** **28% (Alerta Roja Arquitectónica)**
 - **Total Estrellas Rojas Detectadas:** **10** (Bloqueantes P1: **5**, Críticas P2: **2**, Higiene P3: **3**)
 - **Veredicto Operativo:** **APROBADO PARA SALIDA EN VIVO HOY EN MODO CODE-FREEZE.** La aplicación funciona gracias a los parches acumulados, pero requiere ejecutar el Burndown Plan de la Ola 1 a la Ola 4 en la próxima ventana de mantenimiento para garantizar estabilidad y mantenibilidad futura.
+
+---
+
+### 6. 🛡️ Resolución de Estrella Roja Transversal `RED-11`: Cadena Inventario -> Compras -> Alistamiento (`Escenario 457` / `SDD v1.9.412`)
+
+- **Estado:** ✅ **RESUELTA Y UNIFICADA**
+- **Problema Detectado:** Desconexión de fuentes de inventario inicial entre `InventoryDailyBalanceTab` (`Escenario 376`), `alistamiento-print`, `purchases-print`, `ManualDispatchWizardModal`, y `/ops/compras` (uso de `.lte` en lugar de `.lt`, fallback indebido a `calculatedStock` / `inventory_stocks`, zonas horarias UTC en lugar de `America/Bogota`, duplicación Col T entre `blind_count` y `blind_count_shift_close`, y ausencia de semáforo Andon previo al lanzamiento en `/admin/orders/loading`).
+- **Remediación Canónica:**
+  1. Motor único [`resolveInitialInventory.ts`](file:///c:/Projects/frufresco/src/lib/inventory/resolveInitialInventory.ts) (`resolveInitialInventory`, `resolveInitialInventoryFromData`, `reduceBlindCountMovements`, `findLastOperatedDate`, `getDailyManualChecklistStatus`, `evaluateInventoryGateStatus`, `replaceBlindCountMovementsForDate`, `recordInventoryGateOverride`).
+  2. Todos los consumidores (`alistamiento-print`, `purchases-print`, `ManualDispatchWizardModal`, `/ops/compras`, `InventoryDailyBalanceTab`) consumen el mismo resolver con precedencia `bodegaPost10am ?? physicalCount ?? 0`, `blind_count_shift_close > blind_count`, salto automático de domingos/festivos sin operación y `0` estricto para SKUs no conteados.
+  3. Antiduplicado Col T en `ops/inventory`, `PhysicalSheetIngestModal` y `DailyBalanceExcelImportModal`.
+  4. Checklist de 5 pasos con `"Sin novedad hoy (0)"` y semáforo Andon + Modal de Fricción Consciente con override auditado (`public.inventory_gate_overrides`) en `/admin/orders/loading` y `ManualDispatchWizardModal`.

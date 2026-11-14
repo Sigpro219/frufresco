@@ -8,6 +8,7 @@ import { isAbortError } from '@/lib/errorUtils';
 import { parseBlindCountQuantity } from '@/lib/pricingUtils';
 import { getBogotaDayRangeUtcIso, getBogotaDateString } from '@/lib/dateUtils';
 import { parseSpecificCountAccountingIds, isProductWasteSusceptible } from '@/lib/inventory/wasteSusceptibleCatalog';
+import { replaceBlindCountMovementsForDate } from '@/lib/inventory/resolveInitialInventory';
 import { 
     Truck, 
     Package, 
@@ -711,6 +712,12 @@ export default function OpsInventoryPage() {
                 cell_name: cell?.name || null,
                 operator: operatorName
             });
+            await replaceBlindCountMovementsForDate({
+                supabase,
+                productIds: [product.id],
+                targetDate: getBogotaDateString(),
+            });
+
             const { error } = await supabase.from('inventory_movements').insert([{
                 product_id: product.id,
                 warehouse_id: warehouseId,
@@ -818,6 +825,12 @@ export default function OpsInventoryPage() {
             }
 
             if (movementRows.length > 0) {
+                await replaceBlindCountMovementsForDate({
+                    supabase,
+                    productIds: unLockedCountedIds,
+                    targetDate: getBogotaDateString(),
+                });
+
                 const { error: insertError } = await supabase
                     .from('inventory_movements')
                     .insert(movementRows);
