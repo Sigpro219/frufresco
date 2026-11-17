@@ -437,11 +437,12 @@ export default function LoginPage() {
 
             clearTimeout(safetyTimeout);
 
-            // 2. Comprobar si el usuario tiene múltiples identidades (Colaborador + Cliente B2B)
+            // 2. Comprobar si el usuario tiene múltiples identidades activas (Colaborador + Cliente B2B)
             const { data: siblingProfiles } = await supabase
                 .from('profiles')
                 .select('id, company_name, role, profile_type, custom_permissions, email')
-                .ilike('email', cleanEmail);
+                .ilike('email', cleanEmail)
+                .neq('is_active', false);
 
             if (siblingProfiles && siblingProfiles.length > 1) {
                 console.log('Múltiples identidades detectadas para este correo:', siblingProfiles.length);

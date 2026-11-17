@@ -133,7 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const { data: siblings } = await supabase
                         .from('profiles')
                         .select('id, company_name, role, profile_type, custom_permissions, email')
-                        .ilike('email', data.email.trim().toLowerCase());
+                        .ilike('email', data.email.trim().toLowerCase())
+                        .neq('is_active', false);
                     if (siblings && siblings.length > 0) {
                         setAvailableProfiles(siblings as Profile[]);
                     }

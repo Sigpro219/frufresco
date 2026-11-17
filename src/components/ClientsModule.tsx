@@ -125,6 +125,8 @@ interface Profile {
     is_corporate_parent?: boolean;
     parent_id?: string;
     branch_id?: string;
+    billing_nit?: string;
+    billing_razon_social?: string;
     corporate_role?: string;
     additional_billing_emails?: string;
     rut_url?: string;
@@ -5256,6 +5258,8 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
         is_corporate_parent: isB2C ? false : (editData?.is_corporate_parent !== undefined ? editData.is_corporate_parent : (!isEdit ? true : false)),
         parent_id: editData?.parent_id || '',
         branch_id: editData?.branch_id || '',
+        billing_nit: (editData as any)?.billing_nit || '',
+        billing_razon_social: (editData as any)?.billing_razon_social || (editData as any)?.logistics_data?.world_office_branch || '',
         corporate_role: editData?.corporate_role || '',
         additional_billing_emails: (editData as any)?.additional_billing_emails || '',
         rut_url: (editData as any)?.rut_url || '',
@@ -5851,7 +5855,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
     const handleParentSelection = async (parentId: string) => {
         if (!parentId) {
-            setFormData(prev => ({ ...prev, parent_id: '', nit: '', razon_social: '' }));
+            setFormData(prev => ({ ...prev, parent_id: '', nit: '', billing_nit: '', razon_social: '' }));
             return;
         }
 
@@ -5862,6 +5866,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                 ...prev,
                 parent_id: parentId,
                 nit: parent.nit || prev.nit,
+                billing_nit: (parent as any).billing_nit || parent.nit || prev.billing_nit,
                 razon_social: parent.razon_social || prev.razon_social,
                 email: parent.email || prev.email,
                 pricing_model_id: parent.pricing_model_id || prev.pricing_model_id,
@@ -6055,13 +6060,28 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             } = formData;
             
             const finalContactName = `${contactFirstName.trim()} ${contactLastName.trim()}`.trim() || formData.contact_name;
+            const rawWoBranch = (formData.billing_razon_social && formData.billing_razon_social.trim().length > 0)
+                ? formData.billing_razon_social
+                : (
+                    (formData.logistics_data?.world_office_branch && String(formData.logistics_data.world_office_branch).trim().length > 0)
+                        ? String(formData.logistics_data.world_office_branch)
+                        : (b2bStructureType === 'sucursal'
+                            ? (formData.company_name || '').trim()
+                            : (formData.razon_social || formData.company_name || finalContactName || '').trim())
+                );
+            const rawWoNit = (formData.billing_nit || '').trim()
+                || String(formData.nit || '').trim().split('-')[0].replace(/\D/g, '');
             const updatedLogistics = { 
                 ...(formData.logistics_data || {}), 
                 beneficiaries: beneficiariesList,
-                preferred_payment_method: formData.preferred_payment_method 
+                preferred_payment_method: formData.preferred_payment_method,
+                world_office_branch: rawWoBranch,
+                ...(rawWoNit ? { world_office_nit: rawWoNit } : {})
             };
             const payload: any = {
                 ...coreData,
+                billing_razon_social: rawWoBranch || null,
+                billing_nit: rawWoNit || null,
                 contact_name: finalContactName,
                 contact_phone: formData.phone,
                 latitude: formData.latitude ? parseFloat(String(formData.latitude)) : null,
@@ -6162,8 +6182,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                             allow_off_agreement_purchases: formData.allow_off_agreement_purchases,
                             document_type: formData.document_type,
                             remission_with_prices: formData.remission_with_prices,
-                            print_invoice: formData.print_invoice,
-                            logistics_data: formData.logistics_data
+                            print_invoice: formData.print_invoice
                         })
                         .eq('parent_id', (editData as Profile).id);
                 }
@@ -7444,6 +7463,53 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <FormField label="Email Principal" value={formData.email} onChange={(v) => setFormData({...formData, email: v, contact_email: v})} required readOnly={isReadOnly} placeholder="administracion@negocio.com" />
                                 </div>
                             )}
+
+                            {/* HOMOLOGACIÓN CANÓNICA WORLD OFFICE (COLUMNA AD Y NIT) */}
+                            <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', borderRadius: '16px', backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <FileText size={15} strokeWidth={1.75} style={{ color: '#0284C7' }} />
+                                        <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#0369A1', textTransform: 'uppercase', letterSpacing: '0.03rem' }}>
+                                            Homologación World Office Desktop (Plano 57 Columnas)
+                                        </span>
+                                    </div>
+                                    <span style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: '800',
+                                        padding: '2px 10px',
+                                        borderRadius: '999px',
+                                        backgroundColor: formData.logistics_data?.world_office_verified ? '#DCFCE7' : '#FEF3C7',
+                                        color: formData.logistics_data?.world_office_verified ? '#166534' : '#92400E',
+                                        border: `1px solid ${formData.logistics_data?.world_office_verified ? '#86EFAC' : '#FDE68A'}`
+                                    }}>
+                                        {formData.logistics_data?.world_office_verified ? 'Certificado Maestro WO' : 'Pendiente validar en WO'}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+                                    <FormField
+                                        label="Sucursal / Nombre Exacto en World Office (Columna AD)"
+                                        value={formData.billing_razon_social}
+                                        onChange={(v) => setFormData(prev => ({
+                                            ...prev,
+                                            billing_razon_social: v,
+                                            logistics_data: { ...(prev.logistics_data || {}), world_office_branch: v }
+                                        }))}
+                                        readOnly={isReadOnly}
+                                        placeholder={b2bStructureType === 'sucursal' ? 'Nombre literal exacto de la sucursal en WO (ej: EL CUBO)' : 'Nombre literal del Tercero o Sucursal en WO'}
+                                    />
+                                    <FormField
+                                        label="NIT / Cédula World Office (Columna G)"
+                                        value={formData.billing_nit}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, billing_nit: v.replace(/\D/g, '') }))}
+                                        readOnly={isReadOnly}
+                                        placeholder="Solo dígitos sin DV"
+                                    />
+                                </div>
+                                <div style={{ fontSize: '0.66rem', color: '#0369A1', marginTop: '0.45rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Info size={12} style={{ flexShrink: 0 }} />
+                                    <span>Este valor viaja de forma literal sin recortes automáticos al archivo plano de World Office. Respeta mayúsculas, minúsculas y guiones exactos de WO.</span>
+                                </div>
+                            </div>
 
                             {!isB2C && (
                                 <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E2E8F0', marginTop: '1.5rem' }}>

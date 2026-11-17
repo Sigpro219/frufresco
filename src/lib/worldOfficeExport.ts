@@ -1,14 +1,14 @@
 /**
  * WORLD OFFICE DESKTOP EXPORT ENGINE
  * Contract: SPEC.md v1.9.32 - Section 7.7.E & 7.7.F (COM-27, COM-31)
- * Generates official Excel (.xlsx) file matching World Office Desktop import layout (57 columns).
- * Sheet Name: 'Detalle migración'
+ * Generates official Excel (.xls BIFF8) file matching World Office Desktop import layout (44 columns).
+ * Sheet Name: 'Encab + Movim.Inven LOTES'
  */
 
-export const WORLD_OFFICE_SHEET_NAME = 'Detalle migración';
+export const WORLD_OFFICE_SHEET_NAME = 'Encab + Movim.Inven LOTES';
 
-export const WORLD_OFFICE_57_COLUMNS = [
-    'EMPRESA',
+export const WORLD_OFFICE_44_COLUMNS = [
+    'Encab: Empresa',
     'Encab: Tipo Documento',
     'Encab: Prefijo',
     'Encab: Documento Número',
@@ -50,24 +50,13 @@ export const WORLD_OFFICE_57_COLUMNS = [
     'Detalle: Nota',
     'Detalle: Centro costos',
     'Detalle: Personalizado1',
-    'Detalle: Personalizado2',
-    'Detalle: Personalizado3',
-    'Detalle: Personalizado4',
-    'Detalle: Personalizado5',
-    'Detalle: Personalizado6',
-    'Detalle: Personalizado7',
-    'Detalle: Personalizado8',
-    'Detalle: Personalizado9',
-    'Detalle: Personalizado10',
-    'Detalle: Personalizado11',
-    'Detalle: Personalizado12',
-    'Detalle: Personalizado13',
-    'Detalle: Personalizado14',
-    'Detalle: Personalizado15',
+    'Detalle: Lote',
     'Detalle: Código Centro Costos'
 ] as const;
 
-export type WorldOfficeColumnKey = typeof WORLD_OFFICE_57_COLUMNS[number];
+export const WORLD_OFFICE_57_COLUMNS = WORLD_OFFICE_44_COLUMNS;
+
+export type WorldOfficeColumnKey = typeof WORLD_OFFICE_44_COLUMNS[number];
 
 export interface WorldOfficeExportItem {
     empresa?: string;
@@ -222,27 +211,45 @@ export function normalizeWorldOfficeUom(rawUom: string | null | undefined): stri
  */
 /**
  * Resolves the clean World Office branch name (Columna AD: 'Encab: Sucursal').
- * In World Office Desktop, clients with branches are registered under the parent NIT,
- * but the branch column MUST match the exact sub-branch name (e.g. 'EL CUBO', 'CATERING'),
- * NOT the corporate parent legal name.
+ * Prioritizes canonical pre-paired columns (`logistics_data.world_office_branch` and `billing_razon_social`)
+ * so exports never depend on fragile text-splitting heuristics.
  */
 export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): string {
     if (!profile && !parentProfile) return '';
 
-    // Priority 0: Explicit canonical World Office branch override (preserves literal characters/trailing spaces)
-    const explicitBranch = profile?.logistics_data?.world_office_branch ?? (!profile?.parent_id ? parentProfile?.logistics_data?.world_office_branch : undefined);
-    if (typeof explicitBranch === 'string' && explicitBranch.trim().length > 0) {
-        return explicitBranch;
+    // Prioridad 1 (Fuente Única Canónica): Columna pre-apareada en BD (preserva caracteres literales exactos)
+    const canonicalBranch =
+        (typeof profile?.logistics_data?.world_office_branch === 'string' && profile.logistics_data.world_office_branch.trim().length > 0
+            ? profile.logistics_data.world_office_branch
+            : undefined) ??
+        (typeof profile?.billing_razon_social === 'string' && profile.billing_razon_social.trim().length > 0
+            ? profile.billing_razon_social
+            : undefined);
+
+    if (canonicalBranch) {
+        return canonicalBranch;
     }
 
+    // Prioridad 2 (Heredado de Matriz cuando el perfil no es sucursal independiente)
+    const isBranch = Boolean(profile?.parent_id) || Boolean(profile?.branch_id);
+    if (!isBranch && parentProfile) {
+        const parentCanonical =
+            (typeof parentProfile?.logistics_data?.world_office_branch === 'string' && parentProfile.logistics_data.world_office_branch.trim().length > 0
+                ? parentProfile.logistics_data.world_office_branch
+                : undefined) ??
+            (typeof parentProfile?.billing_razon_social === 'string' && parentProfile.billing_razon_social.trim().length > 0
+                ? parentProfile.billing_razon_social
+                : undefined);
+        if (parentCanonical) {
+            return parentCanonical;
+        }
+    }
+
+    // Fallback de emergencia (solo para perfiles recién creados sin homologación previa)
     const fullName = (profile?.company_name || profile?.razon_social || profile?.contact_name || '').trim();
     const legalName = (profile?.razon_social || profile?.company_name || profile?.contact_name || parentProfile?.razon_social || parentProfile?.company_name || '').trim();
     if (!fullName && !legalName) return '';
 
-    const isBranch = Boolean(profile?.parent_id) || Boolean(profile?.branch_id) || profile?.is_corporate_parent === false;
-
-    // Priority 1: Strip exact parent company_name / razon_social BEFORE generic hyphen splitting
-    // (Prevents truncation when parent name itself contains ' - ', e.g. 'AMATU - AMA TU MASCOTA SAS')
     const parentCandidates = [
         parentProfile?.company_name,
         parentProfile?.razon_social,
@@ -258,39 +265,43 @@ export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): str
         }
     }
 
-    // Priority 2: 'EMPRESA - SUCURSAL' pattern when parent profile is not separately matched
     if (isBranch && fullName.includes(' - ')) {
         const parts = fullName.split(' - ');
         const candidate = parts.slice(1).join(' - ').trim();
         if (candidate) return candidate;
     }
 
-    // Priority 3: Explicitly marked as branch without hyphen separator (e.g. 'ESCUELA URBANA EL PROGRESO', 'CIEDI')
     if (isBranch && fullName) {
         return fullName;
     }
 
-    // Fallback for single clients without branches: Razón Social / Legal Name (NEVER 'Principal')
     return legalName || fullName;
 }
 
 /**
  * Resolves the World Office header note (Columna H: 'Encab: Nota').
  * Rules (GEMBA-WO):
- * 1. Colsubsidio (NIT 860007336): Strictly the clean Purchase Order / Solped number (e.g. '4506447348' or '7900424083').
- * 2. Other clients: Format 'FV segun orden de compra {OC} - {Sucursal}' if OC exists, otherwise 'FV - {Sucursal}'.
+ * 1. If a valid Purchase Order / Solped code exists, emit the cleaned code.
+ * 2. Otherwise emit strictly the canonical World Office branch (`branchName`) without discarding 'Principal'.
  */
 export function resolveWorldOfficeNote(order: any, profile: any, branchName?: string, parentProfile?: any): string {
     const rawOc = (order?.purchase_order_number || '').trim();
     const cleanOc = rawOc
-        .replace(/^(?:fv\s*)?(?:seg[uú]n\s*)?(?:orden\s*de\s*compra\s*[:#-]?\s*|oc\b\s*[:#-]?\s+)/i, '')
+        .replace(/^(?:fv\s*)?(?:seg[uú]n\s*)?(?:orden\s*de\s*compra\s*[:#-]?\s*|solped\s*[:#-]?\s*|oc\b\s*[:#-]?\s+)/i, '')
         .trim();
 
-    if (cleanOc) {
-        return /\d/.test(cleanOc) ? cleanOc : ((branchName && branchName !== 'Principal' ? branchName : resolveWorldOfficeBranch(profile, parentProfile)) || (profile?.razon_social || profile?.company_name || profile?.contact_name || '').trim());
+    const digitCount = (cleanOc.match(/\d/g) || []).length;
+    const isLikelyAddressOrNoise =
+        /^(?:calle|cll|carrera|cra|kr|av|avenida|transversal|tv|diagonal|dg|piso|sede|bulevar|homecenter|cafam|corferias|n\/a|na|sin\s*oc|ningun[ao]?|pendiente|no\s*aplica)\b/i.test(cleanOc) ||
+        /^carrera\s*\d+$/i.test(cleanOc);
+    const isExplicitOrderRef = /\b(?:oc|solped|pedido|semana)\b/i.test(rawOc);
+    const isValidOc = Boolean(cleanOc) && digitCount > 0 && !isLikelyAddressOrNoise && (digitCount >= 3 || isExplicitOrderRef);
+
+    if (isValidOc) {
+        return cleanOc;
     }
 
-    const resolvedBranch = branchName && branchName !== 'Principal'
+    const resolvedBranch = (typeof branchName === 'string' && branchName.trim().length > 0)
         ? branchName
         : resolveWorldOfficeBranch(profile, parentProfile);
 
@@ -342,7 +353,7 @@ export async function downloadWorldOfficeExcel(
 
         const cleanTerceroInterno = Number(String(item.terceroInterno || '456282').replace(/\D/g, '')) || 456282;
         const cleanTerceroExterno = Number(cleanNit) || 222222222222;
-        const cleanSucursal = (item.sucursal && item.sucursal !== 'Principal')
+        const cleanSucursal = (typeof item.sucursal === 'string' && item.sucursal.trim().length > 0)
             ? item.sucursal
             : (item.razonSocial || '');
         const cleanProducto = typeof item.codigoProducto === 'number'
@@ -350,7 +361,7 @@ export async function downloadWorldOfficeExcel(
             : (/^\d+$/.test(String(item.codigoProducto || '').trim()) ? Number(String(item.codigoProducto).trim()) : item.codigoProducto);
 
         const row: Record<WorldOfficeColumnKey, any> = {
-            'EMPRESA': item.empresa || 'INVESTMENTS CORTES SAS',
+            'Encab: Empresa': item.empresa || 'INVESTMENTS CORTES SAS',
             'Encab: Tipo Documento': item.tipoDocumento || 'FV',
             'Encab: Prefijo': item.prefijo || undefined,
             'Encab: Documento Número': cleanDocNum,
@@ -392,39 +403,48 @@ export async function downloadWorldOfficeExcel(
             'Detalle: Nota': undefined,
             'Detalle: Centro costos': undefined,
             'Detalle: Personalizado1': undefined,
-            'Detalle: Personalizado2': undefined,
-            'Detalle: Personalizado3': undefined,
-            'Detalle: Personalizado4': undefined,
-            'Detalle: Personalizado5': undefined,
-            'Detalle: Personalizado6': undefined,
-            'Detalle: Personalizado7': undefined,
-            'Detalle: Personalizado8': undefined,
-            'Detalle: Personalizado9': undefined,
-            'Detalle: Personalizado10': undefined,
-            'Detalle: Personalizado11': undefined,
-            'Detalle: Personalizado12': undefined,
-            'Detalle: Personalizado13': undefined,
-            'Detalle: Personalizado14': undefined,
-            'Detalle: Personalizado15': undefined,
+            'Detalle: Lote': undefined,
             'Detalle: Código Centro Costos': undefined
         };
 
         return row;
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(formattedRows, { header: [...WORLD_OFFICE_57_COLUMNS] });
+    const worksheet = XLSX.utils.json_to_sheet(formattedRows, { header: [...WORLD_OFFICE_44_COLUMNS] });
 
-    // Explicitly format AI (Detalle: Cantidad) as 0.00 to match World Office standard exactly
-    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:BE1');
+    const ddmmyyyyToExcelSerial = (val: string): number | null => {
+        const m = String(val || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!m) return null;
+        const day = Number(m[1]);
+        const month = Number(m[2]);
+        const year = Number(m[3]);
+        const utc = Date.UTC(year, month - 1, day);
+        const epoch = Date.UTC(1899, 11, 30);
+        return Math.round((utc - epoch) / 86400000);
+    };
+
+    // Explicitly format AI (Detalle: Cantidad) as 0.00 and date columns (E, J, AM) as native Excel dates (dd/mm/yyyy)
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:AR1');
+    const dateColIndices = [4, 9, 38]; // Encab: Fecha, Encab: Fecha Entrega, Detalle: Vencimiento
     for (let R = 1; R <= range.e.r; ++R) {
         const aiAddr = XLSX.utils.encode_cell({ r: R, c: 34 });
         if (worksheet[aiAddr] && worksheet[aiAddr].t === 'n') {
             worksheet[aiAddr].z = '0.00';
         }
+        for (const cIdx of dateColIndices) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: cIdx });
+            const cell = worksheet[addr];
+            if (cell && typeof cell.v === 'string') {
+                const serial = ddmmyyyyToExcelSerial(cell.v);
+                if (serial !== null) {
+                    worksheet[addr] = { t: 'n', v: serial, z: 'dd/mm/yyyy' };
+                }
+            }
+        }
     }
 
     // Set auto-fit column widths
-    const colWidths = WORLD_OFFICE_57_COLUMNS.map(col => ({
+    const colWidths = WORLD_OFFICE_44_COLUMNS.map(col => ({
         wch: Math.max(col.length + 2, 14)
     }));
     worksheet['!cols'] = colWidths;
@@ -435,13 +455,13 @@ export async function downloadWorldOfficeExcel(
     const cleanDate = new Date().toISOString().split('T')[0];
     const hasDateInPrefix = /\d{4}-\d{2}-\d{2}/.test(fileNamePrefix);
     const fullFileName = hasDateInPrefix
-        ? `${fileNamePrefix}.xlsx`
-        : `${fileNamePrefix}_${cleanDate}.xlsx`;
+        ? `${fileNamePrefix}.xls`
+        : `${fileNamePrefix}_${cleanDate}.xls`;
 
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const wbout = XLSX.write(workbook, { bookType: 'biff8', type: 'array' });
         const blob = new Blob([wbout], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            type: 'application/vnd.ms-excel'
         });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -453,7 +473,7 @@ export async function downloadWorldOfficeExcel(
         document.body.removeChild(link);
         setTimeout(() => window.URL.revokeObjectURL(url), 1500);
     } else {
-        XLSX.writeFile(workbook, fullFileName);
+        XLSX.writeFile(workbook, fullFileName, { bookType: 'biff8' });
     }
 }
 

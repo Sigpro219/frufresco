@@ -12139,6 +12139,17 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 
 ---
 
+### Escenario 296-D: Informe Ejecutivo Diario Redactado, Deduplicación Canónica de `billing_returns` y Blindaje Legal Golden Print (SDD v1.9.273-R2)
+- **Given** la vista `PqrDailyShiftReport.tsx` en `/admin/customer-service`,
+- **When** el analista o gerencia consulta el informe en pantalla (`Informe Ejecutivo` vs `Tabla Operativa`) o imprime el Acta PDF (`Imprimir Acta (PDF)`),
+- **Then** el sistema garantiza:
+  1. **Deduplicación Canónica y Exclusión de Rechazadas:** Las novedades `billing_returns` con `status === 'rejected'` se excluyen del cálculo financiero, y cada `billing_returns.id` se contabiliza una sola vez en los totales diarios aunque un mismo `order_id` tenga múltiples PQRs en la jornada.
+  2. **Exposición Completa de `deductionAmount` en `parseRcaFromRecord()`:** `src/lib/rcaTaxonomy.ts` expone `deductionAmount?: number` en todas las rutas de retorno de `[RCA_METADATA:]`.
+  3. **Informe Ejecutivo Redactado (100% Determinístico):** Presenta en pantalla y en el Acta PDF: (a) Narrativa ejecutiva automática de la jornada, (b) Productos y cantidades afectadas ordenados de mayor a menor impacto económico (`$ COP` con `#ID` contable), (c) Impacto por Causas (Área / Causa Raíz RCA con etiquetas legibles de `RESPONSIBLE_PARTIES` y `RCA_CATEGORIES_L1`), y (d) Relación por Usuarios en dos bloques (*Responsables Imputados & Auditores SAC* y *Clientes / Sedes Afectadas*).
+  4. **Conmutador de Vista + Membrete Legal Canónico:** Permite alternar en 1 clic entre `Informe Ejecutivo` y `Tabla Operativa` (para auditoría directa), y el Acta PDF utiliza exclusivamente la razón social legal **Investments Cortés S.A.S. • NIT: 901.393.217-5** (§1.1 Frontera 2).
+
+---
+
 ### Escenario 297: Saneamiento Integral del Monitor Diario BI y Exportación Oficial de la Relación Diaria de Pedidos (Gemba Hallazgos #5 y #6 Operación) (SDD v1.9.274)
 - **Given** el módulo de Monitor Diario BI y Auditoría de Ventas (`CommercialDailyMonitorModule.tsx`) en `/admin/commercial?tab=daily-monitor`, donde la mesa de operaciones, logística y contabilidad audita y concilia los despachos diarios,
 - **When** el usuario visualiza los pedidos confirmados del día o descarga el archivo Excel para utilizarlo como la Relación Diaria de Pedidos de planta, logística y contabilidad,
