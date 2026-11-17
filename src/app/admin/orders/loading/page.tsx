@@ -252,6 +252,7 @@ function OrderLoadingContent() {
     };
 
     const [inventoryGateStatus, setInventoryGateStatus] = useState<InventoryGateStatus | null>(null);
+    const [todayClosingState, setTodayClosingState] = useState<'locked' | 'reopened' | 'none' | null>(null);
     const [showInventoryGateModal, setShowInventoryGateModal] = useState(false);
     const [gateOverrideConfirmed, setGateOverrideConfirmed] = useState(false);
     const [gateOverrideReason, setGateOverrideReason] = useState('');
@@ -267,9 +268,22 @@ function OrderLoadingContent() {
 
     useEffect(() => {
         let cancelled = false;
-        evaluateInventoryGateStatus({ supabase, targetDate: getBogotaDateString() })
+        const todayStr = getBogotaDateString();
+        evaluateInventoryGateStatus({ supabase, targetDate: todayStr })
             .then((res) => { if (!cancelled) setInventoryGateStatus(res); })
             .catch((err) => console.warn('Inventory gate status fetch warning:', err));
+
+        supabase
+            .from('daily_inventory_closings')
+            .select('is_locked')
+            .eq('closing_date', todayStr)
+            .maybeSingle()
+            .then(({ data }) => {
+                if (cancelled) return;
+                if (!data) setTodayClosingState('none');
+                else setTodayClosingState(data.is_locked ? 'locked' : 'reopened');
+            });
+
         return () => { cancelled = true; };
     }, [refreshTrigger]);
 
@@ -3654,60 +3668,80 @@ useEffect(() => {
                             );
                         })()}
 
-                        {/* BADGE ANDON DE CIERRE DE INVENTARIO (ESCENARIO 457) */}
-                        {inventoryGateStatus && (
-                            <Link
-                                href={`/admin/commercial/inventory${inventoryGateStatus.lastOperatedDate ? `?date=${inventoryGateStatus.lastOperatedDate}` : ''}`}
-                                title={inventoryGateStatus.detail}
-                                className={inventoryGateStatus.level !== 'green' ? 'animate-pulse' : ''}
+                        {/* ALERTA DE DUPLICADOS EN FILA 1 (PARA NO DESBORDAR LA BARRA DE HERRAMIENTAS) */}
+                        {activeTab === 'orders' && duplicateOrdersCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado')}
                                 style={{
+                                    backgroundColor: searchTerm === '@duplicado' ? '#991B1B' : '#DC2626',
+                                    color: '#FFFFFF',
+                                    border: '1px solid #B91C1C',
+                                    borderRadius: '8px',
+                                    padding: '4px 10px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '900',
+                                    cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '4px 10px',
-                                    borderRadius: '8px',
+                                    gap: '5px',
                                     whiteSpace: 'nowrap',
-                                    textDecoration: 'none',
-                                    backgroundColor:
-                                        inventoryGateStatus.level === 'green'
-                                            ? '#ECFDF5'
-                                            : inventoryGateStatus.level === 'amber'
-                                                ? '#FFFBEB'
-                                                : '#FEF2F2',
-                                    border: `1px solid ${
-                                        inventoryGateStatus.level === 'green'
-                                            ? '#86EFAC'
-                                            : inventoryGateStatus.level === 'amber'
-                                                ? '#FCD34D'
-                                                : '#FCA5A5'
-                                    }`,
-                                    color:
-                                        inventoryGateStatus.level === 'green'
-                                            ? '#065F46'
-                                            : inventoryGateStatus.level === 'amber'
-                                                ? '#92400E'
-                                                : '#991B1B',
-                                    fontSize: '0.72rem',
-                                    fontWeight: '800',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                    boxShadow: '0 1px 4px rgba(220, 38, 38, 0.3)',
+                                    flexShrink: 0
                                 }}
+                                title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
                             >
-                                <span
-                                    style={{
-                                        width: '8px',
-                                        height: '8px',
-                                        borderRadius: '50%',
-                                        backgroundColor:
-                                            inventoryGateStatus.level === 'green'
-                                                ? '#10B981'
-                                                : inventoryGateStatus.level === 'amber'
-                                                    ? '#F59E0B'
-                                                    : '#EF4444',
-                                    }}
-                                />
-                                <span>{inventoryGateStatus.headline}</span>
-                            </Link>
+                                <AlertTriangle size={13} color="#FFFFFF" strokeWidth={2.8} />
+                                <span>{duplicateOrdersCount} DUPLICADO(S)</span>
+                            </button>
                         )}
+
+                        {/* BADGE VISUAL DE CIERRE DE INVENTARIO DE HOY (FILA 1) */}
+                        {todayClosingState && (() => {
+                            const todayStr = getBogotaDateString();
+                            const shortToday = `${todayStr.slice(8, 10)}/${todayStr.slice(5, 7)}`;
+                            const isLocked = todayClosingState === 'locked';
+                            const isReopened = todayClosingState === 'reopened';
+                            const bg = isLocked ? '#ECFDF5' : isReopened ? '#FFFBEB' : '#FEF2F2';
+                            const border = isLocked ? '#86EFAC' : isReopened ? '#FCD34D' : '#FCA5A5';
+                            const color = isLocked ? '#065F46' : isReopened ? '#92400E' : '#991B1B';
+                            const dot = isLocked ? '#10B981' : isReopened ? '#F59E0B' : '#EF4444';
+                            const label = isLocked
+                                ? `Inv. Hoy (${shortToday}): Cerrado`
+                                : isReopened
+                                    ? `Inv. Hoy (${shortToday}): Reabierto`
+                                    : `Inv. Hoy (${shortToday}): Sin cerrar`;
+                            const tooltip = isLocked
+                                ? `El inventario de hoy (${todayStr}) ya fue cerrado oficialmente.`
+                                : isReopened
+                                    ? `El inventario de hoy (${todayStr}) fue reabierto y falta volver a sellarlo.`
+                                    : `Aún no se ha ejecutado el cierre de inventario de hoy (${todayStr}).`;
+
+                            return (
+                                <Link
+                                    href={`/admin/commercial/inventory?date=${todayStr}`}
+                                    title={tooltip}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 10px',
+                                        borderRadius: '8px',
+                                        whiteSpace: 'nowrap',
+                                        textDecoration: 'none',
+                                        backgroundColor: bg,
+                                        border: `1px solid ${border}`,
+                                        color,
+                                        fontSize: '0.72rem',
+                                        fontWeight: '800',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    }}
+                                >
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: dot }} />
+                                    <span>{label}</span>
+                                </Link>
+                            );
+                        })()}
 
 
                     </div>
@@ -3731,62 +3765,68 @@ useEffect(() => {
 
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                        {/* Date Selector Segment with Crystal-Clear Storytelling */}
+                        {/* Selector Integrado de Fecha de Entrega (Prefijo + Input unidos) */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {/* Explicit Badge */}
-                            <div style={{
-                                fontSize: '0.68rem',
-                                fontWeight: '900',
-                                color: '#1E293B',
-                                letterSpacing: '0.04em',
-                                textTransform: 'uppercase',
-                                backgroundColor: '#F1F5F9',
-                                padding: '8px 9px',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                border: '1px solid #CBD5E1',
-                                whiteSpace: 'nowrap',
-                                height: '38px',
-                                boxSizing: 'border-box'
-                            }}>
-                                <Truck size={14} style={{ color: THEME.colors.primary }} /> Entrega:
-                            </div>
-
-                            {/* Date Picker Input */}
-                            <div style={{ 
-
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '0 0.6rem',
-                                backgroundColor: '#F9FAFB',
-                                borderRadius: '8px',
-                                border: '1px solid #CBD5E1',
-                                cursor: 'pointer',
-                                height: '38px',
-                                position: 'relative'
-                            }} onClick={(e) => {
-                                const input = e.currentTarget.querySelector('input');
-                                if (input) (input as any).showPicker?.();
-                            }}>
-                                 <Calendar size={14} strokeWidth={1.5} style={{ marginRight: '4px', color: THEME.colors.primary, flexShrink: 0 }} />
-                                 <input
-                                    type="date"
-                                    className="clean-date-input"
-                                    value={['history15', 'all'].includes(selectedDate) ? '' : selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    style={{
-                                        border: 'none',
-                                        background: 'transparent',
-                                        fontSize: '0.8rem',
-                                        fontWeight: '800',
-                                        color: '#0F172A',
-                                        outline: 'none',
-                                        cursor: 'pointer',
-                                        width: '110px'
-                                    }}
-                                />
+                            <div
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    height: '38px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    boxSizing: 'border-box'
+                                }}
+                                onClick={(e) => {
+                                    const input = e.currentTarget.querySelector('input');
+                                    if (input) (input as any).showPicker?.();
+                                }}
+                                title="Seleccionar fecha de entrega"
+                            >
+                                <span style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: '900',
+                                    color: '#334155',
+                                    letterSpacing: '0.03em',
+                                    textTransform: 'uppercase',
+                                    backgroundColor: '#F1F5F9',
+                                    padding: '0 8px',
+                                    height: '100%',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    borderRight: '1px solid #E2E8F0',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    <Truck size={13} style={{ color: THEME.colors.primary }} /> Entrega
+                                </span>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    padding: '0 8px',
+                                    height: '100%',
+                                    backgroundColor: '#FFFFFF'
+                                }}>
+                                    <Calendar size={13} strokeWidth={1.7} style={{ marginRight: '4px', color: THEME.colors.primary, flexShrink: 0 }} />
+                                    <input
+                                        type="date"
+                                        className="clean-date-input"
+                                        value={['history15', 'all'].includes(selectedDate) ? '' : selectedDate}
+                                        onChange={(e) => setSelectedDate(e.target.value)}
+                                        style={{
+                                            border: 'none',
+                                            background: 'transparent',
+                                            fontSize: '0.78rem',
+                                            fontWeight: '800',
+                                            color: '#0F172A',
+                                            outline: 'none',
+                                            cursor: 'pointer',
+                                            width: '106px'
+                                        }}
+                                    />
+                                </span>
                             </div>
 
                             {/* Button: Mañana (Corte Activo) */}
@@ -3927,43 +3967,14 @@ useEffect(() => {
 
                         </div>
 
-                        {/* ALERTA DE DUPLICADOS EN TOOLBAR */}
-                        {duplicateOrdersCount > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => setSearchTerm(searchTerm === '@duplicado' ? '' : '@duplicado')}
-                                style={{
-                                    backgroundColor: searchTerm === '@duplicado' ? '#991B1B' : '#DC2626',
-                                    color: '#FFFFFF',
-                                    border: '1px solid #B91C1C',
-                                    borderRadius: '8px',
-                                    padding: '0 10px',
-                                    height: '38px',
-                                    fontSize: '0.72rem',
-                                    fontWeight: '900',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
-                                    transition: 'all 0.15s',
-                                    flexShrink: 0
-                                }}
-                                title="Filtrar pedidos duplicados (mismo cliente, fecha y sede)"
-                            >
-                                <AlertTriangle size={14} color="#FFFFFF" strokeWidth={2.8} />
-                                <span>{duplicateOrdersCount} DUPLICADO(S)</span>
-                            </button>
-                        )}
-
                         {/* Superbuscador Omnibox Universal FruFresco (SDD Escenario 57 / EFE-1) */}
                         <GalleryOmnibox
                             value={searchTerm}
                             onChange={setSearchTerm}
-                            placeholder="Buscar por ID (#1373), cliente, nit, dirección, @comando..."
+                            placeholder="Buscar por ID (#1373), cliente, nit, dirección..."
                             filteredCount={filteredOrders.length}
                             totalCount={totalOrders}
-                            style={{ flex: 1, minWidth: '240px', maxWidth: 'none' }}
+                            style={{ flex: 1, minWidth: '150px', maxWidth: 'none' }}
                         />
 
                         {/* Info Button for Commands */}

@@ -2423,7 +2423,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const dbConv = conversions.find(c => 
         c.product_id === product.id &&
         normalizeUnitName(c.from_unit) === normalizeUnitName(currentOriginalUnit) &&
-        normalizeUnitName(c.to_unit) === normalizeUnitName(targetUnit)
+        normalizeUnitName(c.to_unit) === normalizeUnitName(targetUnit) &&
+        normalizeUnitName(c.from_unit) !== normalizeUnitName(c.to_unit)
       );
       if (dbConv) {
         conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
@@ -2457,7 +2458,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const packMatch = product?.name ? product.name.match(/\bx\s*(\d+(?:[.,]\d+)?)\s*(?:und|unid|unidades|paq|pqt|gr|g|kg)?\b/i) : null;
       const packSize = packMatch ? parseFloat(packMatch[1].replace(',', '.')) : null;
 
+      const isPack250 = uNorm.includes('250 g') || uNorm.includes('250g') || uNorm.includes('250 gramos');
+      const isPack500 = uNorm.includes('500 g') || uNorm.includes('500g') || uNorm.includes('500 gramos');
+
       if (isLibra) {
+        conversionFactor = 0.5;
+      } else if (isPack250 && targetUnit === 'Kg') {
+        conversionFactor = 0.25;
+      } else if (isPack500 && targetUnit === 'Kg') {
         conversionFactor = 0.5;
       } else if (isGram && targetUnit === 'Kg') {
         conversionFactor = 0.001;
@@ -4894,7 +4902,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             const dbConv = conversions.find(c => 
               c.product_id === prod.id &&
               normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
-              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure)
+              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure) &&
+              normalizeUnitName(c.from_unit) !== normalizeUnitName(c.to_unit)
             );
             if (dbConv) {
               conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
@@ -4907,10 +4916,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         if (!foundDbConversion) {
           const normPUnit = normalizeUnitName(parsedUnit);
           const isLibra = normPUnit === 'libra' || parsedUnit === 'Lb' || normPUnit === 'lb' || normPUnit === 'libras' || normPUnit.includes('500');
+          const isPack250 = normPUnit.includes('250 g') || normPUnit.includes('250g') || normPUnit.includes('250 gramos');
           const isGram = normPUnit === 'gramo' || normPUnit === 'gramos' || normPUnit === 'gr' || normPUnit === 'g';
           
           if (isLibra && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
             conversionFactor = 0.5;
+            finalUnit = prod?.unit_of_measure || 'Kg';
+          } else if (isPack250 && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
+            conversionFactor = 0.25;
             finalUnit = prod?.unit_of_measure || 'Kg';
           } else if (isGram && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
             conversionFactor = 0.001;
@@ -13712,13 +13725,18 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               }
 
               const factor = qty2 / qty1;
+              const toUnit = manageConversionsProduct.unit_of_measure || 'Kg';
+              if (normalizeUnitName(unit1) === normalizeUnitName(toUnit) && Math.abs(factor - 1) > 0.0001) {
+                  alert(`No se puede crear una conversión de "${unit1}" a "${toUnit}" con factor ${factor}. Unidades idénticas siempre equivalen 1:1.`);
+                  return;
+              }
 
               const { data, error } = await supabase
                   .from('product_conversions')
                   .insert([{
                       product_id: manageConversionsProduct.id,
                       from_unit: unit1,
-                      to_unit: manageConversionsProduct.unit_of_measure || 'Kg',
+                      to_unit: toUnit,
                       conversion_factor: factor
                   }])
                   .select();
