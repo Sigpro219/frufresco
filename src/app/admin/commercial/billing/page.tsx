@@ -221,11 +221,9 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         ? 'gift_remission'
         : (isUnpricedOffAgreement
             ? 'remission'
-            : (clientFiscalDocType === 'invoice'
-                ? 'invoice'
-                : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
-                    ? order.logistics_data.document_type_override
-                    : clientFiscalDocType)));
+            : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
+                ? order.logistics_data.document_type_override
+                : clientFiscalDocType));
     const isPrinted = prof.print_invoice !== undefined ? prof.print_invoice : (parent?.print_invoice !== undefined ? parent.print_invoice : true);
     const isWithPrices = isUnpricedOffAgreement
         ? false
@@ -2268,7 +2266,7 @@ export default function BillingDashboard() {
     const pendingFacImpOrdersCount = useMemo(() => {
         return pendingOrders.filter(o => {
             const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
-            const docType = o.document_type || prof.document_type;
+            const docType = o.logistics_data?.document_type_override || o.document_type || prof.document_type;
             const matchesDate = selectedBillingDate === 'all' || o.delivery_date === selectedBillingDate;
             return docType === 'invoice' && !o.billing_cut_id && matchesDate && ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido'].includes(o.status);
         }).length;
@@ -2554,7 +2552,7 @@ export default function BillingDashboard() {
                 // Filtra estrictamente los pedidos cuya configuración documental exige factura impresa en muelle (World Office)
                 targetOrders = targetOrders.filter(o => {
                     const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
-                    const docType = o.document_type || prof.document_type;
+                    const docType = o.logistics_data?.document_type_override || o.document_type || prof.document_type;
                     return docType === 'invoice';
                 });
             } else if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
@@ -9624,7 +9622,7 @@ export default function BillingDashboard() {
                             </div>
 
                             {/* Body */}
-                            <div style={{ padding: '1.15rem 1.35rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ padding: '1.15rem 1.35rem', overflowY: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {loadingAssignPriceOrders ? (
                                     <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748B', fontWeight: '700', fontSize: '0.85rem' }}>
                                         Cargando remisiones retenidas en $0...
@@ -9649,7 +9647,8 @@ export default function BillingDashboard() {
                                                         border: '1px solid #E2E8F0',
                                                         borderRadius: '12px',
                                                         overflow: 'hidden',
-                                                        backgroundColor: 'white'
+                                                        backgroundColor: 'white',
+                                                        flexShrink: 0
                                                     }}
                                                 >
                                                     <div
@@ -9688,7 +9687,7 @@ export default function BillingDashboard() {
                                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
                                                         <thead>
                                                             <tr style={{ backgroundColor: '#F1F5F9', color: '#475569', textAlign: 'left' }}>
-                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800' }}>SKU / Producto Despachado a $0</th>
+                                                                <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800' }}>#ID / Producto Despachado a $0</th>
                                                                 <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'center' }}>Cant. Entregada</th>
                                                                 <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'right' }}>Referencias (Costo / Inst.)</th>
                                                                 <th style={{ padding: '0.45rem 0.75rem', fontWeight: '800', textAlign: 'center' }}>Estado en Facturación</th>

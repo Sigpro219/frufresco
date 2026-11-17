@@ -1,5 +1,7 @@
 import { unstable_cache } from 'next/cache';
 import { supabase, createAdminClient, type Product } from './supabase';
+import { filterStorefrontProductsByFrioganMode } from './storefront/storefrontEngine';
+import type { FrioganStorefrontMode } from './storefront/storefrontContracts';
 
 /**
  * Fetches all products visible on the web.
@@ -53,20 +55,10 @@ export const getVisibleProducts = unstable_cache(
         console.error('Fallback products fetch failed:', fallbackError);
         return [];
       }
-      const fallbackList = ((fallbackData || []) as Product[]).map(p => {
-        if ((!p.pricing_model_prices || p.pricing_model_prices.length === 0) && (p as any).base_price) {
-          return { ...p, pricing_model_prices: [{ price: (p as any).base_price, model_id: 'base' }] };
-        }
-        return p;
-      }).filter(p => !lockedIds.has(p.id));
+      const fallbackList = ((fallbackData || []) as Product[]).filter(p => !lockedIds.has(p.id));
       return fallbackList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
     }
-    const productList = ((data || []) as Product[]).map(p => {
-      if ((!p.pricing_model_prices || p.pricing_model_prices.length === 0) && (p as any).base_price) {
-        return { ...p, pricing_model_prices: [{ price: (p as any).base_price, model_id: 'base' }] };
-      }
-      return p;
-    }).filter(p => !lockedIds.has(p.id));
+    const productList = ((data || []) as Product[]).filter(p => !lockedIds.has(p.id));
     return productList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
   },
   ['visible-products'],
@@ -79,12 +71,17 @@ export const getVisibleProducts = unstable_cache(
  */
 export const getAppSettings = unstable_cache(
   async () => {
-    const { data, error } = await supabase.from('app_settings').select('key, value');
-    if (error) {
-      console.error('Error fetching app settings:', error);
+    try {
+      const { data, error } = await supabase.from('app_settings').select('key, value');
+      if (error) {
+        console.warn('Warning fetching app settings:', error.message || error);
+        return [];
+      }
+      return data || [];
+    } catch (err: any) {
+      console.warn('Warning fetching app settings:', err?.message || err);
       return [];
     }
-    return data || [];
   },
   ['app-settings'],
   { revalidate: 3600, tags: ['settings'] }
@@ -95,13 +92,14 @@ export const getAppSettings = unstable_cache(
  * Uses the cached products list.
  */
 export const getWebCategories = unstable_cache(
-  async () => {
-    const products = await getVisibleProducts();
+  async (mode: FrioganStorefrontMode = 'OFF') => {
+    const rawProducts = await getVisibleProducts();
+    const products = filterStorefrontProductsByFrioganMode(rawProducts, mode);
     const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
     return ['Todos', ...categories];
   },
   ['web-categories'],
-  { revalidate: 60, tags: ['products', 'web-categories'] }
+  { revalidate: 60, tags: ['products', 'web-categories', 'settings'] }
 );
 
 /**
