@@ -24,7 +24,13 @@ interface PdfJsDocument {
 }
 interface PdfJsLibrary {
   GlobalWorkerOptions: { workerSrc: string };
-  getDocument: (opts: { data: Uint8Array }) => { promise: Promise<PdfJsDocument> };
+  getDocument: (opts: {
+    data: Uint8Array;
+    cMapUrl?: string;
+    cMapPacked?: boolean;
+    standardFontDataUrl?: string;
+    useSystemFonts?: boolean;
+  }) => { promise: Promise<PdfJsDocument> };
 }
 interface WindowWithPdfJs extends Window {
   pdfjsLib?: PdfJsLibrary;
@@ -154,7 +160,13 @@ export default function PhysicalSheetIngestModal({ isOpen, onClose, balanceDate,
         return { pages: [file], warning: null };
       }
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await win.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      const pdf = await win.pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+        cMapPacked: true,
+        standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
+        useSystemFonts: true
+      }).promise;
       const rawNumPages = pdf.numPages || 1;
       const totalPages = Math.min(rawNumPages, MAX_PDF_PAGES);
       const pageLimitWarning =
