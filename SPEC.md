@@ -1026,43 +1026,45 @@ La facturación no opera sobre promesas comerciales teóricas sino sobre la **re
        5. *Responsable Asignado & Fecha Límite de Implementación.* 
        6. *Estatus del Plan:* `En Diagnóstico` $\rightarrow$ `En Implementación` $\rightarrow$ `Verificación 15D` $\rightarrow$ `Cerrado Eficaz`.
        7. *Run Chart de Verificación:* Gráfica de control que comprueba la reducción de la causa a cero en los siguientes 30 días.
-#### E. Integración Canónica con World Office Desktop (Matriz Oficial de 57 Columnas - Gemba Real)
-Para la integración con **World Office Desktop (instalación local sobre Microsoft SQL Server)**, contrastada y validada contra la operación viva en producción (`formato_migracion (2).xlsx`):
+#### E. Integración Canónica con World Office Desktop (Matriz Oficial de 44 Columnas `.xls` BIFF8 - Gemba Real)
+Para la integración con **World Office Desktop (instalación local sobre Microsoft SQL Server)**, contrastada y validada contra la plantilla oficial que ingiere World Office (`plantilla de pruebas.xls`):
 
 1. **Veredicto Arquitectónico: Exportación Masiva en Lotes vs API Directa:**
    - World Office Desktop opera en la red local de la empresa y no dispone de una API REST pública nativa en la nube. Forzar túneles locales (VPN / reverse proxies) hacia SQL Server genera graves vulnerabilidades de seguridad y puntos de falla a las 05:00 AM durante el despacho matutino.
-   - Por tanto, el canal maestro de integración es el **Generador de Planos Oficiales de World Office (Excel .xlsx)**, permitiendo al analista contable auditar visualmente el corte y cargarlo en World Office Desktop en 1 clic (*Menú Herramientas $\rightarrow$ Importar Documentos*).
+   - Por tanto, el canal maestro de integración es el **Generador de Planos Oficiales de World Office (Excel `.xls` BIFF8)**, permitiendo al analista contable auditar visualmente el corte y cargarlo en World Office Desktop en 1 clic (*Menú Herramientas $\rightarrow$ Importar Documentos*).
 
-2. **Estructura Canónica del Plano de Importación World Office (57 Columnas):**
-   - **Nombre de la Hoja:** Obligatoriamente `'Detalle migración'`.
+2. **Estructura Canónica del Plano de Importación World Office (44 Columnas):**
+   - **Formato de Archivo:** Obligatoriamente Excel 97-2003 binario **`.xls` (BIFF8)**.
+   - **Nombre de la Hoja:** Obligatoriamente **`'Encab + Movim.Inven LOTES'`**.
    - **Mapeo de Campos Reales del Asistente:**
      | # | Columna World Office | Valor / Mapeo FruFresco |
      | :---: | :--- | :--- |
-     | 0 | `EMPRESA` | `"INVESTMENTS CORTES SAS"` |
+     | 0 | `Encab: Empresa` | `"INVESTMENTS CORTES SAS"` |
      | 1 | `Encab: Tipo Documento` | `"FV"` (Factura Venta) o `"NC"` (Nota Crédito) |
      | 2 | `Encab: Prefijo` | `""` (Vacío según resolución configurada en WO) |
-     | 3 | `Encab: Documento Número` | Número consecutivo asignado al pedido/corte |
+     | 3 | `Encab: Documento Número` | Número consecutivo entero asignado al pedido/corte |
      | 4 | `Encab: Fecha` | Fecha de corte en formato `DD/MM/YYYY` |
-     | 5 | `Encab: Tercero Interno` | `456282` (Código de asesor/usuario interno en WO) |
-     | 6 | `Encab: Tercero Externo` | NIT del cliente (numérico limpio sin DV ni guiones) |
-     | 7 | `Encab: Nota` | Nombre del cliente o referencia de OC (`OC00059992`) |
+     | 5 | `Encab: Tercero Interno` | `456282` (Numérico — código de asesor/usuario interno en WO) |
+     | 6 | `Encab: Tercero Externo` | NIT/Cédula del cliente (numérico limpio sin DV ni guiones; prioriza `profiles.billing_nit`) |
+     | 7 | `Encab: Nota` | Código limpio de OC/Solped válido o sucursal canónica (`resolveWorldOfficeNote`) |
      | 8 | `Encab: FormaPago` | `"Credito"` (o `"Contado"`) |
      | 9 | `Encab: Fecha Entrega` | Fecha de entrega en formato `DD/MM/YYYY` |
-     | 10-28 | `Encab: Personalizado 1` a `15` | `""` |
-     | 29 | `Encab: Sucursal` | Razón social o sede de entrega del cliente |
-     | 30 | `Encab: Clasificación` | `""` |
-     | 31 | `Detalle: Producto` | ID contable numérico del producto en World Office (`products.accounting_id`, con fallback a `products.sku` solo si no existiera) |
+     | 10-28 | `Encab: Prefijo Documento Externo` .. `Encab: Personalizado 15` | Vacío (`undefined`) |
+     | 29 | `Encab: Sucursal` | Nombre literal exacto de la sucursal/tercero pre-apareado en BD (`profiles.logistics_data.world_office_branch` / `profiles.billing_razon_social`) |
+     | 30 | `Encab: Clasificación` | Vacío (`undefined`) o clasificación configurada |
+     | 31 | `Detalle: Producto` | ID contable numérico del producto en World Office (`products.accounting_id`) |
      | 32 | `Detalle: Bodega` | `"Principal"` |
-     | 33 | `Detalle: UnidadDeMedida` | Obligatoriamente `"kg"`, `"Und."` o `"LB"`. Resuelto prioritariamente desde la unidad oficial de compra/catálogo del SKU (`products.unit_of_measure`). Normalizado sin excepción por `normalizeWorldOfficeUom` para erradicar gramajes o descripciones compuestas de despacho (ej. `"Unidad 1800 gr"` -> `"Und."` o `"kg"`). |
-     | 34 | `Detalle: Cantidad` | Cantidad entregada a satisfacción |
+     | 33 | `Detalle: UnidadDeMedida` | Obligatoriamente `"kg"`, `"Und."` o `"LB"`. Normalizado por `normalizeWorldOfficeUom`. |
+     | 34 | `Detalle: Cantidad` | Numérico con formato `0.00` (cantidad neta entregada menos devoluciones aprobadas) |
      | 35 | `Detalle: IVA` | `0` (Excluido/Exento) o `0.19` (Gravado 19%) |
      | 36 | `Detalle: Valor Unitario` | Tarifa pactada por ítem |
-     | 37 | `Detalle: Descuento` | `0` |
+     | 37 | `Detalle: Descuento` | `0` (o decimal de descuento) |
      | 38 | `Detalle: Vencimiento` | Fecha calculada (`Fecha + payment_days`) en `DD/MM/YYYY` |
-     | 39 | `Detalle: Nota` | `""` |
-     | 40 | `Detalle: Centro costos` | `""` |
-     | 41-55 | `Detalle: Personalizado1` a `15` | `""` |
-     | 56 | `Detalle: Código Centro Costos` | `""` |
+     | 39 | `Detalle: Nota` | Vacío (`undefined`) |
+     | 40 | `Detalle: Centro costos` | Vacío (`undefined`) |
+     | 41 | `Detalle: Personalizado1` | Vacío (`undefined`) |
+     | 42 | `Detalle: Lote` | Vacío (`undefined`) |
+     | 43 | `Detalle: Código Centro Costos` | Vacío (`undefined`) |
 
 #### F. Gobernanza de Secuencias Duales y Asignación 1-a-1 por Orden de Entrega (COM-29, COM-30)
 Para salvaguardar la estricta concordancia fiscal con la DIAN y World Office Desktop:
@@ -12105,9 +12107,9 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
 
 ### Escenario 296-B: Informe Consolidado de Cierre Operativo Diario (PQR & Calidad), Bitácora de Novedades y Generación de Acta Golden Print (Gemba Hallazgo #8) (SDD v1.9.273)
 - **Given** la necesidad de la mesa operativa, jefatura de despachos, control interno y gerencia de auditar y certificar el cierre diario de la operación con el consolidado formal de errores, novedades y relación con colaboradores,
-- **When** el analista de calidad o comercial accede mediante el botón de acceso directo **`[Informe Diario de Cierre (PDF)]`** en la barra superior de la Consola SAC (`src/app/admin/customer-service/page.tsx`), o a través de la subpestaña *"Informe Diario de Cierre Operativo"* en el Dashboard Lean & Pareto (`PqrDailyShiftReport.tsx` en `PqrLeanDashboard.tsx`),
-- **Then** el sistema presenta una bitácora operativa diaria de alta precisión y permite generar el reporte con las siguientes capacidades canónicas innegociables:
-  1. **Acceso Directo Universal en Consola:** Botón destacado en la cabecera principal junto a *Taxonomía RCA* que conmuta inmediatamente a la vista de cierre diario (`mainView = 'lean_dashboard'`, `leanSubTab = 'daily_report'`).
+- **When** el analista de calidad o comercial selecciona la pestaña directa **`[Informe Diario de Cierre]`** en la barra segmentada principal de la Consola SAC (`src/app/admin/customer-service/page.tsx`, `mainView = 'daily_report'`),
+- **Then** el sistema presenta una bitácora operativa diaria de alta precisión (`PqrDailyShiftReport.tsx`) y permite generar el reporte con las siguientes capacidades canónicas innegociables:
+  1. **Pestaña Directa de Primer Nivel (Cero Duplicidad `/spacex`):** El Informe Diario de Cierre vive como cuarta pestaña directa en el selector segmentado principal (`Consola de Casos | Dashboard Lean & Pareto | Informe Diario de Cierre | Pedidos Pendientes`), eliminando botones redundantes y sub-barras duplicadas dentro de `PqrLeanDashboard.tsx`.
   2. **Selector Cronológico Diario y Telemetría:** Permite auditar cualquier jornada mediante botones rápidos (`[Hoy]`, `[Ayer]`) o selector de fecha (`YYYY-MM-DD`), proyectando el consolidado reactivo del día: *Total Casos / PQRs*, *Clientes y Sedes Afectadas*, *Productos con Novedad* y *Costo de Calidad Liquidado (\$ COP)*.
   3. **Matriz Operativa de Cierre de Jornada:** Proyecta la tabla integral con el desglose exacto solicitado:
      - **Hora & Folio:** Identificador único (`SAC-XXXX`), hora local Bogotá y pedido asociado (`#Folio`).
@@ -12119,6 +12121,21 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
      - **Estado de Cierre:** Indicador visual de estado (*Resuelto* o *Pendiente*).
   4. **Exportación Nativa a Excel (.xlsx):** Descarga directa de archivo Excel `.xlsx` estructurado mediante SheetJS (`xlsx`) con auto-ajuste de anchos de columna (`!cols`) y tipado de datos para apertura nativa e inmediata en Microsoft Excel.
   5. **Acta Oficial Golden Print (PDF / Impresión Estandarizada):** Ejecuta la tecnología estándar `printViaNewWindow` en orientación apaisada (`letter landscape`), renderizando el membrete corporativo oficial de FruFresco, resumen ejecutivo, tabla formal con bordes y líneas cebras, y los tres bloques solemnes de firmas y custodia: *Auditor de Calidad (SAC)*, *Jefe de Operaciones & Despachos* y *Líder de Cartera / Facturación*.
+
+---
+
+### Escenario 296-C: Endurecimiento Sticky, Accionabilidad Directa, Evidencia Fotográfica, `#ID` Contable y Desglose Financiero Dual en el Informe Diario de Cierre (SDD v1.9.273-R1)
+- **Given** la vista `PqrDailyShiftReport.tsx` dentro de `PqrLeanDashboard.tsx` (`/admin/customer-service`),
+- **When** el analista de calidad o gerencia audita el cierre operativo diario en pantalla, exporta `.xlsx` o imprime el Acta PDF,
+- **Then** el sistema garantiza el cumplimiento estricto de los siguientes contratos tipados:
+  1. **Sticky Magnetic Stacking & Ancho 100% Cero-Recorte:** La barra de filtros (`filterBarRef`) se fija a `top: 85px` (`zIndex: 70`) y su altura dinámica (`filterBarHeight` vía `ResizeObserver`) posiciona el `<thead>` oscuro a `top: ${85 + filterBarHeight}px` (`zIndex: 40`), utilizando `overflowX: 'clip'` combinado con `tableLayout: 'fixed'` y anchos porcentuales que suman `100%` para impedir cualquier recorte lateral de columnas.
+  2. **Fuente Soberana Financiera Dual (`Ajuste Cliente` vs `Recuperado Imputado`):**
+     - `ParsedRcaResult` (`src/lib/rcaTaxonomy.ts`) expone `deductionAmount?: number`.
+     - `clientDiscountAmount` se calcula sumando `quantity_returned * unit_price` de las novedades `billing_returns` del pedido (usando `order_items`), con fallback a `rca.deductionAmount` si no existen líneas valorizadas.
+     - `totalDeductions` suma `rca.imputedEntities[].deductionAmount`.
+     - La telemetría superior, la tabla UI, el archivo `.xlsx` y el Acta PDF muestran explícitamente ambos valores (`Ajuste Cliente` e `Imputado`), evitando confundir exoneraciones internas con descuentos aplicados en factura.
+  3. **Accionabilidad Directa (`PqrAuditModal`) y Visor de Evidencia:** `PqrLeanDashboardProps` y `PqrDailyShiftReportProps` exponen `onOpenAuditModal?: (pqr: PQR) => void` y `onZoomPhoto?: (url: string) => void`. Cada fila conserva su objeto `pqr` completo y sus fotos (`getPqrPhotos(p)`), permitiendo abrir la evidencia fotográfica en zoom o lanzar `PqrAuditModal` directo desde la fila.
+  4. **Prevalencia Absoluta de `accounting_id` (`#ID`) sin `SKU` en UI:** `fetchData` en `src/app/admin/customer-service/page.tsx` selecciona `accounting_id` en `products` de `billing_returns`, renderizando `#ID` tanto en `PqrDailyShiftReport.tsx` como en la tabla de novedades de `page.tsx` en estricto cumplimiento de `AGENTS.md` §4.
 
 ---
 
@@ -17477,3 +17494,30 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - En `src/app/api/commercial/billing/assign-off-agreement-prices/route.ts`: al valorizar el pedido, se limpian los overrides zombie `document_type_override` y `remission_with_prices_override` heredados del bloqueo `$0` para respetar la modalidad fiscal real del perfil (`FAC-IMP` / `remission`).
   3. **Saneamiento en Vivo de `#1811`:**
      - Se sanean en Supabase los campos residuales de `#1811` (`80c13101-0180-474e-b112-ee08d91f95c8`) para restablecer su modalidad fiscal real (`FAC-IMP` de `DIPLOMAT EMBAJADA HOTEL TRYP - TRYP`, `$2.297.796`).
+
+
+---
+
+### Escenario 465: Homologación Canónica 1-a-1 World Office Desktop (`.xls` BIFF8 44 Columnas & Apareamiento Pre-Sellado en BD) (SDD v1.9.420)
+- **Given** la necesidad de erradicar rechazos de importación en **World Office Desktop** causados por recortes dinámicos de texto (`split(' - ')`), diferencias tipográficas en nombres de sucursales/terceros y discrepancias en la estructura del archivo Excel:
+- **When** el usuario exporta cualquier corte, pre-corte o listado de pedidos desde [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx) vía [`src/lib/worldOfficeExport.ts`](file:///c:/Projects/frufresco/src/lib/worldOfficeExport.ts), o edita clientes/sucursales en [`src/components/ClientsModule.tsx`](file:///c:/Projects/frufresco/src/components/ClientsModule.tsx):
+- **Then** rigen de forma inmutable las siguientes reglas contractuales:
+  1. **Plantilla Oficial Única (44 Columnas `.xls` BIFF8):**
+     - Todo archivo plano de descarga masiva para World Office debe generarse exclusivamente en formato binario **`.xls` (`bookType: 'biff8'`)**, con nombre de hoja **`'Encab + Movim.Inven LOTES'`**, Columna A **`'Encab: Empresa'`**, y exactamente **44 columnas** (`Detalle: Personalizado1`, `Detalle: Lote`, `Detalle: Código Centro Costos`, sin `Detalle: Personalizado2..15`), idéntico carácter por carácter a `plantilla de pruebas.xls`.
+  2. **Apareamiento Canónico Pre-Sellado en `public.profiles`:**
+     - `resolveWorldOfficeBranch` prioriza de forma absoluta `profiles.logistics_data.world_office_branch` y `profiles.billing_razon_social` sin recortar ni alterar `'Principal'`, y `billing_nit` provee el NIT/CC limpio.
+     - [`src/components/ClientsModule.tsx`](file:///c:/Projects/frufresco/src/components/ClientsModule.tsx) expone el bloque editable **"Homologación World Office Desktop"** (`billing_razon_social` / `world_office_branch` y `billing_nit`) y prohíbe que `applyConfigToBranches` sobreescriba `logistics_data` de las sucursales al guardar una Casa Matriz.
+  3. **Unificación de los 3 Exportadores & Limpieza de Notas:**
+     - `exportToWorldOffice`, `handleExportPendingToWorldOffice` y `handleExportPreviewToWorldOffice` comparten un único constructor (`buildWorldOfficeExportRows` + `resolveExportParentsMap`), incluyendo `iva_responsible`, `billing_weight_unit`, deducción de `billing_returns` aprobados y exclusión de remisiones de obsequio/reposición `$0`.
+     - `resolveWorldOfficeNote` limpia prefijos `OC` y `SOLPED:`, descarta ruido de direcciones o palabras sueltas y emite la sucursal canónica cuando no existe OC válida.
+
+### Escenario 464: Protección de Selección Manual de Cliente & Eliminación de Falso Match por `split(' ')[0]` (SDD v1.9.419)
+- **Alcance Contractual:** Corrección de sobreescritura involuntaria de cliente y falsos positivos por palabras genéricas/mojibake en [`src/app/admin/orders/create/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/create/page.tsx) y [`src/lib/orders/order-parser-engine.ts`](file:///c:/Projects/frufresco/src/lib/orders/order-parser-engine.ts).
+- **Reglas de Negocio & Comportamiento:**
+  1. **Respeto Absoluto a Selección Manual del Operador (`create/page.tsx`):**
+     - Si el operador ya seleccionó un cliente B2B (`selectedClient`) o B2C (`selectedClientB2C`) antes de cargar el documento/PDF en el Digestor IA, la ingesta **jamás** sobrescribe esa selección hacia otro cliente. Solo auto-selecciona cuando el selector está vacío (`!currentSelectedB2B`).
+  2. **Eliminación de Falso Match por Primera Palabra Genérica (`order-parser-engine.ts`):**
+     - Se amplía `stopWords` con términos institucionales genéricos (`colegio`, `hotel`, `fundacion`, `clinica`, `hospital`, `club`, `servicios`, `alimentos`, `investments`, etc.).
+     - Se elimina la comparación ciega `cleanName.includes(compName.split(' ')[0])` en la Capa 3 de `resolveClientProfile`, exigiendo coincidencia completa (`includes`) o coincidencia de palabras clave distintivas (`nameKeywords`) con puntuación mínima (`score >= 20`) cuando hay múltiples candidatos.
+  3. **Saneamiento de Mojibake UTF-8/Latin1 (`sanitizeDocText`):**
+     - Repara secuencias corruptas de codificación como `Ã±`/`Ã'`/`Ã’` → `n` (ej. `BRETAÃ'A` → `bretana`) antes de la normalización NFKD, asegurando el emparejamiento exacto de sucursales con `Ñ` o tildes.

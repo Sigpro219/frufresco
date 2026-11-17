@@ -3389,6 +3389,13 @@ function CreateOrderContent() {
                 if (isKeepingChosenChildBranch) {
                     autoMatchedProfile = currentSelectedB2B;
                     showToast(`Sucursal conservada (${currentSelectedB2B.company_name}): el documento solo mencionaba la Casa Matriz.`, 'info');
+                } else if (currentSelectedB2B) {
+                    // Respetar selección manual previa del operador: nunca saltar a otro cliente
+                    const sameSelected = autoMatchedProfile && autoMatchedProfile.id === currentSelectedB2B.id;
+                    if (!sameSelected && autoMatchedProfile) {
+                        showToast(`Cliente conservado (${currentSelectedB2B.company_name}). El documento sugiere: ${autoMatchedProfile.company_name || autoMatchedProfile.contact_name}.`, 'info');
+                    }
+                    autoMatchedProfile = currentSelectedB2B;
                 } else if (autoMatchedProfile) {
                     const matchedHasBranches = clients.some(c => c.parent_id === autoMatchedProfile.id);
                     setSelectedClient(autoMatchedProfile.id);
@@ -3407,7 +3414,10 @@ function CreateOrderContent() {
                     phone: data.phoneInDocument
                 }, b2cClients);
 
-                if (autoMatchedProfile) {
+                const currentSelectedB2C = selectedClientB2C ? b2cClients.find(c => c.id === selectedClientB2C) : null;
+                if (currentSelectedB2C) {
+                    autoMatchedProfile = currentSelectedB2C;
+                } else if (autoMatchedProfile) {
                     setB2CMode('search');
                     setSelectedClientB2C(autoMatchedProfile.id);
                     setClientSearchB2C(autoMatchedProfile.contact_name || autoMatchedProfile.phone || '');

@@ -12,7 +12,15 @@ import {
  */
 export function sanitizeDocText(text: string): string {
   if (!text) return '';
-  let str = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  // Reparar mojibake frecuente UTF-8 interpretado como Latin1 (ej. "BRETAÃ'A" -> "BRETANA")
+  let fixed = text
+    .replace(/Ã[±'\u2018\u2019`]/g, 'n')
+    .replace(/Ã\x81|Ã¡/g, 'a')
+    .replace(/Ã\x89|Ã©/g, 'e')
+    .replace(/Ã\x8d|Ã­/g, 'i')
+    .replace(/Ã\x93|Ã³/g, 'o')
+    .replace(/Ã\x9a|Ãº|Ã¼|Ã\x9c/g, 'u');
+  let str = fixed.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
   // Normalizar la Beta griega 'Β' (914) y 'β' (946) a 'B' / 'b' latina
   str = str.replace(/\u0392/g, 'B').replace(/\u03B2/g, 'b');
   let lower = str.toLowerCase().trim();
@@ -166,7 +174,13 @@ export function resolveClientProfile(
   const sigText = sanitizeDocText(clientInfo.signatureText || '');
   const fullSearchContext = `${cleanName} ${cleanAddress} ${cleanBranchCode} ${sigText}`.toLowerCase();
 
-  const stopWords = ['caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 's.a.s', 's.a.', 'ltda', 'sociedad', 'sede', 'sucursal', 'restaurante', 'empresa', 'cliente'];
+  const stopWords = [
+    'caja', 'compensacion', 'familiar', 'colsubsidio', 'sas', 's.a.s', 's.a.', 'ltda',
+    'sociedad', 'sede', 'sucursal', 'restaurante', 'restaurantes', 'empresa', 'cliente',
+    'colegio', 'fundacion', 'hotel', 'clinica', 'hospital', 'club', 'centro', 'instituto',
+    'inversiones', 'investments', 'servicios', 'alimenticios', 'alimentos', 'corporacion',
+    'asociacion', 'grupo', 'comercial', 'distribuidora', 'gran', 'san', 'santa', 'del', 'las', 'los'
+  ];
   const nameKeywords = cleanName
     .split(/\s+/)
     .map(w => w.replace(/[^a-z0-9]/g, ''))
@@ -295,13 +309,24 @@ export function resolveClientProfile(
     }
   }
 
-  // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica / Contacto
+  // Capa 3: Coincidencia por Razón Social / Nombre Comercial / Sede Específica / Contacto (sin falso match por palabra genérica)
   if (cleanName && cleanName.length >= 3) {
     const nameCandidates = profiles.filter(p => {
       const compName = sanitizeDocText(p.company_name || '');
       const contactName = sanitizeDocText(p.contact_name || '');
-      return (compName && (compName.includes(cleanName) || cleanName.includes(compName.split(' ')[0]))) ||
-             (contactName && (contactName.includes(cleanName) || cleanName.includes(contactName.split(' ')[0])));
+      if (compName && (compName.includes(cleanName) || (compName.length >= 5 && cleanName.includes(compName)))) {
+        return true;
+      }
+      if (contactName && (contactName.includes(cleanName) || (contactName.length >= 5 && cleanName.includes(contactName)))) {
+        return true;
+      }
+      if (nameKeywords.length > 0) {
+        const compHits = nameKeywords.filter(kw => compName.includes(kw)).length;
+        const contactHits = nameKeywords.filter(kw => contactName.includes(kw)).length;
+        const requiredHits = nameKeywords.length >= 2 ? Math.min(2, nameKeywords.length) : 1;
+        return compHits >= requiredHits || contactHits >= requiredHits;
+      }
+      return false;
     });
 
     if (nameCandidates.length === 1) {
@@ -309,7 +334,9 @@ export function resolveClientProfile(
     } else if (nameCandidates.length > 1) {
       const scored = nameCandidates.map(p => ({ profile: p, score: scoreCandidateBranch(p) }));
       scored.sort((a, b) => b.score - a.score);
-      return scored[0].profile;
+      if (scored[0].score >= 20) {
+        return scored[0].profile;
+      }
     }
   }
 
