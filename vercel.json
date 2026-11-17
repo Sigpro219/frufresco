@@ -3,6 +3,10 @@
     {
       "path": "/api/products/sync-prices?cron=midnight",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/orders/sync-hostinger",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

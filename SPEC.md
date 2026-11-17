@@ -17422,3 +17422,20 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   4. **Cumplimiento `AGENTS.md §4` (Cero `SKU` Visible) y Tabla Sticky Swiss Industrial:**
      - Eliminación de etiquetas `"Código (SKU)"` y `"SKUs"` en UI y reportes XLSX (`translateDetailsKey`, `formatDetailsSummary`, `formatDetailsSummaryText`), priorizando `ID Contable: #accounting_id` y `Ref:` para referencias históricas.
      - Tabla reconstruida con `borderCollapse: 'separate', borderSpacing: 0` y encabezados `<th>` congelados (`position: 'sticky'`, `top: ${85 + toolbarHeight - 2}px`, fondo `#F1F5F9`, borde `2px solid #CBD5E1`, texto `#0F172A`, columna `Ver` fijada a la derecha con `zIndex: 45`).
+
+### Escenario 462: Blindaje Cero Pérdida de Emails en Ingesta IMAP & Bandeja `order_drafts` (SDD v1.9.417)
+- **Alcance Contractual:** Eliminación definitiva de pérdida u ocultamiento de pedidos por correo en [`src/lib/orders/hostingerImapSync.ts`](file:///c:/Projects/frufresco/src/lib/orders/hostingerImapSync.ts), [`src/app/api/orders/email-ingest/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/email-ingest/route.ts), [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx) y [`vercel.json`](file:///c:/Projects/frufresco/vercel.json).
+- **Reglas de Negocio & Comportamiento:**
+  1. **Ingesta IMAP Incremental Sin Ventana Ciega (`hostingerImapSync.ts`):**
+     - Cuando `lastSyncedUid > 0`, la búsqueda IMAP ejecuta `UID SEARCH UID ${lastSyncedUid + 1}:*` **sin filtro `SINCE 48h`**, garantizando 0 correos omitidos tras fines de semana o puentes festivos.
+     - `MAX_BATCH_SIZE = 5` (con `HEADER_SCAN_WINDOW = 25`), retornando `hasMoreInMailbox: boolean` y `remainingUids: number` para permitir drenaje encadenado automático en UI cuando entren >100 pedidos/día.
+     - Si `/api/orders/email-ingest` falla con HTTP != 2xx sobre un UID puntual, se registra un borrador de alerta (`status: 'rejected'`) en `order_drafts` y se avanza `lastSyncedUid` para impedir que un correo corrupto congele el resto de la cola.
+     - Cron de respaldo cada 5 minutos (`*/5 * * * *`) en [`vercel.json`](file:///c:/Projects/frufresco/vercel.json) apuntando a `/api/orders/sync-hostinger`.
+  2. **Indexación Real de OC (`email-ingest/route.ts`):**
+     - Todo borrador insertado o actualizado (`upsert` / `UPDATE_DELTA`) puebla explícitamente las columnas raíz `po_number` y `client_po_number` en `order_drafts` con la orden de compra detectada.
+  3. **Bandeja UI Sin Techo de 100 & Búsqueda Directa en Servidor (`EmailDraftsModule.tsx`):**
+     - **Cola `pending` independiente y completa:** `fetchDrafts` consulta `status = 'pending'` (ventana operativa de últimos 30 días) paginando automáticamente en bloques de `250` registros hasta agotar el 100% de los pendientes activos, sin competir jamás con `approved` o `rejected`.
+     - **Colas `approved` y `rejected` bajo demanda:** cargan bloque inicial de `200` recientes al activar su pestaña (con botón **Cargar anteriores**), preservando los contadores reales de las pestañas mediante `count: 'exact', head: true` en Supabase.
+     - **Buscador en Servidor:** cuando `searchQuery` está activo, consulta directamente `order_drafts` en Supabase (`email_subject`, `client_detected_name`, `source_email`, `po_number`, `client_po_number`, `email_body`) con debounce de `350ms` sin restricción de fecha ni de ventana de 100 filas.
+     - **Anti-Tormenta Realtime:** `fetchDrafts` implementa lock `in-flight` y debounce (`400ms`) para eventos `postgres_changes`.
+     - **Poka-Yoke Asunto vs. Adjunto:** muestra advertencia visual en la tarjeta/detalle cuando el consecutivo de OC detectado en el asunto difiere de la OC extraída del PDF adjunto.

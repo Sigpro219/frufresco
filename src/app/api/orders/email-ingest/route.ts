@@ -1683,6 +1683,8 @@ export async function POST(req: Request) {
           source_email: senderEmail,
           email_subject: attSubject,
           email_body: currentPlainText,
+          po_number: attPo,
+          client_po_number: attPo,
           extracted_items: [
             {
               isMetadata: true,
@@ -1751,6 +1753,8 @@ export async function POST(req: Request) {
         source_email: senderEmail,
         email_subject: finalSubject,
         email_body: currentPlainText,
+        po_number: primaryPo,
+        client_po_number: primaryPo,
         extracted_items: [
           {
             isMetadata: true,
@@ -1977,6 +1981,7 @@ export async function POST(req: Request) {
                 email_subject: updatedSubject,
                 email_body: draft.email_body,
                 extracted_items: draft.extracted_items,
+                ...(draft.po_number ? { po_number: draft.po_number, client_po_number: draft.client_po_number || draft.po_number } : {}),
               })
               .eq('id', targetRecord.id);
 

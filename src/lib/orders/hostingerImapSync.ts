@@ -41,7 +41,7 @@ export interface ParsedMimeEmail {
 }
 
 const SYNC_SETTINGS_KEY = 'hostinger_imap_sync_state';
-const MAX_BATCH_SIZE = 3;
+const MAX_BATCH_SIZE = 5;
 const MAX_EXECUTION_BUDGET_MS = 40_000;
 const COOLDOWN_MS = 20_000;
 const LEASE_LOCK_MS = 55_000;
@@ -334,6 +334,7 @@ async function fetchNewMessagesFromHostingerImap(params: {
   activeUser: string;
   downloadedMessages: Array<{ uid: number; rawEml: string }>;
   skippedHistoricalToUid: number | null;
+  remainingUids: number;
 }> {
   const { host, port, user, pass, lastSyncedUid, maxBatch } = params;
 
@@ -368,6 +369,7 @@ async function fetchNewMessagesFromHostingerImap(params: {
         activeUser: string;
         downloadedMessages: Array<{ uid: number; rawEml: string }>;
         skippedHistoricalToUid: number | null;
+        remainingUids: number;
       }
     ) => {
       if (settled) return;
@@ -383,7 +385,7 @@ async function fetchNewMessagesFromHostingerImap(params: {
         socket.destroy();
       } catch (_) {}
       if (err) reject(err);
-      else resolve(result || { activeUser: user, downloadedMessages: [], skippedHistoricalToUid: null });
+      else resolve(result || { activeUser: user, downloadedMessages: [], skippedHistoricalToUid: null, remainingUids: 0 });
     };
 
     const sendCommand = (tag: string, cmd: string): Promise<string> => {
@@ -477,12 +479,12 @@ async function fetchNewMessagesFromHostingerImap(params: {
 
       await sendCommand('A002', 'EXAMINE INBOX');
 
-      // Filtro Anti-Histórico Masivo (últimas 48 horas en formato IMAP SINCE)
+      // Búsqueda incremental exacta sin ventana ciega cuando `lastSyncedUid > 0` (protege fines de semana largos y festivos)
       const sinceDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
       const sinceStr = formatImapDate(sinceDate);
       const searchCmd =
         lastSyncedUid > 0
-          ? `UID SEARCH UID ${lastSyncedUid + 1}:* SINCE ${sinceStr}`
+          ? `UID SEARCH UID ${lastSyncedUid + 1}:*`
           : `UID SEARCH SINCE ${sinceStr}`;
 
       const searchResp = await sendCommand('A003', searchCmd);
@@ -498,15 +500,15 @@ async function fetchNewMessagesFromHostingerImap(params: {
       }
 
       if (allUids.length === 0) {
-        cleanupAndFinish(undefined, { activeUser, downloadedMessages: [], skippedHistoricalToUid: null });
+        cleanupAndFinish(undefined, { activeUser, downloadedMessages: [], skippedHistoricalToUid: null, remainingUids: 0 });
         return;
       }
 
       // Grieta #4 (Goldfish RFC): Si `lastSyncedUid === 0` y hay muchos correos, evaluar una ventana
-      // acotada de los últimos 10 UIDs mediante inspección rápida de cabeceras (~2KB) y adelantar el resto
+      // acotada de los últimos 25 UIDs mediante inspección rápida de cabeceras (~2KB) y adelantar el resto
       let skippedHistoricalToUid: number | null = null;
       let candidateUids = allUids;
-      const HEADER_SCAN_WINDOW = 10;
+      const HEADER_SCAN_WINDOW = 25;
       if (lastSyncedUid === 0 && allUids.length > HEADER_SCAN_WINDOW) {
         const splitIdx = allUids.length - HEADER_SCAN_WINDOW;
         skippedHistoricalToUid = allUids[splitIdx - 1];
@@ -516,10 +518,12 @@ async function fetchNewMessagesFromHostingerImap(params: {
       }
 
       const downloadedMessages: Array<{ uid: number; rawEml: string }> = [];
+      let lastScannedUid = 0;
       for (let i = 0; i < candidateUids.length; i++) {
         if (downloadedMessages.length >= maxBatch) break;
 
         const uid = candidateUids[i];
+        lastScannedUid = uid;
         const hdrTag = `H10${i}`;
         const hdrResp = await sendCommand(hdrTag, `UID FETCH ${uid} (BODY.PEEK[HEADER])`);
         const hdrLiteral = hdrResp.match(/BODY\[HEADER\]\s*\{(\d+)\}\r?\n([\s\S]*)/i);
@@ -559,7 +563,8 @@ async function fetchNewMessagesFromHostingerImap(params: {
         }
       }
 
-      cleanupAndFinish(undefined, { activeUser, downloadedMessages, skippedHistoricalToUid });
+      const remainingUids = allUids.filter((u) => u > lastScannedUid).length;
+      cleanupAndFinish(undefined, { activeUser, downloadedMessages, skippedHistoricalToUid, remainingUids });
     }
   });
 }
@@ -574,6 +579,8 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
   ingestedCount: number;
   lastSyncedUid: number;
   transitionEpochAt: string;
+  hasMoreInMailbox?: boolean;
+  remainingUids?: number;
 }> {
   const supabaseAdmin = getSupabaseAdmin();
   let host = process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com';
@@ -707,8 +714,8 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
       inFlightUntil: new Date(nowMs + LEASE_LOCK_MS).toISOString(),
     });
 
-    // 1. Descargar hasta `MAX_BATCH_SIZE` (3) mensajes y CERRAR el socket TLS inmediatamente
-    const { activeUser, downloadedMessages, skippedHistoricalToUid } = await fetchNewMessagesFromHostingerImap({
+    // 1. Descargar hasta `MAX_BATCH_SIZE` (5) mensajes y CERRAR el socket TLS inmediatamente
+    const { activeUser, downloadedMessages, skippedHistoricalToUid, remainingUids } = await fetchNewMessagesFromHostingerImap({
       host,
       port,
       user,
@@ -787,8 +794,33 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
       } else {
         const errBody = await resp.text().catch(() => '');
         console.error(`[Hostinger Sync] Error HTTP ${resp.status} en UID ${msg.uid}: ${errBody}`);
-        batchAborted = true;
-        break;
+        // Registrar alerta en order_drafts y avanzar puntero para que un correo corrupto nunca congele la cola posterior
+        try {
+          const fallbackSubj = parsedMime.headers['subject'] || `UID ${msg.uid}`;
+          await supabaseAdmin.from('order_drafts').insert([{
+            email_subject: `[ERROR INGESTA IMAP UID ${msg.uid}] ${fallbackSubj}`.slice(0, 240),
+            source_email: parsedMime.headers['from'] || 'desconocido',
+            email_body: (parsedMime.plain || errBody || '').slice(0, 8000),
+            status: 'rejected',
+            extracted_items: [
+              {
+                isMetadata: true,
+                ingestChannel: 'channel_3_co',
+                hostingerUid: msg.uid,
+                autoRejectedReason: `Error HTTP ${resp.status} al procesar correo desde Hostinger IMAP`,
+              },
+            ],
+          }]);
+          await persistState({
+            account: activeUser,
+            lastSyncedUid: Math.max(state.lastSyncedUid, msg.uid),
+            lastRunAt: new Date().toISOString(),
+          });
+        } catch (quarantineErr) {
+          console.error('[Hostinger Sync] Error registrando cuarentena UID:', quarantineErr);
+          batchAborted = true;
+          break;
+        }
       }
     }
 
@@ -805,11 +837,15 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
       inFlightUntil: null,
     });
 
+    const hasMoreInMailbox = remainingUids > 0 || (downloadedMessages.length >= MAX_BATCH_SIZE && !batchAborted);
+
     return {
       success: true,
       ingestedCount,
       lastSyncedUid: state.lastSyncedUid,
       transitionEpochAt: state.transitionEpochAt,
+      hasMoreInMailbox,
+      remainingUids,
     };
   } catch (err: any) {
     console.warn('[Hostinger Sync] Warning en sincronización IMAPS:', err?.message || err);

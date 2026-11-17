@@ -22,6 +22,7 @@ import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, 
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import { useAuth } from '@/lib/authContext';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
+import { fetchPendingDraftsComplete, fetchDraftsByStatusPage, fetchDraftTabCounts, searchOrderDraftsServer, detectPoSubjectMismatch, type DraftTabCounts } from '@/lib/orders/draftInboxQuery';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -1864,7 +1865,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [orderDocument, setOrderDocument] = useState<string>('Remisión');
   const [purchaseOrder, setPurchaseOrder] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('pending');
+  const selectedStatusRef = useRef<string>('pending');
+  selectedStatusRef.current = selectedStatus;
   const [searchQuery, setSearchQuery] = useState('');
+  const [dbTabCounts, setDbTabCounts] = useState<DraftTabCounts | null>(null);
+  const [serverSearchResults, setServerSearchResults] = useState<any[] | null>(null);
+  const [isServerSearching, setIsServerSearching] = useState(false);
+  const [hasMoreTabRows, setHasMoreTabRows] = useState(false);
+  const [loadingMoreTabRows, setLoadingMoreTabRows] = useState(false);
+  const [approvedOffset, setApprovedOffset] = useState(0);
+  const [rejectedOffset, setRejectedOffset] = useState(0);
+  const fetchDraftsInFlightRef = useRef(false);
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
   const todayBogotaStr = useMemo(() => getBogotaTodayStr(), []);
   const todayDraftsCount = useMemo(() => {
@@ -3864,7 +3877,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               }
             }
           }
-          fetchDrafts(true);
+          if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+          realtimeDebounceRef.current = setTimeout(() => {
+            fetchDrafts(true);
+          }, 450);
         }
       )
       .subscribe();
@@ -4630,40 +4646,141 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
   };
 
+  const mergeDraftCollections = (collections: any[][]) => {
+    const map = new Map<string, any>();
+    for (const list of collections) {
+      for (const row of list) {
+        if (row?.id && !map.has(row.id)) {
+          map.set(row.id, row);
+        }
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  };
+
+  const loadActiveTabArchive = async (status: string, append = false) => {
+    if (status !== 'approved' && status !== 'rejected' && status !== 'all') {
+      setHasMoreTabRows(false);
+      return;
+    }
+    if (append) setLoadingMoreTabRows(true);
+    try {
+      if (status === 'approved' || status === 'all') {
+        const nextOffset = append ? approvedOffset : 0;
+        const res = await fetchDraftsByStatusPage(supabase, 'approved', 200, nextOffset);
+        setApprovedOffset(nextOffset + res.rows.length);
+        setHasMoreTabRows(status === 'approved' ? res.hasMore : false);
+        setDrafts((prev) => mergeDraftCollections(append ? [prev, res.rows] : [prev.filter((d) => d.status === 'pending'), res.rows]));
+      }
+      if (status === 'rejected' || status === 'all') {
+        const nextOffset = append ? rejectedOffset : 0;
+        const res = await fetchDraftsByStatusPage(supabase, 'rejected', 200, nextOffset);
+        setRejectedOffset(nextOffset + res.rows.length);
+        if (status === 'rejected') setHasMoreTabRows(res.hasMore);
+        setDrafts((prev) => mergeDraftCollections([prev, res.rows]));
+      }
+    } catch (err) {
+      console.error('Error loading archive tab drafts:', err);
+    } finally {
+      if (append) setLoadingMoreTabRows(false);
+    }
+  };
+
+  const triggerHostingerDrain = () => {
+    fetch('/api/orders/sync-hostinger', { method: 'POST' })
+      .then((res) => res.json())
+      .then(async (syncData) => {
+        if (syncData?.ingestedCount > 0) {
+          const [pendingRows, counts] = await Promise.all([
+            fetchPendingDraftsComplete(supabase),
+            fetchDraftTabCounts(supabase),
+          ]);
+          setDrafts((prev) => mergeDraftCollections([pendingRows, prev.filter((d) => d.status !== 'pending')]));
+          setDbTabCounts(counts);
+        }
+        if (syncData?.hasMoreInMailbox) {
+          if (drainTimerRef.current) clearTimeout(drainTimerRef.current);
+          drainTimerRef.current = setTimeout(() => {
+            triggerHostingerDrain();
+          }, 22_000);
+        }
+      })
+      .catch(() => {});
+  };
+
   const fetchDrafts = async (quiet = false) => {
+    if (fetchDraftsInFlightRef.current) return;
+    fetchDraftsInFlightRef.current = true;
     if (!quiet) setLoading(true);
     try {
-      // Sincronización directa en segundo plano del Canal 3 (pedidos@frufresco.co -> Instrumento 4)
-      fetch('/api/orders/sync-hostinger', { method: 'POST' })
-        .then(res => res.json())
-        .then(async (syncData) => {
-          if (syncData && syncData.ingestedCount > 0) {
-            const { data: refreshed } = await supabase
-              .from('order_drafts')
-              .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
-              .in('status', ['pending', 'approved', 'rejected'])
-              .order('created_at', { ascending: false })
-              .limit(100);
-            if (refreshed) setDrafts(refreshed);
-          }
-        })
-        .catch(() => {});
+      triggerHostingerDrain();
 
-      const { data, error } = await supabase
-        .from('order_drafts')
-        .select('*, profiles:profile_id(id, company_name, contact_name, role, is_active, logistics_data, address, city, municipality, department)')
-        .in('status', ['pending', 'approved', 'rejected'])
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const activeTab = selectedStatusRef.current;
+      const [pendingRows, counts] = await Promise.all([
+        fetchPendingDraftsComplete(supabase),
+        fetchDraftTabCounts(supabase),
+      ]);
 
-      if (error) throw error;
-      setDrafts(data || []);
+      let archiveRows: any[] = [];
+      let moreArchive = false;
+      if (activeTab === 'approved' || activeTab === 'all') {
+        const aPage = await fetchDraftsByStatusPage(supabase, 'approved', 200, 0);
+        archiveRows = [...archiveRows, ...aPage.rows];
+        setApprovedOffset(aPage.rows.length);
+        if (activeTab === 'approved') moreArchive = aPage.hasMore;
+      }
+      if (activeTab === 'rejected' || activeTab === 'all') {
+        const rPage = await fetchDraftsByStatusPage(supabase, 'rejected', 200, 0);
+        archiveRows = [...archiveRows, ...rPage.rows];
+        setRejectedOffset(rPage.rows.length);
+        if (activeTab === 'rejected') moreArchive = rPage.hasMore;
+      }
+
+      setDbTabCounts(counts);
+      setHasMoreTabRows(moreArchive);
+      setDrafts(mergeDraftCollections([pendingRows, archiveRows]));
     } catch (err: any) {
       console.error('Error fetching drafts:', err);
     } finally {
+      fetchDraftsInFlightRef.current = false;
       if (!quiet) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedStatus === 'pending') {
+      setHasMoreTabRows(false);
+      return;
+    }
+    loadActiveTabArchive(selectedStatus, false);
+  }, [selectedStatus]);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setServerSearchResults(null);
+      setIsServerSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setIsServerSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await searchOrderDraftsServer(supabase, q, 150);
+        if (!cancelled) setServerSearchResults(rows);
+      } catch (err) {
+        if (!cancelled) console.error('Error searching drafts on server:', err);
+      } finally {
+        if (!cancelled) setIsServerSearching(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const handleRestoreDraft = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -6847,7 +6964,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   };
 
   const { draftsBeforeStatusFilter, filteredDrafts, countAll, countPending, countApproved, countRejected } = useMemo(() => {
-    const beforeStatus = drafts.filter(draft => {
+    const sourceUniverse = (searchQuery.trim().length >= 2 && serverSearchResults)
+      ? mergeDraftCollections([serverSearchResults, drafts])
+      : drafts;
+    const beforeStatus = sourceUniverse.filter(draft => {
       const matchesSearch = searchQuery === '' || 
         draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -6890,15 +7010,23 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       return true;
     });
 
+    const hasLocalDateOrSearch = Boolean(searchQuery.trim() || selectedDate);
+    const resolvedPending = (!hasLocalDateOrSearch && dbTabCounts) ? Math.max(pendingCount, dbTabCounts.pending) : pendingCount;
+    const resolvedApproved = (!hasLocalDateOrSearch && dbTabCounts) ? Math.max(approvedCount, dbTabCounts.approved) : approvedCount;
+    const resolvedRejected = (!hasLocalDateOrSearch && dbTabCounts) ? Math.max(rejectedCount, dbTabCounts.rejected) : rejectedCount;
+    const resolvedAll = (!hasLocalDateOrSearch && dbTabCounts)
+      ? resolvedPending + resolvedApproved + resolvedRejected
+      : beforeStatus.length;
+
     return {
       draftsBeforeStatusFilter: beforeStatus,
       filteredDrafts: filtered,
-      countAll: beforeStatus.length,
-      countPending: pendingCount,
-      countApproved: approvedCount,
-      countRejected: rejectedCount
+      countAll: resolvedAll,
+      countPending: resolvedPending,
+      countApproved: resolvedApproved,
+      countRejected: resolvedRejected
     };
-  }, [drafts, searchQuery, selectedDate, selectedChannel, selectedStatus]);
+  }, [drafts, serverSearchResults, dbTabCounts, searchQuery, selectedDate, selectedChannel, selectedStatus]);
 
   // Escenario 428: Sincronización reactiva del badge de pestaña con el filtro contextual activo (Opción A)
   const totalHistoricPending = useMemo(() => {
@@ -8315,6 +8443,32 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         </span>
                       </span>
 
+                      {/* Poka-Yoke: Alerta si el consecutivo de OC del asunto difiere del PDF adjunto */}
+                      {(() => {
+                        const poMismatch = detectPoSubjectMismatch(draft.email_subject, meta.purchaseOrder || draft.po_number || draft.client_po_number);
+                        if (!poMismatch) return null;
+                        return (
+                          <span
+                            title={`El asunto menciona OC ${poMismatch.subjectPo}, pero el PDF adjunto corresponde a ${poMismatch.attachmentPo}.`}
+                            style={{
+                              fontSize: '0.68rem',
+                              fontWeight: '800',
+                              color: '#9A3412',
+                              backgroundColor: '#FFEDD5',
+                              border: '1px solid #FDBA74',
+                              padding: '2px 6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}
+                          >
+                            <AlertTriangle size={11} color="#C2410C" />
+                            OC Asunto ({poMismatch.subjectPo}) ≠ PDF ({poMismatch.attachmentPo})
+                          </span>
+                        );
+                      })()}
+
                       {/* Badge si fue gestionado con número de orden */}
                       {(draft.status === 'approved' || meta.orderId) && meta.orderNumber && (
                         <span style={{ 
@@ -8713,6 +8867,33 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Paginación para colas históricas (Gestionados / Rechazados) */}
+      {(selectedStatus === 'approved' || selectedStatus === 'rejected') && hasMoreTabRows && !searchQuery.trim() && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem 0 0.5rem' }}>
+          <button
+            type="button"
+            disabled={loadingMoreTabRows}
+            onClick={() => loadActiveTabArchive(selectedStatus, true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '0.55rem 1.4rem',
+              borderRadius: '10px',
+              backgroundColor: 'white',
+              border: `1px solid ${THEME.colors.border}`,
+              color: THEME.colors.textMain,
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: loadingMoreTabRows ? 'wait' : 'pointer'
+            }}
+          >
+            {loadingMoreTabRows ? <Loader2 size={15} className="animate-spin" /> : null}
+            {loadingMoreTabRows ? 'Cargando anteriores...' : 'Cargar 200 registros anteriores'}
+          </button>
         </div>
       )}
 
