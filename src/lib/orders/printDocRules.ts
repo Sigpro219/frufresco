@@ -1,3 +1,9 @@
+import {
+    hasZombieUnpricedRemissionOverride,
+    isOrderUnpricedOffAgreement,
+    type BillingOrderRecordLike,
+} from '@/lib/commercial/billingOrderUtils';
+
 export interface PrintOrderDocProfile {
     role?: string | null;
     company_name?: string | null;
@@ -12,6 +18,7 @@ export interface PrintOrderDocProfile {
 }
 
 export interface PrintOrderDocInput {
+    id?: string;
     type?: string | null;
     admin_notes?: string | null;
     special_notes?: string | null;
@@ -19,12 +26,18 @@ export interface PrintOrderDocInput {
     total_amount?: number | null;
     logistics_data?: {
         document_type_override?: string | null;
+        remission_with_prices_override?: boolean | null;
         is_gift_remission?: boolean | null;
         is_replacement?: boolean | null;
         is_b2c_gift?: boolean | null;
         is_off_agreement_split?: boolean | null;
         off_agreement_priced?: boolean | null;
     } | null;
+    order_items?: Array<{
+        id?: string;
+        unit_price?: number | null;
+        count?: number;
+    }> | null;
     profiles?: PrintOrderDocProfile | PrintOrderDocProfile[] | null;
     profile?: PrintOrderDocProfile | PrintOrderDocProfile[] | null;
 }
@@ -64,13 +77,17 @@ export function isOrderInvoiceRequiredForPrint(order: PrintOrderDocInput | null 
         notesUpper.includes('REMISION DE OBSEQUIO');
     if (isGift) return false;
 
-    // 2. Excluir splits fuera de acuerdo despachados a $0 sin valorizar
-    const orderTotal = Number(order.total ?? order.total_amount ?? 0);
-    const isUnpricedSplit =
-        (notesUpper.includes('DESPACHADO SIN PRECIO') ||
-            notesUpper.includes('SE DESPACHÓ SIN PRECIO') ||
-            (Boolean(ld.is_off_agreement_split) && !ld.off_agreement_priced)) &&
-        orderTotal === 0;
+    // 2. Excluir splits fuera de acuerdo realmente despachados a $0 sin valorizar (evidencia real en order_items)
+    const billingLikeOrder: BillingOrderRecordLike = {
+        id: order.id || '',
+        type: order.type,
+        admin_notes: order.admin_notes,
+        total: order.total,
+        total_amount: order.total_amount,
+        logistics_data: order.logistics_data,
+        order_items: order.order_items,
+    };
+    const isUnpricedSplit = isOrderUnpricedOffAgreement(billingLikeOrder);
     if (isUnpricedSplit) return false;
 
     // 3. Regla canonica: solo clientes B2B pueden operar bajo FAC-IMP (Hogar siempre viaja con remision)
@@ -85,8 +102,12 @@ export function isOrderInvoiceRequiredForPrint(order: PrintOrderDocInput | null 
         return false;
     }
 
+    const effectiveOverride = hasZombieUnpricedRemissionOverride(billingLikeOrder, isUnpricedSplit)
+        ? null
+        : ld.document_type_override;
+
     const resolvedDocType =
-        ld.document_type_override ||
+        effectiveOverride ||
         prof?.document_type ||
         parent?.document_type ||
         'remission';

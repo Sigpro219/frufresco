@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
+import { isOrderUnpricedOffAgreement } from '@/lib/commercial/billingOrderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import {
     DollarSign,
@@ -635,7 +636,7 @@ export default function CommercialUnifiedDashboard({
                     .maybeSingle(),
                 supabase
                     .from('orders')
-                    .select('id, sequence_id, created_at, delivery_date, admin_notes, profiles (company_name, contact_name)')
+                    .select('id, sequence_id, created_at, delivery_date, total, admin_notes, logistics_data, order_items(id, unit_price), profiles (company_name, contact_name)')
                     .or('admin_notes.ilike.%DESPACHADO SIN PRECIO%,admin_notes.ilike.%SE DESPACHÓ SIN PRECIO%')
                     .neq('status', 'cancelled')
                     .order('created_at', { ascending: false })
@@ -1393,8 +1394,10 @@ export default function CommercialUnifiedDashboard({
                 }
             });
 
-            // Alertas Críticas de Pedidos / Remisiones Despachados Sin Precio ($0 COP) - Escenario 121 / 221 SDD
-            (unpricedOrdersRes?.data || []).forEach((uo: any) => {
+            // Alertas Críticas de Pedidos / Remisiones Despachados Sin Precio ($0 COP) - Escenario 121 / 221 / 464 SDD
+            (unpricedOrdersRes?.data || [])
+                .filter((uo: any) => isOrderUnpricedOffAgreement(uo))
+                .forEach((uo: any) => {
                 const prof = Array.isArray(uo.profiles) ? uo.profiles[0] : uo.profiles;
                 const clientName = prof?.company_name || prof?.contact_name || 'Cliente';
                 const matchItems = uo.admin_notes?.match(/PENDIENTE FIJAR TARIFA COMERCIAL: ([^\]]+)\]/);

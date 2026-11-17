@@ -412,12 +412,16 @@ export async function POST(req: NextRequest) {
                 updatedNotes = `${updatedNotes} | [AJUSTE FACTURA: -$${Math.round(deductionTotal).toLocaleString('en-US')}]`.trim();
             }
 
+            const baseLogisticsData: Record<string, unknown> = { ...(orderData.logistics_data || {}) };
+            if (!stillHasZeroPrice && baseLogisticsData.document_type_override === 'remission') {
+                delete baseLogisticsData.document_type_override;
+                delete baseLogisticsData.remission_with_prices_override;
+            }
             const updatedLogisticsData = {
-                ...(orderData.logistics_data || {}),
+                ...baseLogisticsData,
                 off_agreement_priced: !stillHasZeroPrice,
                 off_agreement_priced_at: !stillHasZeroPrice ? new Date().toISOString() : null,
-                off_agreement_priced_by: !stillHasZeroPrice ? assignedBy : null,
-                remission_with_prices_override: !stillHasZeroPrice
+                off_agreement_priced_by: !stillHasZeroPrice ? assignedBy : null
             };
 
             await supabaseAdmin

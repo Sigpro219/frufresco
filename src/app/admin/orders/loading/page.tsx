@@ -1761,7 +1761,7 @@ useEffect(() => {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
 
 
 
@@ -3016,9 +3016,15 @@ useEffect(() => {
             const itemsToUpsert = orderItems.filter(item => item.isNew || item.isModified).map(item => {
                 const numericPrice = Number(item.unit_price || 0);
                 const isPendingTariff = numericPrice <= 0;
-                const mergedSelectedOptions = isPendingTariff
-                    ? { ...(item.selected_options || {}), tarifa_pendiente: true, _off_agreement: true }
-                    : item.selected_options;
+                let mergedSelectedOptions = item.selected_options;
+                if (isPendingTariff) {
+                    mergedSelectedOptions = { ...(item.selected_options || {}), tarifa_pendiente: true, _off_agreement: true };
+                } else if (item.selected_options && (item.selected_options.tarifa_pendiente || item.selected_options._off_agreement)) {
+                    const cleanedOpts = { ...item.selected_options };
+                    delete cleanedOpts.tarifa_pendiente;
+                    delete cleanedOpts._off_agreement;
+                    mergedSelectedOptions = cleanedOpts;
+                }
 
                 const baseItem: any = {
                     order_id: selectedOrder.id,
@@ -3058,7 +3064,22 @@ useEffect(() => {
 
             // 5. Llamada segura al backend (inmune a restricciones RLS de clientes o líderes)
             const effectivePoNumber = cleanOc || (cleanSolped ? `SOLPED: ${cleanSolped}` : null);
-            const updatedLogisticsData = {
+            const rawPrevNotes = String(selectedOrder.admin_notes || '');
+            const hadUnpricedMarker =
+                rawPrevNotes.includes('DESPACHADO SIN PRECIO') ||
+                rawPrevNotes.includes('SE DESPACHÓ SIN PRECIO') ||
+                Boolean(selectedOrder.logistics_data?.is_off_agreement_split && !selectedOrder.logistics_data?.off_agreement_priced);
+            const isGiftOrRepOrder = Boolean(
+                selectedOrder.logistics_data?.is_gift_remission ||
+                selectedOrder.logistics_data?.document_type_override === 'gift_remission' ||
+                selectedOrder.logistics_data?.is_replacement ||
+                rawPrevNotes.toUpperCase().includes('REMISIÓN DE OBSEQUIO') ||
+                rawPrevNotes.toUpperCase().includes('REPOSICIÓN')
+            );
+            const allActiveItemsPriced = orderItems.length > 0 && orderItems.every(it => Number(it.unit_price || 0) > 0);
+
+            let finalAdminNotes = updatedAdminNotes;
+            const baseUpdatedLogistics: Record<string, any> = {
                 ...(selectedOrder.logistics_data || {}),
                 cancelled_items: cancelledOrderItems,
                 purchase_order_number: cleanOc || null,
@@ -3066,6 +3087,22 @@ useEffect(() => {
                 is_colsubsidio: isSelectedOrderColsubsidio || selectedOrder.logistics_data?.is_colsubsidio,
                 colsubsidio_status: cleanOc ? 'oc_formalizada' : (cleanSolped ? 'solped_provisional' : 'none')
             };
+
+            if (hadUnpricedMarker && !isGiftOrRepOrder && allActiveItemsPriced) {
+                finalAdminNotes = finalAdminNotes
+                    .replace(/\[FUERA DE ACUERDO\s*-\s*DESPACHADO SIN PRECIO[^\]]*\]/gi, '')
+                    .replace(/\[DESPACHADO SIN PRECIO[^\]]*\]/gi, '')
+                    .replace(/\[SE DESPACHÓ SIN PRECIO[^\]]*\]/gi, '')
+                    .trim();
+                baseUpdatedLogistics.off_agreement_priced = true;
+                if (baseUpdatedLogistics.document_type_override === 'remission') {
+                    delete baseUpdatedLogistics.document_type_override;
+                }
+                if (baseUpdatedLogistics.remission_with_prices_override === false) {
+                    delete baseUpdatedLogistics.remission_with_prices_override;
+                }
+            }
+            const updatedLogisticsData = baseUpdatedLogistics;
 
             const response = await fetch('/api/orders/update', {
                 method: 'POST',
@@ -3084,7 +3121,7 @@ useEffect(() => {
                         total_weight_kg: currentWeight,
                         subtotal: currentSubtotal,
                         tax: currentTax,
-                        admin_notes: updatedAdminNotes,
+                        admin_notes: finalAdminNotes,
                         logistics_data: updatedLogisticsData
                     },
                     idsToDelete,

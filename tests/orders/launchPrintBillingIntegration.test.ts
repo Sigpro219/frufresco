@@ -9,6 +9,7 @@ import {
     compareCanonicalBillingOrder,
     getCanonicalBillingDocPriority,
     isOrderEligibleForCanonicalBilling,
+    isOrderUnpricedOffAgreement,
     resolveCanonicalDocType,
     type BillingOrderRecordLike,
 } from '../../src/lib/commercial/billingOrderUtils';
@@ -454,5 +455,71 @@ test('Escenario 461 — Lanzamiento, Espacios Anticolision, Impresion Exclusiva 
         assert.equal(projectedMap.get('ord-1760'), undefined);
         assert.equal(projectedMap.get('ord-1750'), undefined);
         assert.equal(projectedMap.get('ord-unpriced'), undefined);
+    });
+
+    await t.test('5. Escenario 464 — Anti-Falso Positivo Rem. $0 (Por Fijar) con evidencia real de order_items e inmunidad a count()', () => {
+        const order1811Like: BillingOrderRecordLike = {
+            id: 'ord-1811',
+            sequence_id: 1811,
+            type: 'b2b',
+            total: 2297796,
+            admin_notes: '[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: Lechuga] [Audit 11:51]',
+            logistics_data: {
+                off_agreement_priced: false,
+                document_type_override: 'remission',
+                remission_with_prices_override: false,
+            },
+            order_items: [
+                { id: 'i1', unit_price: 7200 },
+                { id: 'i2', unit_price: 8500 },
+            ],
+            profiles: { role: 'b2b_client', company_name: 'DIPLOMAT EMBAJADA HOTEL TRYP - TRYP', document_type: 'invoice' },
+        };
+
+        assert.equal(
+            isOrderUnpricedOffAgreement(order1811Like),
+            false,
+            'Si todos los order_items tienen unit_price > 0, no debe marcarse como sin precio'
+        );
+        assert.equal(
+            resolveCanonicalDocType(order1811Like).rawDocType,
+            'invoice',
+            'Debe descartar override zombie remission y restaurar invoice (FAC-IMP)'
+        );
+        assert.equal(
+            isOrderInvoiceRequiredForPrint(order1811Like),
+            true,
+            'En impresion de remisiones debe reconocerse nuevamente como FAC-IMP'
+        );
+
+        const mixedZeroItemOrder: BillingOrderRecordLike = {
+            ...order1811Like,
+            id: 'ord-mixed-zero',
+            total: 150000,
+            order_items: [
+                { id: 'i1', unit_price: 7200 },
+                { id: 'i2', unit_price: 0 },
+            ],
+        };
+        assert.equal(
+            isOrderUnpricedOffAgreement(mixedZeroItemOrder),
+            true,
+            'Si al menos un item real tiene unit_price <= 0, debe seguir marcado para asignar precio'
+        );
+
+        const countOnlyWithTotalOrder: BillingOrderRecordLike = {
+            id: 'ord-count-only',
+            sequence_id: 1812,
+            type: 'b2b',
+            total: 500000,
+            admin_notes: '[DESPACHADO SIN PRECIO]',
+            logistics_data: { off_agreement_priced: false },
+            order_items: [{ count: 12 }],
+        };
+        assert.equal(
+            isOrderUnpricedOffAgreement(countOnlyWithTotalOrder),
+            false,
+            'Filas de solo conteo [{ count }] no deben tratarse como unit_price = 0 cuando total > 0'
+        );
     });
 });

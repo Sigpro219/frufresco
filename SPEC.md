@@ -2,9 +2,9 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.419 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..463 | Pre-Vuelo: 464)  
+> **Versión:** 1.9.419 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..464)  
 > **Fecha:** 17 de Noviembre, 2026  
-> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 463 Certificados | 🟡 Escenario 464 en Pre-Vuelo `/goldfish` | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
+> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 464 Certificados | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
 > **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..464 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258, 430, 462 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL ONFRU** | **onFRU SCOS v1.9.419 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **464 Escenarios Canónicos (1..464)** | **🟡 Pre-Vuelo 464** |
+| **TOTAL ONFRU** | **onFRU SCOS v1.9.419 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **464 Escenarios Canónicos (1..464)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---

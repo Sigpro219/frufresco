@@ -13,6 +13,8 @@ import {
     compareCanonicalBillingOrder,
     buildCanonicalProjectedInvoiceMap,
     isOrderEligibleForCanonicalBilling,
+    isOrderUnpricedOffAgreement,
+    hasZombieUnpricedRemissionOverride,
     extractExistingInvoiceNumber,
 } from '@/lib/commercial/billingOrderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
@@ -182,6 +184,7 @@ export interface CutPreviewOrder {
     type?: string;
     admin_notes?: string;
     logistics_data?: any;
+    order_items?: Array<{ id?: string; unit_price?: number | null }>;
     origin_source?: string;
     profile: {
         company_name: string;
@@ -215,12 +218,10 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         || !!prof.is_corporate_parent
         || (prof.company_name && /(SAS|S\.A|LTDA|BIC|E\.U\.|CORP|COLSUBSIDIO|ALDIMARK|MONSERRATE|TEQUENDAMA|IRCC|COLEGIO|HOTEL|CLINICA|CAJA DE COMPENSACION|FONDO|WOK)/i.test(prof.company_name));
 
-    // 1. Resolve Document Type (Escenario 221: Si es una remisión fuera de acuerdo despachada a $0 y aún no valorizada, forzar REM-S/S; una vez valorizada por Comercial, emitir según el documento fiscal del cliente)
-    const isUnpricedOffAgreement = Boolean(
-        (order?.admin_notes || '').includes('DESPACHADO SIN PRECIO') ||
-        (order?.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
-        (order?.logistics_data?.is_off_agreement_split && !order?.logistics_data?.off_agreement_priced)
-    );
+    // 1. Resolve Document Type (Escenario 221 / 464: verificar evidencia real en order_items para evitar falsos positivos $0)
+    const isUnpricedOffAgreement = isOrderUnpricedOffAgreement(order);
+    const ignoreZombieRemissionOverride = hasZombieUnpricedRemissionOverride(order, isUnpricedOffAgreement);
+    const effectiveDocOverride = ignoreZombieRemissionOverride ? null : order?.logistics_data?.document_type_override;
     const clientFiscalDocType = !isB2B ? 'remission' : (prof.document_type || parent?.document_type || 'remission');
     const isExplicitGift = Boolean(order?.logistics_data?.is_gift_remission || order?.logistics_data?.document_type_override === 'gift_remission');
     const rawDocType = isExplicitGift
@@ -229,8 +230,8 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
             ? 'remission'
             : (isUnpricedOffAgreement
                 ? 'remission'
-                : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
-                    ? order.logistics_data.document_type_override
+                : ((effectiveDocOverride && !order?.logistics_data?.off_agreement_priced)
+                    ? effectiveDocOverride
                     : clientFiscalDocType));
     const isPrinted = prof.print_invoice !== undefined ? prof.print_invoice : (parent?.print_invoice !== undefined ? parent.print_invoice : true);
     const isWithPrices = isUnpricedOffAgreement
@@ -483,11 +484,7 @@ export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutClo
     const activeReturns = (order.billing_returns || []).filter((r: any) => r.status !== 'rejected');
     const activePqrs = (order.customer_service_pqrs || []).filter((p: any) => p.status === 'pending' || p.status === 'in_progress');
     const hasReturn = activeReturns.length > 0 || activePqrs.length > 0;
-    const isUnpricedOffAgreement = Boolean(
-        (order.admin_notes || '').includes('DESPACHADO SIN PRECIO') ||
-        (order.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
-        (order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced)
-    );
+    const isUnpricedOffAgreement = isOrderUnpricedOffAgreement(order);
     const isDelivered = order.status === 'delivered';
     const isShipped = order.status === 'shipped';
 
@@ -1968,8 +1965,7 @@ export default function BillingDashboard() {
         const targetIds = selectedOrderIds.length > 0 
             ? selectedOrderIds 
             : pendingOrders.filter(o => {
-                const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
-                if (isOffAgreement) return false;
+                if (isOrderUnpricedOffAgreement(o)) return false;
                 return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
             }).map(o => o.id);
 
@@ -2074,7 +2070,7 @@ export default function BillingDashboard() {
         return pendingOrders.filter(o => {
             const rep = getOrderReplacementInfo(o);
             if (rep.isReplacement || o.origin_source === 'customer_service') return false;
-            return o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
+            return isOrderUnpricedOffAgreement(o);
         }).length;
     }, [pendingOrders]);
 
@@ -2083,8 +2079,7 @@ export default function BillingDashboard() {
             const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
             const isGiftOrReplacement = docInfo.type === 'gift_remission' || o.admin_notes?.includes('REMISIÓN DE OBSEQUIO') || o.admin_notes?.includes('REPOSICIÓN');
             if (isGiftOrReplacement) return false;
-            const isOffAgreement = o.admin_notes?.includes('DESPACHADO SIN PRECIO') || o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO') || (o.logistics_data?.is_off_agreement_split && !o.logistics_data?.off_agreement_priced);
-            if (isOffAgreement) return false;
+            if (isOrderUnpricedOffAgreement(o)) return false;
             return o.total === 0 || o.admin_notes?.includes('CONSUMO ABIERTO');
         }).length;
     }, [pendingOrders, parentProfilesMap]);
@@ -2498,6 +2493,10 @@ export default function BillingDashboard() {
                     type,
                     logistics_data,
                     origin_source,
+                    order_items (
+                        id,
+                        unit_price
+                    ),
                     profiles (
                         id,
                         company_name,
@@ -2676,6 +2675,7 @@ export default function BillingDashboard() {
                     type: o.type,
                     admin_notes: o.admin_notes,
                     logistics_data: o.logistics_data,
+                    order_items: o.order_items || [],
                     origin_source: o.origin_source,
                     profile: prof ? {
                         company_name: prof.company_name || 'Cliente sin nombre',
@@ -2717,9 +2717,8 @@ export default function BillingDashboard() {
                 || /obsequio/i.test(o.admin_notes || '');
             if (isGiftOrReplacement) return false;
             return (
-                o.netTotal === 0 || 
-                o.admin_notes?.includes('DESPACHADO SIN PRECIO') || 
-                o.admin_notes?.includes('SE DESPACHÓ SIN PRECIO')
+                o.netTotal === 0 ||
+                isOrderUnpricedOffAgreement(o)
             );
         });
         if (unpricedOrder) {

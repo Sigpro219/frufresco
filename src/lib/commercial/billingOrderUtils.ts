@@ -32,10 +32,16 @@ export interface BillingOrderRecordLike {
         is_off_agreement_split?: boolean | null;
         off_agreement_priced?: boolean | null;
         document_type_override?: string | null;
+        remission_with_prices_override?: boolean | null;
         is_replacement?: boolean | null;
         parent_order_id?: string | null;
         parent_sequence_id?: number | string | null;
     } | null;
+    order_items?: Array<{
+        id?: string;
+        unit_price?: number | null;
+        count?: number;
+    }> | null;
     profiles?: BillingOrderProfileInfo | BillingOrderProfileInfo[] | null;
 }
 
@@ -53,6 +59,48 @@ export function extractExistingInvoiceNumber(order: BillingOrderRecordLike | nul
     const bi = Array.isArray(order.billing_invoices) ? order.billing_invoices[0] : order.billing_invoices;
     const num = bi?.invoice_number || order.invoice_number;
     return num && String(num).trim().length > 0 ? String(num).trim() : null;
+}
+
+/**
+ * Determina si un pedido esta realmente despachado sin precio ($0) basandose en evidencia de order_items.
+ * Ignora filas de solo conteo ({ count }) y evita falsos positivos cuando todos los items ya tienen unit_price > 0.
+ */
+export function isOrderUnpricedOffAgreement(order: BillingOrderRecordLike | null | undefined): boolean {
+    if (!order) return false;
+    const notes = String(order.admin_notes || '');
+    const hasTextMarker =
+        notes.includes('DESPACHADO SIN PRECIO') ||
+        notes.includes('SE DESPACHÓ SIN PRECIO');
+    const hasSplitMarker = Boolean(
+        order.logistics_data?.is_off_agreement_split && !order.logistics_data?.off_agreement_priced
+    );
+    if (!hasTextMarker && !hasSplitMarker) {
+        return false;
+    }
+
+    const detailedItems = Array.isArray(order.order_items)
+        ? order.order_items.filter(it => it && typeof it.unit_price === 'number')
+        : [];
+    if (detailedItems.length > 0) {
+        return detailedItems.some(it => Number(it.unit_price) <= 0);
+    }
+
+    return !order.logistics_data?.off_agreement_priced && Number(order.total ?? order.total_amount ?? 0) === 0;
+}
+
+export function hasZombieUnpricedRemissionOverride(
+    order: BillingOrderRecordLike | null | undefined,
+    isUnpriced: boolean
+): boolean {
+    if (!order || isUnpriced) return false;
+    const notes = String(order.admin_notes || '');
+    return Boolean(
+        order.logistics_data?.document_type_override === 'remission' &&
+        order.logistics_data?.remission_with_prices_override === false &&
+        (notes.includes('DESPACHADO SIN PRECIO') ||
+            notes.includes('SE DESPACHÓ SIN PRECIO') ||
+            order.logistics_data?.is_off_agreement_split)
+    );
 }
 
 export function resolveCanonicalDocType(
@@ -77,12 +125,8 @@ export function resolveCanonicalDocType(
         Boolean(prof.is_corporate_parent) ||
         Boolean(prof.company_name && B2B_NAME_REGEX.test(prof.company_name));
 
-    const notes = String(order?.admin_notes || '');
-    const isUnpricedOffAgreement = Boolean(
-        notes.includes('DESPACHADO SIN PRECIO') ||
-        notes.includes('SE DESPACHÓ SIN PRECIO') ||
-        (order?.logistics_data?.is_off_agreement_split && !order?.logistics_data?.off_agreement_priced)
-    );
+    const isUnpricedOffAgreement = isOrderUnpricedOffAgreement(order);
+    const ignoreZombieRemissionOverride = hasZombieUnpricedRemissionOverride(order, isUnpricedOffAgreement);
 
     // Hogar (!isB2B) siempre liquida como remision comercial con valor (REM-VALOR), nunca FAC-IMP/factura directa
     const clientFiscalDocType = !isB2B
@@ -94,14 +138,18 @@ export function resolveCanonicalDocType(
         order?.logistics_data?.document_type_override === 'gift_remission'
     );
 
+    const effectiveDocOverride = ignoreZombieRemissionOverride
+        ? null
+        : order?.logistics_data?.document_type_override;
+
     const rawDocType = isExplicitGift
         ? 'gift_remission'
         : !isB2B
             ? 'remission'
             : isUnpricedOffAgreement
                 ? 'remission'
-                : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
-                    ? order.logistics_data.document_type_override
+                : ((effectiveDocOverride && !order?.logistics_data?.off_agreement_priced)
+                    ? effectiveDocOverride
                     : clientFiscalDocType);
 
     return {

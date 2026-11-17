@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, getOrderProcurementReferences } from '@/lib/orderUtils';
 import { isOrderInvoiceRequiredForPrint } from '@/lib/orders/printDocRules';
+import { hasZombieUnpricedRemissionOverride, isOrderUnpricedOffAgreement } from '@/lib/commercial/billingOrderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, FileText, Gift, CheckSquare, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
@@ -1707,7 +1708,10 @@ function ContingencyPrintContent() {
                 {showRemissions && activePrintOrders.map((order, orderIdx) => {
                     const prof = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
                     const parent = Array.isArray(prof?.parent) ? prof?.parent[0] : prof?.parent;
-                    const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
+                    const isUnpricedOffAgreement = isOrderUnpricedOffAgreement(order as any);
+                    const ignoreZombieOverride = hasZombieUnpricedRemissionOverride(order as any, isUnpricedOffAgreement);
+                    const effectiveDocOverride = ignoreZombieOverride ? null : (order.logistics_data as any)?.document_type_override;
+                    const rawDocType = effectiveDocOverride || prof?.document_type || parent?.document_type || '';
                     const isInvoiceRequired = isOrderInvoiceRequiredForPrint(order);
 
                     const b2cGift = extractB2CGiftDetails(order);
@@ -1715,12 +1719,13 @@ function ContingencyPrintContent() {
                     const orderNum = getFriendlyOrderId(order);
                     const isReposicion = (order.admin_notes || '').toLowerCase().includes('reposici') || (order.special_notes || '').toLowerCase().includes('reposici') || Boolean(order.logistics_data?.is_replacement);
                     const isObsequio = !isReposicion && (b2cGift.isB2CGift || rawDocType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO'));
-                    const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || (order.admin_notes || '').includes('FUERA DE ACUERDO - DESPACHADO SIN PRECIO'));
-                    const isUnpricedOffAgreement = isOffAgreementRemission && !Boolean(order.logistics_data?.off_agreement_priced) && Number(order.total || 0) === 0;
+                    const isOffAgreementRemission = !isReposicion && !isObsequio && (Boolean(order.logistics_data?.is_off_agreement_split) || isUnpricedOffAgreement);
                     const isZeroCostDoc = isReposicion || isObsequio || isUnpricedOffAgreement;
+                    const effectivePricesOverride = ignoreZombieOverride ? undefined : order.logistics_data?.remission_with_prices_override;
                     const withPrices = !isZeroCostDoc && (
-                        Boolean(order.logistics_data?.remission_with_prices_override) ||
-                        (order.profiles?.remission_with_prices !== false && order.profiles?.parent?.remission_with_prices !== false)
+                        effectivePricesOverride !== undefined
+                            ? Boolean(effectivePricesOverride)
+                            : (order.profiles?.remission_with_prices !== false && order.profiles?.parent?.remission_with_prices !== false)
                     );
                     const parentSeq = order.logistics_data?.parent_order_sequence || (() => {
                         const notes = `${order.admin_notes || ''} ${order.special_notes || ''}`;
