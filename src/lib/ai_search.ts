@@ -23,7 +23,7 @@ Analiza esta búsqueda de tienda: "${query}"
 Devuelve exactamente esto: términos_separados_por_coma|CÓDIGO_CATEGORÍA
 
 REGLAS:
-- CÓDIGOS: [FR, VE, TU, HO, LA, DE, CO]
+- CÓDIGOS: [FR, VE, TU, HO, LA, DE, CO, PR, CP]
 - Si no hay categoría clara, usa DE.
 - No escribas nada más que el formato indicado.
 

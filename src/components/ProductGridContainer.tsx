@@ -1,16 +1,18 @@
 import { type Product } from '../lib/supabase';
-import { getVisibleProducts, getTranslationCache } from '../lib/data';
-import ProductCard from './ProductCard';
+import { getAppSettings, getVisibleProducts, getTranslationCache, getProductSalesRanking } from '../lib/data';
 import { expandSearchQuery } from '@/lib/ai_search';
 import { CATEGORY_MAP } from '../lib/constants';
 import { translations, Locale } from '../lib/translations';
 import Link from 'next/link';
 import { ChefHat, X } from 'lucide-react';
-import FeaturedProductsCarousel from './FeaturedProductsCarousel';
 import ProductGridClient from './ProductGridClient';
-import { supabase } from '../lib/supabase';
 import { createServerSideClient } from '@/lib/supabase/server';
 import { resolvePricingModelId, CLIENTES_HOGAR_ID } from '../lib/pricingUtils';
+import {
+    filterStorefrontProductsByFrioganMode,
+    isOfferOrPromoProduct,
+    parseFrioganStorefrontMode,
+} from '@/lib/storefront/storefrontEngine';
 
 interface Props {
     q?: string;
@@ -154,19 +156,55 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     // 1. Data Fetching for the Grid (Optimized with Cache)
     const [
         allVisibleRaw,
-        translationCache
+        translationCache,
+        appSettings,
+        salesRanking
     ] = await Promise.all([
         getVisibleProducts(pricingModelId),
-        locale === 'en' ? getTranslationCache() : Promise.resolve({})
+        locale === 'en' ? getTranslationCache() : Promise.resolve({}),
+        getAppSettings(),
+        getProductSalesRanking()
     ]);
+
+    const settingsMap = new Map<string, string>(
+        (appSettings || []).map((st: { key?: string; value?: string | null }) => [String(st?.key || ''), String(st?.value ?? '')])
+    );
+    const frioganMode = parseFrioganStorefrontMode(settingsMap.get('friogan_storefront_mode'));
+    let lockedIds = new Set<string>();
+    try {
+        const rawScarcity = settingsMap.get('scarcity_locked_skus');
+        if (rawScarcity) lockedIds = new Set(Object.keys(JSON.parse(rawScarcity)));
+    } catch (err) { console.warn('Malformed scarcity_locked_skus in ProductGridContainer:', err); }
+
+    if (category && category.trim().toUpperCase() === 'CP' && frioganMode !== 'LIVE') {
+        return (
+            <ProductGridClient
+                products={[]}
+                noProductsText={
+                    locale === 'en'
+                        ? 'Friogan butcher section will open soon.'
+                        : 'La sección Carnicería Friogan estará disponible próximamente.'
+                }
+            />
+        );
+    }
+
+    const filterEligible = (plist: Product[]) =>
+        filterStorefrontProductsByFrioganMode(plist.filter(p => !lockedIds.has(p.id)), frioganMode);
+
+    const matchesCategoryFilter = (p: Product) => {
+        if (!category || category === 'Todos') return true;
+        if (category.trim().toUpperCase() === 'OFERTAS') return isOfferOrPromoProduct(p);
+        return (p.category || '').trim().toUpperCase() === category.trim().toUpperCase();
+    };
 
     const applyCommercialPrices = (plist: any[]) => {
         const agreementPriceMap = new Map(agreementItems.map(item => [item.product_id, item.unit_price]));
         return plist.map(p => {
             const agreementPrice = agreementPriceMap.get(p.id);
-            const basePrice = agreementPrice !== undefined 
-                ? agreementPrice 
-                : (p.pricing_model_prices?.[0]?.price || p.base_price || 0);
+            const basePrice = (agreementPrice !== undefined && Number(agreementPrice) > 0)
+                ? Number(agreementPrice)
+                : Number(p.pricing_model_prices?.[0]?.price || 0);
 
             const campaignAdj = campaignMap.get(p.id);
             let finalPrice = basePrice;
@@ -198,7 +236,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
         });
     };
 
-    const allVisible = applyCommercialPrices(allVisibleRaw);
+    const allVisible = filterEligible(applyCommercialPrices(allVisibleRaw));
 
     // Fetch nicknames if user is logged in
     const { data: nicknamesData } = userId 
@@ -233,8 +271,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     const searchQueries = q ? q.toLowerCase().split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
     
     const memoryFiltered = productsWithNicknames.filter(p => {
-        const matchesCategory = !category || category === 'Todos' || p.category === category;
-        if (!matchesCategory) return false;
+        if (!matchesCategoryFilter(p)) return false;
         if (searchQueries.length === 0) return true;
         
         // The product must match at least ONE of the comma-separated terms (OR logic)
@@ -307,10 +344,10 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
 
         console.log("DEBUG SEARCH:", { q, searchQueries, searchTerms, orConditionsLen: orConditions.length, dbErr: dbErr?.message, dbCount: dbProducts?.length });
 
-        const dbProductsWithPrices = applyCommercialPrices(dbProducts || []);
-        const foundProducts = applyNicknames(dbProductsWithPrices);
+        const dbProductsWithPrices = filterEligible(applyCommercialPrices(dbProducts || []));
+        const foundProducts = applyNicknames(dbProductsWithPrices).filter(matchesCategoryFilter);
 
-        if (foundProducts.length === 0 && suggestedCatCode) {
+        if (foundProducts.length === 0 && suggestedCatCode && (suggestedCatCode !== 'CP' || frioganMode === 'LIVE')) {
             let catProducts: any[] = [];
             const resCat = await serverSupabase
                 .from('products')
@@ -334,8 +371,8 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             } else {
                 catProducts = resCat.data || [];
             }
-            const catProductsWithPrices = applyCommercialPrices(catProducts || []);
-            rawProducts = applyNicknames(catProductsWithPrices);
+            const catProductsWithPrices = filterEligible(applyCommercialPrices(catProducts || []));
+            rawProducts = applyNicknames(catProductsWithPrices).filter(matchesCategoryFilter);
             fallbackCategoryName = CATEGORY_MAP[suggestedCatCode] || suggestedCatCode;
         } else {
             const merged = [...memoryFiltered];
@@ -346,7 +383,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                     existingIds.add(p.id);
                 }
             });
-            rawProducts = merged;
+            rawProducts = merged.filter(matchesCategoryFilter);
         }
     } else {
         rawProducts = memoryFiltered;
@@ -356,6 +393,19 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
     rawProducts.sort((a, b) => {
         const nameA = (a.display_name || a.name || '').trim();
         const nameB = (b.display_name || b.name || '').trim();
+        const hasImgA = Boolean(a.image_url && a.image_url.trim().startsWith('http'));
+        const hasImgB = Boolean(b.image_url && b.image_url.trim().startsWith('http'));
+        const hasPriceA = Number(a.pricing_model_prices?.[0]?.price || 0) > 0;
+        const hasPriceB = Number(b.pricing_model_prices?.[0]?.price || 0) > 0;
+        const readyA = (hasImgA && hasPriceA) ? 1 : (hasPriceA ? 0 : -1);
+        const readyB = (hasImgB && hasPriceB) ? 1 : (hasPriceB ? 0 : -1);
+        if (readyA !== readyB) return readyB - readyA;
+        const salesA = salesRanking[a.id] || 0;
+        const salesB = salesRanking[b.id] || 0;
+        if (salesA !== salesB) return salesB - salesA;
+        const promoA = a.campaign_info ? 1 : 0;
+        const promoB = b.campaign_info ? 1 : 0;
+        if (promoA !== promoB) return promoB - promoA;
         return nameA.localeCompare(nameB, 'es', { sensitivity: 'base', numeric: true });
     });
 
@@ -436,7 +486,10 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
             )}
             
             <ProductGridClient 
-                products={rawProducts} 
+                products={rawProducts.slice(0, 20).map((p) => (p.keywords ? { ...p, keywords: '' } : p))}
+                totalCount={rawProducts.length}
+                category={category}
+                q={q} 
                 noProductsText={t.noProducts || 'No encontramos productos con ese nombre.'} 
             />
         </div>

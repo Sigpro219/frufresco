@@ -1,644 +1,254 @@
-import { getVisibleProducts, getAppSettings, getWebCategories } from '../lib/data';
-import { type Product } from '../lib/supabase';
-import SearchBar from '../components/SearchBar';
 import Link from 'next/link';
-import Image from 'next/image';
-import FeaturedProductsCarousel from '../components/FeaturedProductsCarousel';
-import { Building2, ShoppingCart, Timer, Sprout, Coins, Flame, Apple, Leaf, Carrot, Milk, Package, LayoutGrid, ArrowRight } from 'lucide-react';
-import { CATEGORY_MAP, REVERSE_CATEGORY_MAP } from '../lib/constants';
-import { translations, Locale } from '../lib/translations';
-import { Suspense } from 'react';
-import ProductGridContainer from '../components/ProductGridContainer';
-import ProductSkeleton from '../components/ProductSkeleton';
-import HeroActions from '../components/HeroActions';
-import ReorderHeroBanner from '../components/ReorderHeroBanner';
-import TypicalRecipesBar from '../components/TypicalRecipesBar';
+import { Flame, ShoppingBasket, X } from 'lucide-react';
+import { getAppSettings, getProductSalesRanking, getVisibleProducts } from '@/lib/data';
+import { CATEGORY_MAP } from '@/lib/constants';
+import { translations, type Locale } from '@/lib/translations';
+import type { Product } from '@/lib/supabase';
+import {
+  RECIPE_BUNDLES,
+  buildStorefrontRuntimeConfig,
+  filterStorefrontProductsByFrioganMode,
+  isFrioganProteinProduct,
+  isOfferOrPromoProduct,
+  resolveProductStorefrontPresentation,
+  resolveRecipeBundleProducts,
+  resolveStorefrontPrice,
+} from '@/lib/storefront/storefrontEngine';
+import StorefrontPromoStage from '@/components/storefront/StorefrontPromoStage';
+import FrioganShowcaseRail from '@/components/storefront/FrioganShowcaseRail';
+import HorecaExecutiveBand from '@/components/storefront/HorecaExecutiveBand';
+import ProductGridContainer from '@/components/ProductGridContainer';
+import FeaturedProductsCarousel from '@/components/FeaturedProductsCarousel';
 
-export const revalidate = 60; // Auto-revalidate every 60s fallback, plus on-demand revalidation
+export const dynamic = 'force-dynamic';
 
-// --- SUB-COMPONENTS FOR STREAMING ---
-
-async function CategoryPills({ category, q, locale }: { category?: string, q?: string, locale: Locale }) {
-    const t = translations[locale];
-    const dynamicCategories = await getWebCategories();
-    
-    const getCategoryName = (cat: string) => {
-        if (cat === 'Todos') return t.allCategories;
-        const code = REVERSE_CATEGORY_MAP[cat] || cat.toUpperCase();
-        return (t.categories as any)[code] || cat;
-    };
-
-    return (
-        <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: '0.4rem',
-            maxWidth: '1200px',
-            margin: '0.4rem auto 0',
-            width: '100%',
-            padding: '0 0.5rem'
-        }}>
-            {dynamicCategories.map((cat: string) => (
-                <Link
-                    key={cat}
-                    href={`/?${new URLSearchParams({
-                        ...(q ? { q } : {}),
-                        category: cat,
-                        lang: locale === 'en' ? 'en' : 'es'
-                    }).toString()}#catalog`}
-                    scroll={false}
-                    className={`category-pill ${((!category && cat === 'Todos') || category === cat) ? 'active' : ''}`}
-                >
-                    {getCategoryName(cat)}
-                </Link>
-            ))}
-        </div>
-    );
-}
-
-async function FeaturedSection({ locale }: { locale: Locale }) {
-    const t = translations[locale];
-    
-    // Fetch products from cache
-    const allVisible = await getVisibleProducts();
-
-    if (!allVisible || allVisible.length === 0) return null;
-
-    // Featured Logic: Algoritmo Híbrido Comercial
-    // 1. Prioridad Alta: Productos con tags de Campaña / Cosecha / Promoción activa
-    // 2. Prioridad Media: Productos con tags de Best Seller / Top Ventas
-    // 3. Relleno Dinámico: Rotación orgánica balanceada por categorías (máx 2 por cat) hasta 10 cupos
-    const featuredProducts: Product[] = [];
-    const addedIds = new Set<string>();
-    const catCount: Record<string, number> = {};
-
-    const hasTag = (p: Product, keywords: string[]) => {
-        if (!p.tags || !Array.isArray(p.tags)) return false;
-        return p.tags.some(tag => {
-            const lower = (tag || '').toLowerCase();
-            return keywords.some(k => lower.includes(k));
-        });
-    };
-
-    // Nivel 1: Campañas y Cosechas activas
-    const campaignProducts = allVisible.filter(p => hasTag(p, ['promo', 'oferta', 'descuento', 'cosecha', 'temporada']));
-    for (const p of campaignProducts) {
-        if (featuredProducts.length >= 10) break;
-        if (!addedIds.has(p.id)) {
-            featuredProducts.push(p);
-            addedIds.add(p.id);
-            const cat = p.category || 'Otros';
-            catCount[cat] = (catCount[cat] || 0) + 1;
-        }
-    }
-
-    // Nivel 2: Best Sellers marcados
-    const bestSellerProducts = allVisible.filter(p => hasTag(p, ['vendido', 'best', 'top', 'estrella']));
-    for (const p of bestSellerProducts) {
-        if (featuredProducts.length >= 10) break;
-        if (!addedIds.has(p.id)) {
-            featuredProducts.push(p);
-            addedIds.add(p.id);
-            const cat = p.category || 'Otros';
-            catCount[cat] = (catCount[cat] || 0) + 1;
-        }
-    }
-
-    // Nivel 3: Relleno inteligente con balance de categorías y rotación diaria
-    if (featuredProducts.length < 10) {
-        const dailySeed = new Date().getDate();
-        const sortedRemaining = [...allVisible]
-            .filter(p => !addedIds.has(p.id))
-            .sort((a, b) => {
-                const scoreA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
-                const scoreB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
-                return (scoreA % 100) - (scoreB % 100);
-            });
-
-        sortedRemaining.forEach(p => {
-            const cat = p.category || 'Otros';
-            if (!catCount[cat]) catCount[cat] = 0;
-            if (catCount[cat] < 2 && featuredProducts.length < 10 && !addedIds.has(p.id)) {
-                featuredProducts.push(p);
-                addedIds.add(p.id);
-                catCount[cat]++;
-            }
-        });
-    }
-
-    return (
-        <section style={{ padding: '3.5rem 0 1.5rem', backgroundColor: 'var(--background)', overflow: 'hidden' }}>
-            <div className="container">
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.22em',
-                        color: '#0D7A57',
-                        fontWeight: 800,
-                        marginBottom: '0.45rem'
-                    }}>
-                        <Flame size={14} strokeWidth={2.5} />
-                        <span>{locale === 'en' ? 'CURATED SELECTION · TODAY' : 'COLECCIÓN SELECTA · DE LA MADRUGADA'}</span>
-                    </div>
-                    <h2 style={{ 
-                        fontFamily: 'var(--font-outfit), sans-serif', 
-                        fontSize: 'clamp(1.85rem, 4.5vw, 2.5rem)', 
-                        fontWeight: '900', 
-                        color: '#081C15', 
-                        margin: 0,
-                        letterSpacing: '-0.02em',
-                        lineHeight: 1.15
-                    }}>
-                        {t.featuredTitle.replace('', '').trim()} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'fresh arrivals' : 'frescura viva'}</span>
-                    </h2>
-                </div>
-                <FeaturedProductsCarousel products={featuredProducts} />
-            </div>
-        </section>
-    );
-}
-
-function formatHeroTitle(title: string) {
-  if (title.includes('*')) {
-    const parts = title.split('*');
-    return parts.map((part, i) => i % 2 === 1 ? <span key={i} className="editorial-serif">{part}</span> : part);
-  }
-  const wordsToHighlight = [
-    'directa', 'campo', 'tierra', 'premium', 'delicia', 'frescura', 'fresco', 'frescos',
-    'direct', 'nature', 'fresh', 'organic', 'farm', 'premium', 'excellence', 'negocio', 'business'
-  ];
-  const words = title.split(' ');
-  return words.map((word, i) => {
-    const cleanWord = word.toLowerCase().replace(/[^a-zñáéíóú]/g, '');
-    if (wordsToHighlight.includes(cleanWord)) {
-      const prefix = word.match(/^[^a-zA-Zñáéíóú]+/)?.[0] || '';
-      const suffix = word.match(/[^a-zA-Zñáéíóú]+$/)?.[0] || '';
-      const core = word.substring(prefix.length, word.length - suffix.length);
-      return (
-        <span key={i}>
-          {prefix}<span className="editorial-serif">{core}</span>{suffix}{' '}
-        </span>
-      );
-    }
-    return word + ' ';
+function selectFeaturedProducts(products: Product[], locale: Locale): Product[] {
+  const priced = products.filter((p) => {
+    const pres = resolveProductStorefrontPresentation(p, locale);
+    return resolveStorefrontPrice(p, pres.defaultOption).isPriceAvailable;
   });
+
+  const result: Product[] = [];
+  const addedIds = new Set<string>();
+  const catCount: Record<string, number> = {};
+
+  const hasTag = (p: Product, keys: string[]) =>
+    Array.isArray(p.tags) &&
+    p.tags.some((tag) => keys.some((k) => String(tag || '').toLowerCase().includes(k)));
+
+  for (const p of priced.filter((item) => hasTag(item, ['promo', 'oferta', 'descuento', 'temporada']))) {
+    if (result.length >= 10) break;
+    if (!addedIds.has(p.id)) {
+      result.push(p);
+      addedIds.add(p.id);
+      const cat = p.category || 'Otros';
+      catCount[cat] = (catCount[cat] || 0) + 1;
+    }
+  }
+
+  for (const p of priced.filter((item) => hasTag(item, ['vendido', 'best', 'top', 'estrella']))) {
+    if (result.length >= 10) break;
+    if (!addedIds.has(p.id)) {
+      result.push(p);
+      addedIds.add(p.id);
+      const cat = p.category || 'Otros';
+      catCount[cat] = (catCount[cat] || 0) + 1;
+    }
+  }
+
+  if (result.length < 10) {
+    const dailySeed = new Date().getDate();
+    const remaining = priced
+      .filter((p) => !addedIds.has(p.id))
+      .sort((a, b) => {
+        const sA = (parseInt(a.id.slice(0, 8), 16) || a.name.length) * dailySeed;
+        const sB = (parseInt(b.id.slice(0, 8), 16) || b.name.length) * dailySeed;
+        return (sA % 100) - (sB % 100);
+      });
+
+    for (const p of remaining) {
+      if (result.length >= 10) break;
+      const cat = p.category || 'Otros';
+      if ((catCount[cat] || 0) < 2) {
+        result.push(p);
+        addedIds.add(p.id);
+        catCount[cat] = (catCount[cat] || 0) + 1;
+      }
+    }
+  }
+
+  return result;
 }
 
-// --- MAIN PAGE ---
-
-export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; lang?: string }> }) {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string; lang?: string }>;
+}) {
   const { q, category, lang } = await searchParams;
-  const locale = (lang === 'en' ? 'en' : 'es') as Locale;
+  const locale: Locale = lang === 'en' ? 'en' : 'es';
+  const isEn = locale === 'en';
   const t = translations[locale];
 
-  // 1. CRITICAL FETCH (FAST CACHED)
-  const appSettings = await getAppSettings();
-  
-  const getSetting = (key: string, defaultValue: string) => {
-    const s = appSettings?.find((x: {key: string, value: string}) => x.key === key);
-    return s ? s.value : defaultValue;
-  };
+  const [settingsRows, allRawProducts, salesRanking] = await Promise.all([
+    getAppSettings(),
+    getVisibleProducts(),
+    getProductSalesRanking(),
+  ]);
 
-  const isB2bEnabled = getSetting('enable_b2b_lead_capture', 'true') === 'true';
-  const heroTitle = (locale === 'en' ? getSetting('hero_title_en', '') : getSetting('hero_title', '')) || t.heroTitle;
-  const heroDescription = (locale === 'en' ? getSetting('hero_description_en', '') : getSetting('hero_description', '')) || t.heroDescription;
-  const heroImageUrl = getSetting('hero_image_url', '/hero_fresh_produce.png');
-  const catalogTitle = (locale === 'en' ? getSetting('home_catalog_title_en', '') : getSetting('home_catalog_title', '')) || t.catalogTitle;
+  const config = buildStorefrontRuntimeConfig(settingsRows || [], allRawProducts || []);
+  const visibleProducts = filterStorefrontProductsByFrioganMode(allRawProducts || [], config.frioganMode);
+  const settingsMap = new Map<string, string>(
+    (settingsRows || []).map((s: { key?: string; value?: string | null }) => [String(s?.key || ''), String(s?.value ?? '')])
+  );
+
+  const activeCatCode = (category || 'Todos').trim().toUpperCase();
+  const isFiltered = Boolean(q || (category && category !== 'Todos'));
+  const catalogHeading = (() => {
+    if (q) return isEn ? `Results for "${q}"` : `Resultados para "${q}"`;
+    if (activeCatCode === 'OFERTAS') return isEn ? 'Today’s Featured Deals' : 'Ofertas y Cosechas de Hoy';
+    if (activeCatCode === 'CP' && config.frioganMode === 'LIVE') {
+      return isEn ? 'Friogan Butcher Showcase' : 'Carnicería Friogan al Vacío';
+    }
+    if (category && category !== 'Todos') {
+      return isEn
+        ? t.categories[activeCatCode as keyof typeof t.categories] || CATEGORY_MAP[activeCatCode] || category
+        : CATEGORY_MAP[activeCatCode] || category;
+    }
+    return settingsMap.get('home_catalog_title') || (isEn ? 'Fresh Market Catalog' : 'Catálogo de Mercado Fresco');
+  })();
+
+  const featuredTitle =
+    settingsMap.get('home_featured_title') ||
+    (isEn ? 'Top 10 Best Sellers' : 'Top 10 Más Vendidos');
+  const featuredProducts = !isFiltered
+    ? visibleProducts
+        .filter((p) => {
+          const pres = resolveProductStorefrontPresentation(p, locale);
+          return resolveStorefrontPrice(p, pres.defaultOption).isPriceAvailable;
+        })
+        .sort((a, b) => {
+          const salesA = salesRanking[a.id] || 0;
+          const salesB = salesRanking[b.id] || 0;
+          if (salesA !== salesB) return salesB - salesA;
+          const offerA = isOfferOrPromoProduct(a) ? 1 : 0;
+          const offerB = isOfferOrPromoProduct(b) ? 1 : 0;
+          if (offerA !== offerB) return offerB - offerA;
+          return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+        })
+        .slice(0, 10)
+    : [];
+
+  const recipeProductsMap = new Map<string, Product>();
+  for (const bundle of RECIPE_BUNDLES) {
+    const matched = resolveRecipeBundleProducts(visibleProducts, bundle.id, config.frioganMode, locale);
+    for (const item of matched) {
+      if (!recipeProductsMap.has(item.product.id)) {
+        recipeProductsMap.set(item.product.id, item.product);
+      }
+    }
+  }
+  const recipeProducts = Array.from(recipeProductsMap.values());
+  const frioganRailProducts =
+    config.frioganMode === 'LIVE'
+      ? visibleProducts.filter((p) => isFrioganProteinProduct(p)).slice(0, 12)
+      : [];
 
   return (
-    <main style={{ minHeight: '100vh', paddingBottom: '4rem', backgroundColor: 'var(--background)' }}>
+    <main style={{ backgroundColor: '#FAF9F6', minHeight: '100vh', overflowX: 'clip' }}>
+      <StorefrontPromoStage products={recipeProducts} config={config} locale={locale} />
 
-      {/* HERO SECTION - Premium Split Layout */}
-      <section className="hero-split">
-        {/* CSS Styles injection */}
-        <style dangerouslySetInnerHTML={{__html: `
-          .editorial-serif {
-            font-family: var(--font-instrument-serif), Georgia, 'Playfair Display', serif;
-            font-style: italic;
-            font-weight: 400;
-            text-transform: none;
-            color: var(--secondary, #d4a373);
-          }
+      <FrioganShowcaseRail products={frioganRailProducts} config={config} locale={locale} />
 
-          .hero-split {
-            display: flex;
-            min-height: 650px;
-            background-color: #081c15;
-            overflow: hidden;
-            position: relative;
-            align-items: stretch;
-          }
-
-          .hero-left {
-            width: 48%;
-            display: flex;
-            align-items: center;
-            padding: 5rem 4rem;
-            z-index: 10;
-            position: relative;
-            background: linear-gradient(90deg, #081c15 85%, rgba(8, 28, 21, 0.9) 100%);
-          }
-
-          .hero-right {
-            width: 52%;
-            position: relative;
-            overflow: hidden;
-            background-color: #1a4d2e;
-            background-image: url('${heroImageUrl}');
-            background-size: cover;
-            background-position: center;
-          }
-
-          .carousel-slide {
-            position: absolute;
-            inset: 0;
-            background-size: cover;
-            background-position: center;
-            opacity: 0;
-            transition: opacity 1.5s ease-in-out;
-          }
-
-          .carousel-slide-1 {
-            background-image: url('/hero_fresh_1.jpg');
-            animation: kb-1 18s infinite ease-in-out;
-          }
-
-          .carousel-slide-2 {
-            background-image: url('/hero_fresh_2.jpg');
-            animation: kb-2 18s infinite ease-in-out;
-          }
-
-          .carousel-slide-3 {
-            background-image: url('/hero_fresh_3.jpg');
-            animation: kb-3 18s infinite ease-in-out;
-          }
-
-          @keyframes kb-1 {
-            0% { opacity: 1; transform: scale(1.02); }
-            28% { opacity: 1; }
-            38% { opacity: 0; transform: scale(1.12); }
-            90% { opacity: 0; transform: scale(1.02); }
-            100% { opacity: 1; transform: scale(1.02); }
-          }
-
-          @keyframes kb-2 {
-            0% { opacity: 0; transform: scale(1.02); }
-            28% { opacity: 0; transform: scale(1.02); }
-            38% { opacity: 1; }
-            62% { opacity: 1; }
-            72% { opacity: 0; transform: scale(1.12); }
-            100% { opacity: 0; }
-          }
-
-          @keyframes kb-3 {
-            0% { opacity: 0; }
-            62% { opacity: 0; transform: scale(1.02); }
-            72% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { opacity: 0; transform: scale(1.12); }
-          }
-
-          /* Bento grid styles */
-          /* Bento grid styles */
-          .bento-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
-            margin-top: 2rem;
-          }
-
-          .bento-card {
-            background: white;
-            border: 1px solid rgba(0, 0, 0, 0.04);
-            border-radius: var(--radius-lg);
-            padding: 2rem 2.2rem;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
-            position: relative;
-            overflow: hidden;
-          }
-
-          .bento-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 24px 48px rgba(26, 77, 46, 0.08);
-            border-color: rgba(26, 77, 46, 0.15);
-          }
-
-          @media (max-width: 991px) {
-            .bento-grid {
-              grid-template-columns: repeat(2, 1fr);
-            }
-          }
-
-          .bento-card:hover .bento-icon-container {
-            transform: scale(1.1) rotate(-3deg);
-          }
-
-          .bento-card:hover .bento-explore-link svg {
-            transform: translateX(4px);
-          }
-
-          .bento-explore-link svg {
-            transition: transform 0.2s ease;
-          }
-
-          @media (max-width: 991px) {
-            .hero-split {
-              flex-direction: column;
-              min-height: 520px;
-            }
-            .hero-left {
-              width: 100%;
-              padding: 6.5rem 2rem 4rem;
-              text-align: center;
-              background: linear-gradient(rgba(8, 28, 21, 0.88), rgba(8, 28, 21, 0.94));
-              align-items: center;
-              justify-content: center;
-            }
-            .hero-right {
-              position: absolute;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              z-index: 1;
-            }
-          }
-
-          @media (max-width: 768px) {
-            .bento-grid {
-              grid-template-columns: 1fr;
-            }
-            .hero-split {
-              min-height: 480px;
-            }
-            .hero-left {
-              padding: 5.5rem 1.5rem 3.5rem;
-            }
-          }
-
-          .sticky-catalog-controls {
-            position: -webkit-sticky;
-            position: sticky;
-            top: 85px;
-            z-index: 45;
-            background-color: rgba(251, 250, 245, 0.95);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            padding: 1rem 0 1.25rem 0;
-            margin: 0 -1rem 2rem -1rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-            box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-          }
-
-          @media (max-width: 768px) {
-            .sticky-catalog-controls {
-              top: 64px !important;
-              padding: 0.5rem 0 0.75rem 0 !important;
-              margin: 0 -0.5rem 1rem -0.5rem !important;
-            }
-          }
-        `}} />
-
-        <div className="hero-left">
-          <div style={{ maxWidth: '640px', width: '100%' }}>
-            {/* KICKER / EYEBROW */}
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.75rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.22em',
-              color: '#A7F3D0',
-              fontWeight: 800,
-              marginBottom: '1rem',
-              backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              padding: '4px 12px',
-              borderRadius: '9999px',
-              border: '1px solid rgba(16, 185, 129, 0.25)'
-            }}>
-              <span>{locale === 'en' ? 'DAILY HARVEST · ORIGIN SELECTION' : 'COSECHA DIARIA · SELECCIÓN DE ORIGEN'}</span>
-            </div>
-
-            <h1 style={{ 
-              fontFamily: 'var(--font-outfit), sans-serif', 
-              fontSize: 'clamp(2.4rem, 4.2vw, 3.6rem)', 
-              fontWeight: '800', 
-              marginBottom: '1.25rem', 
-              color: '#ffffff',
-              lineHeight: 1.12,
-              letterSpacing: '-0.02em'
-            }}>
-              {formatHeroTitle(heroTitle)}
-            </h1>
-            <p style={{ 
-              fontFamily: '"Inter", sans-serif',
-              fontSize: '1.08rem', 
-              lineHeight: '1.65', 
-              marginBottom: '1.75rem', 
-              color: 'rgba(255, 255, 255, 0.8)',
-              fontWeight: 400
-            }}>
-              {heroDescription}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'inherit' }} className="hero-actions-wrapper">
-              <HeroActions t={t} isB2bEnabled={isB2bEnabled} />
-            </div>
-
-            {/* Micro Trust Proof */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '14px',
-              marginTop: '1.25rem',
-              color: 'rgba(255, 255, 255, 0.65)',
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              flexWrap: 'wrap'
-            }}>
-              <span>{locale === 'en' ? 'Dawn Harvest' : 'Cosecha de Madrugada'}</span>
-              <span>{locale === 'en' ? 'Early Delivery' : 'Despacho 5:00 AM - 8:00 AM'}</span>
-              <span>{locale === 'en' ? 'Zero Waste' : 'Cero Mermas Ocultas'}</span>
-            </div>
-
-            <ReorderHeroBanner />
-          </div>
-        </div>
-
-        <div className="hero-right">
-          <div className="carousel-slide carousel-slide-1" />
-          <div className="carousel-slide carousel-slide-2" />
-          <div className="carousel-slide carousel-slide-3" />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(8,28,21,0.25) 0%, rgba(8,28,21,0) 100%)', zIndex: 2 }} />
-        </div>
-      </section>
-
-      {/* FEATURED SECTION - Streamed */}
-      <Suspense fallback={<div style={{ height: '400px' }}><ProductSkeleton /></div>}>
-        <FeaturedSection locale={locale} />
-      </Suspense>
-      
-      {/* CATALOG SECTION */}
-      <section id="catalog" className="container" style={{ padding: '2rem 1rem 1rem', scrollMarginTop: '80px', position: 'relative' }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <span style={{
-            fontSize: '0.78rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.22em',
-            color: '#0D7A57',
-            fontWeight: 800,
-            display: 'inline-block',
-            marginBottom: '0.45rem'
-          }}>
-            {locale === 'en' ? 'DIRECT FARM & MARKET PANTRY' : 'DESPENSA DIRECTA · CALIDAD TIPO EXPORTACIÓN'}
-          </span>
-          <h2 className="section-title" style={{ 
-            fontFamily: 'var(--font-outfit), sans-serif', 
-            fontSize: 'clamp(1.95rem, 5vw, 3rem)', 
-            fontWeight: '900',
-            color: '#081C15',
-            margin: 0,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.15
-          }}>
-            {catalogTitle} <span className="editorial-serif" style={{ color: 'var(--secondary, #d4a373)', fontWeight: 400 }}>{locale === 'en' ? 'in real-time' : 'en tiempo real'}</span>
-          </h2>
-        </div>
-
-        {/* STICKY SEARCH & CATEGORY FILTERS */}
-        <div 
-          className="sticky-catalog-controls"
+      {/* Main Direct-Add Storefront Catalog Grid */}
+      <section
+        id="catalog"
+        aria-label={isEn ? 'Product Catalog' : 'Catálogo de Productos'}
+        style={{ maxWidth: '1440px', margin: '0 auto', padding: '12px 16px 24px', scrollMarginTop: '195px' }}
+      >
+        <div
           style={{
-            position: 'sticky',
-            top: '85px',
-            zIndex: 45,
-            backgroundColor: 'rgba(255, 255, 255, 0.92)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            padding: '0.45rem 0 0.55rem 0',
-            margin: '0 -1rem 0.75rem -1rem',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
-            boxShadow: '0 10px 30px -8px rgba(8, 28, 21, 0.05)'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+            marginBottom: '12px',
           }}
         >
-          <div style={{ maxWidth: '580px', margin: '0 auto', padding: '0 0.5rem' }}>
-            <SearchBar placeholder={t.searchPlaceholder} />
-          </div>
-
-          <Suspense fallback={null}>
-            <TypicalRecipesBar currentQ={q} locale={locale} />
-          </Suspense>
-
-          <Suspense fallback={null}>
-            <CategoryPills category={category} q={q} locale={locale} />
-          </Suspense>
-        </div>
-
-        <Suspense key={`${q}-${category}-${locale}`} fallback={<ProductSkeleton />}>
-            <ProductGridContainer 
-                q={q} 
-                category={category} 
-                locale={locale} 
-            />
-        </Suspense>
-      </section>
-
-      {/* VALUE PROPOSITION - Bento Box Layout */}
-      <section style={{ padding: '5rem 0', backgroundColor: '#FBFBFA', borderTop: '1px solid rgba(0,0,0,0.03)' }}>
-        <div className="container">
-          <div style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
-            <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--primary)', fontWeight: 700, display: 'block', marginBottom: '0.75rem' }}>
-              {locale === 'en' ? 'OUR PROMISE' : 'NUESTRA PROMESA'}
-            </span>
-            <h2 style={{ fontFamily: 'var(--font-outfit), sans-serif', fontSize: 'clamp(1.85rem, 4.5vw, 2.5rem)', fontWeight: '900', color: 'var(--primary-dark)', margin: 0 }}>
-              {locale === 'en' ? 'Why choose FruFresco?' : '¿Por qué elegir FruFresco?'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShoppingBasket size={20} color="#0D7A57" aria-hidden="true" />
+            <h2
+              style={{
+                margin: 0,
+                fontFamily: 'var(--font-outfit), sans-serif',
+                fontWeight: 800,
+                fontSize: 'clamp(1.2rem, 2vw, 1.55rem)',
+                color: '#081C15',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {catalogHeading}
             </h2>
           </div>
-          <div className="bento-grid">
-            {t.valueProps.map((prop: any, i: number) => {
-              const iconColor = '#0D7A57';
-              const iconBg = 'linear-gradient(135deg, rgba(13, 122, 87, 0.08) 0%, rgba(212, 163, 115, 0.1) 100%)';
-              return (
-                <div 
-                  key={i} 
-                  className="bento-card"
-                  style={{
-                    borderRadius: '24px',
-                    border: '1px solid rgba(0, 0, 0, 0.05)',
-                    position: 'relative'
-                  }}
-                >
-                  {/* Editorial Watermark Number */}
-                  <span 
-                    className="editorial-serif" 
-                    style={{ 
-                      position: 'absolute', 
-                      top: '1.4rem', 
-                      right: '1.6rem', 
-                      fontSize: '2.8rem', 
-                      color: 'rgba(212, 163, 115, 0.3)', 
-                      fontWeight: 400, 
-                      pointerEvents: 'none', 
-                      lineHeight: 1,
-                      userSelect: 'none'
-                    }}
-                  >
-                    0{i + 1}
-                  </span>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ 
-                        marginBottom: '1.5rem', 
-                        color: iconColor, 
-                        background: iconBg,
-                        border: '1px solid rgba(13, 122, 87, 0.12)',
-                        width: '56px', 
-                        height: '56px', 
-                        borderRadius: '16px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        transition: 'transform 0.3s ease'
-                      }} className="bento-icon-container">
-                        {i === 0 ? <Timer size={28} strokeWidth={2.2} /> : i === 1 ? <Sprout size={28} strokeWidth={2.2} /> : <Coins size={28} strokeWidth={2.2} />}
-                      </div>
-                      <h3 style={{ 
-                        fontFamily: 'var(--font-outfit), sans-serif',
-                        fontSize: '1.4rem', 
-                        fontWeight: '800', 
-                        marginBottom: '0.75rem',
-                        color: '#081C15',
-                        letterSpacing: '-0.02em'
-                      }}>
-                        {prop.title}
-                      </h3>
-                      <p style={{ 
-                        color: '#475569', 
-                        lineHeight: '1.6',
-                        fontSize: '0.95rem',
-                        margin: 0
-                      }}>
-                        {prop.desc}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {isFiltered && (
+            <Link
+              href={isEn ? '/?lang=en#catalog' : '/#catalog'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 12px',
+                borderRadius: '9999px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid rgba(8,28,21,0.14)',
+                color: '#081C15',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+              }}
+            >
+              <X size={14} aria-hidden="true" />
+              <span>{isEn ? 'Clear filters' : 'Ver todo el mercado'}</span>
+            </Link>
+          )}
         </div>
+
+        <ProductGridContainer q={q} category={category} locale={locale} />
       </section>
+
+      {featuredProducts.length > 0 && (
+        <section
+          aria-label={featuredTitle}
+          style={{ maxWidth: '1440px', margin: '0 auto', padding: '10px 16px 8px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flame size={18} color="#D97706" aria-hidden="true" />
+              <h2
+                style={{
+                  margin: 0,
+                  fontFamily: 'var(--font-outfit), sans-serif',
+                  fontWeight: 800,
+                  fontSize: '1.25rem',
+                  color: '#081C15',
+                }}
+              >
+                {featuredTitle}
+              </h2>
+            </div>
+            <Link
+              href={isEn ? '/?lang=en&category=OFERTAS#catalog' : '/?category=OFERTAS#catalog'}
+              style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0D7A57' }}
+            >
+              {isEn ? 'See all deals →' : 'Ver todas las ofertas →'}
+            </Link>
+          </div>
+          <FeaturedProductsCarousel products={featuredProducts} locale={locale} />
+        </section>
+      )}
+
+      <HorecaExecutiveBand config={config} locale={locale} />
     </main>
   );
 }
-

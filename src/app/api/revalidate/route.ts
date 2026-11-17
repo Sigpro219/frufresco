@@ -11,10 +11,12 @@ export async function POST(request: NextRequest) {
         (revalidateTag as any)(tag);
         (revalidateTag as any)('products');
         (revalidateTag as any)('web-categories');
+        (revalidateTag as any)('settings');
         
         revalidatePath(path, 'page');
         revalidatePath('/', 'layout');
         revalidatePath('/products/[id]', 'page');
+        revalidatePath('/b2b/register', 'page');
 
         return NextResponse.json({
             revalidated: true,

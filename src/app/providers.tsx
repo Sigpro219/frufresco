@@ -3,10 +3,18 @@
 import { CartProvider } from '../lib/cartContext';
 import { AuthProvider } from '../lib/authContext';
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { usePathname } from 'next/navigation';
 import { isAbortError } from '../lib/errorUtils';
-import { APIProvider } from '@vis.gl/react-google-maps';
+
+const APIProvider = dynamic(
+    () => import('@vis.gl/react-google-maps').then((m) => m.APIProvider),
+    { ssr: false }
+);
 
 export function Providers({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname() || '/';
+    const needsMaps = pathname !== '/' && !pathname.startsWith('/products/');
     useEffect(() => {
         const handleAbortError = (error: unknown) => {
             if (isAbortError(error)) {
@@ -115,18 +123,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <APIProvider 
-            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} 
-            libraries={['places', 'marker', 'geometry']}
-            onError={(err) => {
-                console.warn('️ Google Maps API failed to load (likely blocked by network or ad-blocker).', err);
-            }}
-        >
-            <AuthProvider>
-                <CartProvider>
-                    {children}
-                </CartProvider>
-            </AuthProvider>
-        </APIProvider>
+        <AuthProvider>
+            <CartProvider>
+                {needsMaps ? (
+                    <APIProvider
+                        apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+                        libraries={['places', 'marker', 'geometry']}
+                        onError={(err) => {
+                            console.warn('️ Google Maps API failed to load (likely blocked by network or ad-blocker).', err);
+                        }}
+                    >
+                        {children}
+                    </APIProvider>
+                ) : (
+                    children
+                )}
+            </CartProvider>
+        </AuthProvider>
     );
 }

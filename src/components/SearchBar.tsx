@@ -7,8 +7,10 @@ import { supabase } from '@/lib/supabase';
 import { translations, Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
 import { resolvePricingModelId } from '../lib/pricingUtils';
+import type { FrioganStorefrontMode } from '@/lib/storefront/storefrontContracts';
+import { filterStorefrontProductsByFrioganMode, resolveProductStorefrontPresentation, resolveStorefrontPrice } from '@/lib/storefront/storefrontEngine';
 
-function SearchBarContent({ placeholder }: { placeholder?: string }) {
+function SearchBarContent({ placeholder, frioganMode = 'OFF' }: { placeholder?: string; frioganMode?: FrioganStorefrontMode }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
@@ -108,28 +110,30 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
             const orFilter = `name.ilike.%${query}%,display_name.ilike.%${query}%,keywords.ilike.%${query}%`;
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, category, image_url, display_name, web_conversion_factor, pricing_model_prices(price)')
+                .select('id, name, category, inventory_group, tags, unit_of_measure, web_unit, weight_kg, options_config, image_url, display_name, web_conversion_factor, pricing_model_prices(price, model_id)')
                 .eq('is_active', true)
                 .eq('show_on_web', true)
                 .eq('pricing_model_prices.model_id', pricingModelId)
                 .or(orFilter)
                 .order('name', { ascending: true })
-                .limit(8);
+                .limit(12);
 
             if (error) {
                 console.error("Predictive query error, using fallback:", error.message);
                 const { data: fallbackData } = await supabase
                     .from('products')
-                    .select('id, name, category, image_url, display_name, web_conversion_factor')
+                    .select('id, name, category, inventory_group, tags, unit_of_measure, web_unit, weight_kg, options_config, image_url, display_name, web_conversion_factor')
                     .eq('is_active', true)
                     .eq('show_on_web', true)
                     .or(orFilter)
                     .order('name', { ascending: true })
-                    .limit(8);
+                    .limit(12);
                 fetchedData = fallbackData || [];
             } else {
                 fetchedData = data || [];
             }
+
+            fetchedData = filterStorefrontProductsByFrioganMode(fetchedData, frioganMode).slice(0, 8);
 
             fetchedData.sort((a, b) => ((a.display_name || a.name || '').trim()).localeCompare((b.display_name || b.name || '').trim(), 'es', { sensitivity: 'base', numeric: true }));
 
@@ -139,7 +143,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
 
         const timer = setTimeout(fetchSuggestions, 300);
         return () => clearTimeout(timer);
-    }, [query, profile]);
+    }, [query, profile, frioganMode]);
 
     // Handle manual search
     const handleSearch = () => {
@@ -175,7 +179,9 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     onChange={(e) => setQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '0.8rem 4rem 0.8rem 3.2rem',
+                        padding: '0.75rem 3.8rem 0.75rem 2.9rem',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
                         borderRadius: 'var(--radius-full)',
                         border: '1px solid rgba(0,0,0,0.08)',
                         background: 'white',
@@ -184,7 +190,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                         fontWeight: '500',
                         boxShadow: '0 6px 20px rgba(0, 0, 0, 0.025)',
                         outline: 'none',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease',
                     }}
                     onKeyDown={(e) => {
                         if (e.key === 'ArrowDown') {
@@ -271,7 +277,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                 justifyContent: 'center',
                                 color: '#6b7280',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease',
+                                transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease',
                                 padding: 0
                             }}
                         >
@@ -292,7 +298,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                             justifyContent: 'center',
                             color: 'white',
                             cursor: 'pointer',
-                            transition: 'all 0.2s ease',
+                            transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease',
                             boxShadow: '0 4px 12px rgba(26, 77, 46, 0.2)',
                             flexShrink: 0
                         }}
@@ -308,8 +314,8 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                     <div style={{
                         position: 'absolute',
                         top: '100%',
-                        left: '20px',
-                        right: '20px',
+                        left: '0px',
+                        right: '0px',
                         backgroundColor: 'rgba(255, 255, 255, 0.85)',
                         backdropFilter: 'blur(20px)',
                         borderRadius: '24px',
@@ -337,7 +343,7 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                         padding: '12px', 
                                         borderRadius: '16px',
                                         cursor: 'pointer',
-                                        transition: 'all 0.25s ease',
+                                        transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease, background-color 200ms ease',
                                         backgroundColor: activeIndex === idx ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
                                     }}
                                     onMouseEnter={(e) => {
@@ -355,7 +361,11 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.95rem' }}>{p.display_name || p.name}</div>
                                         <div style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.9rem' }}>
-                                            ${(Math.ceil(((p.pricing_model_prices?.[0]?.price || 0) * (p.web_conversion_factor || 1)) / 50) * 50).toLocaleString('es-CO')}
+                                            {(() => {
+                                                const pres = resolveProductStorefrontPresentation(p);
+                                                const pr = resolveStorefrontPrice(p, pres.defaultOption);
+                                                return pr.isPriceAvailable ? `$${pr.displayPrice.toLocaleString('es-CO')}` : 'Precio a consultar';
+                                            })()}
                                         </div>
                                     </div>
                                     <ChevronRight size={18} color="#d1d5db" />
@@ -406,12 +416,12 @@ function SearchBarContent({ placeholder }: { placeholder?: string }) {
     );
 }
 
-export default function SearchBar({ placeholder }: { placeholder?: string }) {
+export default function SearchBar({ placeholder, frioganMode = 'OFF' }: { placeholder?: string; frioganMode?: FrioganStorefrontMode }) {
     return (
         <Suspense fallback={
             <div style={{ height: '50px', backgroundColor: '#F3F4F6', borderRadius: 'var(--radius-full)', maxWidth: '750px', margin: '0 auto' }}></div>
         }>
-            <SearchBarContent placeholder={placeholder} />
+            <SearchBarContent placeholder={placeholder} frioganMode={frioganMode} />
         </Suspense>
     );
 }

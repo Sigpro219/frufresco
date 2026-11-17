@@ -6,7 +6,7 @@ import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function ReorderHeroBanner() {
+export default function ReorderHeroBanner({ variant = 'banner' }: { variant?: 'banner' | 'compact-trigger' }) {
     const { addItem } = useCart();
     const router = useRouter();
 
@@ -161,7 +161,29 @@ export default function ReorderHeroBanner() {
 
     return (
         <>
-            {savedName ? (
+            {variant === 'compact-trigger' ? (
+                <button
+                    type="button"
+                    onClick={() => (savedName ? handleOpenRecent() : setShowLookupModal(true))}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 13px',
+                        borderRadius: '9999px',
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid rgba(8, 28, 21, 0.14)',
+                        color: '#081C15',
+                        fontSize: '0.875rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        transition: 'background-color 150ms ease, border-color 150ms ease',
+                    }}
+                >
+                    <RotateCcw size={15} color="#0D7A57" aria-hidden="true" />
+                    <span>Repetir pedido</span>
+                </button>
+            ) : savedName ? (
                 <div style={{
                     marginTop: '1.25rem',
                     marginBottom: '1rem',
@@ -219,7 +241,7 @@ export default function ReorderHeroBanner() {
                                 alignItems: 'center',
                                 gap: '6px',
                                 boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
-                                transition: 'all 0.2s ease'
+                                transition: 'background-color 150ms ease, transform 150ms ease'
                             }}
                         >
                             {loading ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
@@ -283,7 +305,7 @@ export default function ReorderHeroBanner() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
-                            transition: 'all 0.2s ease'
+                            transition: 'background-color 150ms ease, transform 150ms ease'
                         }}
                     >
                         <RotateCcw size={14} /> ¿Ya eres cliente? Repetir mi pedido anterior

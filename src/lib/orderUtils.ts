@@ -166,13 +166,15 @@ export const getParsedWeight = (text: string | null | undefined): number | null 
         const grams = parseFloat(parts[1]);
         if (!isNaN(grams) && grams > 0) return grams / 1000;
     }
-    const clean = stripPluNoise(str).toLowerCase();
+    const normalizedStr = stripPluNoise(str)
+        .replace(/\b([1-9]\d{0,2})\.(\d{3})(?=\s*(?:g|gr|grs|gramos|gms|grams|gramo|gram)\b)/gi, '$1$2');
+    const clean = normalizedStr.toLowerCase();
     const kgMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilos)\b/);
     if (kgMatch) {
         const val = parseFloat(kgMatch[1].replace(',', '.'));
         if (!isNaN(val) && val > 0) return val;
     }
-    const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)\b/);
+    const gMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grs|gramos|gms|grams|gramo|gram)\b/);
     if (gMatch) {
         const val = parseFloat(gMatch[1].replace(',', '.'));
         if (!isNaN(val) && val > 0) return val / 1000;

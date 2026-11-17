@@ -255,6 +255,11 @@ export interface Product {
     inherit_price?: boolean;
     charge_overweight?: boolean;
     is_verified_dev?: boolean;
-    pricing_model_prices?: { price: number }[];
-    campaign_info?: any;
+    pricing_model_prices?: { price: number; model_id?: string }[];
+    campaign_info?: {
+        campaignName?: string;
+        originalPrice?: number;
+        adjustmentValue?: number;
+        type?: string;
+    } | null;
 }

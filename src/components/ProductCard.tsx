@@ -1,475 +1,341 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Product } from '../lib/supabase';
-import { Apple, Eye, Info, Tag, Leaf, Flame, Sparkles, Zap } from 'lucide-react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import Link from 'next/link';
+import {
+  Apple,
+  Beef,
+  Carrot,
+  Eye,
+  Leaf,
+  Milk,
+  Minus,
+  Package,
+  Plus,
+  Snowflake,
+  Sprout,
+  Tag,
+  Utensils,
+} from 'lucide-react';
+import type { Product } from '../lib/supabase';
+import { useCart } from '../lib/cartContext';
+import { CATEGORY_MAP } from '../lib/constants';
+import { translations, type Locale } from '../lib/translations';
+import {
+  buildCartItemName,
+  buildStorefrontCartItem,
+  isOfferOrPromoProduct,
+  resolveProductStorefrontPresentation,
+  resolveStorefrontPrice,
+} from '@/lib/storefront/storefrontEngine';
+
 const QuickViewModal = dynamic(() => import('./QuickViewModal'), { ssr: false });
-import { useSearchParams } from 'next/navigation';
-import { translations, Locale } from '../lib/translations';
 
-export default function ProductCard({ product }: { product: Product }) {
-    const [isHovered, setIsHovered] = useState(false);
-    const [showQuickView, setShowQuickView] = useState(false);
-    const [imageLoaded, setImageLoaded] = useState(false);
-    const searchParams = useSearchParams();
-    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
-    const t = translations[locale];
-    const [displayName, setDisplayName] = useState(
-        locale === 'en' && product.name_en ? product.name_en : (product.display_name || product.name)
+function CategoryPlaceholder({ code }: { code?: string }) {
+  const props = { size: 38, strokeWidth: 1.5, color: '#0D7A57' };
+  switch ((code || '').toUpperCase()) {
+    case 'FR': return <Apple {...props} />;
+    case 'VE': return <Carrot {...props} />;
+    case 'HO': return <Leaf {...props} />;
+    case 'TU': return <Sprout {...props} />;
+    case 'LA': return <Milk {...props} />;
+    case 'CO': return <Snowflake {...props} color="#0284C7" />;
+    case 'PR': return <Utensils {...props} />;
+    case 'CP': return <Beef {...props} color="#7F1D1D" />;
+    default: return <Package {...props} />;
+  }
+}
+
+export default function ProductCard({ product, locale = 'es' }: { product: Product; locale?: Locale }) {
+  const isEn = locale === 'en';
+  const t = translations[locale];
+
+  const { items, addItem, updateItemQuantity, isCartLoaded } = useCart();
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [showQuickView, setShowQuickView] = useState(false);
+
+  const presentation = useMemo(
+    () => resolveProductStorefrontPresentation(product, locale),
+    [product, locale]
+  );
+  const activeOption = presentation.options[selectedIdx] || presentation.defaultOption;
+  const priceRes = useMemo(
+    () => resolveStorefrontPrice(product, activeOption),
+    [product, activeOption]
+  );
+  const includeSuffix = presentation.options.length > 1 || presentation.kind === 'FIXED_VACUUM_PACK';
+  const cartItemName = buildCartItemName(product, activeOption, includeSuffix, locale);
+
+  const cartEntry = items.find((i) => i.id === product.id && i.name === cartItemName);
+  const qtyInCart = isCartLoaded ? (cartEntry?.quantity || 0) : 0;
+
+  const isFriogan = presentation.kind === 'FIXED_VACUUM_PACK';
+  const isPromo = isOfferOrPromoProduct(product);
+  const title = isEn && product.name_en ? product.name_en : product.display_name || product.name;
+  const catCode = (product.category || '').trim().toUpperCase();
+  const categoryName = isEn
+    ? t.categories[catCode as keyof typeof t.categories] || CATEGORY_MAP[catCode] || 'Market'
+    : CATEGORY_MAP[catCode] || 'Mercado';
+  const hasImage = Boolean(product.image_url && product.image_url.trim().startsWith('http'));
+  const detailHref = `/products/${product.id}${isEn ? '?lang=en' : ''}`;
+
+  const handleAdd = () => {
+    if (!priceRes.isPriceAvailable) return;
+    addItem(
+      buildStorefrontCartItem(
+        product,
+        activeOption,
+        1,
+        presentation.options.length,
+        presentation.kind,
+        priceRes,
+        locale
+      )
     );
+  };
 
-    useEffect(() => {
-        // Al cargar, priorizamos la traducción de la BD si estamos en inglés
-        if (locale === 'en' && product.name_en) {
-            setDisplayName(product.name_en);
-        } else {
-            setDisplayName(product.display_name || product.name);
-        }
-    }, [product.display_name, product.name, product.name_en, locale]);
+  return (
+    <>
+      <article className={`sf-card ${isFriogan ? 'sf-card-friogan' : ''}`}>
+        <div>
+          <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', backgroundColor: '#F7F4ED', height: '172px', marginBottom: '11px' }}>
+            <Link href={detailHref} style={{ position: 'relative', display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+              {hasImage && product.image_url ? (
+                <Image
+                  src={product.image_url}
+                  alt={title}
+                  fill
+                  sizes="(max-width: 640px) 50vw, 240px"
+                  unoptimized={!product.image_url.startsWith('/') && !product.image_url.includes('.supabase.co/storage/v1/object/public/')}
+                  className="sf-card-img"
+                  style={{ objectFit: 'cover', transition: 'transform 220ms ease' }}
+                />
+              ) : (
+                <CategoryPlaceholder code={catCode} />
+              )}
+            </Link>
 
-    useEffect(() => {
-        // Optimización: No disparamos traducciones automáticas en bucle para evitar saturación.
-        // La página ya baja un translationCache que applyNicknames usa en el servidor.
-        if (locale === 'en' && !product.name_en && displayName === product.name) {
-            // Podríamos disparar una traducción solo si el usuario interactúa (ej: hover prolongado)
-            // o simplemente dejar que el servidor maneje la mayoría.
-        }
-    }, [locale, product.name, displayName]);
-
-    const handleQuickViewClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setShowQuickView(true);
-    };
-
-
-    return (
-        <>
-            <div style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '20px',
-                boxShadow: isHovered ? '0 20px 40px -10px rgba(8, 28, 21, 0.12), 0 0 0 1px rgba(13, 122, 87, 0.14)' : '0 4px 20px rgba(0,0,0,0.02)',
-                overflow: 'hidden',
-                transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                border: '1px solid rgba(0, 0, 0, 0.05)',
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative',
-                transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
-                height: '100%'
-            }}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
+            <button
+              type="button"
+              onClick={() => setShowQuickView(true)}
+              aria-label={isEn ? `Quick view ${title}` : `Vista rápida de ${title}`}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                width: '32px',
+                height: '32px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(8,28,21,0.1)',
+                backgroundColor: 'rgba(255,255,255,0.94)',
+                color: '#081C15',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(8,28,21,0.08)',
+              }}
             >
-                {/* IMAGE HEADER - Link specifically the image */}
-                <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ display: 'block', position: 'relative', height: '220px', width: '100%', backgroundColor: '#f9fafb', overflow: 'hidden' }}>
-                    
-                    {/* SKELETON LOADER (Shimmer) */}
-                    {!imageLoaded && product.image_url && (
-                        <div className="shimmer" style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            zIndex: 2
-                        }} />
-                    )}
+              <Eye size={15} aria-hidden="true" />
+            </button>
 
-                    {product.image_url ? (
-                        <Image
-                            src={product.image_url}
-                            alt={product.name}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
-                            quality={70} 
-                            loading="lazy"
-                            decoding="async"
-                            onLoad={() => setImageLoaded(true)}
-                            style={{ 
-                                objectFit: 'cover',
-                                transition: 'transform 0.8s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.4s ease-in-out',
-                                transform: isHovered ? 'scale(1.06)' : 'scale(1)',
-                                opacity: imageLoaded ? 1 : 0
-                            }}
-                            priority={false} 
-                        />
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', backgroundColor: '#f3f4f6', color: 'var(--primary)', opacity: 0.3 }}>
-                            <Apple size={60} strokeWidth={1} />
-                        </div>
-                    )}
-
-                    {/* OVERLAY ACTIONS (Show on Hover) */}
-                    <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        background: 'linear-gradient(to bottom, rgba(26, 77, 46, 0.01), rgba(26, 77, 46, 0.15))',
-                        opacity: isHovered ? 1 : 0,
-                        transition: 'opacity 0.4s ease',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'flex-end',
-                        padding: '1.2rem',
-                        gap: '0.8rem',
-                        zIndex: 5
-                    }}>
-                        <button
-                            onClick={handleQuickViewClick}
-                            style={{
-                                width: 'fit-content',
-                                alignSelf: 'center',
-                                padding: '0.65rem 2rem',
-                                backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                                color: '#081C15',
-                                border: '1px solid rgba(255, 255, 255, 0.9)',
-                                borderRadius: 'var(--radius-full)',
-                                fontWeight: '800',
-                                fontSize: '0.74rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                backdropFilter: 'blur(16px)',
-                                WebkitBackdropFilter: 'blur(16px)',
-                                boxShadow: '0 8px 24px rgba(8, 28, 21, 0.14)',
-                                transform: isHovered ? 'translateY(0)' : 'translateY(12px)',
-                                transition: 'all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                                letterSpacing: '0.06em'
-                            }}
-                        >
-                            <Eye size={14} strokeWidth={2.5} /> {t.quickView}
-                        </button>
-                    </div>
-
-                    {/* BADGES DE ETIQUETAS (TAGS CON LUCIDE ICONS) */}
-                    <div style={{ 
-                        position: 'absolute', 
-                        top: '12px', 
-                        right: '12px', 
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                        zIndex: 10
-                    }}>
-                        {product.tags?.map((tag, i) => {
-                            const lower = (tag || '').toLowerCase();
-                            const isPromo = lower.includes('promo') || lower.includes('descuento');
-                            const isFlash = lower.includes('oferta') || lower.includes('flash') || lower.includes('rayo');
-                            const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
-                            const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
-                            const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
-                            
-                            const bg = (isPromo || isFlash) 
-                                ? '#FEF2F2' 
-                                : isHarvest 
-                                ? '#ECFDF5' 
-                                : isBestSeller 
-                                ? '#FFFBEB' 
-                                : isGourmet 
-                                ? '#F5F3FF' 
-                                : 'rgba(255, 255, 255, 0.95)';
-                                
-                            const color = (isPromo || isFlash) 
-                                ? '#DC2626' 
-                                : isHarvest 
-                                ? '#059669' 
-                                : isBestSeller 
-                                ? '#D97706' 
-                                : isGourmet 
-                                ? '#7C3AED' 
-                                : 'var(--primary-dark)';
-
-                            const border = (isPromo || isFlash) 
-                                ? '1px solid #FCA5A5' 
-                                : isHarvest 
-                                ? '1px solid #A7F3D0' 
-                                : isBestSeller 
-                                ? '1px solid #FDE68A' 
-                                : isGourmet 
-                                ? '1px solid #DDD6FE' 
-                                : '1px solid rgba(0, 0, 0, 0.08)';
-                            
-                            return (
-                                <div key={i} style={{ 
-                                    backgroundColor: bg, 
-                                    padding: '4px 10px', 
-                                    borderRadius: '50px',
-                                    fontSize: '0.65rem',
-                                    fontWeight: '800',
-                                    color: color,
-                                    backdropFilter: 'blur(8px)',
-                                    WebkitBackdropFilter: 'blur(8px)',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                    border: border,
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}>
-                                    {isFlash ? (
-                                        <Zap size={11} strokeWidth={2.5} />
-                                    ) : isPromo ? (
-                                        <Tag size={11} strokeWidth={2.5} />
-                                    ) : isHarvest ? (
-                                        <Leaf size={11} strokeWidth={2.5} />
-                                    ) : isBestSeller ? (
-                                        <Flame size={11} strokeWidth={2.5} />
-                                    ) : isGourmet ? (
-                                        <Sparkles size={11} strokeWidth={2.5} />
-                                    ) : (
-                                        <Tag size={11} strokeWidth={2.5} />
-                                    )}
-                                    <span>{tag}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* Official Brand Watermark Overlay */}
-                    {product.image_url && imageLoaded && (product.image_url.includes('clean') || product.image_url.includes('overlay')) && (
-                        <div style={{
-                            position: 'absolute',
-                            bottom: '4%',
-                            right: '4%',
-                            width: '18%',
-                            height: '18%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 8,
-                            pointerEvents: 'none'
-                        }}>
-                            <img 
-                                src="/logo_simbolo.png" 
-                                alt="FruFresco" 
-                                style={{ 
-                                    width: '100%', 
-                                    height: '100%', 
-                                    objectFit: 'contain' 
-                                }} 
-                                onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                }}
-                            />
-                        </div>
-                    )}
-                </Link>
-
-                {/* CONTENT */}
-                <div style={{ padding: '1.2rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
-                        <h3 style={{ 
-                            fontFamily: 'var(--font-outfit), sans-serif',
-                            fontSize: '1.1rem', 
-                            fontWeight: '700', 
-                            color: 'var(--text-main)',
-                            lineHeight: '1.3',
-                            margin: 0,
-                            minHeight: '2.6em',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                        }}>{displayName}</h3>
-                    </Link>
-
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', margin: '0.2rem 0', flexWrap: 'wrap' }}>
-                        {(() => {
-                            const rawPrice = Number(product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0);
-                            if (rawPrice <= 0) {
-                                return (
-                                    <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#666', fontStyle: 'italic', letterSpacing: '-0.01em' }}>
-                                        Precio a consultar
-                                    </span>
-                                );
-                            }
-
-                            const rawWebUnit = (product.web_unit || '').trim().toLowerCase();
-                            const rawBaseUnit = (product.unit_of_measure || '').trim().toLowerCase();
-                            const isKgBase = ['kg', 'kilo', 'kilos'].includes(rawBaseUnit);
-                            
-                            let conversionFactor = 1;
-                            let unitLabel = product.web_unit || product.unit_of_measure || 'Un';
-                            
-                            if (rawWebUnit.includes('libra') || rawWebUnit.includes('pound') || rawWebUnit === 'lb') {
-                                conversionFactor = 0.5;
-                                unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
-                            } else if (isKgBase) {
-                                const factor = product.web_conversion_factor || 0;
-                                const isEmpaque = ['bandeja', 'cubeta', 'caja', 'paquete', 'malla', 'bolsa'].some(pkg => rawWebUnit.includes(pkg));
-                                if (isEmpaque) {
-                                    conversionFactor = factor > 0 ? factor : 1;
-                                    unitLabel = product.web_unit || 'Bandeja';
-                                } else if (factor > 0.5) {
-                                    conversionFactor = factor;
-                                    const formattedKg = factor % 1 === 0 ? factor : (factor.toFixed(1)).replace('.', ',');
-                                    unitLabel = locale === 'en' ? `Unit (±${factor % 1 === 0 ? factor : factor.toFixed(1)} kg)` : `Unidad (±${formattedKg} kg)`;
-                                } else {
-                                    conversionFactor = 0.5;
-                                    unitLabel = locale === 'en' ? 'Pound 500g' : 'Libra 500g';
-                                }
-                            } else if (product.web_conversion_factor && product.web_conversion_factor > 0) {
-                                conversionFactor = product.web_conversion_factor;
-                                if (rawWebUnit === 'unidad') {
-                                    if (conversionFactor >= 1) {
-                                        const formattedKg = conversionFactor % 1 === 0 ? conversionFactor : (conversionFactor.toFixed(1)).replace('.', ',');
-                                        unitLabel = locale === 'en' ? `Unit (±${conversionFactor % 1 === 0 ? conversionFactor : conversionFactor.toFixed(1)} kg)` : `Unidad (±${formattedKg} kg)`;
-                                    } else {
-                                        const formattedG = Math.round(conversionFactor * 1000);
-                                        unitLabel = locale === 'en' ? `Unit (±${formattedG}g)` : `Unidad (±${formattedG}g)`;
-                                    }
-                                } else {
-                                    unitLabel = product.web_unit || 'Un';
-                                }
-                            }
-
-                            const displayPrice = Math.ceil((rawPrice * conversionFactor) / 50) * 50;
-                            const originalDisplayPrice = product.campaign_info ? Math.ceil((product.campaign_info.originalPrice * conversionFactor) / 50) * 50 : displayPrice;
-
-                                // Bimodal detection (Libra + Unidad)
-                                const presOpt = (product.options_config || []).find((o: any) => (o.name || '').toLowerCase().includes('presentaci'));
-                                const presValues: string[] = presOpt?.values || [];
-                                const hasLibraPres = presValues.some(v => v.toLowerCase().includes('libra') || v.includes('|500'));
-                                const unitPres = presValues.find(v => !v.toLowerCase().includes('libra') && !v.includes('|500'));
-                                let bimodalUnitGrams: number | null = null;
-                                if (hasLibraPres && unitPres) {
-                                    if (unitPres.includes('|')) {
-                                        const g = parseFloat(unitPres.split('|')[1]);
-                                        if (!isNaN(g) && g > 0) bimodalUnitGrams = Math.round(g);
-                                    }
-                                }
-
-                                return (
-                                    <>
-                                        {product.campaign_info ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ fontSize: '1.35rem', fontWeight: '900', color: '#DC2626', fontFamily: 'var(--font-outfit), sans-serif' }}>
-                                                        ${displayPrice.toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.95rem', textDecoration: 'line-through', color: '#94A3B8', fontWeight: '500' }}>
-                                                        ${originalDisplayPrice.toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
-                                                    </span>
-                                                </div>
-                                                <span style={{ 
-                                                    fontSize: '0.7rem', 
-                                                    backgroundColor: '#FEE2E2', 
-                                                    color: '#EF4444', 
-                                                    padding: '2px 6px', 
-                                                    borderRadius: '6px', 
-                                                    fontWeight: 'bold', 
-                                                    display: 'inline-block',
-                                                    alignSelf: 'flex-start',
-                                                    marginTop: '2px'
-                                                }}>
-                                                    {product.campaign_info.campaignName} ({product.campaign_info.adjustmentValue > 0 ? '+' : ''}{product.campaign_info.adjustmentValue}{product.campaign_info.type === 'margin_adjustment' ? '%' : '$'})
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <span style={{ 
-                                                fontSize: '1.35rem', 
-                                                fontWeight: '900', 
-                                                color: '#081C15', 
-                                                fontFamily: 'var(--font-outfit), sans-serif',
-                                                fontVariantNumeric: 'tabular-nums'
-                                            }}>
-                                                ${displayPrice.toLocaleString(locale === 'en' ? 'en-US' : 'es-CO')}
-                                                {locale === 'en' && <span style={{ fontSize: '0.8rem', marginLeft: '4px', opacity: 0.8 }}>COP</span>}
-                                            </span>
-                                        )}
-                                        <span style={{ 
-                                            fontSize: '0.75rem', 
-                                            color: '#475569', 
-                                            fontWeight: '700',
-                                            backgroundColor: '#F1F5F3',
-                                            padding: '2px 8px',
-                                            borderRadius: '9999px',
-                                            marginLeft: '4px'
-                                        }}>
-                                            {unitLabel}
-                                        </span>
-                                        {bimodalUnitGrams && (
-                                            <div style={{ width: '100%', marginTop: '3px' }}>
-                                                <span style={{ 
-                                                    fontSize: '0.68rem', 
-                                                    color: '#047857', 
-                                                    backgroundColor: '#ECFDF5', 
-                                                    border: '1px solid #A7F3D0', 
-                                                    padding: '2px 8px', 
-                                                    borderRadius: '9999px', 
-                                                    fontWeight: '800',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px'
-                                                }}>
-                                                    {locale === 'en' ? `Also by unit (±${bimodalUnitGrams}g)` : `También por unidad (±${bimodalUnitGrams}g)`}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                    </div>
-
-                    {/* ACTION BUTTONS */}
-                    <div style={{ marginTop: 'auto', paddingTop: '0.8rem' }}>
-                        <Link href={`/products/${product.id}${locale === 'en' ? '?lang=en' : ''}`} style={{ textDecoration: 'none' }}>
-                            <div style={{
-                                width: '100%',
-                                height: '38px',
-                                backgroundColor: 'rgba(26, 77, 46, 0.04)',
-                                color: 'var(--primary)',
-                                border: '1px solid rgba(26, 77, 46, 0.12)',
-                                borderRadius: '10px',
-                                fontWeight: '700',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                transition: 'all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = 'var(--primary)';
-                                e.currentTarget.style.color = 'white';
-                                e.currentTarget.style.borderColor = 'var(--primary)';
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 6px 15px rgba(26, 77, 46, 0.18)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.04)';
-                                e.currentTarget.style.color = 'var(--primary)';
-                                e.currentTarget.style.borderColor = 'rgba(26, 77, 46, 0.12)';
-                                e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                            >
-                                {t.viewProduct} <Info size={14} strokeWidth={2.5} />
-                            </div>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-
-            {/* QUICK VIEW LOGIC */}
-            {showQuickView && (
-                <div onClick={(e) => e.stopPropagation()}>
-                    <QuickViewModal 
-                        product={product} 
-                        onClose={() => setShowQuickView(false)} 
-                    />
-                </div>
+            {isPromo && (
+              <span style={{ position: 'absolute', top: '8px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F59E0B', color: '#081C15', borderRadius: '9999px', padding: '3px 9px', fontSize: '0.8125rem', fontWeight: 800 }}>
+                <Tag size={12} aria-hidden="true" />
+                <span>{isEn ? 'Deal' : 'Oferta'}</span>
+              </span>
             )}
-        </>
-    );
+
+            {presentation.sealedWeightLabel && (
+              <span style={{ position: 'absolute', bottom: '8px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(127,29,29,0.92)', color: '#FFFFFF', borderRadius: '9999px', padding: '3px 9px', fontSize: '0.8125rem', fontWeight: 700 }}>
+                <Snowflake size={12} aria-hidden="true" />
+                <span>{presentation.sealedWeightLabel}</span>
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: isFriogan ? '#7F1D1D' : '#0D7A57' }}>
+              {categoryName}
+            </span>
+          </div>
+
+          <Link href={detailHref} style={{ display: 'block', fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 700, fontSize: '1.02rem', lineHeight: 1.25, color: '#081C15', marginBottom: '10px' }}>
+            {title}
+          </Link>
+
+          {/* Boutique Integrated Segmented Presentation Selector */}
+          {presentation.options.length > 1 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', padding: '3px', borderRadius: '10px', backgroundColor: '#F4F1EA', marginBottom: '12px' }}>
+              {presentation.options.map((opt, idx) => {
+                const active = idx === selectedIdx;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setSelectedIdx(idx)}
+                    style={{
+                      flex: '1 1 auto',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      fontSize: '0.8125rem',
+                      fontWeight: active ? 700 : 600,
+                      border: 'none',
+                      backgroundColor: active ? '#FFFFFF' : 'transparent',
+                      color: active ? (isFriogan ? '#7F1D1D' : '#081C15') : '#64748B',
+                      boxShadow: active ? '0 1px 3px rgba(8,28,21,0.1)' : 'none',
+                      transition: 'background-color 140ms ease, color 140ms ease',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.8125rem', color: '#64748B', marginBottom: '12px', padding: '4px 0' }}>
+              {activeOption.label}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '10px', borderTop: '1px solid #EFECE6' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', fontVariantNumeric: 'tabular-nums' }}>
+            {priceRes.isPriceAvailable ? (
+              <>
+                {priceRes.hasCampaignDiscount && (
+                  <span style={{ fontSize: '0.8125rem', color: '#94A3B8', textDecoration: 'line-through' }}>
+                    ${priceRes.originalDisplayPrice.toLocaleString('es-CO')}
+                  </span>
+                )}
+                <span style={{ fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 800, fontSize: '1.16rem', color: isFriogan ? '#7F1D1D' : '#081C15' }}>
+                  ${priceRes.displayPrice.toLocaleString('es-CO')}
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#64748B' }}>
+                {isEn ? 'Price on request' : 'Precio a consultar'}
+              </span>
+            )}
+          </div>
+
+          {!priceRes.isPriceAvailable ? (
+            <button
+              type="button"
+              disabled
+              style={{
+                padding: '7px 12px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(8,28,21,0.12)',
+                backgroundColor: '#F1F5F9',
+                color: '#64748B',
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                cursor: 'not-allowed',
+              }}
+            >
+              {isEn ? 'Price on request' : 'Precio a consultar'}
+            </button>
+          ) : qtyInCart > 0 ? (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: isFriogan ? '#7F1D1D' : '#081C15',
+                color: '#FFFFFF',
+                borderRadius: '9999px',
+                padding: '5px 10px',
+              }}
+            >
+              <button
+                type="button"
+                aria-label={isEn ? `Decrease ${title}` : `Disminuir ${title}`}
+                onClick={() => updateItemQuantity(product.id, cartItemName, qtyInCart - 1)}
+                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', padding: '2px' }}
+              >
+                <Minus size={14} />
+              </button>
+              <span style={{ minWidth: '20px', textAlign: 'center', fontWeight: 800, fontSize: '0.875rem', fontVariantNumeric: 'tabular-nums' }}>
+                {qtyInCart}
+              </span>
+              <button
+                type="button"
+                aria-label={isEn ? `Increase ${title}` : `Aumentar ${title}`}
+                onClick={() => updateItemQuantity(product.id, cartItemName, qtyInCart + 1)}
+                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', padding: '2px' }}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAdd}
+              className={`sf-add-btn ${isFriogan ? 'sf-add-btn-friogan' : ''}`}
+            >
+              <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
+              <span>{isEn ? 'Add' : 'Agregar'}</span>
+            </button>
+          )}
+        </div>
+      </article>
+
+      {showQuickView && (
+        <QuickViewModal
+          product={product}
+          onClose={() => setShowQuickView(false)}
+          initialQuantity={qtyInCart > 0 ? qtyInCart : undefined}
+        />
+      )}
+
+      <style jsx>{`
+        .sf-card {
+          background-color: #FFFFFF;
+          border-radius: 18px;
+          border: 1px solid #EAE5DC;
+          padding: 13px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
+        }
+        .sf-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 28px -12px rgba(8, 28, 21, 0.14);
+          border-color: rgba(13, 122, 87, 0.34);
+        }
+        .sf-card:hover .sf-card-img {
+          transform: scale(1.03);
+        }
+        .sf-card-friogan {
+          border-color: rgba(127, 29, 29, 0.22);
+          background-color: #FFFDFD;
+        }
+        .sf-add-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background-color: #0D7A57;
+          color: #FFFFFF;
+          border: none;
+          border-radius: 9999px;
+          padding: 8px 15px;
+          font-weight: 800;
+          font-size: 0.84rem;
+          transition: background-color 150ms ease, transform 150ms ease;
+        }
+        .sf-add-btn:hover {
+          background-color: #081C15;
+        }
+        .sf-add-btn-friogan {
+          background-color: #7F1D1D;
+        }
+        .sf-add-btn-friogan:hover {
+          background-color: #450A0A;
+        }
+      `}</style>
+    </>
+  );
 }

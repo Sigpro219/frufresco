@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCart } from '@/lib/cartContext';
+import type { FrioganStorefrontMode } from '@/lib/storefront/storefrontContracts';
 import { 
     ShoppingCart, 
     Package, 
@@ -13,10 +14,10 @@ import {
     ChevronDown, 
     ChevronUp,
     Sparkles
-} from 'lucide-react';
+, Snowflake } from 'lucide-react';
 
-export default function FloatingCartBar() {
-    const { items, totalPrice, totalWeight } = useCart();
+export default function FloatingCartBar({ frioganMode = 'LIVE' }: { frioganMode?: FrioganStorefrontMode }) {
+    const { items, totalPrice, totalWeight, hasFrioganItems, openDrawer, isDrawerOpen } = useCart();
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -45,8 +46,10 @@ export default function FloatingCartBar() {
     // Don't render on admin, ops, print, or checkout pages
     const isOpsOrAdmin = pathname?.startsWith('/ops') || pathname?.startsWith('/admin') || pathname?.includes('/print');
     const isCheckout = pathname === '/checkout';
+    const isHomeStorefront = pathname === '/';
+    const isB2bRegister = pathname === '/b2b/register';
 
-    if (!mounted || isOpsOrAdmin || isCheckout || items.length === 0) {
+    if (!mounted || isOpsOrAdmin || isCheckout || isHomeStorefront || isB2bRegister || isDrawerOpen || items.length === 0) {
         return null;
     }
 
@@ -75,7 +78,7 @@ export default function FloatingCartBar() {
                 width: 'calc(100% - 24px)',
                 maxWidth: isMinimized ? 'max-content' : '720px',
                 pointerEvents: 'none',
-                transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                transition: 'padding 180ms ease, border-radius 180ms ease, transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)'
             }}
         >
             <style dangerouslySetInnerHTML={{__html: `
@@ -163,7 +166,14 @@ export default function FloatingCartBar() {
                     // FULL EXPANDED SUMMARY BAR
                     <>
                         {/* Summary Metrics */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                        <div
+                            onClick={() => { if (!isCheckout) openDrawer(); }}
+                            role={!isCheckout ? 'button' : undefined}
+                            tabIndex={!isCheckout ? 0 : undefined}
+                            onKeyDown={(e) => { if (!isCheckout && (e.key === 'Enter' || e.key === ' ')) openDrawer(); }}
+                            title={!isCheckout ? 'Abrir cajón del carrito' : undefined}
+                            style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', cursor: !isCheckout ? 'pointer' : 'default' }}
+                        >
                             {/* Shopping Icon */}
                             <div className="floating-cart-hide-mobile" style={{
                                 backgroundColor: 'rgba(255, 255, 255, 0.12)',
@@ -239,6 +249,12 @@ export default function FloatingCartBar() {
                                     {formattedPrice}
                                 </span>
                             </div>
+                            {hasFrioganItems && frioganMode === 'LIVE' && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', backgroundColor: 'rgba(127,29,29,0.85)', color: '#FEE2E2', borderRadius: '9999px', padding: '4px 10px', fontSize: '0.8125rem', fontWeight: 700, border: '1px solid rgba(254,202,202,0.35)' }}>
+                                    <Snowflake size={12} />
+                                    <span>0°C–4°C</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions Right */}
@@ -260,7 +276,7 @@ export default function FloatingCartBar() {
                                         alignItems: 'center',
                                         gap: '6px',
                                         boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
-                                        transition: 'all 0.2s',
+                                        transition: 'background-color 160ms ease',
                                         whiteSpace: 'nowrap'
                                     }}
                                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#059669')}
@@ -287,7 +303,7 @@ export default function FloatingCartBar() {
                                             alignItems: 'center',
                                             gap: '6px',
                                             boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
-                                            transition: 'all 0.2s',
+                                            transition: 'background-color 160ms ease',
                                             whiteSpace: 'nowrap'
                                         }}
                                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#059669')}

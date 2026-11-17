@@ -4,6 +4,8 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import LeadGenBotV2 from '../../../components/LeadGenBot';
+import type { FrioganStorefrontMode } from '@/lib/storefront/storefrontContracts';
+import { parseFrioganStorefrontMode } from '@/lib/storefront/storefrontEngine';
 import { Rocket, Banknote, Leaf, CreditCard } from 'lucide-react';
 import { translations, Locale } from '@/lib/translations';
 
@@ -29,6 +31,7 @@ function B2BRegisterContent() {
 
     const [loading, setLoading] = useState(true);
     const [content, setContent] = useState<B2BContent | null>(null);
+    const [frioganMode, setFrioganMode] = useState<FrioganStorefrontMode>('OFF');
 
     useEffect(() => {
         let isMounted = true;
@@ -42,6 +45,7 @@ function B2BRegisterContent() {
             };
 
             const b2bStatus = getSetting('enable_b2b_lead_capture', 'true') === 'true';
+            setFrioganMode(parseFrioganStorefrontMode(getSetting('friogan_storefront_mode', 'OFF')));
             if (!b2bStatus) {
                 router.push('/');
                 return;
@@ -153,7 +157,7 @@ function B2BRegisterContent() {
                     </div>
 
                     <div className="b2b-bot-wrapper" style={{ animation: 'fadeInRight 0.8s ease-out', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', width: '100%', maxWidth: '100%', minWidth: 0 }}>
-                        <LeadGenBotV2 key={locale} lang={locale} />
+                        <LeadGenBotV2 key={locale} lang={locale} frioganMode={frioganMode} />
                     </div>
                 </div>
             </div>

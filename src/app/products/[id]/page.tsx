@@ -1,4 +1,6 @@
 import { supabase, createAdminClient } from '@/lib/supabase';
+import { getAppSettings } from '@/lib/data';
+import { filterStorefrontProductsByFrioganMode, isFrioganProteinProduct, parseFrioganStorefrontMode } from '@/lib/storefront/storefrontEngine';
 import ProductDetailClient from '@/components/ProductDetailClient';
 import ProductCard from '@/components/ProductCard';
 import { notFound } from 'next/navigation';
@@ -22,6 +24,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     let pricingModelId = CLIENTES_HOGAR_ID;
     let agreementItems: any[] = [];
     let hasActiveAgreement = false;
+    let userRole = '';
 
     if (userId) {
         const { data: profile } = await serverSupabase
@@ -29,6 +32,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
             .select('id, role, profile_type, company_name, pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
             .eq('id', userId)
             .single();
+        userRole = String(profile?.role || '').toLowerCase();
         pricingModelId = resolvePricingModelId(profile);
 
         // Check if this client (or their matrix parent) has an active agreement quote
@@ -87,7 +91,11 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     }
     const queryDb = adminDb || serverSupabase;
 
-    // 1. Fetch Current Product
+    // 1. Fetch Current Product & Friogan Storefront Mode
+    const appSettingsRows = await getAppSettings().catch(() => []);
+    const frioganSetting = (appSettingsRows || []).find((st: any) => st.key === 'friogan_storefront_mode');
+    const frioganMode = parseFrioganStorefrontMode(frioganSetting?.value);
+
     let product: any = null;
     const resProduct = await queryDb
         .from('products')
@@ -111,7 +119,15 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         product = resProduct.data;
     }
 
-    // Red de seguridad Poka-Yoke: Si pricing_model_prices está vacío para este modelo, buscar en Clientes Hogar o base_price
+    if (
+        isFrioganProteinProduct(product) &&
+        frioganMode !== 'LIVE' &&
+        !['admin', 'sys_admin', 'sysadmin'].includes(userRole)
+    ) {
+        return notFound();
+    }
+
+    // Poka-Yoke: Fallback solo contra Clientes Hogar en pricing_model_prices (cero base_price)
     if (!product?.pricing_model_prices || product.pricing_model_prices.length === 0) {
         const { data: hogarPriceData } = await queryDb
             .from('pricing_model_prices')
@@ -120,11 +136,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
             .eq('model_id', CLIENTES_HOGAR_ID)
             .maybeSingle();
 
-        if (hogarPriceData) {
-            product.pricing_model_prices = [hogarPriceData];
-        } else if (product?.base_price && product.base_price > 0) {
-            product.pricing_model_prices = [{ price: product.base_price, model_id: 'base' }];
-        }
+        product.pricing_model_prices = hogarPriceData ? [hogarPriceData] : [];
     }
 
     // Override main product price if it's in the agreement
@@ -171,15 +183,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
         relatedProductsRaw = resRelated.data || [];
     }
 
-    // Red de seguridad para productos relacionados sin tarifa en el modelo
-    relatedProductsRaw = relatedProductsRaw.map((p: any) => {
-        if (!p.pricing_model_prices || p.pricing_model_prices.length === 0) {
-            if (p.base_price && p.base_price > 0) {
-                return { ...p, pricing_model_prices: [{ price: p.base_price, model_id: 'base' }] };
-            }
-        }
-        return p;
-    });
+    relatedProductsRaw = filterStorefrontProductsByFrioganMode(relatedProductsRaw || [], frioganMode);
 
     // Override related products' prices if they are in the agreement
     if (hasActiveAgreement && agreementItems.length > 0 && relatedProductsRaw.length > 0) {
@@ -270,7 +274,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
                                 }}
                             >
                                 {relatedProducts.map((p) => (
-                                    <ProductCard key={p.id} product={p} />
+                                    <ProductCard key={p.id} product={p} locale={locale} />
                                 ))}
                             </div>
                             

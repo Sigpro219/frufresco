@@ -2,92 +2,27 @@
 
 import ProductCard from './ProductCard';
 import { Product } from '@/lib/supabase';
-import { useRef, useEffect, useState } from 'react';
+import type { Locale } from '@/lib/translations';
+import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Props {
     products: Product[];
+    locale?: Locale;
 }
 
-export default function FeaturedProductsCarousel({ products }: Props) {
+export default function FeaturedProductsCarousel({ products, locale }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [isHovered, setIsHovered] = useState(false);
-    const [isVisible, setIsVisible] = useState(true);
 
     if (!products || products.length === 0) return null;
 
-    // Duplicar 2x (suficiente para bucle continuo sin sobrecargar el árbol DOM de React)
-    const displayProducts = [...products, ...products];
-
-    const exactScrollRef = useRef<number>(0);
-
-    // Pausar animación cuando el carrusel esté fuera de la pantalla (0% CPU/GPU)
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                setIsVisible(entry.isIntersecting);
-            },
-            { threshold: 0.05 }
-        );
-
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
-        }
-
-        return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
-        let animationFrameId: number;
-        let lastTime = performance.now();
-        const speed = 0.048; // Pixeles por milisegundo
-
-        // Sincronizar en caso de scroll manual previo
-        if (scrollRef.current && exactScrollRef.current === 0) {
-            exactScrollRef.current = scrollRef.current.scrollLeft;
-        }
-
-        const scroll = (time: number) => {
-            const delta = time - lastTime;
-            lastTime = time;
-
-            if (scrollRef.current && !isHovered && isVisible) {
-                // Si alguien hizo scroll manual (touch/trackpad), actualizamos la referencia exacta
-                if (Math.abs(scrollRef.current.scrollLeft - Math.round(exactScrollRef.current)) > 2) {
-                    exactScrollRef.current = scrollRef.current.scrollLeft;
-                }
-
-                exactScrollRef.current += speed * delta;
-                scrollRef.current.scrollLeft = exactScrollRef.current;
-                
-                // Lógica de loop infinito con 2x duplicación
-                const singleSetWidth = products.length * 304; 
-                if (scrollRef.current.scrollLeft >= singleSetWidth) {
-                    exactScrollRef.current -= singleSetWidth;
-                    scrollRef.current.scrollLeft = exactScrollRef.current;
-                }
-            }
-            if (isVisible) {
-                animationFrameId = requestAnimationFrame(scroll);
-            }
-        };
-
-        if (isVisible) {
-            animationFrameId = requestAnimationFrame(scroll);
-        }
-        return () => cancelAnimationFrame(animationFrameId);
-    }, [isHovered, isVisible, products.length]);
+    const trackItems = [...products, ...products];
 
     const scrollByAmount = (amount: number) => {
         if (scrollRef.current) {
             scrollRef.current.scrollBy({ left: amount, behavior: 'smooth' });
-            // Sincronizar después de la animación de scroll
-            setTimeout(() => {
-                if (scrollRef.current) {
-                    exactScrollRef.current = scrollRef.current.scrollLeft;
-                }
-            }, 600);
         }
     };
 
@@ -102,43 +37,57 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                 .hide-scrollbar::-webkit-scrollbar {
                     display: none;
                 }
+                .sf-marquee-track {
+                    display: flex;
+                    align-items: stretch;
+                    gap: 1.25rem;
+                    width: max-content;
+                    animation: sfTop10Marquee 42s linear infinite;
+                    will-change: transform;
+                }
+                .sf-marquee-paused {
+                    animation-play-state: paused;
+                }
+                @keyframes sfTop10Marquee {
+                    0% { transform: translate3d(0, 0, 0); }
+                    100% { transform: translate3d(-50%, 0, 0); }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .sf-marquee-track { animation: none; }
+                }
             `}} />
             
             <div 
                 ref={scrollRef}
                 style={{ 
-                    display: 'flex', 
-                    gap: '1.5rem', 
                     overflowX: 'auto', 
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
-                    padding: '1rem 40px', // Espacio para que la sombra del hover de la tarjeta no se corte
-                    scrollBehavior: 'auto' // El smooth se aplica solo en el botón
+                    padding: '0.75rem 54px',
+                    scrollBehavior: 'smooth'
                 }}
                 className="hide-scrollbar"
             >
-                {displayProducts.map((p, i) => (
-                    <div key={`${p.id}-${i}`} style={{ minWidth: '280px', maxWidth: '280px', flexShrink: 0 }}>
-                        <ProductCard product={p} />
-                    </div>
-                ))}
+                <div className={`sf-marquee-track ${isHovered ? 'sf-marquee-paused' : ''}`}>
+                    {trackItems.map((p, idx) => (
+                        <div key={`${p.id}-${idx}`} style={{ minWidth: '264px', maxWidth: '264px', flexShrink: 0, display: 'flex' }}>
+                            <ProductCard product={p} locale={locale} />
+                        </div>
+                    ))}
+                </div>
             </div>
-
-            {/* Degradados laterales para suavizar los bordes */}
-            <div style={{ position: 'absolute', top: 0, left: 0, width: '120px', height: '100%', background: 'linear-gradient(to right, var(--background) 20%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
-            <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '100%', background: 'linear-gradient(to left, var(--background) 20%, transparent)', pointerEvents: 'none', zIndex: 10 }} />
 
             {/* BOTÓN IZQUIERDA */}
             <button 
-                onClick={() => scrollByAmount(-304 * 2)}
+                onClick={() => scrollByAmount(-284 * 2)}
                 style={{
                     position: 'absolute',
-                    left: '20px',
+                    left: '6px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '46px',
-                    height: '46px',
+                    width: '40px',
+                    height: '40px',
                     borderRadius: '50%',
                     backgroundColor: 'rgba(255, 255, 255, 0.88)',
                     border: '1px solid rgba(255, 255, 255, 0.95)',
@@ -150,7 +99,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
                     color: '#081C15',
-                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    transition: 'background-color 200ms ease, color 200ms ease, transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 200ms ease, opacity 200ms ease',
                     opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {
@@ -174,15 +123,15 @@ export default function FeaturedProductsCarousel({ products }: Props) {
 
             {/* BOTÓN DERECHA */}
             <button 
-                onClick={() => scrollByAmount(304 * 2)}
+                onClick={() => scrollByAmount(284 * 2)}
                 style={{
                     position: 'absolute',
-                    right: '20px',
+                    right: '6px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 20,
-                    width: '46px',
-                    height: '46px',
+                    width: '40px',
+                    height: '40px',
                     borderRadius: '50%',
                     backgroundColor: 'rgba(255, 255, 255, 0.88)',
                     border: '1px solid rgba(255, 255, 255, 0.95)',
@@ -194,7 +143,7 @@ export default function FeaturedProductsCarousel({ products }: Props) {
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
                     color: '#081C15',
-                    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    transition: 'background-color 200ms ease, color 200ms ease, transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 200ms ease, opacity 200ms ease',
                     opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {

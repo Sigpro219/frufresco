@@ -1,82 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 import OrderTracking from './OrderTracking';
 import { MapPin, Phone, Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 import { config } from '@/lib/config';
 import { useSearchParams } from 'next/navigation';
 import { translations, Locale } from '../lib/translations';
+import type { StorefrontRuntimeConfig } from '@/lib/storefront/storefrontContracts';
 
-export default function Footer() {
-  const [appSettings, setAppSettings] = useState<{key: string, value: string}[] | null>(null);
+export default function Footer({ initialConfig }: { initialConfig?: StorefrontRuntimeConfig }) {
   const searchParams = useSearchParams();
   const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
   const t = translations[locale];
 
-  useEffect(() => {
-    async function fetchSettings() {
-      try {
-        const { data } = await supabase
-          .from('app_settings')
-          .select('key, value')
-          .in('key', [
-            'contact_phone', 
-            'contact_email', 
-            'contact_address', 
-            'footer_description',
-            'footer_description_en',
-            'app_logo_url',
-            'app_name'
-          ]);
-        if (data) setAppSettings(data);
-      } catch (err) {
-        console.error('Error fetching footer settings:', err);
-      }
-    }
-    
-    fetchSettings();
-
-    // Sincronización en tiempo real con cambios en app_settings
-    const channel = supabase
-      .channel('app_settings_footer_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'app_settings' },
-        () => {
-          fetchSettings();
-        }
-      )
-      .subscribe();
-
-    const handleCustomUpdate = () => fetchSettings();
-    window.addEventListener('app-settings-updated', handleCustomUpdate);
-
-    return () => {
-      supabase.removeChannel(channel);
-      window.removeEventListener('app-settings-updated', handleCustomUpdate);
-    };
-  }, []);
-
-  const getSetting = (key: string, defaultValue: string) => {
-      const s = appSettings?.find(x => x.key === key);
-      return s?.value ? s.value : defaultValue;
-  };
-
-  const appName = getSetting('app_name', config.brand.name);
-  const phone = getSetting('contact_phone', '316 7022898');
-  const email = getSetting('contact_email', 'contacto@investmentscortes.com');
-  const address = getSetting('contact_address', 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia');
-  const description = (locale === 'en' ? getSetting('footer_description_en', '') : getSetting('footer_description', '')) || t.footerDesc;
-  const logoUrl = getSetting('app_logo_url', '');
+  const appName = config.brand.name;
+  const phone = initialConfig?.contactPhone || '316 7022898';
+  const email = 'contacto@investmentscortes.com';
+  const address = 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia';
+  const description = t.footerDesc;
+  const logoUrl = initialConfig?.logoUrl || '/logo.png';
 
   return (
     <footer style={{ 
       background: 'linear-gradient(180deg, #05130e 0%, #020a07 100%)', 
       color: '#F9FAFB', 
-      padding: '4rem 0 3rem',
-      borderTop: '1px solid rgba(255,255,255,0.05)'
+      padding: '2.75rem 0 1.75rem',
+      borderTop: '1px solid rgba(16, 185, 129, 0.22)'
     }}>
       <div className="container">
         {/* Compact Tracking in Footer */}
@@ -88,32 +37,29 @@ export default function Footer() {
            </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '3rem', marginBottom: '3rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
           
           {/* Brand */}
           <div>
-            {logoUrl ? (
+            <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#FAF9F6', padding: '6px 14px', borderRadius: '12px', marginBottom: '1rem' }}>
               <img 
-                src={logoUrl} 
+                src={logoUrl || '/logo.png'} 
                 alt={appName} 
-                style={{ height: '60px', width: 'auto', marginBottom: '1.2rem', filter: 'brightness(0) invert(1)' }} 
+                style={{ height: '42px', width: 'auto', objectFit: 'contain', display: 'block' }} 
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  if (!e.currentTarget.src.endsWith('/logo.png')) {
+                    e.currentTarget.src = '/logo.png';
+                  }
                 }}
               />
-            ) : (
-                <h3 style={{ 
-                  fontFamily: 'var(--font-outfit), sans-serif',
-                  fontSize: '1.8rem', 
-                  fontWeight: '900', 
-                  marginBottom: '1rem', 
-                  color: 'white',
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase'
-                }}>{appName}</h3>
-            )}
-            <p style={{ opacity: 0.7, lineHeight: 1.6, fontSize: '0.95rem' }}>
+            </div>
+            <p style={{ opacity: 0.78, lineHeight: 1.55, fontSize: '0.9rem', margin: '0 0 0.75rem' }}>
               {description}
+            </p>
+            <p style={{ fontSize: '0.78rem', color: '#6EE7B7', fontWeight: 600, margin: 0 }}>
+              {locale === 'en'
+                ? 'AM Deliveries · Bogota & Sabana · Cash on delivery or B2B credit'
+                : 'Despachos AM · Bogotá, Chía, Cajicá, Cota y Sabana · Contraentrega o crédito B2B'}
             </p>
           </div>
 
@@ -205,32 +151,32 @@ export default function Footer() {
           <div className="delta-badge" style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
-            backgroundColor: '#121214',
-            border: '1px solid rgba(39, 39, 42, 0.9)',
-            padding: '6px 16px',
+            gap: '6px',
+            backgroundColor: 'rgba(18, 18, 20, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '4px 11px',
             borderRadius: '9999px',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
-            backdropFilter: 'blur(12px)',
-            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            backdropFilter: 'blur(8px)',
+            transition: 'border-color 0.25s ease',
             cursor: 'default'
           }}>
-            <span style={{ fontSize: '10px', color: '#a1a1aa', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '9px', color: '#94a3b8', letterSpacing: '0.04em' }}>
               Powered by
             </span>
             <img 
               src="/assets/images/delta_symbol_white.png" 
               alt="Delta CoreTech Icon" 
               style={{
-                width: '20px',
-                height: '20px',
+                width: '14px',
+                height: '14px',
                 objectFit: 'contain',
-                filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.4))',
+                opacity: 0.9,
                 transition: 'transform 0.2s ease'
               }}
               className="delta-icon" 
             />
-            <span style={{ fontSize: '12px', fontWeight: '800', color: '#FFFFFF', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>
+            <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#E2E8F0', letterSpacing: '0.04em', textTransform: 'uppercase', fontFamily: 'var(--font-outfit), sans-serif' }}>
               Delta <span style={{ color: '#FBD007' }}>CoreTech</span>
             </span>
           </div>

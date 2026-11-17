@@ -7,7 +7,8 @@ export const CATEGORY_MAP: Record<string, string> = {
     'LA': 'Lácteos',
     'DE': 'Despensa',
     'CO': 'Congelados',
-    'PR': 'Procesados'
+    'PR': 'Procesados',
+    'CP': 'Carnes y Proteínas'
 };
 
 // Business Logic Cutoff Rules (Valores por defecto / Fallback si no existen en app_settings)
@@ -38,7 +39,10 @@ export const REVERSE_CATEGORY_MAP: Record<string, string> = {
     'Lácteos': 'LA',
     'Despensa': 'DE',
     'Congelados': 'CO',
-    'Procesados': 'PR'
+    'Procesados': 'PR',
+    'Carnes y Proteínas': 'CP',
+    'Carnes y proteinas': 'CP',
+    'Proteínas': 'CP'
 };
 
 // --- SUBTIPOS DE MOVIMIENTOS & MERMAS LEAN (Auditoría 24 Columnas) ---

@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { Product } from '@/lib/supabase';
+import {
+    parseFrioganStorefrontMode,
+    isFrioganProteinProduct,
+    resolveProductStorefrontPresentation,
+    resolveStorefrontPrice,
+    buildStorefrontCartItem,
+} from '@/lib/storefront/storefrontEngine';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -113,46 +121,66 @@ export async function GET(request: Request) {
         // Modelo por defecto B2C: Clientes Hogar
         const CLIENTES_HOGAR_ID = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
 
-        const { data: dbProducts, error: dbErr } = await supabase
-            .from('products')
-            .select(`
-                id, name, display_name, unit_of_measure, image_url, 
-                is_active, iva_rate, weight_kg, web_conversion_factor,
-                pricing_model_prices(price, model_id)
-            `)
-            .in('id', productIds);
+        const [{ data: dbProducts, error: dbErr }, { data: modeSetting }] = await Promise.all([
+            supabase
+                .from('products')
+                .select(`
+                    id, name, display_name, name_en, accounting_id, category, inventory_group, tags,
+                    unit_of_measure, web_unit, options_config, image_url,
+                    is_active, iva_rate, weight_kg, web_conversion_factor,
+                    pricing_model_prices(price, model_id)
+                `)
+                .in('id', productIds),
+            supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'friogan_storefront_mode')
+                .maybeSingle(),
+        ]);
 
         if (dbErr || !dbProducts) {
             console.error('Error fetching dbProducts in last-purchase API:', dbErr);
             return NextResponse.json({ error: 'Error al consultar precios del catálogo.' }, { status: 500 });
         }
 
+        const frioganMode = parseFrioganStorefrontMode(modeSetting?.value);
         const itemsToImport = [];
 
         for (const item of orderItems) {
             const dbProd = dbProducts.find((p: any) => p.id === item.product_id);
             if (dbProd && dbProd.is_active !== false) {
+                if (frioganMode !== 'LIVE' && isFrioganProteinProduct(dbProd as Product)) {
+                    continue;
+                }
+
                 // PRECIO VIGENTE B2C (CLIENTES HOGAR) DE HOY EN EL CATÁLOGO
                 const b2cPriceObj = dbProd.pricing_model_prices?.find(
                     (p: any) => p.model_id === CLIENTES_HOGAR_ID
                 );
-                const rawPrice = Number(b2cPriceObj?.price) > 0 
-                    ? Number(b2cPriceObj.price) 
-                    : (Number(dbProd.pricing_model_prices?.[0]?.price) || 0);
+                const resolvedPrices = b2cPriceObj
+                    ? [b2cPriceObj]
+                    : (dbProd.pricing_model_prices || []);
 
-                const conversionFactor = Number(dbProd.web_conversion_factor) || 1;
-                const currentPrice = Math.ceil((rawPrice * conversionFactor) / 50) * 50;
+                const normalizedProd = {
+                    ...(dbProd as Product),
+                    pricing_model_prices: resolvedPrices,
+                };
+                const pres = resolveProductStorefrontPresentation(normalizedProd, 'es');
+                const priceRes = resolveStorefrontPrice(normalizedProd, pres.defaultOption);
+                if (!priceRes.isPriceAvailable) continue;
 
+                const cartItem = buildStorefrontCartItem(
+                    normalizedProd,
+                    pres.defaultOption,
+                    Number(item.quantity) || 1,
+                    pres.options.length,
+                    pres.kind,
+                    priceRes,
+                    'es'
+                );
                 itemsToImport.push({
-                    id: dbProd.id,
-                    name: dbProd.display_name || dbProd.name,
-                    price: currentPrice, // ¡PRECIO ACTUALIZADO HOY CON MODELO B2C!
-                    iva_rate: dbProd.iva_rate || 0,
-                    unit: dbProd.unit_of_measure || 'Kg',
-                    quantity: Number(item.quantity) || 1,
-                    image_url: dbProd.image_url,
-                    weight_kg: dbProd.weight_kg,
-                    is_from_last_order: true
+                    ...cartItem,
+                    is_from_last_order: true,
                 });
             }
         }

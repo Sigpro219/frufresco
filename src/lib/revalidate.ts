@@ -12,3 +12,17 @@ export async function triggerProductRevalidation() {
         console.warn('Silent revalidation fetch error:', err);
     }
 }
+
+/**
+ * Triggers background on-demand revalidation when storefront settings (e.g. Friogan toggle) change.
+ */
+export async function triggerStorefrontSettingsRevalidation() {
+    try {
+        await fetch('/api/revalidate?tag=settings&path=/', {
+            method: 'POST',
+            cache: 'no-store'
+        });
+    } catch (err) {
+        console.warn('Silent settings revalidation fetch error:', err);
+    }
+}

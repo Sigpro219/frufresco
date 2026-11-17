@@ -11,6 +11,7 @@ import {
     Camera, CheckCircle2, Clock, Layers, RefreshCw, Trash2, EyeOff, Globe, 
     ShoppingCart, FileEdit, AlertTriangle, ArrowRight, ArrowLeft, ChevronRight, Store
 } from 'lucide-react';
+import { CATEGORY_MAP } from '@/lib/constants';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { normalizeCatalogSpelling, getSpellingSuggestion, hasSpellingSuggestion } from '@/lib/spellingNormalizer';
@@ -523,15 +524,7 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     const [tagInput, setTagInput] = useState('');
     const [keywordInput, setKeywordInput] = useState('');
 
-    const categories = [
-        { id: 'FR', name: 'Frutas' },
-        { id: 'VE', name: 'Verduras' },
-        { id: 'TU', name: 'Tubérculos' },
-        { id: 'HO', name: 'Hortalizas' },
-        { id: 'LA', name: 'Lácteos' },
-        { id: 'DE', name: 'Despensa' },
-        { id: 'CO', name: 'Congelados' }
-    ];
+    const categories = Object.entries(CATEGORY_MAP).map(([id, name]) => ({ id, name }));
 
     const buyingTeams = ['HIERBAS Y HORTALIZAS', 'EQUIPO A FRUTAS', 'EQUIPO A VEGETALES', 'LOGISTICA - PAPAS', 'REFRIGERADOS'];
     const procurementMethods = ['Compras Generales', 'Contratación Directa', 'Importación', 'Local'];

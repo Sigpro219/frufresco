@@ -1,6 +1,8 @@
-import { Inter, Outfit, Instrument_Serif } from 'next/font/google';
+import { Inter, Outfit } from 'next/font/google';
 import "./globals.css";
 import ClientLayout from '@/components/ClientLayout';
+import { getAppSettings, getSeoSettings, getVisibleProducts } from '@/lib/data';
+import { buildStorefrontRuntimeConfig, DEFAULT_STOREFRONT_CONFIG } from '@/lib/storefront/storefrontEngine';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -13,16 +15,6 @@ const outfit = Outfit({
   variable: '--font-outfit',
   display: 'swap',
 });
-
-const instrumentSerif = Instrument_Serif({
-  weight: '400',
-  subsets: ['latin'],
-  style: ['normal', 'italic'],
-  variable: '--font-instrument-serif',
-  display: 'swap',
-});
-
-import { getSeoSettings } from '@/lib/data';
 
 export async function generateMetadata() {
   try {
@@ -45,11 +37,22 @@ export async function generateMetadata() {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let initialStorefrontConfig = DEFAULT_STOREFRONT_CONFIG;
+  try {
+    const [settingsRows, visibleProducts] = await Promise.all([
+      getAppSettings(),
+      getVisibleProducts(),
+    ]);
+    initialStorefrontConfig = buildStorefrontRuntimeConfig(settingsRows || [], visibleProducts || []);
+  } catch (err) {
+    console.warn('RootLayout storefront config fallback active:', err);
+  }
+
   return (
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
@@ -100,8 +103,8 @@ export default function RootLayout({
         `}} />
 
       </head>
-      <body className={`${inter.variable} ${outfit.variable} ${instrumentSerif.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
-        <ClientLayout>
+      <body className={`${inter.variable} ${outfit.variable}`} style={{ fontFamily: 'var(--font-inter), sans-serif' }} suppressHydrationWarning>
+        <ClientLayout initialStorefrontConfig={initialStorefrontConfig}>
           {children}
         </ClientLayout>
       </body>

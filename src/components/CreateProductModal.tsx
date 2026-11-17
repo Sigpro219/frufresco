@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase, Product } from '@/lib/supabase';
 import { diagnoseStorageError } from '@/lib/errorUtils';
-import { REVERSE_CATEGORY_MAP } from '@/lib/constants';
+import { CATEGORY_MAP, REVERSE_CATEGORY_MAP } from '@/lib/constants';
 import { Wand2, Sparkles, Loader2 } from 'lucide-react';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
@@ -211,15 +211,7 @@ export default function CreateProductModal({ onClose, onSave }: CreateProductMod
         });
     };
 
-    const categories = [
-        { id: 'FR', name: 'Frutas' },
-        { id: 'VE', name: 'Verduras' },
-        { id: 'TU', name: 'Tubérculos' },
-        { id: 'HO', name: 'Hortalizas' },
-        { id: 'LA', name: 'Lácteos' },
-        { id: 'DE', name: 'Despensa' },
-        { id: 'CO', name: 'Congelados' }
-    ];
+    const categories = Object.entries(CATEGORY_MAP).map(([id, name]) => ({ id, name }));
     const baseUnits = ['Kg', 'G', 'Lb', 'Lt', 'Un', 'Atado', 'Bulto'];
 
     // LÓGICA DE VARIANTES (Replicada de VariantModal)

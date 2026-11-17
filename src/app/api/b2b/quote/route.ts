@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { parseFrioganStorefrontMode, filterStorefrontProductsByFrioganMode } from '@/lib/storefront/storefrontEngine';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,8 @@ const ALL_CATEGORIES = [
   'Despensa',
   'Lácteos',
   'Congelados',
-  'Procesados'
+  'Procesados',
+  'Carnes y Proteínas'
 ];
 
 const CATEGORY_TO_CODES: Record<string, string[]> = {
@@ -32,7 +34,8 @@ const CATEGORY_TO_CODES: Record<string, string[]> = {
   'Despensa': ['DE', 'Despensa', 'despensa'],
   'Lácteos': ['LA', 'Lácteos', 'lacteos'],
   'Congelados': ['CO', 'Congelados', 'congelados'],
-  'Procesados': ['PR', 'Procesados', 'procesados']
+  'Procesados': ['PR', 'Procesados', 'procesados'],
+  'Carnes y Proteínas': ['CP', 'Carnes y Proteínas', 'carnes y proteinas', 'Carnes', 'Proteínas']
 };
 
 const ANCHOR_PRIORITY: Record<string, string[]> = {
@@ -209,8 +212,18 @@ export async function POST(request: Request) {
             const modelId = matchedModel?.id || 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
             const modelName = matchedModel?.name || 'General Institucional';
 
+            const { data: frioganSetting } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'friogan_storefront_mode')
+                .maybeSingle();
+            const frioganMode = parseFrioganStorefrontMode(frioganSetting?.value);
+
             let productsToQuote: any[] = [];
-            const rawChosenCats = (selected_categories && selected_categories.length > 0 && !selected_categories.includes('Todas'))
+            const hasExplicitCategories = Boolean(
+                selected_categories && selected_categories.length > 0 && !selected_categories.includes('Todas')
+            );
+            const rawChosenCats = hasExplicitCategories
                 ? selected_categories
                 : ALL_CATEGORIES;
 
@@ -240,13 +253,16 @@ export async function POST(request: Request) {
             if (template?.id) {
                 const { data: tItems } = await supabase
                     .from('quote_template_items')
-                    .select('product_id, products(id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit, is_active)')
+                    .select('product_id, products(id, name, iva_rate, sku, category, inventory_group, tags, unit_of_measure, web_conversion_factor, web_unit, is_active)')
                     .eq('template_id', template.id);
 
                 if (tItems && tItems.length > 0) {
-                    templateProducts = tItems
-                        .map(ti => ti.products)
-                        .filter((p: any) => p && p.is_active !== false);
+                    templateProducts = filterStorefrontProductsByFrioganMode(
+                        tItems
+                            .map((ti: any) => ti.products)
+                            .filter((p: any) => p && p.is_active !== false),
+                        frioganMode
+                    );
                 }
             }
 
@@ -303,10 +319,10 @@ export async function POST(request: Request) {
                 if (catProds.length === 0) {
                     const { data: fallbackProds } = await supabase
                         .from('products')
-                        .select('id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
+                        .select('id, name, iva_rate, sku, category, inventory_group, tags, unit_of_measure, web_conversion_factor, web_unit')
                         .eq('is_active', true)
                         .in('category', codes);
-                    if (fallbackProds) catProds = fallbackProds;
+                    if (fallbackProds) catProds = filterStorefrontProductsByFrioganMode(fallbackProds, frioganMode);
                 }
 
                 // Sort alphabetically by name
@@ -322,14 +338,14 @@ export async function POST(request: Request) {
                 return true;
             });
 
-            // Ultimate fallback if empty
-            if (productsToQuote.length === 0) {
+            // Ultimate fallback if empty (only when no explicit categories were chosen)
+            if (productsToQuote.length === 0 && !hasExplicitCategories) {
                 const { data: activeProds } = await supabase
                     .from('products')
-                    .select('id, name, iva_rate, sku, category, unit_of_measure, web_conversion_factor, web_unit')
+                    .select('id, name, iva_rate, sku, category, inventory_group, tags, unit_of_measure, web_conversion_factor, web_unit')
                     .eq('is_active', true)
                     .limit(30);
-                if (activeProds) productsToQuote = activeProds;
+                if (activeProds) productsToQuote = filterStorefrontProductsByFrioganMode(activeProds, frioganMode);
             }
 
             if (productsToQuote.length > 0) {

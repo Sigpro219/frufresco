@@ -37,6 +37,7 @@ import {
     Clock
 } from 'lucide-react';
 import { parseStoreVacationConfig, getHolyWeekRange, StoreVacationConfig } from '@/lib/colombianHolidays';
+import { triggerStorefrontSettingsRevalidation } from '@/lib/revalidate';
 
 function ImageUpload({ 
     label, 
@@ -283,7 +284,8 @@ export default function AdminSettingsPage() {
             { key: 'delivery_fee', value: '5000', description: 'Costo de envío estándar' },
             { key: 'email_notifications_mode', value: 'sandbox', description: 'Modo de Notificaciones por Correo Saliente' },
             { key: 'email_sandbox_recipient', value: 'auditoria.investment@gmail.com', description: 'Correo Destino para Modo Pruebas / Sandbox' },
-            { key: 'min_order_hogar', value: '30000', description: 'Pedido mínimo para la Línea Hogar' },
+            { key: 'min_order_hogar', value: '150000', description: 'Pedido mínimo para la Línea Hogar' },
+            { key: 'friogan_storefront_mode', value: 'OFF', description: 'Modo vitrina pública proteínas FruFresco × Friogan (OFF / TEASER / LIVE)' },
             { key: 'max_order_hogar_cod', value: '400000', description: 'Tope máximo para pedidos Hogar con pago Contra Entrega' },
             { key: 'min_order_institucional', value: '150000', description: 'Pedido mínimo para la Línea Institucional' },
             { key: 'enable_cutoff_rules', value: 'true', description: 'Habilitar Reglas de Hora de Corte (Desactivar para Pruebas)' },
@@ -430,6 +432,11 @@ export default function AdminSettingsPage() {
                     return [...prev, { key, value: newValue, description: 'Auto-created' }];
                 }
             });
+            try {
+                await triggerStorefrontSettingsRevalidation();
+            } catch (revalErr) {
+                console.warn('Settings revalidation warning:', revalErr);
+            }
             setPersisted(true);
             (window as any).showToast?.('Cambio guardado ', 'success');
         }
@@ -671,7 +678,7 @@ export default function AdminSettingsPage() {
                             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
                         }}>
                             {(() => {
-                                const opKeys = ['store_status', 'store_vacation_config', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'b2c_delivery_allowed_days', 'max_future_delivery_days', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
+                                const opKeys = ['store_status', 'friogan_storefront_mode', 'store_vacation_config', 'email_notifications_mode', 'email_sandbox_recipient', 'delivery_fee', 'min_order_hogar', 'max_order_hogar_cod', 'min_order_institucional', 'enable_b2b_lead_capture', 'enable_cutoff_rules', 'allow_sunday_deliveries', 'allow_holiday_deliveries', 'b2c_delivery_allowed_days', 'max_future_delivery_days', 'packaging_fee_enabled', 'packaging_fee_percentage', 'packaging_fee_note'];
                                 return settings
                                     .filter(s => opKeys.includes(s.key))
                                     .sort((a, b) => opKeys.indexOf(a.key) - opKeys.indexOf(b.key))
@@ -1001,6 +1008,7 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'max_order_hogar_cod' ? 'Máximo Hogar (Contra Entrega)' :
                                                  setting.key === 'min_order_institucional' ? 'Mínimo Institucional' :
                                                  setting.key === 'store_status' ? <><Store size={14} style={{ color: 'var(--primary)' }} /> Estado Operativo de la Tienda</> :
+                                                 setting.key === 'friogan_storefront_mode' ? <><PackageCheck size={14} style={{ color: '#7F1D1D' }} /> Vitrina FruFresco × Friogan (Toggle)</> :
                                                  setting.key === 'store_vacation_config' ? <><CalendarClock size={14} style={{ color: '#D97706' }} /> Programador de Receso Operativo / Semana Santa / Vacaciones</> :
                                                  setting.key === 'enable_b2b_lead_capture' ? 'Captura Leads B2B' :
                                                  setting.key === 'enable_cutoff_rules' ? <><Clock size={14} style={{ color: 'var(--primary)' }} /> REGLAS HORA DE CORTE</> :
@@ -1015,7 +1023,41 @@ export default function AdminSettingsPage() {
                                                  setting.key === 'packaging_fee_note' ? <><FileText size={14} style={{ color: 'var(--primary)' }} /> Explicación de Empaque (Nota Cliente)</> :
                                                  setting.key.replace(/_/g, ' ')}
                                             </h4>
-                                            {setting.key === 'email_notifications_mode' ? (
+                                            {setting.key === 'friogan_storefront_mode' ? (
+                                                <div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                                                        {[
+                                                            { val: 'OFF', label: 'OFF (Oculto)', activeBg: '#1E293B', activeText: '#FFFFFF' },
+                                                            { val: 'TEASER', label: 'TEASER (Expectativa)', activeBg: '#D97706', activeText: '#FFFFFF' },
+                                                            { val: 'LIVE', label: 'LIVE (Venta Activa)', activeBg: '#7F1D1D', activeText: '#FFFFFF' }
+                                                        ].map(opt => {
+                                                            const isActive = (setting.value || 'OFF').toUpperCase() === opt.val;
+                                                            return (
+                                                                <button
+                                                                    key={opt.val}
+                                                                    type="button"
+                                                                    onClick={() => handleUpdateSetting('friogan_storefront_mode', opt.val)}
+                                                                    style={{
+                                                                        padding: '8px 6px',
+                                                                        borderRadius: THEME.radius.sm,
+                                                                        border: `1px solid ${isActive ? opt.activeBg : THEME.colors.borderActive}`,
+                                                                        backgroundColor: isActive ? opt.activeBg : '#F8FAFC',
+                                                                        color: isActive ? opt.activeText : THEME.colors.textMain,
+                                                                        fontWeight: 800,
+                                                                        fontSize: '0.72rem',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                >
+                                                                    {opt.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '6px', lineHeight: 1.4 }}>
+                                                        OFF oculta proteínas CP/Friogan al 100%; TEASER activa registro prioritario sin precios; LIVE abre compra al vacío 0–4°C.
+                                                    </div>
+                                                </div>
+                                            ) : setting.key === 'email_notifications_mode' ? (
                                                 <select 
                                                     value={setting.value || 'sandbox'} 
                                                     onChange={(e) => handleUpdateSetting(setting.key, e.target.value)} 

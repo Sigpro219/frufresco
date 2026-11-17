@@ -9,6 +9,8 @@ import { User, CheckCircle2, MapPin, Building2, Phone, Mail, ArrowRight, Rocket,
 import { translations, Locale } from '../lib/translations';
 import { Polygon } from './admin/GeofencingManager';
 import { normalizeCityName } from '../lib/locationNorm';
+import type { FrioganStorefrontMode } from '@/lib/storefront/storefrontContracts';
+import { parseFrioganStorefrontMode } from '@/lib/storefront/storefrontEngine';
 
 const mapMinimalistStyles = [
   {
@@ -64,7 +66,8 @@ const ALL_CATEGORIES = [
   'Despensa',
   'Lácteos',
   'Congelados',
-  'Procesados'
+  'Procesados',
+  'Carnes y Proteínas'
 ];
 
 const BUSINESS_TYPES = ['Restaurante', 'Hotel', 'Colegio', 'Casino/Catering', 'Otro'];
@@ -86,7 +89,8 @@ const CATEGORIES_EN: Record<string, string> = {
   'Despensa': 'Pantry',
   'Lácteos': 'Dairy',
   'Congelados': 'Frozen',
-  'Procesados': 'Processed'
+  'Procesados': 'Processed',
+  'Carnes y Proteínas': 'Meat & Protein'
 };
 
 const BUSINESS_SIZES = [
@@ -120,28 +124,29 @@ type LeadData = {
     longitude: number | null;
 };
 
-export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
+export default function LeadGenBotV2({ lang = 'es', frioganMode }: { lang?: string; frioganMode?: FrioganStorefrontMode }) {
     const locale = (lang === 'en' ? 'en' : 'es') as Locale;
     const isEn = locale === 'en';
+    const [resolvedMode, setResolvedMode] = useState<FrioganStorefrontMode>(frioganMode || 'OFF');
+
+    useEffect(() => {
+        if (frioganMode) {
+            setResolvedMode(frioganMode);
+            return;
+        }
+        supabase.from('app_settings').select('value').eq('key', 'friogan_storefront_mode').maybeSingle()
+            .then(({ data }) => {
+                if (data?.value) setResolvedMode(parseFrioganStorefrontMode(data.value));
+            });
+    }, [frioganMode]);
+
+    const visibleCategories = ALL_CATEGORIES.filter(
+        (cat) => cat !== 'Carnes y Proteínas' || resolvedMode === 'TEASER' || resolvedMode === 'LIVE'
+    );
     const t = translations[locale];
 
     const [currentStep, setCurrentStep] = useState<number>(1); // 1: Necesidad, 2: Cobertura, 3: Contacto
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 1,
-            text: isEn
-                ? "Welcome! Pre-quote your institutional account in 3 simple steps with farm-direct prices."
-                : "¡Bienvenido! Pre-cotiza tu cuenta institucional en 3 simples pasos con precios de origen.",
-            sender: 'bot'
-        },
-        {
-            id: 2,
-            text: isEn
-                ? "Step 1 of 3: Configure your operation's profile and purchasing needs:"
-                : "Paso 1 de 3: Configura el perfil y necesidades de tu operación:",
-            sender: 'bot'
-        }
-    ]);
+    const [messages, setMessages] = useState<Message[]>([]);
     
     // Step 1 Form State
     const [selectedType, setSelectedType] = useState<string>('Restaurante');
@@ -172,6 +177,31 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     useEffect(() => {
         leadDataRef.current = leadData;
     }, [leadData]);
+
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem('frufresco_b2b_prefill');
+            if (!raw) return;
+            const prefill = JSON.parse(raw) as Partial<{
+                contact_name: string;
+                phone: string;
+                nit: string;
+                municipality: string;
+            }>;
+            if (prefill.contact_name) setNameInput(prefill.contact_name);
+            if (prefill.phone) setPhoneInput(prefill.phone);
+            setLeadData((prev) => ({
+                ...prev,
+                contact_name: prefill.contact_name || prev.contact_name,
+                company_name: prefill.contact_name || prev.company_name,
+                phone: prefill.phone || prev.phone,
+                nit: prefill.nit || prev.nit,
+                municipality: prefill.municipality || prev.municipality,
+            }));
+        } catch {
+            // Ignore malformed sessionStorage prefill
+        }
+    }, []);
 
     const [isTyping, setIsTyping] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,7 +247,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
     // Handle Step 1 Submission -> Move to Step 2
     const handleStep1Submit = () => {
         const isAll = selectedCategories.includes('Todas') || selectedCategories.length === 0;
-        const cats = isAll ? ALL_CATEGORIES : selectedCategories;
+        const cats = isAll ? visibleCategories : selectedCategories;
         const updatedData = {
             ...leadDataRef.current,
             business_type: selectedType,
@@ -598,7 +628,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         color: currentStep === 1 ? '#064E3B' : currentStep > 1 ? '#4ADE80' : 'rgba(255, 255, 255, 0.65)',
                         boxShadow: currentStep === 1 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
                         border: currentStep === 1 ? '1px solid #86EFAC' : currentStep > 1 ? '1px solid rgba(74, 222, 128, 0.3)' : '1px solid transparent',
-                        transition: 'all 0.3s ease'
+                        transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                     }}>
                         <div style={{
                             width: '17px',
@@ -637,7 +667,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         color: currentStep === 2 ? '#064E3B' : currentStep > 2 ? '#4ADE80' : 'rgba(255, 255, 255, 0.65)',
                         boxShadow: currentStep === 2 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
                         border: currentStep === 2 ? '1px solid #86EFAC' : currentStep > 2 ? '1px solid rgba(74, 222, 128, 0.3)' : '1px solid transparent',
-                        transition: 'all 0.3s ease'
+                        transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                     }}>
                         <div style={{
                             width: '17px',
@@ -676,7 +706,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         color: currentStep === 3 ? '#064E3B' : 'rgba(255, 255, 255, 0.65)',
                         boxShadow: currentStep === 3 ? '0 0 10px rgba(74,222,128,0.3)' : 'none',
                         border: currentStep === 3 ? '1px solid #86EFAC' : '1px solid transparent',
-                        transition: 'all 0.3s ease'
+                        transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                     }}>
                         <div style={{
                             width: '17px',
@@ -701,7 +731,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
             {/* Messages Area */}
             <div 
                 ref={messagesContainerRef}
-                style={{ flex: 1, minHeight: 0, padding: 'clamp(0.85rem, 3vw, 1.25rem)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.1rem', backgroundColor: '#F8FAFC' }}
+                style={{ flex: 1, minHeight: 0, padding: 'clamp(0.75rem, 2.5vw, 1rem)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#F8FAFC' }}
             >
                 {messages.map((msg) => (
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
@@ -728,13 +758,13 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                         width: '100%',
                         backgroundColor: '#FFFFFF',
                         borderRadius: '20px',
-                        padding: 'clamp(1rem, 3.5vw, 1.4rem)',
+                        padding: 'clamp(0.9rem, 2.5vw, 1.15rem)',
                         border: '1.5px solid #10B981',
                         boxShadow: '0 10px 30px rgba(16, 185, 129, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '1.1rem',
-                        margin: '0.5rem 0',
+                        gap: '0.85rem',
+                        margin: '0.15rem 0',
                         flexShrink: 0
                     }}>
                         <div style={{ borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -768,7 +798,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                             fontSize: '0.82rem',
                                             cursor: 'pointer',
                                             boxShadow: selectedType === type ? '0 2px 8px rgba(16, 185, 129, 0.15)' : 'none',
-                                            transition: 'all 0.2s ease',
+                                            transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '6px'
@@ -790,7 +820,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                 {/* Botón 'Todas' */}
                                 {(() => {
-                                    const isAll = selectedCategories.includes('Todas') || (selectedCategories.length === ALL_CATEGORIES.length && ALL_CATEGORIES.every(c => selectedCategories.includes(c)));
+                                    const isAll = selectedCategories.includes('Todas') || (selectedCategories.length === visibleCategories.length && visibleCategories.every(c => selectedCategories.includes(c)));
                                     return (
                                         <button
                                             type="button"
@@ -811,7 +841,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 fontSize: '0.82rem',
                                                 cursor: 'pointer',
                                                 boxShadow: isAll ? '0 2px 10px rgba(16, 185, 129, 0.3)' : 'none',
-                                                transition: 'all 0.2s ease',
+                                                transition: 'background-color 150ms ease, border-color 150ms ease',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '6px'
@@ -827,7 +857,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     );
                                 })()}
 
-                                {ALL_CATEGORIES.map(cat => {
+                                {visibleCategories.map(cat => {
                                     const isAll = selectedCategories.includes('Todas');
                                     const isSel = isAll || selectedCategories.includes(cat);
                                     return (
@@ -836,7 +866,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                             type="button"
                                             onClick={() => {
                                                 if (isAll) {
-                                                    setSelectedCategories(ALL_CATEGORIES.filter(c => c !== cat));
+                                                    setSelectedCategories(visibleCategories.filter(c => c !== cat));
                                                 } else {
                                                     setSelectedCategories(prev => {
                                                         const clean = prev.filter(c => c !== 'Todas');
@@ -854,7 +884,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                                 fontSize: '0.8rem',
                                                 cursor: 'pointer',
                                                 boxShadow: isSel ? '0 2px 8px rgba(16, 185, 129, 0.15)' : 'none',
-                                                transition: 'all 0.2s ease',
+                                                transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '6px'
@@ -878,27 +908,27 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 <TrendingUp size={16} style={{ color: '#10B981', flexShrink: 0 }} />
                                 <span>{isEn ? 'Estimated Monthly Purchasing Volume (COP):' : 'Volumen de Compras Mensual Estimado (COP):'}</span>
                             </label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '7px' }}>
                                 {BUSINESS_SIZES.map(size => (
                                     <button
                                         key={size}
                                         type="button"
                                         onClick={() => setSelectedSize(size)}
                                         style={{
-                                            padding: '10px 16px',
-                                            borderRadius: '14px',
+                                            padding: '8px 10px',
+                                            borderRadius: '12px',
                                             border: selectedSize === size ? '1.5px solid #10B981' : '1.5px solid #E2E8F0',
                                             backgroundColor: selectedSize === size ? '#ECFDF5' : '#FFFFFF',
                                             color: selectedSize === size ? '#065F46' : '#334155',
                                             fontWeight: selectedSize === size ? '800' : '600',
-                                            fontSize: '0.84rem',
+                                            fontSize: '0.79rem',
                                             textAlign: 'left',
                                             cursor: 'pointer',
                                             boxShadow: selectedSize === size ? '0 3px 10px rgba(16, 185, 129, 0.12)' : 'none',
-                                            transition: 'all 0.2s ease',
+                                            transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '10px'
+                                            gap: '7px'
                                         }}
                                     >
                                         {selectedSize === size ? (
@@ -931,7 +961,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 justifyContent: 'center',
                                 gap: '8px',
                                 marginTop: '6px',
-                                transition: 'all 0.2s ease'
+                                transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                             }}
                         >
                             <span>{isEn ? 'Next: Verify Coverage (Step 2/3)' : 'Siguiente: Validar Cobertura (Paso 2/3)'}</span>
@@ -1072,7 +1102,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                transition: 'all 0.2s ease'
+                                transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                             }}
                         >
                             <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
@@ -1195,7 +1225,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                 justifyContent: 'center',
                                 gap: '8px',
                                 marginTop: '6px',
-                                transition: 'all 0.2s ease'
+                                transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                             }}
                         >
                             <FileText size={20} />
@@ -1255,7 +1285,7 @@ export default function LeadGenBotV2({ lang = 'es' }: { lang?: string }) {
                                     gap: '6px',
                                     boxShadow: '0 3px 10px rgba(16, 185, 129, 0.25)',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s ease'
+                                    transition: 'background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease'
                                 }}
                             >
                                 <Download size={15} />

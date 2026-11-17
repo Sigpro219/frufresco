@@ -1,13 +1,18 @@
+import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { supabase, createAdminClient, type Product } from './supabase';
 import { filterStorefrontProductsByFrioganMode } from './storefront/storefrontEngine';
 import type { FrioganStorefrontMode } from './storefront/storefrontContracts';
 
+const STOREFRONT_PRODUCT_FALLBACK_COLUMNS =
+  'id, sku, name, display_name, name_en, description, category, inventory_group, tags, unit_of_measure, web_unit, weight_kg, options_config, image_url, web_conversion_factor, accounting_id, iva_rate, keywords, is_active, show_on_web, min_inventory_level';
+const STOREFRONT_PRODUCT_COLUMNS = `${STOREFRONT_PRODUCT_FALLBACK_COLUMNS}, pricing_model_prices(price, model_id)`;
+
 /**
  * Fetches all products visible on the web.
- * Cached for 1 hour by default.
+ * Cached for 1 hour by default and deduplicated per-request via React.cache.
  */
-export const getVisibleProducts = unstable_cache(
+const getVisibleProductsCached = unstable_cache(
   async (pricingModelId?: string) => {
     const modelId = pricingModelId || 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
 
@@ -35,7 +40,7 @@ export const getVisibleProducts = unstable_cache(
 
     const { data, error } = await dbClient
       .from('products')
-      .select('*, pricing_model_prices(price, model_id)')
+      .select(STOREFRONT_PRODUCT_COLUMNS)
       .eq('is_active', true)
       .eq('show_on_web', true)
       .eq('pricing_model_prices.model_id', modelId)
@@ -46,7 +51,7 @@ export const getVisibleProducts = unstable_cache(
       console.error('Error fetching products with prices, trying fallback:', error.message);
       const { data: fallbackData, error: fallbackError } = await dbClient
         .from('products')
-        .select('*')
+        .select(STOREFRONT_PRODUCT_FALLBACK_COLUMNS)
         .eq('is_active', true)
         .eq('show_on_web', true)
         .order('name', { ascending: true })
@@ -65,11 +70,45 @@ export const getVisibleProducts = unstable_cache(
   { revalidate: 60, tags: ['products'] }
 );
 
+export const getVisibleProducts = cache((pricingModelId?: string) => getVisibleProductsCached(pricingModelId));
+
+const getProductSalesRankingCached = unstable_cache(
+  async (): Promise<Record<string, number>> => {
+    try {
+      let dbClient: any = supabase;
+      try {
+        dbClient = createAdminClient();
+      } catch {
+        // Safe fallback
+      }
+      const { data, error } = await dbClient
+        .from('order_items')
+        .select('product_id')
+        .not('product_id', 'is', null)
+        .limit(3000);
+      if (error || !data) return {};
+      const counts: Record<string, number> = {};
+      for (const row of data as Array<{ product_id?: string | null }>) {
+        if (row?.product_id) {
+          counts[row.product_id] = (counts[row.product_id] || 0) + 1;
+        }
+      }
+      return counts;
+    } catch {
+      return {};
+    }
+  },
+  ['product-sales-ranking'],
+  { revalidate: 3600, tags: ['orders', 'products'] }
+);
+
+export const getProductSalesRanking = cache(() => getProductSalesRankingCached());
+
 /**
  * Fetches app settings.
- * Cached for 1 hour.
+ * Cached for 1 hour and deduplicated per-request via React.cache.
  */
-export const getAppSettings = unstable_cache(
+const getAppSettingsCached = unstable_cache(
   async () => {
     try {
       const { data, error } = await supabase.from('app_settings').select('key, value');
@@ -86,6 +125,8 @@ export const getAppSettings = unstable_cache(
   ['app-settings'],
   { revalidate: 3600, tags: ['settings'] }
 );
+
+export const getAppSettings = cache(() => getAppSettingsCached());
 
 /**
  * Fetches unique categories from visible products.

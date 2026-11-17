@@ -1,899 +1,480 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCart } from '../lib/cartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { translations, Locale } from '../lib/translations';
+import {
+  AlertTriangle,
+  Flame,
+  Leaf,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Snowflake,
+  Sparkles,
+  Tag,
+  X,
+  Zap,
+} from 'lucide-react';
+import { supabase, type Product } from '../lib/supabase';
+import { useCart } from '../lib/cartContext';
+import { translations, type Locale } from '../lib/translations';
 import { useAuth } from '../lib/authContext';
 import { resolvePricingModelId } from '../lib/pricingUtils';
-import { AlertTriangle, ShoppingCart, Tag, Leaf, Flame, Sparkles, Zap } from 'lucide-react';
-
-// Keep interface consistent with usage
-interface Product {
-    id: string;
-    name: string;
-    name_en?: string;
-    base_price?: number;
-    unit_of_measure: string;
-    image_url: string;
-    sku?: string;
-    iva_rate?: number;
-    options?: any;
-    options_config?: any[];
-    variants?: any[];
-    web_conversion_factor?: number;
-    web_unit?: string;
-    display_name?: string;
-    pricing_model_prices?: { price: number }[];
-    tags?: string[];
-}
+import {
+  buildStorefrontCartItem,
+  isFrioganProteinProduct,
+  resolveProductStorefrontPresentation,
+  resolveStorefrontPrice,
+} from '@/lib/storefront/storefrontEngine';
 
 interface QuickViewModalProps {
-    product: Product;
-    onClose: () => void;
-    initialQuantity?: number;
-    onUpdateQuantity?: (qty: number) => void;
+  product: Product;
+  onClose: () => void;
+  initialQuantity?: number;
+  onUpdateQuantity?: (qty: number) => void;
 }
 
-const ModalContent: React.FC<QuickViewModalProps> = ({ product: initialProduct, onClose, initialQuantity, onUpdateQuantity }) => {
-    const { addItem, items } = useCart();
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
-    const t = translations[locale];
-    const [quantity, setQuantity] = useState(initialQuantity !== undefined ? initialQuantity : 1);
-    const [inputValue, setInputValue] = useState(initialQuantity !== undefined ? String(initialQuantity).replace('.', ',') : '1');
+function ModalContent({
+  product: initialProduct,
+  onClose,
+  initialQuantity,
+  onUpdateQuantity,
+}: QuickViewModalProps) {
+  const { addItem, openDrawer } = useCart();
+  const { profile } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const locale = (searchParams.get('lang') === 'en' ? 'en' : 'es') as Locale;
+  const isEn = locale === 'en';
+  const t = translations[locale];
 
-    const { profile } = useAuth();
-    const [product, setProduct] = useState<Product>(initialProduct);
+  const [product, setProduct] = useState<Product>(initialProduct);
+  const [quantity, setQuantity] = useState<number>(initialQuantity ?? 1);
+  const [inputValue, setInputValue] = useState<string>(String(initialQuantity ?? 1));
+  const [extraSelections, setExtraSelections] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        const fetchFreshProduct = async () => {
-            const pricingModelId = resolvePricingModelId(profile);
-            const { data, error } = await supabase
-                .from('products')
-                .select('*, pricing_model_prices(price)')
-                .eq('id', initialProduct.id)
-                .eq('pricing_model_prices.model_id', pricingModelId)
-                .single();
-                
-            if (!error && data) {
-                setProduct(data as Product);
-            }
-        };
-        fetchFreshProduct();
-    }, [initialProduct.id, profile?.pricing_model_id]);
-
-    const [masterAttributes, setMasterAttributes] = useState<any[]>([]);
-
-    useEffect(() => {
-        const fetchMaster = async () => {
-            const { data } = await supabase
-                .from('product_attributes_master')
-                .select('name, show_on_web, show_in_picking');
-            if (data) setMasterAttributes(data);
-        };
-        fetchMaster();
-    }, []);
-
-    const rawBaseUnit = (product.unit_of_measure || '').trim().toLowerCase();
-    const isBaseInKg = ['kg', 'kilo', 'kilos'].includes(rawBaseUnit);
-
-    // Helper para extraer peso en Kg
-    const getParsedWeight = (text: string): number | null => {
-        if (!text) return null;
-        const clean = text.toLowerCase();
-        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
-            return (product as any).web_conversion_factor || (isBaseInKg ? 0.5 : 1);
-        }
-        if (text.includes('|')) {
-            const parts = text.split('|');
-            const grams = parseFloat(parts[1]);
-            if (!isNaN(grams) && grams > 0) return grams / 1000;
-        }
-        const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
-        if (kgMatch) {
-            const val = parseFloat(kgMatch[1]);
-            if (!isNaN(val) && val > 0) return val;
-        }
-        const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
-        if (gMatch) {
-            const val = parseFloat(gMatch[1]);
-            if (!isNaN(val) && val > 0) return val / 1000;
-        }
-        if (clean.includes('libra') || clean.includes('lb') || clean.includes('pound')) return 0.5;
-        return null;
+  useEffect(() => {
+    const fetchFresh = async () => {
+      const modelId = resolvePricingModelId(profile);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, pricing_model_prices(price, model_id)')
+        .eq('id', initialProduct.id)
+        .eq('pricing_model_prices.model_id', modelId)
+        .single();
+      if (!error && data) {
+        setProduct((prev) => ({
+          ...(data as Product),
+          display_name: prev.display_name || (data as Product).display_name,
+          pricing_model_prices:
+            prev.pricing_model_prices && prev.pricing_model_prices.length > 0
+              ? prev.pricing_model_prices
+              : (data as Product).pricing_model_prices,
+          campaign_info: prev.campaign_info ?? (data as Product).campaign_info,
+        }));
+      }
     };
+    fetchFresh();
+  }, [initialProduct.id, profile?.pricing_model_id, profile]);
 
-    // Helper para formatear visualmente valores de opciones con peso en Kg
-    const formatOptionDisplay = (val: string, isEn?: boolean): string => {
-        if (!val) return '';
-        const clean = val.toLowerCase();
-        if (clean === 'unidad web' || clean.includes('unidad web') || clean === 'unidadweb') {
-            const unitName = (product as any).web_unit || (isEn ? 'Pound' : 'Libra');
-            const factor = (product as any).web_conversion_factor || (isBaseInKg ? 0.5 : 1);
-            if (unitName.toLowerCase().includes('libra') || unitName.toLowerCase().includes('pound') || factor === 0.5) {
-                return `${unitName} 500g`;
-            }
-            const formattedWeight = factor >= 1 ? `${factor} kg` : `${Math.round(factor * 1000)} g`;
-            return `${unitName} ±${formattedWeight}`;
-        }
-        if (val.includes('|')) {
-            const parts = val.split('|');
-            const rawUnit = parts[0].trim();
-            const rawWeight = parts[1]?.trim();
-            if (rawWeight) {
-                const grams = parseFloat(rawWeight);
-                if (!isNaN(grams) && grams > 0) {
-                    if (grams === 500 || rawUnit.toLowerCase().includes('libra') || rawUnit.toLowerCase().includes('pound')) {
-                        return isEn ? 'Pound 500g' : 'Libra 500g';
-                    }
-                    let cleanBase = rawUnit.replace(/\s*\d+[\s]*(?:gr|g|grs|gramos|kg|kilo|kilos)?/gi, '').trim();
-                    if (!cleanBase) cleanBase = rawUnit;
-                    const unitName = isEn ? (cleanBase.toLowerCase() === 'unidad' ? 'Unit' : cleanBase) : cleanBase;
-
-                    if (grams < 1000) {
-                        return `${unitName} ±${grams} g`;
-                    }
-                    const kg = grams / 1000;
-                    const formattedKg = kg % 1 === 0 ? kg.toString() : (isEn ? kg.toFixed(1) : kg.toFixed(1).replace('.', ','));
-                    return `${unitName} ±${formattedKg} kg`;
-                }
-                return `${rawUnit} ±${rawWeight}`;
-            }
-            return rawUnit;
-        }
-        if (clean.includes('libra') || clean.includes('pound')) {
-            return isEn ? 'Pound 500g' : 'Libra 500g';
-        }
-        return val;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
     };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
-    // Normalizar las opciones aplicando reglas canónicas Hogar B2C
-    const displayOptions = useMemo(() => {
-        let opts = product.options_config && product.options_config.length > 0
-            ? product.options_config
-                .filter((opt: any) => {
-                    const master = masterAttributes.find(m => m.name.toLowerCase() === opt.name.toLowerCase());
-                    if (master) {
-                        return master.show_on_web === true;
-                    }
-                    return opt.show_on_web !== false;
-                })
-                .reduce((acc: any, opt: any) => {
-                    let values = opt.values || [];
-                    // SDD v1.9.177 / v1.9.305 (Escenario 324): "Maduro" es el estándar implícito; se suprime de selectores
-                    if (opt.name.toLowerCase().includes('madura')) {
-                        values = values.filter((v: string) => {
-                            const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
-                            return clean !== 'maduro' && clean !== 'madura';
-                        });
-                    }
-                    if (values.length === 0) return acc;
-                    return { ...acc, [opt.name]: values };
-                }, {})
-            : (() => {
-                const rawOpts = { ...(product.options || {}) };
-                Object.keys(rawOpts).forEach(k => {
-                    if (k.toLowerCase().includes('madura') && Array.isArray(rawOpts[k])) {
-                        rawOpts[k] = rawOpts[k].filter((v: string) => {
-                            const clean = (v.includes('|') ? v.split('|')[0] : v).toLowerCase().trim();
-                            return clean !== 'maduro' && clean !== 'madura';
-                        });
-                        if (rawOpts[k].length === 0) delete rawOpts[k];
-                    }
-                });
-                return rawOpts;
-            })();
+  const presentation = useMemo(
+    () => resolveProductStorefrontPresentation(product, locale),
+    [product, locale]
+  );
+  const [selectedOptKey, setSelectedOptKey] = useState<string>(presentation.defaultOption.key);
 
-        if (isBaseInKg) {
-            const presKey = Object.keys(opts).find(k => k.toLowerCase().includes('presentaci'));
-            const rawPresValues: string[] = presKey ? (opts[presKey] || []) : [];
+  useEffect(() => {
+    if (!presentation.options.some((o) => o.key === selectedOptKey)) {
+      setSelectedOptKey(presentation.defaultOption.key);
+    }
+  }, [presentation, selectedOptKey]);
 
-            // Detectar si alguna presentación supera 500g (Pieza Grande: Sandía, Papaya, Melón, Patilla, Calabaza, etc.)
-            const hasHeavyPiece = (product.web_conversion_factor && product.web_conversion_factor > 0.5) || rawPresValues.some(v => {
-                const w = getParsedWeight(v);
-                return w !== null && w > 0.5; // > 500g
-            });
+  const activeOption =
+    presentation.options.find((o) => o.key === selectedOptKey) || presentation.defaultOption;
+  const priceResolution = resolveStorefrontPrice(product, activeOption);
+  const isFriogan = presentation.kind === 'FIXED_VACUUM_PACK' || isFrioganProteinProduct(product);
 
-            if (hasHeavyPiece) {
-                // Pieza Grande (> 500g): Se vende por UNIDAD de fruta completa, PROHIBIDO vender por libras
-                const unitOnlyValues = rawPresValues.filter(v => {
-                    const w = getParsedWeight(v);
-                    return w !== null && w > 0.5;
-                });
-                opts = {
-                    ...opts,
-                    [presKey || 'Presentación']: unitOnlyValues.length > 0 ? unitOnlyValues : (rawPresValues.length > 0 ? rawPresValues : [product.web_unit || 'Unidad'])
-                };
-            } else {
-                // Gramaje <= 500g o sin presentación: En canal Hogar se vende SIEMPRE por LIBRAS (500g)
-                // Se purgan opciones sub-libra ("Unidad 200 gr", "Unidad 150 gr", etc.)
-                const canonicalLibra = locale === 'en' ? 'Pound 500g|500' : 'Libra 500g|500';
-                opts = {
-                    ...opts,
-                    [presKey || 'Presentación']: [canonicalLibra]
-                };
-            }
-        } else {
-            // Unidad de compra es Unidad: Se preserva la presentación
-            const presKey = Object.keys(opts).find(k => k.toLowerCase().includes('presentaci'));
-            if (!presKey) {
-                const defaultVal = (product as any).web_unit || product.unit_of_measure || 'Unidad';
-                opts = {
-                    ...opts,
-                    'Presentación': [defaultVal]
-                };
-            }
-        }
-        return opts;
-    }, [product, masterAttributes, locale, isBaseInKg]);
-
-    // Initialize selections with the first option of each category (sorted by weight/name)
-    const initialSelections = useMemo(() => {
-        const selections: Record<string, string> = {};
-        Object.entries(displayOptions).forEach(([key, values]: [string, any]) => {
-            if (Array.isArray(values) && values.length > 0) {
-                const defaultUnit = isBaseInKg ? (locale === 'en' ? 'pound 500g' : 'libra 500g') : ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-                const sortedValues = values.slice().sort((valA, valB) => {
-                    const weightA = getParsedWeight(valA);
-                    const weightB = getParsedWeight(valB);
-                    if (weightA !== null && weightB !== null && weightA !== weightB) {
-                        return weightA - weightB;
-                    }
-                    const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
-                    const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
-                    if (cleanA.toLowerCase() === defaultUnit) return -1;
-                    if (cleanB.toLowerCase() === defaultUnit) return 1;
-                    return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-                });
-                selections[key] = sortedValues[0];
-            }
-        });
-        return selections;
-    }, [displayOptions, product, locale, isBaseInKg]);
-
-    const [selections, setSelections] = useState(initialSelections);
-
-    useEffect(() => {
-        setSelections(prev => {
-            const hasChanges = Object.keys(initialSelections).some(k => prev[k] !== initialSelections[k]);
-            return hasChanges ? { ...prev, ...initialSelections } : prev;
-        });
-    }, [initialSelections]);
-
-    const visibleVariants = (product.variants || []).filter(v => v.show_on_web !== false);
-
-    const nonPresentationEntries = Object.entries(selections).filter(
-        ([key]) => !key.toLowerCase().includes('presentaci')
-    );
-
-    const currentVariant = visibleVariants.find(v =>
-        v.options && Object.entries(selections).every(([key, value]) => {
-            const vVal = v.options[key];
-            if (!vVal) return false;
-            if (vVal === value) return true;
-            const cleanV = vVal.split('|')[0].trim().toLowerCase();
-            const cleanS = value.split('|')[0].trim().toLowerCase();
-            return cleanV === cleanS;
-        })
-    ) || (
-        nonPresentationEntries.length > 0
-            ? visibleVariants.find(v =>
-                v.options && nonPresentationEntries.every(([key, value]) => v.options[key] === value)
-            )
-            : visibleVariants[0]
-    );
-
-    // Obtener la presentación seleccionada
-    let selectedPresentationVal: string | null = null;
-    Object.entries(selections).forEach(([key, val]) => {
-        if (key.toLowerCase().includes('presentaci')) {
-            selectedPresentationVal = val;
-        }
+  // Non-presentation attributes (e.g. ripeness) for non-Friogan items
+  const extraOptionGroups = useMemo(() => {
+    if (isFriogan || !Array.isArray(product.options_config)) return [];
+    return product.options_config.filter((grp: { name?: string; values?: string[] }) => {
+      const nameLower = String(grp?.name || '').toLowerCase();
+      return (
+        !nameLower.includes('presentaci') &&
+        !nameLower.includes('gramaje') &&
+        Array.isArray(grp?.values) &&
+        grp.values.length > 0
+      );
     });
+  }, [isFriogan, product.options_config]);
 
-    const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
-    const activeConversionFactor = parsedWeight !== null ? parsedWeight : (isBaseInKg ? 0.5 : ((product as any).web_conversion_factor || 1));
-    const activeUnit = selectedPresentationVal ? formatOptionDisplay(selectedPresentationVal, locale === 'en') : (isBaseInKg ? (locale === 'en' ? 'Pound 500g' : 'Libra 500g') : ((product as any).web_unit || product.unit_of_measure));
-
-    // Feedback visual humano y claro del peso acumulado (Hogar B2C)
-    const quantityFeedback = useMemo(() => {
-        const isEn = locale === 'en';
-        const isLibra = activeUnit.toLowerCase().includes('libra') || activeUnit.toLowerCase().includes('pound') || (isBaseInKg && (parsedWeight === 0.5 || parsedWeight === null));
-        
-        if (isLibra) {
-            const totalGrams = quantity * 500;
-            const formattedGrams = totalGrams.toLocaleString('es-CO');
-            const unitName = quantity === 1 ? (isEn ? 'Pound' : 'Libra') : (isEn ? 'Pounds' : 'Libras');
-            return `${quantity} ${unitName} (~${formattedGrams} g aprox.)`;
+  useEffect(() => {
+    if (extraOptionGroups.length === 0) return;
+    setExtraSelections((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const grp of extraOptionGroups) {
+        const cleanVals = (grp.values || []).filter((v: string) => {
+          const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+          return !String(grp.name || '').toLowerCase().includes('madura') || (clean !== 'maduro' && clean !== 'madura');
+        });
+        if (grp.name && cleanVals.length > 0 && !next[grp.name]) {
+          next[grp.name] = cleanVals[0];
+          changed = true;
         }
+      }
+      return changed ? next : prev;
+    });
+  }, [extraOptionGroups]);
 
-        if (parsedWeight !== null && parsedWeight > 0.5) {
-            const totalKg = quantity * parsedWeight;
-            const formattedKg = totalKg % 1 === 0 ? totalKg.toString() : (isEn ? totalKg.toFixed(1) : totalKg.toFixed(1).replace('.', ','));
-            const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
-            return `${quantity} ${unitName} (~${formattedKg} kg aprox.)`;
-        }
+  const title = isEn && product.name_en ? product.name_en : product.display_name || product.name;
+  const safeQty = Math.max(1, Math.round(quantity || 1));
+  const totalAmount = priceResolution.displayPrice * safeQty;
+  const weightSummaryKg = Math.round(activeOption.weightKg * safeQty * 100) / 100;
 
-        if (parsedWeight !== null && parsedWeight < 0.5 && parsedWeight > 0) {
-            const totalGrams = Math.round(quantity * parsedWeight * 1000);
-            const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
-            return `${quantity} ${unitName} (~${totalGrams.toLocaleString('es-CO')} g aprox.)`;
-        }
+  const commitInput = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, '');
+    if (!cleaned) {
+      setQuantity(1);
+      setInputValue('1');
+      return;
+    }
+    const parsed = Math.max(1, Math.floor(Number(cleaned)));
+    setQuantity(parsed);
+    setInputValue(String(parsed));
+  };
 
-        const unitName = quantity === 1 ? (isEn ? 'Unit' : 'Unidad') : (isEn ? 'Units' : 'Unidades');
-        return `${quantity} ${unitName}`;
-    }, [activeUnit, isBaseInKg, parsedWeight, quantity, locale]);
+  const handleAddToCart = () => {
+    if (!priceResolution.isPriceAvailable) return;
+    if (onUpdateQuantity) {
+      onUpdateQuantity(safeQty);
+    } else {
+      const item = buildStorefrontCartItem(
+        product,
+        activeOption,
+        safeQty,
+        presentation.options.length,
+        presentation.kind,
+        priceResolution,
+        locale
+      );
+      if (Object.keys(extraSelections).length > 0) {
+        item.selected_options = extraSelections;
+      }
+      addItem(item);
+      openDrawer();
+    }
+    onClose();
+  };
 
-    const isSelectedPresentationLibra = selectedPresentationVal?.toLowerCase().includes('libra') || selectedPresentationVal?.toLowerCase().includes('lb') || selectedPresentationVal?.toLowerCase().includes('unidad web');
-    const isAvailable = product.variants && product.variants.length > 0
-        ? (isSelectedPresentationLibra || !!currentVariant)
-        : true;
-    
-    // Aplicar factor de conversión y redondeo a 50
-    const rawPrice = currentVariant ? (currentVariant.price || product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0) : (product.pricing_model_prices?.[0]?.price || (product as any).base_price || 0);
-    
-    // Si la variante tiene price_adj_pct o price_adjustment_percent, aplicarlo al precio base
-    const adjustmentPercent = currentVariant ? (currentVariant.price_adj_pct ?? currentVariant.price_adjustment_percent ?? 0) : 0;
-    const priceWithAdjustment = rawPrice * (1 + adjustmentPercent / 100);
+  const handleBuyNow = () => {
+    if (!priceResolution.isPriceAvailable) return;
+    const item = buildStorefrontCartItem(
+      product,
+      activeOption,
+      safeQty,
+      presentation.options.length,
+      presentation.kind,
+      priceResolution,
+      locale
+    );
+    if (Object.keys(extraSelections).length > 0) {
+      item.selected_options = extraSelections;
+    }
+    addItem(item);
+    onClose();
+    router.push(isEn ? '/checkout?lang=en' : '/checkout');
+  };
 
-    const currentPrice = Math.ceil((priceWithAdjustment * activeConversionFactor) / 50) * 50;
-
-    const getFormattedOptionName = (name: string, isEn?: boolean) => {
-        const lower = name.toLowerCase();
-        if (lower.includes('madura') || lower.includes('madurez')) {
-            return isEn ? 'Ripeness level' : 'Punto de maduración';
-        }
-        if (lower.includes('presentaci')) {
-            return isEn ? 'Presentation' : 'Presentación';
-        }
-        if (lower.includes('calidad') || lower.includes('grado')) {
-            return isEn ? 'Grade / Quality' : 'Grado de calidad';
-        }
-        if (lower.includes('corte') || lower.includes('tamano') || lower.includes('tamaño')) {
-            return isEn ? 'Size / Cut' : 'Tamaño / Corte';
-        }
-        return name.charAt(0).toUpperCase() + name.slice(1);
-    };
-
-    const getFormattedName = () => {
-        const sortedEntries = Object.entries(selections).sort(([keyA], [keyB]) => keyA.localeCompare(keyB, undefined, { sensitivity: 'base' }));
-        const optionString = sortedEntries
-            .map(([key, value]) => {
-                const rawKey = key.toLowerCase();
-                const displayKey = (rawKey.includes('madura') || rawKey.includes('madurez'))
-                    ? (locale === 'en' ? 'Ripeness' : 'Maduración')
-                    : rawKey.includes('presentaci')
-                        ? (locale === 'en' ? 'Presentation' : 'Presentación')
-                        : key;
-                const displayVal = formatOptionDisplay(value, locale === 'en');
-                return `${displayKey}: ${displayVal}`;
-            })
-            .join(', ');
-        const baseName = locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name);
-        return optionString ? `${baseName} (${optionString})` : baseName;
-    };
-
-    const handleAddToCart = () => {
-        if (onUpdateQuantity) {
-            onUpdateQuantity(quantity);
-        } else {
-            const unitLower = (product.unit_of_measure || '').toLowerCase();
-            const isWeightUnit = ['kg', 'kilo', 'kilos'].includes(unitLower);
-            const isLibra = ['libra', 'libras'].includes(unitLower);
-
-            const parsedWeight = selectedPresentationVal ? getParsedWeight(selectedPresentationVal) : null;
-            let unitWeight = parsedWeight !== null ? parsedWeight : ((product as any).weight_kg !== undefined && (product as any).weight_kg !== null ? (product as any).weight_kg : (isWeightUnit ? 1 : isLibra ? 0.5 : 0));
-            let cartUnit = activeUnit;
-
-            addItem({
-                id: product.id,
-                name: getFormattedName(),
-                price: currentPrice,
-                iva_rate: product.iva_rate,
-                unit: cartUnit,
-                quantity: quantity,
-                image_url: product.image_url,
-                weight_kg: unitWeight
-            });
-        }
-        onClose();
-    };
-
-    const handleBuyNow = () => {
-        handleAddToCart();
-        router.push('/checkout');
-    };
-
-    return (
-        <div
-            style={{
-                position: 'fixed',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10000,
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)'
-            }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
-        >
-            <div 
-                className="custom-scrollbar"
-                style={{
-                    backgroundColor: 'white',
-                    borderRadius: '24px',
-                    padding: '1.75rem',
-                    width: '92%',
-                    maxWidth: '480px',
-                    maxHeight: 'calc(100dvh - 32px)',
-                    overflowY: 'auto',
-                    overscrollBehavior: 'contain',
-                    position: 'relative',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                    animation: 'modalFadeUp 0.3s ease-out'
-                }}
-            >
-                <style jsx>{`
-                    @keyframes modalFadeUp {
-                        from { opacity: 0; transform: translateY(20px); }
-                        to { opacity: 1; transform: translateY(0); }
-                    }
-                `}</style>
-                <button
-                    onClick={onClose}
-                    style={{
-                        position: 'absolute',
-                        top: '1.25rem',
-                        right: '1.25rem',
-                        background: '#F3F4F6',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '32px',
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: '#6B7280',
-                        fontSize: '1rem',
-                        transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E5E7EB'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                >
-                    </button>
-
-                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem' }}>
-                    <div style={{
-                        width: '140px',
-                        height: '140px',
-                        borderRadius: '16px',
-                        overflow: 'hidden',
-                        backgroundColor: '#F9FAFB',
-                        border: '1px solid #F3F4F6',
-                        position: 'relative',
-                        flexShrink: 0
-                    }}>
-                        <img
-                            src={product.image_url}
-                            alt={product.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => (e.currentTarget.src = 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=400')}
-                        />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        {/* BADGES ARRIBA DEL TÍTULO EN MODAL (ÚNICO CON LUCIDE ICONS) */}
-                        {product.tags && product.tags.length > 0 && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
-                                {product.tags.map((tag, i) => {
-                                    const lower = (tag || '').toLowerCase();
-                                    const isPromo = lower.includes('promo') || lower.includes('descuento');
-                                    const isFlash = lower.includes('oferta') || lower.includes('flash') || lower.includes('rayo');
-                                    const isHarvest = lower.includes('cosecha') || lower.includes('temporada') || lower.includes('fresco') || lower.includes('viva');
-                                    const isBestSeller = lower.includes('vendido') || lower.includes('best') || lower.includes('top');
-                                    const isGourmet = lower.includes('gourmet') || lower.includes('destacado') || lower.includes('premium');
-                                    
-                                    const bg = (isPromo || isFlash) ? '#FEF2F2' : isHarvest ? '#ECFDF5' : isBestSeller ? '#FFFBEB' : isGourmet ? '#F5F3FF' : 'rgba(0, 0, 0, 0.04)';
-                                    const color = (isPromo || isFlash) ? '#DC2626' : isHarvest ? '#059669' : isBestSeller ? '#D97706' : isGourmet ? '#7C3AED' : 'var(--primary-dark)';
-                                    const border = (isPromo || isFlash) ? '1px solid #FCA5A5' : isHarvest ? '1px solid #A7F3D0' : isBestSeller ? '1px solid #FDE68A' : isGourmet ? '1px solid #DDD6FE' : '1px solid rgba(0, 0, 0, 0.08)';
-                                    
-                                    return (
-                                        <span key={i} style={{
-                                            backgroundColor: bg,
-                                            padding: '3px 8px',
-                                            borderRadius: '6px',
-                                            fontSize: '0.65rem',
-                                            fontWeight: '800',
-                                            color: color,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.04em',
-                                            border: border,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}>
-                                            {isFlash ? (
-                                                <Zap size={12} strokeWidth={2.5} />
-                                            ) : isPromo ? (
-                                                <Tag size={12} strokeWidth={2.5} />
-                                            ) : isHarvest ? (
-                                                <Leaf size={12} strokeWidth={2.5} />
-                                            ) : isBestSeller ? (
-                                                <Flame size={12} strokeWidth={2.5} />
-                                            ) : isGourmet ? (
-                                                <Sparkles size={12} strokeWidth={2.5} />
-                                            ) : (
-                                                <Tag size={12} strokeWidth={2.5} />
-                                            )}
-                                            <span>{tag}</span>
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 0.4rem', color: '#111827', lineHeight: '1.3' }}>
-                            {locale === 'en' ? (product.name_en || product.display_name || product.name) : (product.display_name || product.name)}
-                        </h2>
-                        <p style={{
-                            fontSize: '1.6rem',
-                            fontWeight: '900',
-                            color: 'var(--primary)',
-                            margin: 0
-                        }}>
-                            ${(currentPrice || 0).toLocaleString('es-CO')}
-                            <span style={{ fontSize: '0.85rem', color: '#6B7280', fontWeight: '500' }}> / {activeUnit}</span>
-                        </p>
-                    </div>
-                </div>
-
-                {/* ALERTA DE PRODUCTO YA EXISTENTE EN EL CARRITO/PEDIDO */}
-                {(() => {
-                    const finalName = currentVariant
-                        ? `${product.name} (${Object.values(selections).map(v => formatOptionDisplay(v, locale === 'en')).join(', ')})`
-                        : product.name;
-                    const existingInCart = items?.find(item => item.id === product.id && item.name === finalName)
-                        || items?.find(item => item.id === product.id);
-                    if (!existingInCart || onUpdateQuantity) return null;
-
-                    const currentQty = Number(existingInCart.quantity || 0);
-                    const addedNum = Number(quantity) || 0;
-                    const newTotal = Math.round((currentQty + addedNum) * 1000) / 1000;
-                    const productName = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name);
-                    const unitLabel = existingInCart.unit || activeUnit;
-
-                    const titleStr = t.alreadyInCartTitle || 'Insumo ya incluido en tu pedido';
-                    const msgStr = (t.alreadyInCartMsg || 'Ya tienes {qty} {unit} de {name} en tu pedido.')
-                        .replace('{qty}', String(currentQty))
-                        .replace('{unit}', unitLabel)
-                        .replace('{name}', productName);
-                    const badgeStr = (t.alreadyInCartBadge || 'Al adicionar {qty} {unit} el nuevo total será {total} {unit}')
-                        .replace('{qty}', String(quantity))
-                        .replace('{unit}', activeUnit)
-                        .replace('{total}', String(newTotal))
-                        .replace('{unit}', unitLabel);
-
-                    return (
-                        <div style={{
-                            backgroundColor: '#FFFBEB',
-                            border: '1.5px solid #F59E0B',
-                            borderRadius: '14px',
-                            padding: '0.85rem 1rem',
-                            marginBottom: '1rem',
-                            textAlign: 'left',
-                            fontSize: '0.82rem',
-                            color: '#92400E',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '10px',
-                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.12)'
-                        }}>
-                            <AlertTriangle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
-                            <div>
-                                <div style={{ fontWeight: '900', fontSize: '0.86rem', color: '#B45309', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <ShoppingCart size={15} style={{ color: '#B45309' }} /> {titleStr}
-                                </div>
-                                <div style={{ marginTop: '3px', color: '#78350F', lineHeight: '1.4' }}>
-                                    {msgStr}
-                                </div>
-                                <div style={{ marginTop: '6px', fontSize: '0.78rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '4px 8px', borderRadius: '8px', display: 'inline-block' }}>
-                                    {badgeStr}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                <div style={{ height: '1px', backgroundColor: '#F3F4F6', margin: '1.25rem 0' }}></div>
-
-                <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '0.5rem' }}>
-                    {Object.entries(displayOptions)
-                        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-                        .map(([optionName, values]: [string, any]) => {
-                            const displayOptionName = getFormattedOptionName(optionName, locale === 'en');
-                            return (
-                                <div key={optionName} style={{ marginBottom: '1.25rem' }}>
-                                    <label style={{ display: 'block', fontWeight: '700', marginBottom: '0.6rem', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#6B7280' }}>
-                                        {displayOptionName}
-                                    </label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                                        {Array.isArray(values) && values
-                                            .slice()
-                                            .sort((valA, valB) => {
-                                                const weightA = getParsedWeight(valA);
-                                                const weightB = getParsedWeight(valB);
-                                                if (weightA !== null && weightB !== null && weightA !== weightB) {
-                                                    return weightA - weightB;
-                                                }
-                                                const cleanA = valA.includes('|') ? valA.split('|')[0] : valA;
-                                                const cleanB = valB.includes('|') ? valB.split('|')[0] : valB;
-                                                const defaultUnit = ((product as any).web_unit || product.unit_of_measure || '').toLowerCase();
-                                                if (cleanA.toLowerCase() === defaultUnit) return -1;
-                                                if (cleanB.toLowerCase() === defaultUnit) return 1;
-                                                return cleanA.localeCompare(cleanB, undefined, { numeric: true, sensitivity: 'base' });
-                                            })
-                                            .map((val) => {
-                                        const displayVal = formatOptionDisplay(val, locale === 'en');
-                                        return (
-                                            <button
-                                                key={val}
-                                                onClick={() => setSelections({ ...selections, [optionName]: val })}
-                                                style={{
-                                                    padding: '0.5rem 1rem',
-                                                    borderRadius: '10px',
-                                                    border: selections[optionName] === val ? '2px solid var(--primary)' : '1px solid #E5E7EB',
-                                                    backgroundColor: selections[optionName] === val ? 'var(--primary)' : 'white',
-                                                    color: selections[optionName] === val ? 'white' : '#4B5563',
-                                                    fontWeight: '700',
-                                                    fontSize: '0.85rem',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                }}
-                                            >
-                                                {displayVal}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <div style={{ marginBottom: '2rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '0.75rem', color: '#6B7280', textTransform: 'uppercase' }}>
-                        {t.selectionQuantity}
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            border: '1.5px solid #F3F4F6', 
-                            borderRadius: '12px', 
-                            overflow: 'hidden',
-                            backgroundColor: '#F9FAFB'
-                        }}>
-                            <button
-                                onClick={() => {
-                                    const newQty = Math.max(1, Math.round(quantity - 1));
-                                    setQuantity(newQty);
-                                    setInputValue(String(newQty));
-                                }}
-                                style={{
-                                    width: '44px', height: '44px',
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    fontSize: '1.2rem',
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
-                                    color: '#4B5563',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >−</button>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={inputValue}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === '') {
-                                        setInputValue('');
-                                        setQuantity(0);
-                                        return;
-                                    }
-                                    const cleanInt = val.replace(/[^0-9]/g, '');
-                                    setInputValue(cleanInt);
-                                    const num = parseInt(cleanInt, 10);
-                                    if (!isNaN(num) && num > 0) {
-                                        setQuantity(num);
-                                    }
-                                }}
-                                onBlur={() => {
-                                    if (quantity <= 0) {
-                                        setQuantity(1);
-                                        setInputValue('1');
-                                    } else {
-                                        const intVal = Math.max(1, Math.round(quantity));
-                                        setQuantity(intVal);
-                                        setInputValue(String(intVal));
-                                    }
-                                }}
-                                style={{
-                                    width: '60px',
-                                    textAlign: 'center',
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    fontSize: '1.1rem',
-                                    fontWeight: '800',
-                                    color: '#111827',
-                                    outline: 'none'
-                                }}
-                            />
-                            <button
-                                onClick={() => {
-                                    const newQty = Math.max(1, Math.round(quantity + 1));
-                                    setQuantity(newQty);
-                                    setInputValue(String(newQty));
-                                }}
-                                style={{
-                                    width: '44px', height: '44px',
-                                    border: 'none',
-                                    backgroundColor: 'transparent',
-                                    fontSize: '1.2rem',
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
-                                    color: '#4B5563',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >+</button>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                            <span style={{ 
-                                fontSize: '0.85rem', 
-                                fontWeight: '800', 
-                                color: 'var(--primary)', 
-                                backgroundColor: 'rgba(34, 197, 94, 0.08)', 
-                                padding: '6px 12px', 
-                                borderRadius: '10px', 
-                                border: '1px solid rgba(34, 197, 94, 0.15)',
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                            }}>
-                                {quantityFeedback}
-                            </span>
-                            {isBaseInKg && (
-                                <span style={{ fontSize: '0.72rem', color: '#6B7280', fontWeight: '500' }}>
-                                    {locale === 'en' ? 'Approx. scale weight' : 'Peso aprox. en báscula'}
-                                </span>
-                            )}
-                        </div>
-
-                        <div style={{ flex: 1, textAlign: 'right' }}>
-                             <span style={{ fontSize: '0.9rem', color: '#9CA3AF', fontWeight: '600' }}>{t.total}</span>
-                             <div style={{ fontSize: '1.35rem', fontWeight: '900', color: isAvailable ? '#111827' : '#9CA3AF' }}>
-                                 ${(currentPrice * (isAvailable ? quantity : 1)).toLocaleString('es-CO')}
-                             </div>
-                         </div>
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {!isAvailable && (
-                        <div style={{ 
-                            backgroundColor: '#FEF2F2', 
-                            color: '#EF4444', 
-                            padding: '0.75rem', 
-                            borderRadius: '10px', 
-                            fontSize: '0.85rem', 
-                            fontWeight: '700', 
-                            textAlign: 'center',
-                            border: '1px solid #FEE2E2',
-                            marginBottom: '0.5rem'
-                        }}>
-                                                         ️ {t.notAvailableAlt}
-                        </div>
-                    )}
-                    <button
-                        onClick={handleAddToCart}
-                        disabled={!isAvailable}
-                        style={{
-                            width: '100%',
-                            padding: '1.15rem',
-                            backgroundColor: 'white',
-                            border: `2.5px solid ${isAvailable ? 'var(--primary)' : '#E5E7EB'}`,
-                            color: isAvailable ? 'var(--primary)' : '#9CA3AF',
-                            borderRadius: '15px',
-                            fontSize: '1rem',
-                            fontWeight: '800',
-                            cursor: isAvailable ? 'pointer' : 'not-allowed',
-                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                        }}
-                        onMouseEnter={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1.02)';
-                                e.currentTarget.style.backgroundColor = 'rgba(26, 77, 46, 0.05)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if(isAvailable) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.backgroundColor = 'white';
-                            }
-                        }}
-                    >
-                        {onUpdateQuantity 
-                            ? (locale === 'en' ? 'Update Quantity' : 'Actualizar Cantidad') 
-                            : (isAvailable ? t.addToOrder : t.unavailable)}
-                    </button>
-                    {!onUpdateQuantity && (
-                        <button
-                            onClick={handleBuyNow}
-                            disabled={!isAvailable}
-                            style={{
-                                width: '100%',
-                                padding: '1.15rem',
-                                borderRadius: '15px',
-                                fontSize: '1rem',
-                                fontWeight: '800',
-                                cursor: isAvailable ? 'pointer' : 'not-allowed',
-                                backgroundColor: isAvailable ? 'var(--primary)' : '#F3F4F6',
-                                color: isAvailable ? 'white' : '#9CA3AF',
-                                border: 'none',
-                                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                boxShadow: isAvailable ? '0 10px 20px rgba(26, 77, 46, 0.2)' : 'none'
-                            }}
-                            onMouseEnter={(e) => {
-                                if(isAvailable) {
-                                    e.currentTarget.style.transform = 'scale(1.02)';
-                                    e.currentTarget.style.boxShadow = '0 15px 30px rgba(26, 77, 46, 0.3)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if(isAvailable) {
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                    e.currentTarget.style.boxShadow = '0 10px 20px rgba(26, 77, 46, 0.2)';
-                                }
-                            }}
-                        >
-                            {isAvailable ? t.payNow : t.outOfStock}
-                        </button>
-                    )}
-                </div>
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(8, 28, 21, 0.6)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        padding: '16px',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '22px',
+          width: '100%',
+          maxWidth: '500px',
+          maxHeight: 'min(90dvh, 720px)',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          padding: '20px',
+          boxShadow: '0 24px 48px -12px rgba(8, 28, 21, 0.35)',
+        }}
+      >
+        {/* Top Row: Image + Meta */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: 0 }}>
+            <div style={{ width: '76px', height: '76px', borderRadius: '14px', overflow: 'hidden', backgroundColor: '#FAF9F6', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {product.image_url ? (
+                <img src={product.image_url} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <Sparkles size={26} color="#0D7A57" />
+              )}
             </div>
+            <div style={{ minWidth: 0 }}>
+              <h3 style={{ margin: '2px 0 4px', fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 800, fontSize: '1.15rem', color: '#081C15', lineHeight: 1.2 }}>
+                {title}
+              </h3>
+              <div style={{ fontSize: '1.08rem', fontWeight: 800, color: isFriogan ? '#7F1D1D' : '#0D7A57', fontVariantNumeric: 'tabular-nums' }}>
+                {priceResolution.isPriceAvailable ? (
+                  <>
+                    ${priceResolution.displayPrice.toLocaleString('es-CO')}{' '}
+                    <span style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
+                      / {activeOption.label}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: '#64748B' }}>{isEn ? 'Price on request' : 'Precio a consultar'}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={isEn ? 'Close quick view' : 'Cerrar vista rápida'}
+            style={{ width: '34px', height: '34px', borderRadius: '9999px', border: '1px solid rgba(8,28,21,0.14)', backgroundColor: '#FAF9F6', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          >
+            <X size={17} />
+          </button>
         </div>
-    );
-};
 
-const QuickViewModal: React.FC<QuickViewModalProps> = (props) => {
-    const [mounted, setMounted] = useState(false);
+        {/* Tags */}
+        {Array.isArray(product.tags) && product.tags.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+            {product.tags.slice(0, 4).map((tag) => (
+              <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 9px', borderRadius: '9999px', backgroundColor: '#FEF3C7', color: '#92400E', fontSize: '0.76rem', fontWeight: 700 }}>
+                {String(tag).toLowerCase().includes('promo') ? <Flame size={12} /> : String(tag).toLowerCase().includes('org') ? <Leaf size={12} /> : <Tag size={12} />}
+                <span>{tag}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
-    useEffect(() => {
-        setMounted(true);
-        const originalOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = originalOverflow || 'unset';
-        };
-    }, []);
+        {/* Presentation Selector */}
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+            {isEn ? 'Presentation' : 'Presentación'}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
+            {presentation.options.map((opt) => {
+              const active = opt.key === activeOption.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setSelectedOptKey(opt.key)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '10px',
+                    border: `1.5px solid ${active ? (isFriogan ? '#7F1D1D' : '#0D7A57') : 'rgba(8,28,21,0.14)'}`,
+                    backgroundColor: active ? (isFriogan ? '#FFF5F5' : '#ECFDF5') : '#FFFFFF',
+                    color: active ? (isFriogan ? '#7F1D1D' : '#065F46') : '#334155',
+                    fontWeight: 700,
+                    fontSize: '0.84rem',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-    if (!mounted) return null;
+        {/* Extra Physical Attributes (Agricultural only) */}
+        {extraOptionGroups.map((grp: { name?: string; values?: string[] }) => {
+          const vals = (grp.values || []).filter((v: string) => {
+            const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
+            return !String(grp.name || '').toLowerCase().includes('madura') || (clean !== 'maduro' && clean !== 'madura');
+          });
+          if (!grp.name || vals.length === 0) return null;
+          return (
+            <div key={grp.name} style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                {grp.name}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {vals.map((val) => {
+                  const selected = extraSelections[grp.name!] === val;
+                  const label = val.includes('|') ? val.split('|')[0] : val;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setExtraSelections((p) => ({ ...p, [grp.name!]: val }))}
+                      style={{
+                        padding: '6px 11px',
+                        borderRadius: '9px',
+                        border: `1px solid ${selected ? '#0D7A57' : 'rgba(8,28,21,0.14)'}`,
+                        backgroundColor: selected ? '#ECFDF5' : '#FFFFFF',
+                        color: selected ? '#065F46' : '#334155',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
 
-    return createPortal(
-        <ModalContent {...props} />,
-        document.body
-    );
-};
+        {/* Quantity + Weight Notice */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px', borderRadius: '14px', backgroundColor: '#FAF9F6', border: '1px solid rgba(8,28,21,0.08)', marginBottom: '14px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid rgba(8,28,21,0.16)', borderRadius: '9999px', backgroundColor: '#FFFFFF', padding: '3px' }}>
+              <button
+                type="button"
+                aria-label="Disminuir cantidad"
+                onClick={() => {
+                  const next = Math.max(1, safeQty - 1);
+                  setQuantity(next);
+                  setInputValue(String(next));
+                }}
+                style={{ width: '30px', height: '30px', borderRadius: '9999px', border: 'none', backgroundColor: '#FAF9F6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Minus size={14} />
+              </button>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value.replace(/[^0-9]/g, ''))}
+                onBlur={() => commitInput(inputValue)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                }}
+                style={{ width: '42px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 800, fontSize: '0.95rem', fontVariantNumeric: 'tabular-nums', outline: 'none' }}
+              />
+              <button
+                type="button"
+                aria-label="Aumentar cantidad"
+                onClick={() => {
+                  const next = safeQty + 1;
+                  setQuantity(next);
+                  setInputValue(String(next));
+                }}
+                style={{ width: '30px', height: '30px', borderRadius: '9999px', border: 'none', backgroundColor: '#FAF9F6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
 
-export default QuickViewModal;
+            <div style={{ fontSize: '0.8125rem', color: isFriogan ? '#7F1D1D' : '#475569', fontWeight: 600 }}>
+              {isFriogan ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Snowflake size={14} />
+                  <span>{presentation.sealedWeightLabel || 'Empaque exacto al vacío'}</span>
+                </span>
+              ) : (
+                <span>
+                  {weightSummaryKg > 0 ? `${weightSummaryKg} kg · Peso aprox. en báscula` : activeOption.label}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: '0.78rem', color: '#64748B' }}>{t.total}</div>
+            <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#081C15' }}>
+              {priceResolution.isPriceAvailable ? `$${totalAmount.toLocaleString('es-CO')}` : '—'}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        {!priceResolution.isPriceAvailable && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 12px', borderRadius: '10px', backgroundColor: '#FEF2F2', color: '#991B1B', fontSize: '0.83rem', fontWeight: 700, marginBottom: '12px' }}>
+            <AlertTriangle size={16} />
+            <span>{isEn ? 'Price on request for this account' : 'Producto sin tarifa vigente para tu lista (Precio a consultar)'}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            type="button"
+            disabled={!priceResolution.isPriceAvailable}
+            onClick={handleAddToCart}
+            style={{
+              flex: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '7px',
+              padding: '11px 14px',
+              borderRadius: '12px',
+              border: 'none',
+              backgroundColor: priceResolution.isPriceAvailable ? (isFriogan ? '#7F1D1D' : '#0D7A57') : '#CBD5E1',
+              color: '#FFFFFF',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              cursor: priceResolution.isPriceAvailable ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <ShoppingCart size={16} />
+            <span>{priceResolution.isPriceAvailable ? t.addToOrder || 'Agregar al carrito' : 'Precio a consultar'}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={!priceResolution.isPriceAvailable}
+            onClick={handleBuyNow}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '11px 14px',
+              borderRadius: '12px',
+              border: `1.5px solid ${priceResolution.isPriceAvailable ? '#081C15' : '#CBD5E1'}`,
+              backgroundColor: '#FFFFFF',
+              color: priceResolution.isPriceAvailable ? '#081C15' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              cursor: priceResolution.isPriceAvailable ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Zap size={15} />
+            <span>{t.payNow || 'Pagar'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function QuickViewModal(props: QuickViewModalProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted || typeof document === 'undefined') return null;
+  return createPortal(<ModalContent {...props} />, document.body);
+}

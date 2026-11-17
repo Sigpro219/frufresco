@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { resolvePricingModelId, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import { getParsedWeight as parseCanonicalWeight } from '@/lib/orderUtils';
+import { STOREFRONT_CRATE_PRODUCT_ID } from '@/lib/storefront/storefrontContracts';
+import { isFrioganProteinProduct, parseFrioganStorefrontMode } from '@/lib/storefront/storefrontEngine';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -19,6 +22,21 @@ export async function POST(request: Request) {
 
         if (!order || !items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: 'Invalid order data' }, { status: 400 });
+        }
+
+        const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        for (const item of items) {
+            if (!item || typeof item.product_id !== 'string' || !uuidRe.test(item.product_id)) {
+                return NextResponse.json({ error: 'Invalid product identifier' }, { status: 400 });
+            }
+            const qty = Number(item.quantity);
+            if (!Number.isFinite(qty) || qty <= 0) {
+                return NextResponse.json({ error: 'Invalid item quantity' }, { status: 400 });
+            }
+            const unitPrice = Number(item.unit_price);
+            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                return NextResponse.json({ error: 'Invalid item price' }, { status: 400 });
+            }
         }
 
         if (!supabase) {
@@ -55,62 +73,102 @@ export async function POST(request: Request) {
             let pricingModelId = (order.type === 'b2c_client') 
                 ? CLIENTES_HOGAR_ID 
                 : GENERAL_INSTITUCIONAL_ID;
+            const agreementPricesMap = new Map<string, number>();
 
             if (userId) {
                 const { data: profile } = await serverSupabase
                     .from('profiles')
-                    .select('id, role, profile_type, company_name, pricing_model_id, parent_id, parent:parent_id(pricing_model_id)')
+                    .select('id, role, profile_type, company_name, pricing_model_id, parent_id, logistics_data, parent:parent_id(pricing_model_id)')
                     .eq('id', userId)
                     .single();
                 if (profile) {
                     pricingModelId = resolvePricingModelId({ ...profile, parent: Array.isArray(profile.parent) ? profile.parent[0] : profile.parent });
+                    const effectiveClientId = profile.parent_id || userId;
+                    let targetAgreementId: string | null = null;
+                    const { data: activeAgreement } = await supabase
+                        .from('quotes')
+                        .select('id')
+                        .eq('client_id', effectiveClientId)
+                        .eq('status', 'agreement')
+                        .maybeSingle();
+
+                    if (activeAgreement?.id) {
+                        targetAgreementId = activeAgreement.id;
+                    } else {
+                        let masterQuoteId = (profile.logistics_data as Record<string, unknown> | null)?.active_master_agreement_id as string | undefined;
+                        if (!masterQuoteId) {
+                            const { data: modelRow } = await supabase
+                                .from('special_agreement_model_clients')
+                                .select('model_id')
+                                .in('client_id', [userId, profile.parent_id].filter(Boolean))
+                                .limit(1)
+                                .maybeSingle();
+                            if (modelRow?.model_id) {
+                                const { data: sam } = await supabase
+                                    .from('special_agreement_models')
+                                    .select('master_quote_id')
+                                    .eq('id', modelRow.model_id)
+                                    .maybeSingle();
+                                masterQuoteId = sam?.master_quote_id;
+                            }
+                        }
+                        if (masterQuoteId) targetAgreementId = masterQuoteId;
+                    }
+
+                    if (targetAgreementId) {
+                        const { data: qItems } = await supabase
+                            .from('quote_items')
+                            .select('product_id, unit_price')
+                            .eq('quote_id', targetAgreementId);
+                        qItems?.forEach((qi: { product_id: string; unit_price: number }) => {
+                            if (Number(qi.unit_price) > 0) {
+                                agreementPricesMap.set(qi.product_id, Number(qi.unit_price));
+                            }
+                        });
+                    }
                 }
             }
 
-            const getParsedWeight = (text?: string): number | null => {
-                if (!text) return null;
-                if (text.includes('|')) {
-                    const parts = text.split('|');
-                    const grams = parseFloat(parts[1]);
-                    if (!isNaN(grams) && grams > 0) return grams / 1000;
-                }
-                const clean = text.toLowerCase().replace(',', '.');
-                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
-                if (kgMatch) {
-                    const val = parseFloat(kgMatch[1]);
-                    if (!isNaN(val) && val > 0) return val;
-                }
-                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
-                if (gMatch) {
-                    const val = parseFloat(gMatch[1]);
-                    if (!isNaN(val) && val > 0) return val / 1000;
-                }
-                if (clean.includes('libra') || clean.includes('lb') || clean.includes('pound') || clean.includes('500g')) return 0.5;
-                return null;
-            };
+            const getParsedWeight = (text?: string): number | null => parseCanonicalWeight(text);
 
-            const productIds = items.map((item: any) => item.product_id);
+            const { data: frioganSetting } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'friogan_storefront_mode')
+                .maybeSingle();
+            const frioganMode = parseFrioganStorefrontMode(frioganSetting?.value);
+
+            const productIds = items.map((item: { product_id: string }) => item.product_id);
             const { data: dbProducts, error: dbErr } = await supabase
                 .from('products')
-                .select('id, base_price, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id), product_variants(sku, price_adjustment_percent, is_active, options)')
+                .select('id, base_price, category, inventory_group, tags, web_conversion_factor, unit_of_measure, pricing_model_prices(price, model_id), product_variants(sku, price_adjustment_percent, is_active, options)')
                 .in('id', productIds);
 
             if (dbErr) {
-                console.warn("Pricing cache check skipped due to DB error:", dbErr.message);
+                console.error("Pricing cache check failed:", dbErr.message);
+                return NextResponse.json({ error: 'Unable to verify product pricing' }, { status: 500 });
             } else if (dbProducts) {
                 for (const item of items) {
-                    const dbProd = dbProducts.find((p: any) => p.id === item.product_id);
+                    const dbProd = dbProducts.find((p: { id: string }) => p.id === item.product_id);
                     if (!dbProd) {
                         return NextResponse.json({ error: `Product not found: ${item.product_id}` }, { status: 400 });
                     }
+                    if (isFrioganProteinProduct(dbProd) && frioganMode !== 'LIVE') {
+                        return NextResponse.json({ error: 'Producto Friogan no disponible en el modo actual.' }, { status: 403 });
+                    }
+                    const isCrateDepositItem = item.product_id === STOREFRONT_CRATE_PRODUCT_ID;
                     const parsedWeight = getParsedWeight(item.unit) || getParsedWeight(item.variant_label);
                     const isLibraUnit = !!(item.unit && (item.unit.toLowerCase().includes('libra') || item.unit.toLowerCase().includes('500g')));
                     const isKgProd = (dbProd.unit_of_measure || '').toLowerCase() === 'kg';
                     const unitFactor = parsedWeight !== null ? parsedWeight : ((isLibraUnit && isKgProd) ? 0.5 : (dbProd.web_conversion_factor || 1));
 
                     const basePrices: number[] = [];
-                    if (dbProd.base_price && Number(dbProd.base_price) > 0) {
+                    if (isCrateDepositItem && dbProd.base_price && Number(dbProd.base_price) > 0) {
                         basePrices.push(Number(dbProd.base_price));
+                    }
+                    const agreedUnitPrice = agreementPricesMap.get(item.product_id);
+                    if (agreedUnitPrice && agreedUnitPrice > 0) {
+                        basePrices.push(agreedUnitPrice);
                     }
                     if (dbProd.pricing_model_prices) {
                         for (const p of dbProd.pricing_model_prices) {
@@ -139,20 +197,22 @@ export async function POST(request: Request) {
                         }
                     }
 
-                    const isPriceValid = item.unit_price === 0 || allowedPrices.some(ap => ap > 0 && Math.abs(ap - item.unit_price) <= 0.01);
+                    const positiveAllowed = allowedPrices.filter(p => p > 0);
+                    const sentUnitPrice = Number(item.unit_price);
+                    const isPriceValid = isCrateDepositItem
+                        ? sentUnitPrice >= 0
+                        : positiveAllowed.length > 0 && positiveAllowed.some(ap => Math.abs(ap - sentUnitPrice) <= 1);
 
                     if (!isPriceValid) {
-                        console.error(`Price validation: Product: ${item.product_id}, Sent price: ${item.unit_price}, Allowed prices:`, allowedPrices);
-                        // Allow if sent price is greater than zero and doesn't deviate erratically
-                        const minAllowed = Math.min(...allowedPrices.filter(p => p > 0));
-                        if (item.unit_price <= 0 || (minAllowed > 0 && item.unit_price < minAllowed * 0.1)) {
-                            return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
-                        }
+                        console.error(`Price validation rejected: Product: ${item.product_id}, Sent price: ${sentUnitPrice}, Allowed:`, positiveAllowed);
+                        return NextResponse.json({ error: 'Invalid item price detected.' }, { status: 400 });
                     }
                 }
             }
-        } catch (validationErr: any) {
-            console.error("Backend price validation threw exception (continuing checkout safely):", validationErr.message);
+        } catch (validationErr: unknown) {
+            const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
+            console.error("Backend price validation threw exception:", msg);
+            return NextResponse.json({ error: 'Unable to verify order pricing' }, { status: 500 });
         }
 
         // Calculate total weight for the order
