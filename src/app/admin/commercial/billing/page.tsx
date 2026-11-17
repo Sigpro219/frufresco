@@ -8357,7 +8357,7 @@ export default function BillingDashboard() {
                                         <GalleryOmnibox
                                             value={previewSearchQuery}
                                             onChange={setPreviewSearchQuery}
-                                            placeholder="Buscar por REM-xxxx, cliente, NIT, ruta o FV..."
+                                            placeholder="Buscar por REM-xxxx, cliente, NIT o FV..."
                                             filteredCount={displayedPreviewOrders.length}
                                             totalCount={previewOrders.length}
                                             style={{ width: '100%' }}
@@ -8388,16 +8388,6 @@ export default function BillingDashboard() {
                                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: '0.74rem' }}>
                                         <thead style={{ position: 'sticky', top: 0, zIndex: 30, boxShadow: '0 2px 4px -1px rgba(15, 23, 42, 0.08)' }}>
                                             <tr>
-                                                <th
-                                                    onClick={() => handlePreviewSort('route')}
-                                                    title="Ordenar por ruta y secuencia de parada"
-                                                    style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: '#F1F5F9', borderBottom: '2px solid #CBD5E1', padding: '0.6rem 0.85rem', fontWeight: '800', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: previewSortConfig.key === 'route' ? '#0D7A57' : '#0F172A', cursor: 'pointer', userSelect: 'none' }}
-                                                >
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <span>Ruta</span>
-                                                        {previewSortConfig.key === 'route' ? (previewSortConfig.direction === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} /> : <ArrowDown size={12} strokeWidth={2.5} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}
-                                                    </div>
-                                                </th>
                                                 <th
                                                     onClick={() => handlePreviewSort('remission')}
                                                     title="Ordenar por número de remisión / pedido"
@@ -8463,13 +8453,6 @@ export default function BillingDashboard() {
                                         <tbody>
                                             {displayedPreviewOrders.map((ord, idx) => (
                                                 <tr key={ord.id} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                                                    <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#F1F5F9', padding: '3px 7px', borderRadius: '6px', fontWeight: '800', fontSize: '0.72rem', color: '#334155' }}>
-                                                            <Truck size={12} style={{ color: THEME.colors.primary }} />
-                                                            <span>{ord.routeCode}</span>
-                                                            {ord.stopSequence > 0 && <span style={{ color: THEME.colors.primary }}>• #{ord.stopSequence}</span>}
-                                                        </div>
-                                                    </td>
                                                     <td style={{ padding: '0.6rem 0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, whiteSpace: 'nowrap' }}>
                                                         <span style={{ backgroundColor: '#F1F5F9', color: '#0F172A', border: '1px solid #CBD5E1', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: '800', fontVariantNumeric: 'tabular-nums', fontSize: '0.74rem' }}>
                                                             REM-{getFriendlyOrderId(ord)}

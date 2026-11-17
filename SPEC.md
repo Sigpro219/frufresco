@@ -15562,7 +15562,7 @@ CREATE TABLE IF NOT EXISTS public.production_orders (
   2. **Parametrización de Referencias Estandarizadas al Vacío:**
      - Cada referencia inicial se modela con peso neto fijo garantizado y empaque termoencogible/vacío de origen (ej. *Lomo de Res Estandarizado al Vacío 1.000g*, *Sobrebarriga / Punta de Anca Estandarizada al Vacío 1.000g*, *Carne Molida Premium al Vacío 500g*).
      - El cliente compra por paquete/kilo estandarizado y el ítem se integra de forma transparente al **mismo carrito de compras, misma orden (`orders`) y misma remisión/factura** junto con las frutas y verduras.
-  - *(Implementación Preparatoria en Storefront y Periféricos — Ver Escenario 459 / SDD v1.9.414):* El rediseño Catalog-First estilo FreshDirect de la Landing Page (`/`), `ProductCard`, `CartDrawer`, `ProductDetailClient`, `LeadGenBot` y la Máquina de Estados de 3 niveles del Toggle `friogan_storefront_mode` (`'OFF' | 'TEASER' | 'LIVE'`) quedan especificados de forma ejecutable en el **Escenario 459**.
+  - *(Implementación Preparatoria en Storefront y Periféricos — Ver Escenario 459 / SDD v1.9.414):* El rediseño Catalog-First estilo FreshDirect de la Landing Page (`/`), `ProductCard`, `QuickViewModal`, `CartDrawer`, `ProductDetailClient`, `LeadGenBot`, `/api/b2b/quote`, maestro de productos (`CreateProductModal` / `EditProductModal` con categoría `'CP'`) y la Máquina de Estados de 3 niveles del Toggle `friogan_storefront_mode` (`'OFF' | 'TEASER' | 'LIVE'`) quedan especificados de forma ejecutable en el **Escenario 459**. Los filtros operativos internos en `/admin/orders/create` y `EmailDraftsModule` permanecen acotados a la activación operativa de bodega `onFRU v2.0` (`Escenarios 407–408`).
 
 ---
 
@@ -17072,20 +17072,25 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
 ### Escenario 459: Rediseño Integral Storefront "FreshDirect Boutique" (Catalog-First), Cajón Lateral de Carrito, Embudo B2B Exprés y Arquitectura Toggle 3-Estados `FruFresco × Friogan` (SDD v1.9.414)
 
 #### Bloque 1 — Identidad, Contexto de Dominio y Núcleos Intocables (`READ-ONLY LOCK`)
-- **Dominio y Contexto de Negocio:** Rediseño completo de la tienda pública de **FruFresco** (`/`, `/products/[id]`, `/b2b/register` y componentes globales de navegación y carrito) bajo un arquetipo **Supermercado Gourmet Catalog-First inspirado en FreshDirect**, priorizando visibilidad inmediata del buscador, pasillos por departamento y compra directa `+ / -` en tarjeta sin abandonar el catálogo, junto con captura ágil HORECA/B2B y habilitación en caliente de la línea de proteínas al vacío **FruFresco × Friogan** (almacenamiento en cuarto frío, peso fijo estandarizado).
-- **Alcance Multi-Tenant / Entorno:** Ecosistema FruFresco (`localhost:3001` en desarrollo local; Vercel `main` / `liard` en producción; datos reales de Supabase PostgreSQL sin mocks).
+- **Dominio y Contexto de Negocio:** Rediseño integral de la tienda pública de **FruFresco** (`/`, `/products/[id]`, `/b2b/register`, `/api/orders/last-purchase`, `/api/orders/public`, `/api/b2b/quote`, maestro `/admin/products` y panel `/admin/settings`) bajo un arquetipo **Supermercado Gourmet Catalog-First inspirado en FreshDirect**, priorizando visibilidad inmediata del buscador, departamentos visuales y compra directa `+ / -` en tarjeta sin abandonar el catálogo, junto con captura ágil HORECA/B2B y habilitación en caliente de la línea de proteínas al vacío **FruFresco × Friogan** (peso fijo estandarizado, cadena de frío `0°C–4°C`).
+- **Alcance Multi-Tenant / Entorno & Frontera con `onFRU v2.0` (`Escenarios 407–408`):**
+  - Ecosistema FruFresco en `localhost:3001` y producción Vercel (`main` / `liard`) con Supabase PostgreSQL real (`0` dependencias npm nuevas: NO instalar `zod` ni librerías externas).
+  - La segregación operativa interna en planta (`/admin/orders/create`, `EmailDraftsModule`, `/ops/proteinas`, `cell_proteinas_friogan`) permanece acotada a `onFRU v2.0` (`Escenarios 407–408`).
 - **Núcleos Intocables (`READ-ONLY LOCK` — Prohibido Modificar en la Implementación):**
-  1. `src/app/checkout/page.tsx` (`4.150 LOC`): Se declara **intocable al 100%** para preservar intacta su lógica certificada de geocercas B2C/B2B, calendario de entregas/vacaciones, recargos por flete, pasarela Wompi, contraentrega y descuento de nómina. Toda mejora previa al pago ocurre aguas arriba mediante `<CartDrawer />`, manteniendo compatibilidad estricta con `CartContext` (`items`, `addItem`, `removeItem(id, name)`, `updateItemQuantity(id, name, quantity)` con `quantity` entero `>= 1`).
-  2. `src/components/Navbar.tsx` (`1.284 LOC`): Se declara **intocable al 100%** para preservar los módulos administrativos (`/admin/*`), operativos (`/ops/*`), portal corporativo (`/b2b/dashboard`), impresión (`*/print`) y autenticación (`/login`, `/auth/*`).
-- **Enrutamiento Seguro en `src/components/ClientLayout.tsx`:**
-  - Función pura exportada `isPublicStorefrontRoute(pathname: string | null): boolean` que retorna `true` únicamente cuando `pathname` no es nulo y **NO** comienza con `'/admin'`, `'/ops'`, `'/login'`, `'/auth'`, `'/b2b/dashboard'`, `'/register'`, ni contiene `'/print'` o `'-print'`.
-  - Cuando `isPublicStorefrontRoute(pathname) === true`: `ClientLayout` renderiza `<StorefrontHeader />` + `{children}` + `<FloatingCartBar />` + `<CartDrawer />` + `<Footer />` (suprimiendo `<GlobalBanner />` y `<Navbar />`, integrando el anuncio superior dentro de `<StorefrontHeader />`).
-  - Cuando `isPublicStorefrontRoute(pathname) === false`: `ClientLayout` mantiene exactamente `<GlobalBanner />` (si no es `/ops`, `/admin` o print), `<Navbar />` (si no es `/ops` o print), `<Footer />` (si no es `/ops`, `/admin`, `/b2b/dashboard` o print) y `<PQRFloatingWidget />` (en `/ops` y `/admin`).
+  1. `src/app/checkout/page.tsx` (`4.150 LOC`): **Intocable al 100%** (geocercas B2C/B2B, calendario de entregas/vacaciones, recargos, Wompi, contraentrega, descuento nómina). Compatibilidad obligatoria aguas arriba:
+     - `CartItem` debe emitir `quantity` entero `>= 1` y poblar **`variant_label: option.label`** siempre que un producto tenga `options.length > 1` o `presentation.kind === 'FIXED_VACUUM_PACK'`, asegurando claves únicas en `checkout/page.tsx:3054` (`key={`${item.id}-${item.variant_label || ''}`}`) **sin editar `checkout/page.tsx`**.
+     - `isPublicStorefrontRoute(pathname)` debe retornar `false` para `'/checkout'` para preservar intacta su experiencia de pago y su `<GlobalBanner />` horario.
+  2. `src/components/Navbar.tsx` (`1.284 LOC`): **Intocable al 100%** para preservar `/admin/*`, `/ops/*`, `/b2b/dashboard`, `/login`, `/auth/*` y `/checkout`.
+- **Enrutamiento e Hidratación Segura (`src/app/layout.tsx` + `src/components/ClientLayout.tsx`):**
+  - Función pura exportada `isPublicStorefrontRoute(pathname: string | null): boolean` en `src/lib/storefront/storefrontEngine.ts`: retorna `true` únicamente cuando `pathname` existe y **NO** inicia con `'/admin'`, `'/ops'`, `'/login'`, `'/auth'`, `'/b2b/dashboard'`, `'/register'`, `'/checkout'`, ni incluye `'/print'` o `'-print'`.
+  - `src/app/layout.tsx` (Server Component): lee en servidor `getAppSettings()` y los primeros `6` productos elegibles de `getVisibleProducts()` (ya filtrados por `filterStorefrontProductsByFrioganMode` y `isPriceAvailable === true` sin leer `base_price`), construyendo `initialStorefrontConfig: StorefrontRuntimeConfig` para pasarlo como prop opcional a `<ClientLayout initialStorefrontConfig={...} />`.
+  - Cuando `isPublicStorefrontRoute(pathname) === true`: `ClientLayout` renderiza `<StorefrontHeader config={storefrontConfig} />` + `{children}` + `<FloatingCartBar />` + `<CartDrawer config={storefrontConfig} suggestions={storefrontConfig.quickSuggestions} />` + `<Footer />` (suprimiendo `<GlobalBanner />` y `<Navbar />` únicamente en esas rutas, pues `<StorefrontHeader />` absorbe `global_banner`, `store_status` y `store_vacation_config`).
+  - Cuando `isPublicStorefrontRoute(pathname) === false` (incluyendo `/checkout`): `ClientLayout` conserva intacto el render actual de `<GlobalBanner />`, `<Navbar />`, `<FloatingCartBar />`, `<Footer />` y `<PQRFloatingWidget />`.
 
 #### Bloque 2 — Modelo de Dominio, Diccionario de IDs Canónicos y Motor Puro (`Headless Core`)
-Toda lógica pura de detección, filtrado, precios, presentaciones y canastas de recetas vive exclusivamente en dos módulos TypeScript sin React ni DOM (`src/lib/storefront/`), prohibiendo incrustar cálculos comerciales dentro de componentes `.tsx`:
-1. `src/lib/storefront/storefrontContracts.ts` (`<= 200 LOC`)
-2. `src/lib/storefront/storefrontEngine.ts` (`<= 350 LOC`)
+Toda lógica pura vive exclusivamente en dos módulos TypeScript sin React ni DOM (`src/lib/storefront/`):
+1. `src/lib/storefront/storefrontContracts.ts` (`<= 240 LOC`)
+2. `src/lib/storefront/storefrontEngine.ts` (`<= 420 LOC`)
 
 - **Contratos y Tipos Canónicos (`storefrontContracts.ts`):**
 ```ts
@@ -17093,215 +17098,238 @@ export type FrioganStorefrontMode = 'OFF' | 'TEASER' | 'LIVE';
 
 export type StorefrontPresentationKind = 'AGRICULTURAL_STANDARD' | 'FIXED_VACUUM_PACK';
 
+export type StoreStatusMode = 'open' | 'vacation_preorder' | 'closed';
+
 export interface StorefrontPresentationOption {
   /** Clave determinista para identificar variante en UI y Carrito (ej. 'lb_500', 'kg_1000', 'pack_1000', 'und_300') */
   key: string;
-  /** Etiqueta legible para UI en el idioma activo (ej. 'Libra 500g', 'Kg', 'Paquete 1.000g al vacío') */
+  /** Etiqueta legible para UI (ej. 'Libra 500g', 'Kg', 'Paquete 1.000g al vacío') */
   label: string;
-  /** Etiqueta corta de unidad persistida en CartItem.unit / order_items.unit (ej. 'Lb', 'Kg', 'Unidad', 'Paquete 1.000g') */
+  /** Etiqueta de unidad sin punto separador de miles en gramos para compatibilidad estricta con getParsedWeight (ej. 'Lb', 'Kg', 'Unidad', 'Paquete 500g', 'Paquete 1000g') */
   cartUnit: string;
-  /** Factor multiplicador respecto al unitBasePrice de pricing_model_prices (Kg base -> factor en Kg) */
+  /** Factor multiplicador respecto al unitBasePrice de pricing_model_prices */
   conversionFactor: number;
-  /** Peso neto físico en Kg por unidad de esta presentación (para totalWeight de CartContext) */
+  /** Peso neto físico en Kg por unidad de esta presentación */
   weightKg: number;
-  /** Indica si corresponde a un corte estandarizado de peso fijo al vacío (cero peso variable) */
+  /** true para paquetes cerrados al vacío de peso fijo */
   isFixedWeightPack: boolean;
 }
 
 export interface StorefrontPriceResolution {
-  /** Precio base por unidad maestra (Kg o Unidad según products.unit_of_measure) proveniente únicamente de Acuerdo/Modelo */
   unitBasePrice: number;
-  /** Precio redondeado al múltiplo superior de $50 COP para la presentación elegida */
   displayPrice: number;
-  /** Precio original antes de campaña (si product.campaign_info existe), redondeado a $50 COP */
   originalDisplayPrice: number;
-  /** true únicamente si unitBasePrice > 0 en pricing_model_prices / quote_items (NUNCA lee base_price) */
   isPriceAvailable: boolean;
   hasCampaignDiscount: boolean;
 }
 
+export type CanonicalRecipeId =
+  | 'ajiaco'
+  | 'sancocho'
+  | 'bandeja paisa'
+  | 'mondongo'
+  | 'mute'
+  | 'tamal'
+  | 'arroz con pollo';
+
 export interface RecipeBundleDefinition {
-  id: 'ajiaco' | 'sancocho' | 'bandeja_paisa' | 'mercado_basico';
+  id: CanonicalRecipeId;
   labelEs: string;
   labelEn: string;
   searchQuery: string;
-  /** Términos normalizados para emparejar ingredientes agrícolas de la receta contra Product.name / keywords */
+  /** Términos normalizados (sin tildes, minúsculas) contra Product.name / display_name / keywords */
   ingredientMatchTerms: string[];
-  /** Términos opcionales de cortes cárnicos Friogan que solo se incluyen cuando FrioganMode === 'LIVE' */
+  /** Términos opcionales de proteína Friogan incluidos solo cuando mode === 'LIVE' */
   optionalFrioganMatchTerms: string[];
+}
+
+export interface RecipeBundleItemResult {
+  product: Product;
+  matchedTerm: string;
+  defaultOption: StorefrontPresentationOption;
+  price: StorefrontPriceResolution;
+  cartItemName: string;
+}
+
+export interface StorefrontRuntimeConfig {
+  frioganMode: FrioganStorefrontMode;
+  cutoffHourPublic: number;
+  minOrderHogar: number;
+  deliveryFee: number;
+  storeStatus: StoreStatusMode;
+  vacationConfigRaw: string | null;
+  globalBannerEs: string;
+  globalBannerEn: string;
+  contactPhone: string;
+  isB2bLeadCaptureEnabled: boolean;
+  quickSuggestions: Product[];
 }
 
 export type LeadExpressChannel = 'B2B_EXPRESS' | 'FRIOGAN_TEASER';
 export type LeadExpressSegment = 'HOGAR' | 'HORECA';
+
+export interface LeadExpressValidatedInput {
+  channel: LeadExpressChannel;
+  segment: LeadExpressSegment;
+  contact_name: string;
+  phone: string;
+  company_name: string;
+  nit: number | null;
+  email: string | null;
+  municipality: string;
+  address: string;
+  business_type: string;
+  business_size: string;
+  notes: string;
+}
+
+export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3';
 ```
 
-- **Categoría Canónica de Proteínas (`'CP'`):**
-  - En `src/lib/constants.ts`: añadir `'CP': 'Carnes y Proteínas'` a `CATEGORY_MAP` y añadir `'Carnes y Proteínas': 'CP'`, `'Carnes y proteinas': 'CP'`, `'Proteínas': 'CP'` a `REVERSE_CATEGORY_MAP`.
-  - En `src/lib/translations.ts`: añadir `'CP': 'Carnes y Proteínas'` en `es.categories` y añadir tanto `'PR': 'Processed'` como `'CP': 'Meat & Protein'` en `en.categories`.
-  - **Prohibición `AGENTS.md §4`:** Jamás renderizar el código `'CP'` ni `'SKU'` en botones, tarjetas o encabezados visibles al cliente. En UI se muestra `'Carnes y Proteínas'` o `'Carnicería Friogan'`, y de requerirse código visible se muestra `#accounting_id`.
+- **Validador Puro Sin Librerías Externas (`validateLeadExpressPayload(raw: unknown)` en `storefrontContracts.ts`):**
+  - Valida en TypeScript puro (sin `zod`): `channel` (`'B2B_EXPRESS' | 'FRIOGAN_TEASER'`), `segment` (`'HOGAR' | 'HORECA'`, default `'HORECA'`), `contact_name` (trim `2..120` chars), `phone` (`replace(/\D/g, '')` exigiendo `10..13` dígitos), `company_name` (opcional max `160`; default `segment === 'HOGAR' ? 'Hogar - Lista Prioritaria Friogan' : contact_name`), `email` (opcional regex RFC simple si no vacío -> `null`), `municipality` (default `'Bogotá'`, max `80`), `address` (`municipality` saneada o texto provisto, nunca vacío), `business_type` (`segment === 'HOGAR' ? 'Hogar' : 'Restaurante'`), `business_size` (`segment === 'HOGAR' ? 'Hogar B2C' : 'Por calificar (Exprés)'`), `notes` (max `300`).
+  - **Sanitización SQL de `nit` (`bigint` en `public.leads`, migración `20260712_add_columns_to_leads.sql:2`):** Si `raw.nit` viene con puntos o dígito de verificación (`"900.123.456-7"`), toma la porción anterior al primer `'-'`, limpia todo carácter no numérico (`/\D/g`) y si resulta en `5..15` dígitos convierte a `Number(cleanDigits)` (`null` si viene vacío; HTTP `400` si no es numérico válido). Nunca envía string al campo `bigint`.
 
-- **Reglas Deterministas del Motor Puro (`storefrontEngine.ts`):**
-  1. `parseFrioganStorefrontMode(raw?: string | null): FrioganStorefrontMode`:
-     - Normaliza `String(raw ?? '').trim().toUpperCase()`. Retorna `'LIVE'` si es `'LIVE'`, `'TEASER'` si es `'TEASER'`, y `'OFF'` para cualquier otro valor (`''`, `null`, `undefined`, booleanos legados o valores desconocidos).
-  2. `isFrioganProteinProduct(product: Partial<Product> | null | undefined): boolean`:
-     - Retorna `true` si se cumple cualquiera de las 3 condiciones:
-       1. `(product?.category || '').trim().toUpperCase() === 'CP'`
-       2. `(product?.inventory_group || '').trim().toUpperCase().includes('FRIOGAN')`
-       3. `Array.isArray(product?.tags) && product.tags.some((tag) => String(tag || '').trim().toLowerCase().includes('friogan'))`
-  3. `filterStorefrontProductsByFrioganMode(products: Product[], mode: FrioganStorefrontMode): Product[]`:
-     - Si `mode === 'LIVE'`: retorna todos los productos visibles sin excluir los de Friogan.
-     - Si `mode === 'OFF'` o `mode === 'TEASER'`: filtra excluyendo estrictamente todo producto donde `isFrioganProteinProduct(p) === true`.
-  4. `resolveProductStorefrontPresentation(product: Product, locale?: Locale): { kind: StorefrontPresentationKind; defaultOption: StorefrontPresentationOption; options: StorefrontPresentationOption[]; sealedWeightLabel: string | null }`:
+- **Actualización de Tipos e Identificadores Existentes:**
+  1. `src/lib/supabase.ts` (`lines 258-259`): tipar `pricing_model_prices?: { price: number; model_id?: string }[];` y `campaign_info?: { campaignName?: string; originalPrice?: number; adjustmentValue?: number; type?: string } | null;`.
+  2. `src/lib/constants.ts`: añadir `'CP': 'Carnes y Proteínas'` a `CATEGORY_MAP`; añadir `'Carnes y Proteínas': 'CP'`, `'Carnes y proteinas': 'CP'`, `'Proteínas': 'CP'` a `REVERSE_CATEGORY_MAP`.
+  3. `src/lib/translations.ts`: añadir `'CP': 'Carnes y Proteínas'` a `es.categories` y añadir `'PR': 'Processed'`, `'CP': 'Meat & Protein'` a `en.categories`.
+  4. `src/lib/ai_search.ts`: incluir `'CP'` entre las categorías válidas del clasificador semántico.
+  5. `src/components/CreateProductModal.tsx` (`L214-222`) y `src/components/EditProductModal.tsx` (`L526-534`): reemplazar los listados estáticos de 7 categorías por `Object.entries(CATEGORY_MAP)` (incluyendo `'PR'` y `'CP'`).
+  6. **Prohibición `AGENTS.md §4`:** Jamás renderizar `'CP'` o `'SKU'` en botones, tarjetas o encabezados visibles; mostrar `'Carnes y Proteínas'` o `'Carnicería Friogan'` (y `#accounting_id` si se muestra identificador).
+
+- **Funciones Puras Obligatorias en `storefrontEngine.ts`:**
+  1. `parseFrioganStorefrontMode(raw?: string | null): FrioganStorefrontMode`: `'LIVE'` -> `'LIVE'`, `'TEASER'` -> `'TEASER'`, resto -> `'OFF'`.
+  2. `isFrioganProteinProduct(product: Partial<Product> | null | undefined): boolean`: `true` si `category?.trim().toUpperCase() === 'CP'`, o `inventory_group?.toUpperCase().includes('FRIOGAN')`, o algún `tag` incluye `'friogan'` (case-insensitive).
+  3. `filterStorefrontProductsByFrioganMode(products: Product[], mode: FrioganStorefrontMode): Product[]`: solo retorna `isFrioganProteinProduct(p) === true` cuando `mode === 'LIVE'`.
+  4. `isOfferOrPromoProduct(product: Partial<Product> | null | undefined): boolean`: `true` si `Boolean(product?.campaign_info)` **o** si `Array.isArray(product?.tags)` contiene algún tag con `/promo|oferta|descuento|flash|temporada/i` (cubriendo tanto campañas B2B dirigidas como los tags reales `'PROMOCION'` / `'temporada'` en `products`).
+  5. `resolveProductStorefrontPresentation(product: Product, locale?: Locale): { kind: StorefrontPresentationKind; defaultOption: StorefrontPresentationOption; options: StorefrontPresentationOption[]; sealedWeightLabel: string | null }`:
      - Si `isFrioganProteinProduct(product) === true`:
        * `kind = 'FIXED_VACUUM_PACK'`.
-       * Construye opciones de paquete fijo desde `options_config` (entradas cuyo nombre incluya `'presentaci'` o `'gramaje'`), extrayendo peso en gramos/kg (formato `'Nombre|500'` o texto como `'Paquete 500 g'`, `'1.000g'`, `'2.5 kg'`); si no existen en `options_config`, usa `product.web_unit` (default `'Paquete'`) + `product.web_conversion_factor || product.weight_kg || 1`.
-       * `isFixedWeightPack = true` en todas las opciones; `sealedWeightLabel` toma formato legible exacto (`'500 g exactos al vacío'` o `'1.000 g exactos al vacío'`, o `{kg} kg exactos al vacío` cuando `>= 1000 g`).
-       * **Invariante Poka-Yoke:** Jamás emite cadenas `"Peso aprox."`, `"báscula"` o símbolo `±` para productos Friogan.
+       * Construye opciones de paquete fijo desde `options_config` (`Presentación`/`Gramaje`) o `web_unit` + `web_conversion_factor || weight_kg || 1`.
+       * `cartUnit`: siempre en formato seguro sin separador de miles en gramos (ej. `'Paquete 500g'`, `'Paquete 1000g'`, `'Paquete 2500g'`), mientras `label` legible presenta `'Paquete 1.000 g al vacío'`.
+       * **Invariante Poka-Yoke:** Jamás emite `"Peso aprox."`, `"báscula"` o `±`; `sealedWeightLabel` = `'500 g exactos al vacío'` / `'1.000 g exactos al vacío'`.
      - Si `isFrioganProteinProduct(product) === false`:
        * `kind = 'AGRICULTURAL_STANDARD'`, `sealedWeightLabel = null`.
-       * Respeta la lógica actual de opciones web (`Libra 500g` con `conversionFactor = 0.5`, `Kg` con `conversionFactor = 1`, empaques `bandeja/cubeta/caja/paquete/malla/bolsa` o `Unidad (±Xg)` desde `options_config` / `web_unit` / `web_conversion_factor`) manteniendo paridad exacta con `ProductCard.tsx` y `AGENTS.md` (Libra siempre `0.5 kg`, Kg siempre `1.0 kg`).
-  5. `resolveStorefrontPrice(product: Product, option: StorefrontPresentationOption): StorefrontPriceResolution`:
-     - **Soberanía Tarifaria y Erradicación de `products.base_price`:** Lee `unitBasePrice = Number(product.pricing_model_prices?.[0]?.price || 0)`. **Queda terminantemente prohibido leer `product.base_price`**.
-     - Se purgan los fallbacks a `base_price` en:
-       * `src/lib/data.ts` (`getVisibleProducts`, líneas `57-59` y `65-67`)
-       * `src/components/ProductCard.tsx` (línea `287`)
-       * `src/app/products/[id]/page.tsx` (líneas `125-127` y `177-179`)
-     - Si `unitBasePrice <= 0 || !Number.isFinite(unitBasePrice)`: retorna `{ unitBasePrice: 0, displayPrice: 0, originalDisplayPrice: 0, isPriceAvailable: false, hasCampaignDiscount: false }`.
-     - Si `unitBasePrice > 0`:
-       * `displayPrice = Math.ceil((unitBasePrice * option.conversionFactor) / 50) * 50`
-       * `rawOrig = Number(product.campaign_info?.originalPrice || 0)`
-       * `originalDisplayPrice = rawOrig > 0 ? Math.ceil((rawOrig * option.conversionFactor) / 50) * 50 : displayPrice`
-       * `isPriceAvailable = true`, `hasCampaignDiscount = Boolean(product.campaign_info && originalDisplayPrice > displayPrice)`.
-  6. `buildCartItemName(product: Product, option: StorefrontPresentationOption, includePresentationSuffix: boolean, locale?: Locale): string`:
-     - Construye un nombre canónico consistente para matching exacto con `CartContext` (`items.find(i => i.id === item.id && i.name === item.name)`): base `(locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name)` y sufijo `(${option.label})` únicamente cuando el producto tenga `options.length > 1` o sea `FIXED_VACUUM_PACK`.
-  7. **Extensión Retrocompatible de `src/lib/cartContext.tsx`:**
-     - Extiende `CartItem` añadiendo campos opcionales: `is_friogan?: boolean; accounting_id?: number | null; presentation_key?: string;`.
-     - Conserva intactas las firmas y cálculos de `addItem`, `removeItem`, `updateItemQuantity`, `clearCart`, `totalItems`, `totalPrice` (`Math.ceil((item.price * item.quantity) / 50) * 50`), `totalWeight`.
-     - Añade al `CartContextType`:
-       * `lineCount: number` (`items.length`, conteo de referencias distintas)
-       * `hasFrioganItems: boolean` (`items.some((i) => Boolean(i.is_friogan))`)
-       * `isDrawerOpen: boolean`, `openDrawer: () => void`, `closeDrawer: () => void`
-     - **Guardia de Seguridad en `updateItemQuantity`:** Si un caller invoca `updateItemQuantity(id, name, qty)` con `qty <= 0`, elimina la línea (equivalente a `removeItem`) en lugar de dejar ítems con cantidad `0` o negativa en `CartContext`.
+       * Libra siempre `0.5 kg` (`Libra 500g`, `cartUnit: 'Lb'`), Kg siempre `1.0 kg` (`Kg`, `cartUnit: 'Kg'`), empaques y `Unidad` conforme a `options_config` / `web_unit` / `web_conversion_factor`.
+  6. `resolveStorefrontPrice(product: Product, option: StorefrontPresentationOption): StorefrontPriceResolution`:
+     - Lee **exclusivamente** `unitBasePrice = Number(product.pricing_model_prices?.[0]?.price || 0)`. **Prohibición absoluta de leer `product.base_price`**.
+     - Erradica todo fallback a `base_price` en:
+       * `src/lib/data.ts` (`getVisibleProducts`, `L57-59` y `L65-67`)
+       * `src/components/ProductGridContainer.tsx` (`L169`, manteniendo override por `agreementPrice` solo si `agreementPrice > 0`, nunca heredando `base_price`)
+       * `src/components/ProductCard.tsx` (`L287`)
+       * `src/components/QuickViewModal.tsx` (`L337`)
+       * `src/components/ProductDetailClient.tsx` (`L317`)
+       * `src/app/products/[id]/page.tsx` (`L125-127`, `L177-179`)
+       * `src/app/api/orders/public/route.ts` (`L95`, `L112-114`): para productos comerciales regulares, valida contra `pricing_model_prices` y, si llega `profile_id` autenticado en el payload o sesión, resuelve acuerdos vigentes desde `quotes` (`status = 'agreement'`, `client_id = profile.parent_id || profile.id`) y `special_agreement_model_clients` + `special_agreement_models` -> `quote_items.unit_price`. **Excepción explícita de empaque retornable (compatibilidad `checkout/page.tsx:240` en `READ-ONLY LOCK`):** si `item.product_id === STOREFRONT_CRATE_PRODUCT_ID` (`'c13cfedc-c803-495b-9b9d-71a54d472aa3'`), se conserva la consulta del costo de depósito de canastilla (`dbProd.base_price` o `pricing_model_prices`); y antes de invocar `Math.min(...positiveAllowed)` en `L147`, verificar `positiveAllowed.length > 0` (evitando `Math.min(...[]) === Infinity` y HTTP `400` falso).
+     - Si `unitBasePrice <= 0 || !Number.isFinite(unitBasePrice)`: `isPriceAvailable = false`, `displayPrice = 0`, `originalDisplayPrice = 0`.
+     - Si `unitBasePrice > 0`: `displayPrice = Math.ceil((unitBasePrice * option.conversionFactor) / 50) * 50`.
+  7. `buildCartItemName(product: Product, option: StorefrontPresentationOption, includePresentationSuffix: boolean, locale?: Locale): string`:
+     - Toma `base = (locale === 'en' && product.name_en) ? product.name_en : (product.display_name || product.name)`.
+     - Si `includePresentationSuffix === true`, retorna `${base} (${option.label})`; en caso contrario retorna `base`. Los llamadores (`ProductCard`, `QuickViewModal`, `ProductDetailClient`, `storefrontEngine`) pasan `includePresentationSuffix = options.length > 1 || presentation.kind === 'FIXED_VACUUM_PACK'`.
+  8. **Contrato Obligatorio de Construcción de `CartItem` (Peso y Unidad Seguros):**
+     - Todo emisor a `CartContext.addItem` (`ProductCard`, `QuickViewModal`, `ProductDetailClient`, `StorefrontPromoStage`, `FrioganShowcaseRail`, `api/orders/last-purchase`) debe incluir obligatoriamente: `unit: option.cartUnit`, **`weight_kg: option.weightKg`**, `presentation_key: option.key`, `is_friogan: isFrioganProteinProduct(product)`, `accounting_id: product.accounting_id ?? null`, y `variant_label: (options.length > 1 || kind === 'FIXED_VACUUM_PACK') ? option.label : undefined`. Con ello `CartContext.totalWeight` y `checkout/page.tsx` (`produceWeightKg` / `suggestedCrates`) nunca caen a `0 kg` aunque `cartUnit` sea `'Lb'` o `'Paquete 1000g'`.
+  9. **Catálogo `RECIPE_BUNDLES` y Función `resolveRecipeBundleProducts` (`storefrontEngine.ts`):**
+     - `RECIPE_BUNDLES: RecipeBundleDefinition[]` conserva exactamente los 7 `CanonicalRecipeId` de `TypicalRecipesBar.tsx` + `ProductGridContainer.tsx` (`'ajiaco'`, `'sancocho'`, `'bandeja paisa'`, `'mondongo'`, `'mute'`, `'tamal'`, `'arroz con pollo'`), cada uno con sus `ingredientMatchTerms` (ej. para `'ajiaco'`: `['papa sabanera', 'papa pastusa', 'papa criolla', 'mazorca', 'guascas', 'arracacha', 'aguacate']`, etc.) y `optionalFrioganMatchTerms` (ej. `['pechuga', 'sobrebarriga', 'costilla', 'carne']`).
+     - Firma exacta:
+       `export function resolveRecipeBundleProducts(products: Product[], bundleId: string, mode: FrioganStorefrontMode, locale: Locale = 'es'): RecipeBundleItemResult[]`
+     - Filtra primero `eligible = filterStorefrontProductsByFrioganMode(products, mode)`. Combina `terms = mode === 'LIVE' ? [...bundle.ingredientMatchTerms, ...bundle.optionalFrioganMatchTerms] : bundle.ingredientMatchTerms`. Por cada `term` normalizado sin tildes, selecciona el primer producto elegible que coincida en `name` / `display_name` / `keywords`, que no esté repetido por `product.id` y cuyo `resolveStorefrontPrice(product, defaultOption).isPriceAvailable === true`.
+  10. **Corrección del Parser de Peso en Miles (`getParsedWeight`):**
+      - En `src/lib/orderUtils.ts` (`L169-179`) y `src/app/api/orders/public/route.ts` (`L77-87`): tras `.replace(',', '.')` (cuando aplique), normalizar exclusivamente miles con primer dígito `>= 1` (`text.replace(/\b([1-9]\d{0,2})\.(\d{3})(?=\s*(?:g|gr|grs|gramos|gms)\b)/gi, '$1$2')`) para garantizar que `'Paquete 1.000g'` y `'1.000 g'` resuelvan a `1.0 kg` sin alterar decimales como `'0.500g'`.
+  11. **Extensión Retrocompatible de `src/lib/cartContext.tsx`:**
+      - `CartItem` añade opcionales: `is_friogan?: boolean; accounting_id?: number | null; presentation_key?: string;`.
+      - `CartContextType` añade: `lineCount: number` (`items.length`), `hasFrioganItems: boolean` (`items.some((i) => Boolean(i.is_friogan))`), `isDrawerOpen: boolean`, `openDrawer: () => void`, `closeDrawer: () => void`, `sanitizeForFrioganMode: (mode: FrioganStorefrontMode) => void`.
+      - **`updateItemQuantity(id, name, qty)`:** si `qty <= 0`, elimina la línea en lugar de guardar `<= 0`.
+      - **Purga Automática Anti-Fuga en `'OFF'` / `'TEASER'`:** cuando `CartDrawer` o `ClientLayout` montan/reciben `frioganMode !== 'LIVE'`, invocan `sanitizeForFrioganMode(frioganMode)` eliminando cualquier `CartItem` previo de `localStorage` con `item.is_friogan === true` (cumpliendo `Gherkin 2`).
 
 #### Bloque 3 — Máquina de Estados Finita (FSM) del Toggle `friogan_storefront_mode`
-- **Llave Persistente en BD:** Tabla `public.app_settings`, fila con `key = 'friogan_storefront_mode'`, `value IN ('OFF', 'TEASER', 'LIVE')`. Valor inicial por defecto si no existe fila en BD: `'OFF'`.
-- **Control en Panel Admin (`src/app/admin/settings/page.tsx`):**
-  - Se añade `'friogan_storefront_mode'` al catálogo por defecto de `app_settings` con valor `'OFF'`.
-  - En la pestaña de Tienda Web / Configuración Comercial, renderiza un **Selector Segmentado de 3 Estados** (`OFF — Oculto` · `TEASER — Expectativa` · `LIVE — Venta Activa`), más explicación visual clara de qué se enciende en cada estado.
-  - Al cambiar de estado: ejecuta `upsert` en `public.app_settings` (`{ key: 'friogan_storefront_mode', value: nextMode, description: '...' }`) seguido inmediatamente de `await triggerStorefrontSettingsRevalidation()`.
-- **Transiciones y Matriz Comportamental:**
+- **Persistencia en BD:** Tabla `public.app_settings`, `key = 'friogan_storefront_mode'`, `value IN ('OFF', 'TEASER', 'LIVE')` (default `'OFF'`).
+- **Control Admin (`src/app/admin/settings/page.tsx`):**
+  - Añadir `'friogan_storefront_mode'` al listado inicial de llaves por defecto (`L291-338`) con valor `'OFF'`, alinear el fallback inicial de `'min_order_hogar'` en `L286` a `'150000'` (paridad con `checkout/page.tsx:88` y `StorefrontRuntimeConfig`), y añadir `'friogan_storefront_mode'` dentro del arreglo `opKeys` (`L674`, dentro del acordeón `'operation'`, junto a `store_status` y `cutoff_hour_public`).
+  - Renderizar un selector segmentado de 3 botones conectados: `OFF (Oculto)` · `TEASER (Expectativa)` · `LIVE (Venta Activa)`. Al cambiar, hace `upsert` en `app_settings` y ejecuta `await triggerStorefrontSettingsRevalidation()`.
+- **Transiciones y Comportamiento por Estado:**
+  - **`'OFF'`:** Excluye `100%` de SKUs Friogan en `getVisibleProducts` (cuando se filtra en storefront), `getWebCategories(mode)`, `ProductGridContainer` (incluyendo búsqueda directa `q.length > 2`), `SearchBar`, `FeaturedProductsCarousel`, `CartDrawer` (incluye purga de `localStorage`), `/api/orders/last-purchase`, `LeadGenBot` y `/api/b2b/quote`. En `/products/[id]/page.tsx` ejecuta `notFound()` salvo rol `'admin'` o `'sys_admin'`. Cero menciones UI a Friogan.
+  - **`'TEASER'`:** Mantiene el bloqueo completo de compra de `'OFF'`, y habilita: (a) tarjeta co-branded **`Próximamente: Carnicería al Vacío FruFresco × Friogan`** en `<StorefrontPromoStage />` con formulario rápido conectado a `POST /api/storefront/lead-express` (`channel: 'FRIOGAN_TEASER'`), y (b) categoría `'Carnes y Proteínas'` en `LeadGenBot` + `/api/b2b/quote`.
+  - **`'LIVE'`:** Libera SKUs Friogan en toda la tienda (`StorefrontHeader` Nivel 2 agrega burbuja **`Carnicería Friogan`** hacia `/?category=CP#catalog`), activa `<FrioganShowcaseRail />` si existe `>= 1` SKU Friogan activo con precio disponible, muestra sello **`Cadena de Frío Garantizada (0°C–4°C)`** en `CartDrawer` / `FloatingCartBar` cuando `hasFrioganItems === true`, y cotiza SKUs `'CP'` reales en `/api/b2b/quote`.
 
-| Superficie / Módulo | `OFF` *(Lanzamiento Inicial)* | `TEASER` *(Pre-lanzamiento Expectativa)* | `LIVE` *(Operación Comercial Activa)* |
-| :--- | :--- | :--- | :--- |
-| **`getVisibleProducts` / `/` Grilla / `?q=`** | Excluye 100% SKUs Friogan (`isFrioganProteinProduct === true`). | Excluye 100% SKUs Friogan de catálogo comprable. | Incluye todos los SKUs Friogan activos con `show_on_web = true`. |
-| **`getWebCategories()` & `StorefrontHeader` Nivel 2** | No expone categoría `'CP'` ni burbuja `Carnicería Friogan`. | No expone categoría comprable `'CP'` en filtros del catálogo. | Expone `'CP'` (`Carnes y Proteínas`) y burbuja destacada **`Carnicería Friogan`** (`/?category=CP#catalog`). |
-| **`StorefrontPromoStage` / `FrioganShowcaseRail`** | Cero menciones ni banners de Friogan. | Muestra tarjeta co-branded **`Próximamente: Carnicería al Vacío FruFresco × Friogan`** + formulario rápido (`channel: 'FRIOGAN_TEASER'`). | Muestra **`<FrioganShowcaseRail />`** (vitrina `#1C1917` / `#7F1D1D` con botón `+ Agregar`) **solo si hay `>= 1` SKU Friogan activo con precio `> 0`**; si hay `0` SKUs, se oculta automáticamente sin dejar huecos vacíos. |
-| **`/products/[id]/page.tsx`** | Si `isFrioganProteinProduct(product)`: ejecuta `notFound()` salvo si usuario autenticado tiene `profile.role` en `['admin', 'sys_admin']`. | Igual que `OFF` (`notFound()` público; previsualización solo para `admin` / `sys_admin`). | Accesible a todo público (`Empaque al vacío · Peso exacto · INVIMA`). |
-| **`CartDrawer` / `FloatingCartBar`** | Flujo agrícola/despensa estándar. | Flujo agrícola/despensa estándar. | Si `hasFrioganItems === true`, muestra sello **`Cadena de Frío Garantizada (0°C–4°C)`**. |
-| **`LeadGenBot.tsx` & `POST /api/b2b/quote`** | `ALL_CATEGORIES` clásico de 8 categorías sin proteínas Friogan. | Habilita `'Carnes y Proteínas'` en el selector; `/api/b2b/quote` guarda la solicitud en `leads.notes` sin fallar si aún hay `0` SKUs `'CP'`. | Habilita `'Carnes y Proteínas'` en selector y pre-cotiza SKUs reales `CATEGORY_TO_CODES['Carnes y Proteínas'] = ['CP', 'Carnes y Proteínas', 'carnes y proteinas']`. |
-
-#### Bloque 4 — Contratos de API, Validación Zod y Revalidación en Caliente
-1. **Actualización de `src/app/api/revalidate/route.ts` y `src/lib/revalidate.ts`:**
-   - `POST /api/revalidate` e `GET /api/revalidate` invocan `(revalidateTag as any)(tag)`, `(revalidateTag as any)('products')`, `(revalidateTag as any)('web-categories')` y **`(revalidateTag as any)('settings')`**, más `revalidatePath(path, 'page')`, `revalidatePath('/', 'layout')`, `revalidatePath('/products/[id]', 'page')` y `revalidatePath('/b2b/register', 'page')`.
-   - En `src/lib/revalidate.ts`: añadir `export async function triggerStorefrontSettingsRevalidation()` llamando `await fetch('/api/revalidate?tag=settings&path=/', { method: 'POST', cache: 'no-store' })`.
-2. **Nuevo Endpoint `POST /api/storefront/lead-express` (`src/app/api/storefront/lead-express/route.ts`, `<= 150 LOC`):**
-   - Valida el cuerpo JSON con `zod`:
-     ```ts
-     const LeadExpressSchema = z.object({
-       channel: z.enum(['B2B_EXPRESS', 'FRIOGAN_TEASER']),
-       segment: z.enum(['HOGAR', 'HORECA']).default('HORECA'),
-       contact_name: z.string().trim().min(2).max(120),
-       phone: z.string().trim().min(7).max(20),
-       company_name: z.string().trim().max(160).optional(),
-       nit: z.string().trim().max(30).optional(),
-       email: z.union([z.string().trim().email().max(160), z.literal('')]).optional(),
-       municipality: z.string().trim().max(80).default('Bogotá'),
-       notes: z.string().trim().max(300).optional()
-     });
-     ```
-   - Sanitiza teléfono dejando solo dígitos (`cleanPhone = phone.replace(/\D/g, '')`). Si `cleanPhone.length < 10 || cleanPhone.length > 13`, retorna HTTP `400 { error: 'Ingresa un número celular o fijo válido de 10 dígitos en Colombia.' }`.
-   - Construye valores para inserción usando `Service Role Key` en `public.leads` (respetando exactamente las columnas existentes verificadas en `src/app/api/b2b/quote/route.ts`):
-     * `company_name`: `parsed.company_name?.trim() || (parsed.segment === 'HOGAR' ? 'Hogar - Lista Prioritaria Friogan' : parsed.contact_name.trim())`
-     * `nit`: `parsed.nit?.trim() || null`
-     * `contact_name`: `parsed.contact_name.trim()`
-     * `phone`: `cleanPhone`
-     * `email`: `parsed.email?.trim() || null`
-     * `business_type`: `parsed.segment === 'HOGAR' ? 'Hogar' : 'Restaurante'`
-     * `business_size`: `parsed.segment === 'HOGAR' ? 'Hogar B2C' : 'Por calificar (Exprés)'`
-     * `address`: `parsed.municipality.trim()`
-     * `municipality`: `parsed.municipality.trim()`
-     * `status`: `'nuevo'`
-     * `notes`: `` `[SOURCE:${parsed.channel}][SEG:${parsed.segment}] ${parsed.notes?.trim() || ''}`.trim() ``
-   - Respuestas: `201 { success: true, leadId: string }`, `400 { error: string, details?: unknown }`, `500 { error: string }`.
-3. **Filtro por `'OFERTAS'` y Canastas de Recetas (`page.tsx` & `ProductGridContainer.tsx`):**
-   - `ProductGridContainer.tsx` acepta `category?: string`. Si `category?.toUpperCase() === 'OFERTAS'`, filtra únicamente productos con `Boolean(p.campaign_info)` activa. Si `category === 'Todos'` o indefinida, muestra todos los visibles permitidos por `frioganMode`. En otros valores compara normalizado contra `category` / `CATEGORY_MAP`.
-   - `src/app/products/[id]/page.tsx` consulta `getAppSettings()` para leer `friogan_storefront_mode` y exige que, si `isFrioganProteinProduct(product)` y `mode !== 'LIVE'`, solo pueda ver la ficha un usuario con `profile.role` en `['admin', 'sys_admin']`; para cualquier otro usuario ejecuta `notFound()`. Además `relatedProductsRaw` aplica `filterStorefrontProductsByFrioganMode` y elimina el fallback a `base_price`.
-4. **`FeaturedProductsCarousel.tsx`:** Recibe productos filtrados previamente por `filterStorefrontProductsByFrioganMode(products, frioganMode)` o ejecuta dicho filtro para impedir fugas cuando `mode !== 'LIVE'`.
+#### Bloque 4 — Contratos de API, Caché y Rutas Servidor
+1. **`src/lib/data.ts`:**
+   - `getVisibleProducts`: purgar fallback a `base_price` (`L57-59` y `L65-67`).
+   - `getWebCategories(mode: FrioganStorefrontMode = 'OFF')`: filtra `products` con `filterStorefrontProductsByFrioganMode(products, mode)` antes de extraer categorías únicas e incluye `'settings'` en tags (`{ revalidate: 60, tags: ['products', 'web-categories', 'settings'] }`).
+2. **`src/app/api/revalidate/route.ts` y `src/lib/revalidate.ts`:**
+   - Revalidar adicionalmente `(revalidateTag as any)('settings')` y `revalidatePath('/b2b/register', 'page')`. Exportar `triggerStorefrontSettingsRevalidation()` llamando `POST /api/revalidate?tag=settings&path=/` (`cache: 'no-store'`).
+3. **`POST /api/storefront/lead-express` (`src/app/api/storefront/lead-express/route.ts`, `<= 150 LOC`):**
+   - Valida payload con `validateLeadExpressPayload` (sin `zod`).
+   - Inserta en `public.leads` usando `SUPABASE_SERVICE_ROLE_KEY`: `company_name`, `nit` (`bigint | null`), `contact_name`, `phone` (10-13 dígitos), `email`, `business_type` (`'Hogar' | 'Restaurante'`), `business_size`, `address`, `municipality`, **`status: 'new'`** (norma CRM de `20260712_add_columns_to_leads.sql`, `ClientsModule` y `CommercialUnifiedDashboard`), `notes`.
+   - Devuelve `201 { success: true, leadId: String(leadRow.id) }`, `400 { error: string }` o `500 { error: string }`.
+4. **`src/components/ProductGridContainer.tsx`:**
+   - Pasa `allVisible`, y dentro de `if (q && q.length > 2)` pasa las 4 fuentes (`resSearch`, `resFallback`, `resCat` y `resCatFallback` en `L284-345`) por `filterStorefrontProductsByFrioganMode(plist, frioganMode)` y exclusión `scarcity_locked_skus`, **y aplica obligatoriamente el filtro de `category`** (`category === 'OFERTAS'` -> `isOfferOrPromoProduct(p)`; otras categorías -> coincidencia normalizada contra `p.category`) sobre los resultados fusionados antes de entregar `rawProducts` (eliminando mezclas de categorías o no-ofertas cuando coexisten `category` y `q > 2`).
+   - En `category?.toUpperCase() === 'OFERTAS'`: filtra con `isOfferOrPromoProduct(p)`.
+   - En `category?.toUpperCase() === 'CP'` con `frioganMode !== 'LIVE'`: retorna lista vacía sin error para que `ProductGridClient` muestre estado vacío limpio con CTA `"Explorar todo el catálogo"`.
+   - Purga fallback a `base_price` en `L169` y `L190-196`.
+5. **`src/app/api/orders/last-purchase/route.ts`:**
+   - Consulta `friogan_storefront_mode` de `app_settings` y `category, inventory_group, tags, web_unit, options_config` de `products`.
+   - Excluye productos Friogan si `mode !== 'LIVE'` y nunca emite precios desde `base_price`; usa `resolveProductStorefrontPresentation`, `resolveStorefrontPrice`, `buildCartItemName` y pobla **`unit: option.cartUnit`**, **`weight_kg: option.weightKg`**, `variant_label`, `presentation_key` e `is_friogan` en cada ítem devuelto.
+6. **`src/app/api/b2b/quote/route.ts` y `src/components/LeadGenBot.tsx`:**
+   - `/api/b2b/quote` lee `friogan_storefront_mode` de `app_settings`, filtra `templateProducts`, `fallbackProds` y `activeProds` con `filterStorefrontProductsByFrioganMode(..., mode)` y `is_active = true`; si el cliente selecciona categorías sin SKUs disponibles (ej. solo `'Carnes y Proteínas'` en `'TEASER'`), omite el fallback ciego `activeProds.limit(30)` y conserva el lead en `leads` retornando `quoteId: null` sin error.
+   - `LeadGenBot.tsx` añade `'Carnes y Proteínas': 'Meat & Protein'` en `CATEGORIES_EN` (`L80-90`), lee prop opcional `frioganMode` (o `app_settings` como fallback) y muestra `'Carnes y Proteínas'` solo en `'TEASER'` o `'LIVE'`.
+7. **`src/components/SearchBar.tsx`:**
+   - Recibe prop opcional `frioganMode?: FrioganStorefrontMode` (default `'OFF'`).
+   - En el autocompletado directo a `products`, incluye `category, inventory_group, tags, pricing_model_prices(price, model_id)`, filtra con `filterStorefrontProductsByFrioganMode(rows, frioganMode)` y formatea precio con `resolveStorefrontPrice` (si `isPriceAvailable === false`, muestra `"Precio a consultar"` en vez de `$0`).
 
 #### Bloque 5 — Diseño de Interfaz Carril 2 (`/disenador-web`) y Presupuesto Anti-Monolito (`<= 600 LOC`)
 - **Directrices Visuales "FreshDirect Boutique" (Carril 2):**
-  - **Prohibición de Plantilla Hero 50/50:** Se elimina el bloque `.hero-split` de `650px` y la sección final Bento `01/02/03`. Al abrir `/` en escritorio (`1280x800`), por encima del pliegue (`y = 0..760`) son visibles el Header de 2 Niveles, la vitrina promocional compacta (`<= 240px`) y la primera fila del catálogo comprable.
-  - **Tipografía y Disciplina Cromática:**
-    * Máximo **2 fuentes**: `Outfit` (títulos, precios con `font-variant-numeric: tabular-nums`, departamentos) e `Inter` (cuerpo y controles). Se elimina el uso de `Instrument_Serif` y cursivas partidas en `src/app/page.tsx`.
-    * Máximo 3 escalas tipográficas en cuerpo y cero texto `< 13px` (`0.8125rem`) sobre el pliegue inicial.
-    * **Paleta:** Lienzo cálido `#FAF9F6`, tarjetas `#FFFFFF`, bordes `1px solid #E2E8F0`, ink principal `#081C15`, verde operativo `#0D7A57`, acento oferta `#DC2626`, mostrador Friogan `#1C1917` (carbón) + `#7F1D1D` (vino/cobre). Contraste mínimo WCAG AA (`>= 4.5:1`).
-  - **Higiene UI / CSS / Lucide / Estándar 5B:**
-    * `100%` íconos de `lucide-react` (cero emojis unicode; corregir también carácter `️` corrupto en `ProductDetailClient.tsx` línea `807` reemplazándolo con `<AlertTriangle />`).
-    * Inputs numéricos bajo Estándar `5B` (`type="text" inputMode="numeric"`, `onFocus` select, purga de ceros a la izquierda).
-    * Transiciones CSS explícitas (`transition-property: transform, opacity, background-color, border-color;`, prohibido `transition: all`) y `@media (prefers-reduced-motion: reduce)`.
-    * Responsivo verificado para escritorio y móvil (`390x844`) sin scroll horizontal (`overflow-x: hidden`) ni colisión entre `FloatingCartBar` y el widget de ayuda/PQR.
-
-- **Arquitectura Modular (`<= 600 LOC` obligatorios por archivo nuevo o reescrito):**
-  1. `src/components/storefront/StorefrontHeader.tsx` (`<= 420 LOC`, `'use client'`):
-     - Barra superior compacta con aviso configurable (`global_banner`) y píldora de cobertura/corte (`Bogotá y Sabana · Pide antes de las {cutoffHour}:00 para recibir mañana AM`).
-     - Nivel 1 sticky: Wordmark FruFresco (o `app_logo_url` + `app_name`), `<SearchBar />` ancho integrado, disparador compacto **`Repetir mercado`** (integra modal/acción de `ReorderHeroBanner`), enlace de cuenta / login (`Portal B2B` si autenticado) y botón de carrito **`$ subtotal (N)`** que ejecuta `openDrawer()`.
-     - Nivel 2 (Tira de Departamentos Visuales con scroll horizontal suave en móvil): *Todo · Ofertas · Frutas · Verduras · Hortalizas · Tubérculos · Lácteos · Despensa · Procesados* + **`Carnicería Friogan`** *(visible solo en `'LIVE'`)*.
-  2. `src/components/storefront/StorefrontPromoStage.tsx` (`<= 350 LOC`, `'use client'`):
-     - Hero/Stage promocional compacto estilo FreshDirect (`<= 240px` alto en desktop): tarjeta principal de frescura & ofertas del día con 1 CTA principal hacia ofertas/catálogo + tarjetas rápidas de **Canastas de Platos Típicos Comprables** (*Ajiaco, Sancocho, Bandeja Paisa, Mercado Básico*), cuyo clic despliega modal/panel ligero para agregar todos los ingredientes disponibles con 1 clic al carrito + panel de expectativa **Friogan** cuando `frioganMode === 'TEASER'`.
-  3. `src/components/storefront/FrioganShowcaseRail.tsx` (`<= 320 LOC`, `'use client'`):
-     - Renderizado exclusivamente cuando `frioganMode === 'LIVE' && frioganProducts.length > 0`. Vitrina de contraste `#1C1917` / `#7F1D1D` con scroll horizontal de cortes al vacío Friogan y compra directa en 1 clic.
-  4. `src/components/ProductCard.tsx` (`<= 480 LOC`, `'use client'`):
-     - Conserva `<QuickViewModal />`, skeleton shimmer y badges `lucide-react`.
-     - Selector táctil compacto de presentación cuando `presentation.options.length > 1`.
-     - Reemplaza el botón único `"Ver producto"` por control interactivo directo en grilla:
-       * Si `isPriceAvailable === false`: botón deshabilitado `"Precio a consultar"`.
-       * Si `currentCartQty === 0`: botón **`+ Agregar`** (`onClick` agrega `1` unidad de la presentación activa sin redirigir).
-       * Si `currentCartQty > 0`: control segmentado **`[ -   N   + ]`** conectado en tiempo real a `updateItemQuantity` / `removeItem`.
-     - Clic en imagen o título abre `/products/[id]`; icono/botón discreto en imagen sigue abriendo Vista Rápida.
-     - En SKUs Friogan (`kind === 'FIXED_VACUUM_PACK'`) muestra badge `#7F1D1D`: `"Friogan · Vacío · Peso exacto"`.
-  5. `src/components/storefront/CartDrawer.tsx` (`<= 450 LOC`, `'use client'`):
-     - Cajón lateral derecho deslizable (`role="dialog"`, `aria-modal="true"`, cierre con tecla `Escape` y clic fuera).
-     - Muestra: barra de progreso hacia `min_order_hogar` (desde `app_settings`, fallback `150000`), sello **`Cadena de Frío Garantizada (0°C–4°C)`** cuando `hasFrioganItems === true`, listado editable de `items` con controles `- / + / eliminar`, 2 sugerencias rápidas de productos frescos no presentes aún en el carrito y botón primario **`Ir a Pagar ($ total) →`** (`Link href="/checkout"`).
-  6. `src/components/FloatingCartBar.tsx` (Ajuste quirúrgico, `<= 380 LOC`):
-     - Añade indicador de frío cuando `hasFrioganItems === true`; al pulsar en el bloque de resumen o `"Ver canasta"` ejecuta `openDrawer()`, conservando el CTA secundario rápido `"Ir a Pagar →"` hacia `/checkout`.
-  7. `src/components/ProductDetailClient.tsx` (Ajuste quirúrgico):
-     - Al pulsar `"Agregar al carrito"` **NO** ejecuta `router.push('/#catalog')`; agrega el ítem con campos `is_friogan`, `accounting_id`, `presentation_key` y llama `openDrawer()`. `"Comprar ahora"` sigue llevando a `/checkout`.
-     - Cuando `isFrioganProteinProduct(product) === true`, sustituye la leyenda `"Peso aprox. en báscula"` (`L795-L799`) por ficha limpia **`Empaque al vacío termoformado · Peso neto exacto · Control INVIMA 0°C–4°C`**.
-     - Corrige el carácter corrupto de `L807` con `<AlertTriangle />` y elimina cualquier lectura de `base_price`.
-  8. `src/components/storefront/HorecaExecutiveBand.tsx` (`<= 320 LOC`, `'use client'`) + actualización de `src/components/LeadGenBot.tsx` y `src/app/b2b/register/page.tsx`:
-     - Cierre de `/` con propuesta directa para Restaurantes, Hoteles, Colegios y Casinos: entregas 5:00–8:00 AM, facturación y suministro unificado fruver (+ proteína Friogan en `TEASER`/`LIVE`), formulario exprés de 3 campos (`POST /api/storefront/lead-express` con `channel: 'B2B_EXPRESS'`) y enlace al Cotizador Inteligente (`/b2b/register`).
-     - `LeadGenBot.tsx` recibe prop opcional `frioganMode?: FrioganStorefrontMode` (y si se omite la resuelve desde `app_settings`) para exponer `'Carnes y Proteínas'` solo en `TEASER` y `LIVE`.
-  9. `src/app/page.tsx` (`<= 320 LOC`, Server Component):
-     - Ensambla `getAppSettings()`, `getVisibleProducts()` y `parseFrioganStorefrontMode(...)`, filtra `CategoryPills` y `FeaturedSection` con el modo Friogan, renderiza `StorefrontPromoStage`, `FrioganShowcaseRail` (en `LIVE`), `#catalog` con `ProductGridContainer`, y `HorecaExecutiveBand`.
+  - **Eliminación de Hero `50/50` y Bento `01/02/03`:** Arriba en escritorio (`1280x800`) se ven de inmediato Header 2 niveles, vitrina promocional compacta (`<= 240px`) y primera fila del catálogo.
+  - **Máximo 2 Fuentes y Paleta Cohesiva:** Retirar `Instrument_Serif` de `src/app/layout.tsx` (`L1, L17, L103`), manteniendo únicamente `Inter` y `Outfit` (`font-variant-numeric: tabular-nums` para precios). Actualizar tokens raíz en `src/app/globals.css` (`--background: #FAF9F6`, `--primary: #0D7A57`, `--primary-dark: #081C15`). Cero `< 13px` (`0.8125rem`) sobre el pliegue.
+  - **Cero Duplicación de UI:** `src/app/page.tsx` elimina `<CategoryPills />` y `<TypicalRecipesBar />` redundantes porque `<StorefrontHeader />` aloja los departamentos visuales y `<StorefrontPromoStage />` aloja las canastas de platos típicos comprables.
+  - **Higiene UI / Hooks / `lucide-react` / Estándar 5B:**
+    * `100%` `lucide-react`, cero emojis, transiciones CSS explícitas (prohibido `transition: all`) y `@media (prefers-reduced-motion: reduce)`.
+    * Corregir `src/components/FeaturedProductsCarousel.tsx` (`L18-26`) moviendo el early return `if (!products || products.length === 0) return null;` **después** de `useRef` y `useEffect` (cumpliendo reglas de React Hooks) y filtrar sus productos por `frioganMode`.
+- **Mapa Modular de Componentes (`<= 600 LOC` cada uno):**
+  1. `src/components/storefront/StorefrontHeader.tsx` (`<= 440 LOC`, `'use client'`):
+     - Cinto de aviso superior (absorbe `global_banner`, `store_status === 'closed' | 'vacation_preorder'`, `store_vacation_config`) + píldora cobertura/corte (`Bogotá y Sabana · Pide antes de las {cutoffHourPublic}:00`).
+     - Nivel 1 sticky: Logo/wordmark, `<SearchBar frioganMode={config.frioganMode} />`, `<ReorderHeroBanner variant="compact-trigger" />`, acceso Cuenta / Portal B2B, y botón carrito **`$ subtotal (N)`** donde **`N` = `lineCount`**, ejecutando `openDrawer()`.
+     - Nivel 2 (Tira única de departamentos con avatar visual): *Todo · Ofertas · Frutas · Verduras · Hortalizas · Tubérculos · Lácteos · Despensa · Procesados* + **`Carnicería Friogan`** *(solo en `'LIVE'`)*.
+  2. `src/components/ReorderHeroBanner.tsx` (Ajuste quirúrgico):
+     - Añadir prop opcional `variant?: 'banner' | 'compact-trigger'` para renderizar como botón compacto de header manteniendo intactos sus modales de historial y búsqueda por teléfono/correo/cédula.
+  3. `src/components/storefront/StorefrontPromoStage.tsx` (`<= 360 LOC`, `'use client'`):
+     - Vitrina compacta (`<= 240px`) con 1 CTA principal hacia ofertas/catálogo, selector de las 7 recetas canónicas (`RECIPE_BUNDLES`) que abre popover/modal ligero con checkboxes para añadir ingredientes disponibles en 1 clic (`isPriceAvailable === true`, pasando `unit: defaultOption.cartUnit`, `weight_kg: defaultOption.weightKg`, `variant_label`, `presentation_key`, `is_friogan`, `accounting_id`), y tarjeta **Teaser Friogan** (`channel: 'FRIOGAN_TEASER'`) cuando `frioganMode === 'TEASER'`.
+  4. `src/components/storefront/FrioganShowcaseRail.tsx` (`<= 320 LOC`, `'use client'`):
+     - Visible únicamente si `frioganMode === 'LIVE' && frioganProducts.length > 0`. Vitrina `#1C1917` / `#7F1D1D` con botón `+ Agregar` / `[ - N + ]` pasando `unit: option.cartUnit`, `weight_kg: option.weightKg`, `variant_label`, `presentation_key`, `is_friogan: true`, `accounting_id`.
+  5. `src/components/ProductCard.tsx` (`<= 480 LOC`, `'use client'`):
+     - Selector compacto de presentación (`resolveProductStorefrontPresentation`), precio sin `base_price` (`resolveStorefrontPrice`), botón `+ Agregar` mutando in-situ a `[ - N + ]` poblando `unit: option.cartUnit`, `weight_kg: option.weightKg`, `variant_label`, `presentation_key`, `is_friogan`, `accounting_id`. Deshabilitado con `"Precio a consultar"` si `isPriceAvailable === false`. Sello `#7F1D1D` para Friogan al vacío.
+  6. `src/components/QuickViewModal.tsx` (Ajuste quirúrgico / refactor `<= 580 LOC`):
+     - Reemplazar cálculo de precio y presentaciones propio por `resolveProductStorefrontPresentation`, `resolveStorefrontPrice` y `buildCartItemName`; retirar coerción a `Libra 500g|500` para productos Friogan; purgar `base_price`; bloquear agregado cuando `isPriceAvailable === false`; suprimir `"Peso aprox. en báscula"` para Friogan; poblar `unit: option.cartUnit`, `weight_kg: option.weightKg`, `variant_label`, `presentation_key`, `is_friogan`, `accounting_id` en `addItem` y abrir `openDrawer()` al agregar.
+  7. `src/components/storefront/CartDrawer.tsx` (`<= 450 LOC`, `'use client'`):
+     - Cajón derecho accesible (`role="dialog"`, `ESC`, backdrop): excluye `STOREFRONT_CRATE_PRODUCT_ID` del cálculo hacia `minOrderHogar` (`150000` fallback), respeta envío libre para `profile?.role === 'b2b_client'`, muestra sello **`Cadena de Frío Garantizada (0°C–4°C)`** si `hasFrioganItems === true`, controles `- / + / eliminar` (estándar `5B` en input manual), hasta 2 sugerencias disponibles no presentes en carrito (con botón `+ Agregar` poblando `unit` y `weight_kg`) y CTA **`Ir a Pagar →`** (`/checkout`).
+  8. `src/components/FloatingCartBar.tsx` (Ajuste quirúrgico, `<= 380 LOC`):
+     - Suma chip de frío si `hasFrioganItems === true`; al pulsar resumen/canasta abre `openDrawer()` dejando CTA secundario directo a `/checkout`.
+  9. `src/components/ProductDetailClient.tsx` (Ajuste quirúrgico):
+     - Unifica precios/presentaciones/nombre con `resolveProductStorefrontPresentation`, `resolveStorefrontPrice` y `buildCartItemName` (retirando la divergencia entre `getFormattedName` y la alerta de `L508-512`, retirando `base_price` en `L317` y la coerción `<= 500g` a Libra en `L166-195` para productos Friogan).
+     - `"Agregar al carrito"` añade el ítem con `unit: option.cartUnit`, `weight_kg: option.weightKg`, `variant_label`, `presentation_key`, `is_friogan`, `accounting_id` y abre `openDrawer()` **sin** `router.push('/#catalog')`.
+     - En Friogan reemplaza `"Peso aprox. en báscula"` (`L795-799`) por **`Empaque al vacío termoformado · Peso neto exacto · Control INVIMA 0°C–4°C`**. Reemplaza carácter corrupto `L807` con `<AlertTriangle />`.
+  10. `src/components/storefront/HorecaExecutiveBand.tsx` (`<= 320 LOC`, `'use client'`) + `src/app/b2b/register/page.tsx`:
+      - Banda final HORECA en `/` con formulario exprés de 3 campos (`POST /api/storefront/lead-express` `B2B_EXPRESS`) y CTA al Cotizador Inteligente (`/b2b/register`). `b2b/register/page.tsx` pasa `frioganMode` leído de `app_settings` a `<LeadGenBotV2 />`.
+  11. `src/components/ProductGridClient.tsx` (`<= 140 LOC`, `'use client'`):
+      - Cuando `products.length === 0`, renderiza estado vacío limpio con ícono `lucide-react`, `{noProductsText}` y enlace CTA `<Link href="/#catalog">Explorar todo el catálogo</Link>` (que limpia `?category` y `?q` y hace scroll al catálogo completo).
+  12. `src/app/page.tsx` (`<= 300 LOC`, Server Component):
+      - Lee `getAppSettings()` y `getVisibleProducts()`, resuelve `frioganMode`, pasa productos filtrados a `FeaturedSection` (`filterStorefrontProductsByFrioganMode`), renderiza `StorefrontPromoStage`, `FrioganShowcaseRail`, `#catalog` (`ProductGridContainer` sin `CategoryPills` ni `TypicalRecipesBar` duplicados) y `HorecaExecutiveBand`.
 
 #### Bloque 6 — Ecosistema de Refacciones del Arsenal & Seguridad
-- **Piezas de Arsenal Aplicadas:**
-  - `REF-INPUT-NUMERICO-SIN-CERO-Y-COMA-DECIMAL.md` (Estándar `5B` en cantidades numéricas).
-  - `disenador-web` Carril 2 (`gemini-frontend-design.md` — disciplina tipográfica 2 familias / 3 escalas, contraste AA/AAA, transiciones explícitas, cero ruido decorativo).
+- **Refacciones Aplicadas:** Estándar `5B` numérico (`REF-INPUT-NUMERICO-SIN-CERO-Y-COMA-DECIMAL.md`), Carril 2 (`/disenador-web`), cero emojis (`lucide-react`), `0` dependencias nuevas en `package.json`.
 - **Seguridad Zero-Trust (`experto-seguridad`):**
-  - El endpoint `/api/storefront/lead-express` valida estrictamente con `zod`, sanitiza teléfonos y usa `SUPABASE_SERVICE_ROLE_KEY` solo en servidor, nunca exponiendo credenciales en cliente.
-  - En estado `OFF` o `TEASER`, un usuario público no puede consultar la ficha `/products/[id]` de un SKU `'CP'` ni inyectarlo por query param `?category=CP` o `?q=`.
+  - Validación pura estricta en servidor (`/api/storefront/lead-express`) usando `Service Role Key` únicamente en API routes, sanitización de `nit` (`bigint`) y `phone`, y aislamiento hermético de SKUs `'CP'`/Friogan en `'OFF'`/`'TEASER'` en servidor, cliente, autocomplete y `localStorage`.
 
 #### Bloque 7 — Plan de Verificación, Tester Automático y Criterios Gherkin
-- **Tester Automático Obligatorio (`tests/storefront/storefrontEngine.test.ts` ejecutado con `npx.cmd tsx --test tests/storefront/storefrontEngine.test.ts`):**
-  1. `parseFrioganStorefrontMode` + `isFrioganProteinProduct` + `filterStorefrontProductsByFrioganMode`: verifica ocultamiento total de SKUs `CP`/Friogan en `'OFF'` y `'TEASER'`, y visibilidad en `'LIVE'`.
-  2. `resolveStorefrontPrice`: verifica rechazo absoluto de `products.base_price` cuando `pricing_model_prices` está vacío (`isPriceAvailable: false`, `displayPrice: 0`) y cálculo con redondeo a `$50 COP` cuando tiene tarifa (`Libra 0.5x`, `Kg 1x`, campaña).
-  3. `resolveProductStorefrontPresentation`: verifica generación de opciones `FIXED_VACUUM_PACK` (cero `±`, etiqueta exacta) vs. `AGRICULTURAL_STANDARD`.
-  4. `isPublicStorefrontRoute`: verifica `true` en `/`, `/products/abc`, `/b2b/register`, `/checkout`, y `false` en `/admin`, `/ops`, `/login`, `/b2b/dashboard`, `/admin/orders/alistamiento-print`.
-  5. `resolveRecipeBundleProducts`: verifica armado de ingredientes de *Ajiaco* / *Sancocho* ignorando proteínas Friogan en `'OFF'`/`'TEASER'` e incluyéndolas en `'LIVE'`.
+- **Tester Automático (`tests/storefront/storefrontEngine.test.ts` ejecutado con `npx.cmd tsx --test tests/storefront/storefrontEngine.test.ts`):**
+  1. `parseFrioganStorefrontMode`, `isFrioganProteinProduct` y `filterStorefrontProductsByFrioganMode`: verifica ocultamiento total en `'OFF'`/`'TEASER'` y exposición en `'LIVE'`.
+  2. `resolveStorefrontPrice` e `isOfferOrPromoProduct`: verifica rechazo absoluto de `base_price` (`isPriceAvailable: false`), redondeo a `$50 COP` y detección tanto por `campaign_info` como por tags `'PROMOCION'` / `'temporada'`.
+  3. `resolveProductStorefrontPresentation` + `getParsedWeight` (`orderUtils.ts`): verifica que `FIXED_VACUUM_PACK` emita `cartUnit` (`'Paquete 1000g'`) sin `±` y que `getParsedWeight('Paquete 1.000g')` y `getParsedWeight('Paquete 1000g')` resuelvan exactamente `1.0 kg`.
+  4. `isPublicStorefrontRoute` y `validateLeadExpressPayload`: verifica exclusión de `/checkout`, `/admin`, `/ops`, `/b2b/dashboard` + coerción segura de `nit: "900.123.456-7"` a `900123456`.
+  5. `resolveRecipeBundleProducts`: verifica armado sobre los 7 `CanonicalRecipeId`, omitiendo SKUs sin tarifa (`isPriceAvailable === false`) y proteínas Friogan cuando `mode !== 'LIVE'`.
 - **Escenarios Gherkin (`Given / When / Then`) de Certificación (`/tirano`):**
-  - **Gherkin 1 (Compra Directa en Grilla + Cajón Lateral):** *Given* una compradora en `/` viendo `ProductCard` de un producto con precio en `pricing_model_prices`, *When* selecciona presentación (`Libra 500g` o `Kg`) y pulsa `+ Agregar`, *Then* se añade al `CartContext` sin cambiar de ruta, la tarjeta muta in-situ a `[ - 1 + ]` y el `CartDrawer` refleja subtotal, peso total y progreso hacia `min_order_hogar`.
-  - **Gherkin 2 (Aislamiento Absoluto Toggle `'OFF'`):** *Given* `friogan_storefront_mode = 'OFF'`, *When* existe un SKU activo con `category = 'CP'` o tag `'Friogan'`, *Then* dicho SKU no aparece en `/`, `?category=CP`, `?q=`, `getWebCategories()`, ni en `CartDrawer`, y `/products/[id]` retorna `404` (`notFound()`) a visitantes no administradores.
-  - **Gherkin 3 (Expectativa y Captura Toggle `'TEASER'`):** *Given* `friogan_storefront_mode = 'TEASER'`, *When* el usuario abre `/` o `/b2b/register`, *Then* ve el bloque de lanzamiento próximo `FruFresco × Friogan`, puede enviar sus datos al `POST /api/storefront/lead-express` (`201`, fila creada en `public.leads`), y ningún producto Friogan aparece comprable en catálogo.
-  - **Gherkin 4 (Venta Unificada Toggle `'LIVE'`):** *Given* `friogan_storefront_mode = 'LIVE'` y al menos un SKU `'CP'` con precio en `pricing_model_prices`, *When* el usuario agrega un producto agrícola y un corte Friogan al vacío, *Then* ambos conviven en el mismo `CartDrawer` y `/checkout`, la tarjeta/ficha Friogan no muestra `"Peso aprox. en báscula"`, y el carrito despliega el sello `"Cadena de Frío Garantizada (0°C–4°C)"`.
-  - **Gherkin 5 (Cero `base_price` + Ficha sin Expulsión):** *Given* un SKU sin fila en `pricing_model_prices` y con `base_price = 5000`, *When* se renderiza en `/` o `/products/[id]`, *Then* muestra `"Precio a consultar"` con botón bloqueado; y al agregar un SKU con tarifa desde `/products/[id]`, se abre `<CartDrawer />` sin redirigir forzadamente a `/#catalog`.
+  - **Gherkin 1 (Compra Directa + CartDrawer):** *Given* una compradora en `/` viendo `ProductCard` con tarifa en `pricing_model_prices`, *When* elige presentación y pulsa `+ Agregar`, *Then* se añade al `CartContext` con `variant_label` y `weight_kg` poblados sin salir de `/`, la tarjeta muta a `[ - 1 + ]` y `CartDrawer` calcula progreso hacia `min_order_hogar` excluyendo `STOREFRONT_CRATE_PRODUCT_ID`.
+  - **Gherkin 2 (Aislamiento Total en `'OFF'` + Purga `localStorage`):** *Given* `friogan_storefront_mode = 'OFF'` incluso si `localStorage` contiene un `CartItem` `is_friogan`, *When* carga `/`, `?q=lomo`, `?category=CP`, `SearchBar`, `CartDrawer` o `/products/[id]` como visitante público, *Then* `localStorage` purga ítems Friogan, ningún SKU `'CP'`/Friogan aparece en grilla, autocomplete, categorías o `CartDrawer`, y `/products/[id]` retorna `404` (`notFound()`).
+  - **Gherkin 3 (Expectativa `'TEASER'`):** *Given* `friogan_storefront_mode = 'TEASER'`, *When* el usuario envía sus datos en el formulario teaser o exprés (`/api/storefront/lead-express`), *Then* se crea fila en `public.leads` con `status = 'new'`, `nit` entero (`bigint | null`) y respuesta `201 { success: true, leadId: string }`, sin mostrar productos Friogan comprables.
+  - **Gherkin 4 (Venta Unificada `'LIVE'`):** *Given* `friogan_storefront_mode = 'LIVE'` y SKUs `'CP'` con tarifa en `pricing_model_prices`, *When* se agrega una verdura y un corte al vacío Friogan, *Then* ambos conviven en `CartDrawer` y `/checkout` con claves React únicas (`variant_label`), cero leyenda `"Peso aprox. en báscula"`, peso `1000g -> 1 kg` exacto y sello `"Cadena de Frío Garantizada (0°C–4°C)"`.
+  - **Gherkin 5 (Cero `base_price` + Ficha + Admin `'CP'`):** *Given* un SKU sin fila en `pricing_model_prices` y `base_price = 5000`, *When* se muestra en `/`, `SearchBar`, `QuickViewModal` o `/products/[id]`, *Then* indica `"Precio a consultar"` con botón deshabilitado; `"Agregar al carrito"` en `/products/[id]` abre `CartDrawer` sin redirigir; `CreateProductModal`/`EditProductModal` permiten crear categoría `'CP'`; y `npx.cmd tsc --noEmit` termina con `0` errores en `src/`.
