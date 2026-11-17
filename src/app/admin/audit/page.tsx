@@ -35,6 +35,7 @@ import {
 import { THEME } from '@/lib/adminTheme';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { fetchAuditLogsSmart, parseAuditSearchQuery, type AuditModuleFilter } from '@/lib/audit/auditOmnibox';
 
 const translateTableName = (table: string) => {
     if (table === 'products') return 'Productos';
@@ -76,9 +77,9 @@ const translateDetailsKey = (key: string) => {
     if (k === 'system_roles') return 'Roles y Permisos del Sistema';
     if (k === 'ai_product_aliases') return 'Sinónimos IA';
     if (k === 'out_of_bounds_requests') return 'Solicitudes Fuera de Horario';
-    if (k === 'scarcity_locked_skus') return 'SKUs Bloqueados por Escasez';
+    if (k === 'scarcity_locked_skus') return 'Referencias Bloqueadas por Escasez';
     if (k === 'warehouse_crate_stock') return 'Stock de Canastillas';
-    if (k === 'sku') return 'Código (SKU)';
+    if (k === 'sku') return 'Referencia Interna';
     if (k === 'name') return 'Nombre';
     if (k === 'role') return 'Rol / Permiso';
     if (k === 'company_name') return 'Nombre de Empresa';
@@ -375,7 +376,8 @@ const formatDetailsSummary = (log: any) => {
     }
     
     let parts: string[] = [];
-    if (d.sku) parts.push(`Código (SKU): ${d.sku}`);
+    if (d.accounting_id) parts.push(`ID Contable: #${d.accounting_id}`);
+    if (d.sku) parts.push(`Ref: ${d.sku}`);
     if (d.name) parts.push(`Nombre: ${d.name}`);
     if (d.role) parts.push(`Rol: ${translateRole(d.role)}`);
     if (d.company_name) parts.push(`Empresa: ${d.company_name}`);
@@ -467,7 +469,8 @@ const formatDetailsSummaryText = (log: any): string => {
     }
 
     let parts: string[] = [];
-    if (d.sku) parts.push(`Código (SKU): ${d.sku}`);
+    if (d.accounting_id) parts.push(`ID Contable: #${d.accounting_id}`);
+    if (d.sku) parts.push(`Ref: ${d.sku}`);
     if (d.name) parts.push(`Nombre: ${d.name}`);
     if (d.role) parts.push(`Rol: ${translateRole(d.role)}`);
     if (d.company_name) parts.push(`Empresa: ${d.company_name}`);
@@ -576,11 +579,53 @@ export default function AuditLogPage() {
         };
     }, [selectedLog]);
 
+    const [searchInput, setSearchInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [moduleFilter, setModuleFilter] = useState<AuditModuleFilter>('all');
     const [dateRange, setDateRange] = useState('all');
     const [actionType, setActionType] = useState('all');
     const toolbarRef = useRef<HTMLDivElement>(null);
-    const [toolbarHeight, setToolbarHeight] = useState(63);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const [toolbarHeight, setToolbarHeight] = useState(96);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearchTerm(searchInput);
+        }, 280);
+        return () => clearTimeout(timer);
+    }, [searchInput]);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isEditable =
+                target?.tagName === 'INPUT' ||
+                target?.tagName === 'TEXTAREA' ||
+                target?.tagName === 'SELECT' ||
+                target?.isContentEditable;
+            if (e.key === '/' && !isEditable && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+                if (searchInput) {
+                    setSearchInput('');
+                    setSearchTerm('');
+                } else {
+                    searchInputRef.current?.blur();
+                }
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [searchInput]);
+
+    const PAGE_SIZE = 50;
+
+    const hasPermission = (permission: string) => {
+        return checkUserPermission(profile, permission, systemRoles);
+    };
+
+    const canView = hasPermission('admin.dashboard.audit');
 
     useEffect(() => {
         if (!toolbarRef.current) return;
@@ -592,57 +637,27 @@ export default function AuditLogPage() {
         });
         observer.observe(toolbarRef.current);
         return () => observer.disconnect();
-    }, []);
+    }, [authLoading, canView]);
 
-    const PAGE_SIZE = 50;
+    const getLogExtraTexts = (log: any): string[] => [
+        formatCollaboratorName(log.collaborator_name),
+        formatActionName(log),
+        translateModule(log),
+        log.details?.status ? translateStatus(log.details.status) : '',
+        formatDetailsSummaryText(log),
+    ];
 
-    const hasPermission = (permission: string) => {
-        return checkUserPermission(profile, permission, systemRoles);
+    const clearSearch = () => {
+        setSearchInput('');
+        setSearchTerm('');
     };
 
-    const canView = hasPermission('admin.dashboard.audit');
-
-    const applyFilters = (query: any) => {
-        // Enforce STRICT 3-month limit (90 days)
-        const limitDate = new Date();
-        limitDate.setDate(limitDate.getDate() - 90);
-        query = query.gte('created_at', limitDate.toISOString());
-
-        if (searchTerm.trim()) {
-            const sanitizedTerm = searchTerm.trim().replace(/[%_]/g, '\\$&');
-            const term = `%${sanitizedTerm}%`;
-            query = query.or(`collaborator_name.ilike.${term},action.ilike.${term},module.ilike.${term}`);
-        }
-        
-        if (dateRange === 'today') {
-            const start = new Date();
-            start.setHours(0, 0, 0, 0);
-            query = query.gte('created_at', start.toISOString());
-        } else if (dateRange === 'week') {
-            const start = new Date();
-            start.setDate(start.getDate() - 7);
-            query = query.gte('created_at', start.toISOString());
-        } else if (dateRange === 'month') {
-            const start = new Date();
-            start.setDate(start.getDate() - 30);
-            query = query.gte('created_at', start.toISOString());
-        }
-        
-        if (actionType === 'create') {
-            query = query.like('action', 'INSERT_%');
-        } else if (actionType === 'update') {
-            query = query.like('action', 'UPDATE_%');
-        } else if (actionType === 'delete') {
-            query = query.like('action', 'DELETE_%');
-        } else if (actionType === 'login') {
-            query = query.or('action.eq.LOGIN,action.eq.USER_LOGIN');
-        } else if (actionType === 'logout') {
-            query = query.or('action.eq.LOGOUT,action.eq.USER_LOGOUT');
-        } else if (actionType === 'security') {
-            query = query.or('module.eq.SECURITY,action.ilike.%SECURITY%,action.ilike.%LOGIN%,action.ilike.%LOGOUT%,action.ilike.%REGENERATE%,action.ilike.%PERMISSION%');
-        }
-        
-        return query;
+    const resetAllFilters = () => {
+        setSearchInput('');
+        setSearchTerm('');
+        setModuleFilter('all');
+        setDateRange('all');
+        setActionType('all');
     };
 
     useEffect(() => {
@@ -661,58 +676,60 @@ export default function AuditLogPage() {
 
     useEffect(() => {
         if (authLoading || !canView) return;
+        let cancelled = false;
 
         async function loadInitial() {
             setLoading(true);
             try {
-                let query = supabase
-                    .from('audit_logs')
-                    .select('*');
-                    
-                query = applyFilters(query);
-                
-                const { data, error } = await query
-                    .order('created_at', { ascending: false })
-                    .range(0, PAGE_SIZE - 1);
-                    
-                if (error) throw error;
-                
-                const uniqueData = Array.from(new Map((data || []).map((item: any) => [item.id, item])).values());
-                setLogs(uniqueData);
-                setHasMore((data || []).length === PAGE_SIZE);
+                const result = await fetchAuditLogsSmart({
+                    supabase,
+                    rawQuery: searchTerm,
+                    moduleFilter,
+                    dateRange,
+                    actionType,
+                    limit: PAGE_SIZE,
+                    getExtraTexts: getLogExtraTexts,
+                });
+                if (cancelled) return;
+                setLogs(result.logs);
+                setHasMore(result.hasMore);
                 setPage(0);
-            } catch (err: any) {
-                console.error('Error loading audit logs:', err);
+            } catch (err) {
+                if (!cancelled) console.error('Error loading audit logs:', err);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         }
         loadInitial();
-    }, [searchTerm, dateRange, actionType, refreshKey, authLoading, canView]);
+        return () => {
+            cancelled = true;
+        };
+    }, [searchTerm, moduleFilter, dateRange, actionType, refreshKey, authLoading, canView]);
 
     const loadMore = async () => {
-        if (loading || !hasMore) return;
+        if (loading || !hasMore || logs.length === 0) return;
         const nextPage = page + 1;
         setLoading(true);
         try {
-            let query = supabase
-                .from('audit_logs')
-                .select('*');
-                
-            query = applyFilters(query);
-            
-            const { data, error } = await query
-                .order('created_at', { ascending: false })
-                .range(nextPage * PAGE_SIZE, (nextPage + 1) * PAGE_SIZE - 1);
-                
-            if (error) throw error;
-            
-            setLogs(prev => {
-                const existingIds = new Set(prev.map(l => l.id));
-                const newLogs = (data || []).filter(l => !existingIds.has(l.id));
-                return [...prev, ...newLogs];
+            const lastLog = logs[logs.length - 1];
+            const existingIds = new Set(logs.map((l) => l.id));
+            const result = await fetchAuditLogsSmart({
+                supabase,
+                rawQuery: searchTerm,
+                moduleFilter,
+                dateRange,
+                actionType,
+                limit: PAGE_SIZE,
+                beforeCreatedAt: lastLog?.created_at || null,
+                excludeIds: existingIds,
+                getExtraTexts: getLogExtraTexts,
             });
-            setHasMore((data || []).length === PAGE_SIZE);
+            setLogs((prev) => {
+                const seen = new Set(prev.map((l) => l.id));
+                const nextRows = result.logs.filter((l) => !seen.has(l.id));
+                return [...prev, ...nextRows];
+            });
+            setHasMore(result.hasMore && result.logs.length > 0);
             setPage(nextPage);
         } catch (err) {
             console.error('Error loading more logs:', err);
@@ -724,35 +741,39 @@ export default function AuditLogPage() {
     const handleExportXLSX = async () => {
         setExporting(true);
         try {
-            // Carga optimizada de hasta 2.500 registros con columnas específicas para máxima velocidad
+            // Carga optimizada de hasta 2.500 registros filtrados con el Omnibox
             let allLogs: any[] = [];
-            let from = 0;
-            const batchSize = 1000;
+            const seenIds = new Set<string>();
+            const batchSize = 500;
             const maxExportLimit = 2500;
+            let beforeCursor: string | null = null;
             let keepFetching = true;
 
             while (keepFetching && allLogs.length < maxExportLimit) {
-                let query = supabase
-                    .from('audit_logs')
-                    .select('id, created_at, collaborator_name, collaborator_id, action, module, details');
-                query = applyFilters(query);
-                const { data, error } = await query
-                    .order('created_at', { ascending: false })
-                    .range(from, from + batchSize - 1);
-
-                if (error) throw error;
-                if (!data || data.length === 0) {
+                const res = await fetchAuditLogsSmart({
+                    supabase,
+                    rawQuery: searchTerm,
+                    moduleFilter,
+                    dateRange,
+                    actionType,
+                    limit: Math.min(batchSize, maxExportLimit - allLogs.length),
+                    beforeCreatedAt: beforeCursor,
+                    excludeIds: seenIds,
+                    selectColumns: 'id, created_at, collaborator_name, collaborator_id, action, module, details',
+                    getExtraTexts: getLogExtraTexts,
+                });
+                if (!res.logs || res.logs.length === 0) {
                     keepFetching = false;
                 } else {
-                    allLogs = [...allLogs, ...data];
-                    if (data.length < batchSize || allLogs.length >= maxExportLimit) {
-                        keepFetching = false;
-                    } else {
-                        from += batchSize;
+                    for (const row of res.logs) {
+                        seenIds.add(row.id);
+                        allLogs.push(row);
                     }
+                    beforeCursor = res.logs[res.logs.length - 1].created_at;
+                    keepFetching = res.hasMore && allLogs.length < maxExportLimit;
                 }
             }
-            
+
             const exportData = allLogs.map((log: any) => ({
                 'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO'),
                 'Usuario': formatCollaboratorName(log.collaborator_name),
@@ -825,7 +846,7 @@ export default function AuditLogPage() {
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background }}>
-            <div style={{ width: '98%', maxWidth: '100%', margin: '0 auto', padding: '2rem 2.5rem' }}>
+            <div style={{ width: '98%', maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem' }}>
                 {/* Banner de Notificación / Toast In-UI */}
                 {toast && (
                     <div
@@ -992,112 +1013,260 @@ export default function AuditLogPage() {
                     </span>
                 </div>
 
-                {/* Filtros de Auditoría - Barra Flotante Sticky Frosted Glass (Estándar Diseñador-Web) */}
-                <div 
-                    ref={toolbarRef}
-                    style={{ 
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        backdropFilter: 'blur(12px)',
-                        WebkitBackdropFilter: 'blur(12px)',
-                        padding: '0.65rem 1.15rem', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E2E8F0', 
-                        display: 'flex', 
-                        gap: '0.75rem', 
-                        marginBottom: '1rem', 
-                        flexWrap: 'wrap', 
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
-                        position: 'sticky',
-                        top: '85px',
-                        zIndex: 70,
-                        transition: 'all 0.2s ease-in-out'
-                    }}
-                >
-                    <div style={{ flex: '1 1 320px', minWidth: '260px', position: 'relative' }}>
-                        <Search size={16} strokeWidth={1.75} style={{ position: 'absolute', left: '0.9rem', top: '50%', transform: 'translateY(-50%)', color: THEME.colors.textSecondary }} />
-                        <input 
-                            placeholder="Buscar por usuario, acción o referencia..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                {/* Buscador Omnibox Forense + Filtros - Barra Flotante Sticky (Estándar FruFresco 1600px) */}
+                {(() => {
+                    const parsedLive = parseAuditSearchQuery(searchInput);
+                    const effectiveModuleBadge: AuditModuleFilter = parsedLive.moduleTag || moduleFilter;
+                    const hasAnyFilter = Boolean(searchInput.trim() || moduleFilter !== 'all' || dateRange !== 'all' || actionType !== 'all');
+                    const moduleChips: { id: AuditModuleFilter; label: string }[] = [
+                        { id: 'all', label: 'Todos' },
+                        { id: 'ORDERS', label: 'Pedidos' },
+                        { id: 'PRODUCTS', label: 'Productos' },
+                        { id: 'CLIENTS', label: 'Clientes' },
+                        { id: 'COMMERCIAL', label: 'Matriz Costos' },
+                        { id: 'SECURITY', label: 'Seguridad' },
+                        { id: 'GOVERNANCE', label: 'Gobernanza' },
+                        { id: 'SETTINGS', label: 'Configuración' },
+                    ];
+
+                    return (
+                        <div 
+                            ref={toolbarRef}
                             style={{ 
-                                width: '100%', padding: '0.6rem 2.2rem 0.6rem 2.5rem', borderRadius: THEME.radius.md, 
-                                border: `1px solid ${THEME.colors.border}`, backgroundColor: THEME.colors.background, fontWeight: '600', fontSize: '0.85rem',
-                                fontFamily: THEME.typography.fontFamilySecondary, color: THEME.colors.textMain
+                                backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                                backdropFilter: 'blur(12px)',
+                                WebkitBackdropFilter: 'blur(12px)',
+                                padding: '0.7rem 1.1rem', 
+                                borderRadius: '16px', 
+                                border: '1px solid #E2E8F0', 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                gap: '0.55rem', 
+                                marginBottom: '1rem', 
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.05)',
+                                position: 'sticky',
+                                top: '85px',
+                                zIndex: 70,
+                                transition: 'all 0.2s ease-in-out'
                             }}
-                        />
-                        {searchTerm && (
-                            <button
-                                onClick={() => setSearchTerm('')}
-                                style={{
-                                    position: 'absolute',
-                                    right: '0.75rem',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    background: 'none',
-                                    border: 'none',
-                                    color: THEME.colors.textSecondary,
-                                    cursor: 'pointer',
-                                    padding: '2px',
-                                    display: 'flex'
-                                }}
-                                title="Limpiar búsqueda"
-                            >
-                                <X size={14} />
-                            </button>
-                        )}
-                    </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                            <Calendar size={15} strokeWidth={1.75} color={THEME.colors.primary} />
-                            <select 
-                                value={dateRange}
-                                onChange={(e) => setDateRange(e.target.value)}
-                                style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
-                            >
-                                <option value="all">Últimos 3 meses</option>
-                                <option value="today">Hoy</option>
-                                <option value="week">Esta Semana</option>
-                                <option value="month">Este Mes</option>
-                            </select>
-                        </div>
+                        >
+                            <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ flex: '1 1 360px', minWidth: '280px', position: 'relative' }}>
+                                    <Search
+                                        size={16}
+                                        strokeWidth={2}
+                                        style={{
+                                            position: 'absolute',
+                                            left: '0.9rem',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            color: searchInput ? THEME.colors.primary : THEME.colors.textSecondary
+                                        }}
+                                    />
+                                    <input
+                                        ref={searchInputRef}
+                                        type="text"
+                                        aria-label="Buscador omnibox de auditoría de últimos 3 meses"
+                                        placeholder="Buscar persona, #pedido (1812), producto, empresa, campo o @módulo..."
+                                        value={searchInput}
+                                        onChange={(e) => setSearchInput(e.target.value)}
+                                        style={{ 
+                                            width: '100%',
+                                            padding: '0.6rem 3.4rem 0.6rem 2.5rem',
+                                            borderRadius: THEME.radius.md, 
+                                            border: `1.5px solid ${searchInput ? THEME.colors.primary : THEME.colors.border}`,
+                                            backgroundColor: searchInput ? '#F8FFFC' : THEME.colors.background,
+                                            fontWeight: '600',
+                                            fontSize: '0.86rem',
+                                            fontFamily: THEME.typography.fontFamilySecondary,
+                                            color: THEME.colors.textMain,
+                                            outline: 'none',
+                                            transition: 'border-color 0.15s ease, background-color 0.15s ease'
+                                        }}
+                                    />
+                                    {searchInput ? (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            style={{
+                                                position: 'absolute',
+                                                right: '0.65rem',
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                background: '#E2E8F0',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                color: '#334155',
+                                                cursor: 'pointer',
+                                                padding: '3px 5px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                            title="Limpiar búsqueda (Esc)"
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    ) : (
+                                        <kbd
+                                            title="Atajo de teclado: /"
+                                            style={{
+                                                position: 'absolute',
+                                                right: '0.7rem',
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                padding: '2px 7px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: '800',
+                                                color: '#64748B',
+                                                backgroundColor: '#F1F5F9',
+                                                border: '1px solid #CBD5E1',
+                                                borderRadius: '5px',
+                                                pointerEvents: 'none',
+                                                fontFamily: 'monospace'
+                                            }}
+                                        >
+                                            /
+                                        </kbd>
+                                    )}
+                                </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.75rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
-                            <Filter size={15} strokeWidth={1.75} color={THEME.colors.primary} />
-                            <select 
-                                value={actionType}
-                                onChange={(e) => setActionType(e.target.value)}
-                                style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
-                            >
-                                <option value="all">Todas las Acciones</option>
-                                <option value="create">Creación (INSERT)</option>
-                                <option value="update">Modificación (UPDATE)</option>
-                                <option value="delete">Eliminación (DELETE)</option>
-                                <option value="login">Ingresos (LOGIN)</option>
-                                <option value="logout">Salidas (LOGOUT)</option>
-                                <option value="security">Seguridad / Autenticación</option>
-                            </select>
-                        </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.72rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                        <Layers size={15} strokeWidth={1.75} color={THEME.colors.primary} />
+                                        <select 
+                                            aria-label="Filtrar por módulo"
+                                            value={moduleFilter}
+                                            onChange={(e) => setModuleFilter(e.target.value as AuditModuleFilter)}
+                                            style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
+                                        >
+                                            <option value="all">Todos los Módulos</option>
+                                            <option value="ORDERS">Pedidos</option>
+                                            <option value="PRODUCTS">Productos</option>
+                                            <option value="CLIENTS">Clientes</option>
+                                            <option value="COMMERCIAL">Matriz de Costos</option>
+                                            <option value="SECURITY">Seguridad</option>
+                                            <option value="GOVERNANCE">Gobernanza Operativa</option>
+                                            <option value="SETTINGS">Configuración</option>
+                                        </select>
+                                    </div>
 
-                        <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            padding: '0.42rem 0.75rem', 
-                            backgroundColor: '#F1F5F9', 
-                            borderRadius: THEME.radius.md, 
-                            border: '1px solid #E2E8F0',
-                            fontSize: '0.8rem',
-                            fontWeight: '700',
-                            color: '#475569',
-                            fontFamily: THEME.typography.fontFamilySecondary,
-                            whiteSpace: 'nowrap'
-                        }}>
-                            {logs.length} {logs.length === 1 ? 'registro' : 'registros'}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.72rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                        <Calendar size={15} strokeWidth={1.75} color={THEME.colors.primary} />
+                                        <select 
+                                            aria-label="Filtrar por rango de fechas"
+                                            value={dateRange}
+                                            onChange={(e) => setDateRange(e.target.value)}
+                                            style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
+                                        >
+                                            <option value="all">Últimos 3 meses</option>
+                                            <option value="today">Hoy</option>
+                                            <option value="week">Esta Semana</option>
+                                            <option value="month">Este Mes</option>
+                                        </select>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: THEME.colors.background, padding: '0.42rem 0.72rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+                                        <Filter size={15} strokeWidth={1.75} color={THEME.colors.primary} />
+                                        <select 
+                                            aria-label="Filtrar por tipo de acción"
+                                            value={actionType}
+                                            onChange={(e) => setActionType(e.target.value)}
+                                            style={{ border: 'none', background: 'none', fontWeight: '700', color: THEME.colors.textMain, fontSize: '0.82rem', cursor: 'pointer', outline: 'none', fontFamily: THEME.typography.fontFamilySecondary }}
+                                        >
+                                            <option value="all">Todas las Acciones</option>
+                                            <option value="create">Creación (INSERT)</option>
+                                            <option value="update">Modificación (UPDATE)</option>
+                                            <option value="delete">Eliminación (DELETE)</option>
+                                            <option value="login">Ingresos (LOGIN)</option>
+                                            <option value="logout">Salidas (LOGOUT)</option>
+                                            <option value="security">Seguridad / Autenticación</option>
+                                        </select>
+                                    </div>
+
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '6px',
+                                        padding: '0.42rem 0.75rem', 
+                                        backgroundColor: hasAnyFilter ? '#ECFDF5' : '#F1F5F9', 
+                                        borderRadius: THEME.radius.md, 
+                                        border: `1px solid ${hasAnyFilter ? '#A7F3D0' : '#E2E8F0'}`,
+                                        fontSize: '0.8rem',
+                                        fontWeight: '700',
+                                        color: hasAnyFilter ? '#065F46' : '#475569',
+                                        fontFamily: THEME.typography.fontFamilySecondary,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {loading ? (
+                                            <Loader2 size={13} className="animate-spin" />
+                                        ) : (
+                                            <span>{logs.length}{hasMore ? '+' : ''} {logs.length === 1 ? 'registro' : 'registros'}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                                    {moduleChips.map((chip) => {
+                                        const isActive = effectiveModuleBadge === chip.id;
+                                        return (
+                                            <button
+                                                key={chip.id}
+                                                type="button"
+                                                onClick={() => setModuleFilter(chip.id === moduleFilter && chip.id !== 'all' ? 'all' : chip.id)}
+                                                style={{
+                                                    padding: '0.24rem 0.65rem',
+                                                    borderRadius: '999px',
+                                                    fontSize: '0.73rem',
+                                                    fontWeight: '700',
+                                                    cursor: 'pointer',
+                                                    border: `1px solid ${isActive ? '#0D7A57' : '#E2E8F0'}`,
+                                                    backgroundColor: isActive ? '#0D7A57' : '#F8FAFC',
+                                                    color: isActive ? '#FFFFFF' : '#475569',
+                                                    fontFamily: THEME.typography.fontFamilySecondary,
+                                                    transition: 'all 0.12s ease'
+                                                }}
+                                            >
+                                                {chip.label}
+                                            </button>
+                                        );
+                                    })}
+                                    {hasAnyFilter && (
+                                        <button
+                                            type="button"
+                                            onClick={resetAllFilters}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                padding: '0.24rem 0.65rem',
+                                                borderRadius: '999px',
+                                                fontSize: '0.73rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                border: '1px solid #FECACA',
+                                                backgroundColor: '#FEF2F2',
+                                                color: '#B91C1C',
+                                                fontFamily: THEME.typography.fontFamilySecondary
+                                            }}
+                                        >
+                                            <X size={12} /> Limpiar filtros
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600', fontFamily: THEME.typography.fontFamilySecondary, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span>Omnibox 90d:</span>
+                                    <code style={{ backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', color: '#334155' }}>Edgar 1812</code>
+                                    <code style={{ backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', color: '#334155' }}>Rivas, Brotes</code>
+                                    <code style={{ backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', color: '#334155' }}>@pedidos</code>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    );
+                })()}
 
                 {/* Tabla de Auditoría con Encabezados Sticky (Estándar Diseñador-Web) */}
                 <div style={{ 
@@ -1110,65 +1279,97 @@ export default function AuditLogPage() {
                     boxShadow: THEME.shadow.sm,
                     overflow: 'visible'
                 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead style={{ position: 'sticky', top: `${85 + toolbarHeight - 2}px`, zIndex: 40, backgroundColor: '#F8FAFC' }}>
-                            <tr style={{ backgroundColor: '#F8FAFC', borderBottom: `2px solid ${THEME.colors.border}`, boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left' }}>
+                        <thead>
+                            <tr style={{ backgroundColor: '#F1F5F9', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    zIndex: 35,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
                                     padding: '0.85rem 1.25rem', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '170px'
                                 }}>
                                     Fecha y Hora
                                 </th>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    zIndex: 35,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
                                     padding: '0.85rem 1.25rem', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '180px'
                                 }}>
                                     Usuario
                                 </th>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    zIndex: 35,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
                                     padding: '0.85rem 1.25rem', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '160px'
                                 }}>
                                     Acción
                                 </th>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    zIndex: 35,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
                                     padding: '0.85rem 1.25rem', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '140px'
                                 }}>
                                     Módulo
                                 </th>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    zIndex: 35,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
                                     padding: '0.85rem 1.25rem', 
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform, 
                                     minWidth: '320px'
                                 }}>
                                     Cambios y Actividad
                                 </th>
                                 <th style={{ 
+                                    position: 'sticky',
+                                    top: `${85 + toolbarHeight - 2}px`,
+                                    right: 0,
+                                    zIndex: 45,
+                                    backgroundColor: '#F1F5F9',
+                                    borderBottom: '2px solid #CBD5E1',
+                                    boxShadow: '-4px 0 8px rgba(0,0,0,0.04)',
                                     padding: '0.85rem 0.75rem', 
                                     width: '80px', 
                                     minWidth: '80px', 
@@ -1176,7 +1377,7 @@ export default function AuditLogPage() {
                                     fontSize: THEME.typography.tableHeader.fontSize, 
                                     letterSpacing: THEME.typography.tableHeader.letterSpacing, 
                                     fontWeight: THEME.typography.tableHeader.fontWeight, 
-                                    color: THEME.typography.tableHeader.color, 
+                                    color: '#0F172A', 
                                     textTransform: THEME.typography.tableHeader.textTransform
                                 }}>
                                     Ver

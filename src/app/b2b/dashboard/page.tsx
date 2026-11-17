@@ -6,7 +6,7 @@ import { supabase } from '../../../lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAbortError } from '@/lib/errorUtils';
-import { Package, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X, ChevronRight, History, ArrowDownAZ } from 'lucide-react';
+import { Package, Plus, Trash2, Search, Truck, ShoppingCart, Smile, Printer, Rocket, ShoppingBag, FileText, BarChart3, Info, Tag, Maximize2, Minimize2, Columns, Clock, HelpCircle, Eye, RotateCcw, Sparkles, Globe, Layers, AlertTriangle, CheckCircle2, Lock, Building2, UserCheck, Zap, Edit2, Calendar, X, ChevronRight, History, ArrowDownAZ } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
 import { CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { translations, Locale } from '@/lib/translations';
@@ -191,11 +191,14 @@ export default function B2BDashboard() {
             const nameNorm = normalizeSearch(p.name);
             const nameEnNorm = normalizeSearch(p.name_en);
             const skuNorm = normalizeSearch(p.sku);
+            const accIdNorm = String(p.accounting_id ?? '').trim();
             const catNorm = normalizeSearch(p.category);
+            const cleanNoHash = cleanSearchQuery.replace(/^#/, '');
 
             return nameNorm.includes(cleanSearchQuery) ||
                 nameEnNorm.includes(cleanSearchQuery) ||
                 skuNorm.includes(cleanSearchQuery) ||
+                (cleanNoHash.length > 0 && accIdNorm.includes(cleanNoHash)) ||
                 catNorm.includes(cleanSearchQuery);
         }).slice(0, 8);
     }, [searchTerm, categoryProducts, searchResults, agreementPricesMap, activeProfile, agreementFilter]);
@@ -338,7 +341,7 @@ export default function B2BDashboard() {
                 while (hasMore) {
                     let query = supabase
                         .from('products')
-                        .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, category')
+                        .select('id, name, name_en, unit_of_measure, image_url, sku, accounting_id, options_config, category')
                         .eq('is_active', true)
                         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -407,7 +410,7 @@ export default function B2BDashboard() {
             try {
                 const { data, error } = await supabase
                     .from('products')
-                    .select('id, name, name_en, unit_of_measure, image_url, sku, options_config, category, is_active')
+                    .select('id, name, name_en, unit_of_measure, image_url, sku, accounting_id, options_config, category, is_active')
                     .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
                     .eq('is_active', true)
                     .limit(50)
@@ -1229,34 +1232,42 @@ export default function B2BDashboard() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
 
-            <div className="container" style={{ padding: '1.25rem 1.5rem 2rem', maxWidth: '1400px', margin: '0 auto' }}>
+            <div className="container" style={{ padding: '0.75rem 1.5rem 1.25rem', maxWidth: '1600px', margin: '0 auto' }}>
 
-                {/* UNIFIED ULTRA-COMPACT HEADER & TOOLBAR */}
+                {/* UNIFIED ULTRA-COMPACT HEADER & TOOLBAR (SINGLE ROW COMMAND BAR) */}
                 <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
                     flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    marginBottom: '1rem',
+                    gap: '0.6rem',
+                    marginBottom: '0.75rem',
                     backgroundColor: 'white',
-                    padding: '0.65rem 1.25rem',
+                    padding: '0.5rem 1rem',
                     borderRadius: THEME.radius.lg,
                     border: `1px solid ${THEME.colors.border}`,
                     boxShadow: THEME.shadow.sm
                 }}>
-                    {/* Left: Company Title & Client Simulator Dropdown */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                        <div>
-                            <h1 style={{ 
-                                fontFamily: THEME.typography.fontFamilyMain,
-                                fontSize: '1.2rem', 
-                                fontWeight: '800', 
-                                color: THEME.colors.textMain, 
-                                margin: 0,
-                                letterSpacing: '-0.02em',
-                                lineHeight: 1.2
-                            }}>
+                    {/* Left: Company Title (truncated 1 line) & Client Simulator Dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0, flex: '1 1 320px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                            <Building2 size={17} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                            <h1
+                                title={activeProfile?.company_name || profile?.company_name || t.b2b.dashboard.title}
+                                style={{ 
+                                    fontFamily: THEME.typography.fontFamilyMain,
+                                    fontSize: '1.02rem', 
+                                    fontWeight: '800', 
+                                    color: THEME.colors.textMain, 
+                                    margin: 0,
+                                    letterSpacing: '-0.02em',
+                                    lineHeight: 1.2,
+                                    maxWidth: '420px',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                }}
+                            >
                                 {activeProfile?.company_name || profile?.company_name || t.b2b.dashboard.title}
                             </h1>
                         </div>
@@ -1267,18 +1278,19 @@ export default function B2BDashboard() {
                             alignItems: 'center', 
                             gap: '0.35rem', 
                             backgroundColor: '#EFF6FF', 
-                            padding: '0.25rem 0.6rem', 
+                            padding: '0.22rem 0.55rem', 
                             borderRadius: THEME.radius.md,
-                            border: '1px solid #BFDBFE' 
+                            border: '1px solid #BFDBFE',
+                            flexShrink: 0
                         }}>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
-                                 Cliente:
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap' }}>
+                                Cliente:
                             </span>
                             <select
                                 value={simulatedClientId || activeProfile?.id || ''}
                                 onChange={(e) => setSimulatedClientId(e.target.value)}
                                 style={{
-                                    fontSize: '0.78rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 700,
                                     color: '#1E293B',
                                     backgroundColor: 'white',
@@ -1287,7 +1299,7 @@ export default function B2BDashboard() {
                                     padding: '2px 6px',
                                     cursor: 'pointer',
                                     outline: 'none',
-                                    maxWidth: '240px'
+                                    maxWidth: '200px'
                                 }}
                             >
                                 <option value="">(Mi Cuenta Autenticada)</option>
@@ -1301,22 +1313,22 @@ export default function B2BDashboard() {
                     </div>
 
                     {/* Right: Inline Tabs + Enfoque Segmented Control */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flexShrink: 0 }}>
                         {/* Navigation Tabs */}
                         <div className="b2b-tab-navigation" style={{
                             display: 'flex',
                             backgroundColor: '#F8FAFC',
                             borderRadius: THEME.radius.md,
-                            padding: '3px',
+                            padding: '2px',
                             border: `1px solid ${THEME.colors.border}`,
                             gap: '2px'
                         }}>
                             {[
-                                { key: 'order', icon: <ShoppingCart size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabQuickOrder },
-                                { key: 'invoices', icon: <FileText size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabInvoices },
-                                { key: 'consumption', icon: <BarChart3 size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabConsumption },
-                                { key: 'agreements', icon: <Rocket size={14} strokeWidth={2} />, label: t.b2b.dashboard.tabAgreements },
-                                { key: 'crates', icon: <Package size={14} strokeWidth={2} />, label: 'Mis Canastillas' },
+                                { key: 'order', icon: <ShoppingCart size={13} strokeWidth={2} />, label: t.b2b.dashboard.tabQuickOrder },
+                                { key: 'invoices', icon: <FileText size={13} strokeWidth={2} />, label: t.b2b.dashboard.tabInvoices },
+                                { key: 'consumption', icon: <BarChart3 size={13} strokeWidth={2} />, label: t.b2b.dashboard.tabConsumption },
+                                { key: 'agreements', icon: <Rocket size={13} strokeWidth={2} />, label: t.b2b.dashboard.tabAgreements },
+                                { key: 'crates', icon: <Package size={13} strokeWidth={2} />, label: 'Mis Canastillas' },
                             ].map(tab => (
                                 <button
                                     key={tab.key}
@@ -1324,14 +1336,14 @@ export default function B2BDashboard() {
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '5px',
-                                        padding: '0.35rem 0.65rem',
+                                        gap: '4px',
+                                        padding: '0.3rem 0.55rem',
                                         borderRadius: THEME.radius.md,
                                         border: 'none',
                                         backgroundColor: activeTab === tab.key ? THEME.colors.primary : 'transparent',
                                         color: activeTab === tab.key ? 'white' : THEME.colors.textSecondary,
                                         fontWeight: activeTab === tab.key ? '800' : '600',
-                                        fontSize: '0.76rem',
+                                        fontSize: '0.74rem',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s',
                                         whiteSpace: 'nowrap'
@@ -1486,97 +1498,100 @@ export default function B2BDashboard() {
                             {/* Sticky Header Wrapper for Catalog Search and Categories — UNIFIED COMPACT SINGLE ROW */}
                             <div className="b2b-sticky-catalog-header" style={{
                                 backgroundColor: THEME.colors.surface,
-                                padding: '0.75rem 1.25rem',
+                                padding: '0.6rem 1rem',
                                 borderBottom: `1px solid ${THEME.colors.border}`,
                                 borderLeft: `3px solid ${THEME.colors.primary}`,
                                 borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
                                 display: 'flex',
-                                flexDirection: 'column',
-                                gap: '0.6rem',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '0.5rem',
                                 width: '100%',
                                 boxSizing: 'border-box',
                                 position: 'relative',
                                 zIndex: 100
                             }}>
-                                {/* Fila 1: Título + Buscador + Categoria */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', width: '100%' }}>
-                                    <h2 style={{ 
-                                        fontFamily: THEME.typography.fontFamilyMain,
-                                        fontSize: '1.05rem', 
-                                        fontWeight: '800', 
-                                        margin: 0,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        color: THEME.colors.textMain,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        <Package size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Catálogo'}
-                                    </h2>
-                                    
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
-                                        <div 
-                                            style={{ position: 'relative', flex: '1 1 140px', minWidth: '120px', maxWidth: '240px', zIndex: 1000 }}
-                                            onBlur={(e) => {
-                                                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                                                    setIsSearchDropdownOpen(false);
-                                                }
+                                <h2 style={{ 
+                                    fontFamily: THEME.typography.fontFamilyMain,
+                                    fontSize: '0.98rem', 
+                                    fontWeight: '800', 
+                                    margin: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    color: THEME.colors.textMain,
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    <Package size={17} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.navCatalog || 'Catálogo'}
+                                </h2>
+                                
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
+                                    <div 
+                                        style={{ position: 'relative', flex: '1 1 200px', minWidth: '160px', maxWidth: '360px', zIndex: 1000 }}
+                                        onBlur={(e) => {
+                                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                                setIsSearchDropdownOpen(false);
+                                            }
+                                        }}
+                                    >
+                                        <div style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex', zIndex: 2 }}>
+                                            <Search size={13} strokeWidth={2} />
+                                        </div>
+                                        <input
+                                            ref={catalogSearchInputRef}
+                                            type="text"
+                                            placeholder={t.b2b.dashboard.searchPlaceholder}
+                                            value={searchTerm}
+                                            onChange={(e) => {
+                                                setSearchTerm(e.target.value);
+                                                setIsSearchDropdownOpen(true);
+                                                setSearchFocusedIndex(-1);
                                             }}
-                                        >
-                                            <div style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)', display: 'flex', zIndex: 2 }}>
-                                                <Search size={13} strokeWidth={2} />
-                                            </div>
-                                            <input
-                                                ref={catalogSearchInputRef}
-                                                type="text"
-                                                placeholder={t.b2b.dashboard.searchPlaceholder}
-                                                value={searchTerm}
-                                                onChange={(e) => {
-                                                    setSearchTerm(e.target.value);
-                                                    setIsSearchDropdownOpen(true);
+                                            onFocus={() => setIsSearchDropdownOpen(true)}
+                                            onKeyDown={handleSearchKeyDown}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.35rem 1.5rem 0.35rem 1.65rem',
+                                                borderRadius: THEME.radius.md,
+                                                border: isSearchDropdownOpen && searchDropdownResults.length > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                                                fontSize: '0.76rem',
+                                                fontWeight: '600',
+                                                outline: 'none',
+                                                backgroundColor: '#F9FAFB',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                        {searchTerm && (
+                                            <button
+                                                type="button"
+                                                aria-label="Limpiar búsqueda"
+                                                onClick={() => {
+                                                    setSearchTerm('');
+                                                    setIsSearchDropdownOpen(false);
                                                     setSearchFocusedIndex(-1);
                                                 }}
-                                                onFocus={() => setIsSearchDropdownOpen(true)}
-                                                onKeyDown={handleSearchKeyDown}
                                                 style={{
-                                                    width: '100%',
-                                                    padding: '0.35rem 1.4rem 0.35rem 1.6rem',
-                                                    borderRadius: THEME.radius.md,
-                                                    border: isSearchDropdownOpen && searchDropdownResults.length > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '600',
-                                                    outline: 'none',
-                                                    backgroundColor: '#F9FAFB',
-                                                    boxSizing: 'border-box'
+                                                    position: 'absolute',
+                                                    right: '6px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: '#E2E8F0',
+                                                    border: 'none',
+                                                    borderRadius: '50%',
+                                                    width: '16px',
+                                                    height: '16px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#475569',
+                                                    cursor: 'pointer',
+                                                    zIndex: 2
                                                 }}
-                                            />
-                                            {searchTerm && (
-                                                <button
-                                                    onClick={() => {
-                                                        setSearchTerm('');
-                                                        setIsSearchDropdownOpen(false);
-                                                        setSearchFocusedIndex(-1);
-                                                    }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        right: '6px',
-                                                        top: '50%',
-                                                        transform: 'translateY(-50%)',
-                                                        background: '#f3f4f6',
-                                                        border: 'none',
-                                                        borderRadius: '50%',
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        color: '#6b7280',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.6rem',
-                                                        zIndex: 2
-                                                    }}
-                                                ></button>
-                                            )}
+                                            >
+                                                <X size={10} strokeWidth={2.5} />
+                                            </button>
+                                        )}
 
                                             {/* FLOATING AUTOCOMPLETE DROPDOWN (DESPLEGABLE IDÉNTICO A LA IMAGEN 2) */}
                                             {isSearchDropdownOpen && searchTerm.trim().length > 0 && (
@@ -1642,7 +1657,7 @@ export default function B2BDashboard() {
                                                                                 />
                                                                                 <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                                                                                     <div style={{ fontWeight: '800', fontSize: '0.84rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                        {locale === 'en' ? (prod.name_en || prod.name) : prod.name}
+                                                                                        {prod.accounting_id ? `#${prod.accounting_id} · ` : ''}{locale === 'en' ? (prod.name_en || prod.name) : prod.name}
                                                                                     </div>
                                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                                                                                         <span style={{ fontSize: '0.78rem', fontWeight: '900', color: isAgree ? 'var(--primary)' : '#475569' }}>
@@ -1714,7 +1729,7 @@ export default function B2BDashboard() {
                                                 backgroundRepeat: 'no-repeat',
                                                 backgroundPosition: 'right 4px center',
                                                 backgroundSize: '12px',
-                                                maxWidth: '120px'
+                                                maxWidth: '135px'
                                             }}
                                         >
                                             <option value="">{t.b2b.dashboard.allCategories}</option>
@@ -1724,121 +1739,109 @@ export default function B2BDashboard() {
                                                 </option>
                                             ))}
                                         </select>
-                                    </div>
-                                </div>
 
-                                {/* Fila 2: Filtros de Convenio (CSS Grid Garantizado 100% Sin Desbordamiento) */}
-                                {(() => {
-                                    const activeProds = categoryProducts.filter(p => p.is_active !== false);
-                                    const countInAgreement = activeProds.filter(p => agreementPricesMap[p.id] !== undefined).length;
-                                    const countOutAgreement = activeProds.filter(p => agreementPricesMap[p.id] === undefined).length;
-                                    const countTotal = activeProds.length;
-                                    const allowOffAgreement = (activeProfile as any)?.allow_off_agreement_purchases !== false;
-                                    if (!allowOffAgreement && agreementFilter !== 'agreement') {
-                                        setAgreementFilter('agreement');
-                                    }
+                                        {/* Segmented Control Compacto de Convenio en la misma línea */}
+                                        {(() => {
+                                            const activeProds = categoryProducts.filter(p => p.is_active !== false);
+                                            const countInAgreement = activeProds.filter(p => agreementPricesMap[p.id] !== undefined).length;
+                                            const countOutAgreement = activeProds.filter(p => agreementPricesMap[p.id] === undefined).length;
+                                            const countTotal = activeProds.length;
+                                            const allowOffAgreement = (activeProfile as any)?.allow_off_agreement_purchases !== false;
+                                            const activeFilter = !allowOffAgreement ? 'agreement' : agreementFilter;
 
-                                    return (
-                                        <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: allowOffAgreement ? 'repeat(3, 1fr)' : '1fr',
-                                            backgroundColor: '#F1F5F9',
-                                            padding: '3px',
-                                            borderRadius: THEME.radius.md,
-                                            gap: '4px',
-                                            width: '100%',
-                                            boxSizing: 'border-box',
-                                            marginTop: '0.5rem'
-                                        }}>
-                                            {/* Button 1: En Convenio */}
-                                            <button
-                                                onClick={() => setAgreementFilter('agreement')}
-                                                style={{
-                                                    minWidth: 0,
-                                                    padding: '0.4rem 0.5rem',
-                                                    borderRadius: THEME.radius.md,
-                                                    border: 'none',
-                                                    backgroundColor: agreementFilter === 'agreement' ? '#D1FAE5' : 'transparent',
-                                                    color: agreementFilter === 'agreement' ? '#065F46' : '#64748B',
-                                                    fontWeight: agreementFilter === 'agreement' ? '800' : '600',
-                                                    fontSize: '0.75rem',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
+                                            return (
+                                                <div style={{
+                                                    display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: agreementFilter === 'agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                                title="Mostrar productos incluidos en tu acuerdo comercial"
-                                            >
-                                                <Tag size={13} style={{ flexShrink: 0 }} />
-                                                <span>Convenio</span>
-                                                <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'agreement' ? '#059669' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countInAgreement}</span>
-                                            </button>
-
-                                            {/* Buttons 2 & 3: Fuera y Todos (Visible ONLY when allowOffAgreement is true) */}
-                                            {allowOffAgreement && (
-                                                <>
+                                                    backgroundColor: '#F1F5F9',
+                                                    padding: '2px',
+                                                    borderRadius: THEME.radius.md,
+                                                    gap: '2px',
+                                                    flexShrink: 0
+                                                }}>
                                                     <button
-                                                        onClick={() => setAgreementFilter('non_agreement')}
+                                                        type="button"
+                                                        onClick={() => setAgreementFilter('agreement')}
                                                         style={{
-                                                            minWidth: 0,
-                                                            padding: '0.4rem 0.5rem',
+                                                            padding: '0.3rem 0.5rem',
                                                             borderRadius: THEME.radius.md,
                                                             border: 'none',
-                                                            backgroundColor: agreementFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
-                                                            color: agreementFilter === 'non_agreement' ? '#1E293B' : '#64748B',
-                                                            fontWeight: agreementFilter === 'non_agreement' ? '800' : '600',
-                                                            fontSize: '0.75rem',
+                                                            backgroundColor: activeFilter === 'agreement' ? '#D1FAE5' : 'transparent',
+                                                            color: activeFilter === 'agreement' ? '#065F46' : '#64748B',
+                                                            fontWeight: activeFilter === 'agreement' ? '800' : '600',
+                                                            fontSize: '0.73rem',
                                                             cursor: 'pointer',
-                                                            display: 'flex',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
-                                                            justifyContent: 'center',
                                                             gap: '4px',
-                                                            boxShadow: agreementFilter === 'non_agreement' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                            boxShadow: activeFilter === 'agreement' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
                                                             whiteSpace: 'nowrap'
                                                         }}
-                                                        title="Mostrar productos fuera de convenio"
+                                                        title="Mostrar productos incluidos en tu acuerdo comercial"
                                                     >
-                                                        <Info size={13} style={{ flexShrink: 0 }} />
-                                                        <span>Fuera</span>
-                                                        <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'non_agreement' ? '#475569' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countOutAgreement}</span>
+                                                        <Tag size={12} style={{ flexShrink: 0 }} />
+                                                        <span>Convenio</span>
+                                                        <span style={{ fontWeight: '800', fontSize: '0.66rem', backgroundColor: activeFilter === 'agreement' ? '#059669' : '#94A3B8', color: 'white', padding: '0 5px', borderRadius: '9999px' }}>{countInAgreement}</span>
                                                     </button>
 
-                                                    <button
-                                                        onClick={() => setAgreementFilter('all')}
-                                                        style={{
-                                                            minWidth: 0,
-                                                            padding: '0.4rem 0.5rem',
-                                                            borderRadius: THEME.radius.md,
-                                                            border: 'none',
-                                                            backgroundColor: agreementFilter === 'all' ? 'white' : 'transparent',
-                                                            color: agreementFilter === 'all' ? 'var(--primary)' : '#64748B',
-                                                            fontWeight: agreementFilter === 'all' ? '800' : '600',
-                                                            fontSize: '0.75rem',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: '4px',
-                                                            boxShadow: agreementFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                            whiteSpace: 'nowrap'
-                                                        }}
-                                                        title="Mostrar todos los productos"
-                                                    >
-                                                        <Layers size={13} style={{ flexShrink: 0 }} />
-                                                        <span>Todos</span>
-                                                        <span style={{ flexShrink: 0, fontWeight: '800', fontSize: '0.68rem', backgroundColor: agreementFilter === 'all' ? 'var(--primary)' : '#94A3B8', color: 'white', padding: '1px 6px', borderRadius: '10px' }}>{countTotal}</span>
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
+                                                    {allowOffAgreement && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setAgreementFilter('non_agreement')}
+                                                                style={{
+                                                                    padding: '0.3rem 0.5rem',
+                                                                    borderRadius: THEME.radius.md,
+                                                                    border: 'none',
+                                                                    backgroundColor: activeFilter === 'non_agreement' ? '#E2E8F0' : 'transparent',
+                                                                    color: activeFilter === 'non_agreement' ? '#1E293B' : '#64748B',
+                                                                    fontWeight: activeFilter === 'non_agreement' ? '800' : '600',
+                                                                    fontSize: '0.73rem',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    boxShadow: activeFilter === 'non_agreement' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}
+                                                                title="Mostrar productos fuera de convenio"
+                                                            >
+                                                                <span>Fuera</span>
+                                                                <span style={{ fontWeight: '800', fontSize: '0.66rem', backgroundColor: activeFilter === 'non_agreement' ? '#475569' : '#94A3B8', color: 'white', padding: '0 5px', borderRadius: '9999px' }}>{countOutAgreement}</span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setAgreementFilter('all')}
+                                                                style={{
+                                                                    padding: '0.3rem 0.5rem',
+                                                                    borderRadius: THEME.radius.md,
+                                                                    border: 'none',
+                                                                    backgroundColor: activeFilter === 'all' ? 'white' : 'transparent',
+                                                                    color: activeFilter === 'all' ? 'var(--primary)' : '#64748B',
+                                                                    fontWeight: activeFilter === 'all' ? '800' : '600',
+                                                                    fontSize: '0.73rem',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    boxShadow: activeFilter === 'all' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}
+                                                                title="Mostrar todos los productos"
+                                                            >
+                                                                <span>Todos</span>
+                                                                <span style={{ fontWeight: '800', fontSize: '0.66rem', backgroundColor: activeFilter === 'all' ? 'var(--primary)' : '#94A3B8', color: 'white', padding: '0 5px', borderRadius: '9999px' }}>{countTotal}</span>
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                </div>
                             </div>
 
-                            <div style={{ padding: '1.25rem 1rem' }}>
+                            <div style={{ padding: '0.85rem 1rem' }}>
                                 {(() => {
                                     const normalizeSearch = (str: string) => 
                                         (str || '')
@@ -1848,6 +1851,7 @@ export default function B2BDashboard() {
                                             .trim();
 
                                     const cleanSearchQuery = normalizeSearch(searchTerm);
+                                    const cleanNoHash = cleanSearchQuery.replace(/^#/, '');
 
                                     // Combinar productos cargados con resultados de la búsqueda Supabase si el término tiene al menos 2 letras
                                     let baseList = categoryProducts;
@@ -1877,12 +1881,14 @@ export default function B2BDashboard() {
                                             const nameNorm = normalizeSearch(p.name);
                                             const nameEnNorm = normalizeSearch(p.name_en);
                                             const skuNorm = normalizeSearch(p.sku);
+                                            const accIdNorm = String(p.accounting_id ?? '').trim();
                                             const catNorm = normalizeSearch(p.category);
 
                                             const matches = 
                                                 nameNorm.includes(cleanSearchQuery) ||
                                                 nameEnNorm.includes(cleanSearchQuery) ||
                                                 skuNorm.includes(cleanSearchQuery) ||
+                                                (cleanNoHash.length > 0 && accIdNorm.includes(cleanNoHash)) ||
                                                 catNorm.includes(cleanSearchQuery);
 
                                             if (!matches) return false;
@@ -1895,100 +1901,179 @@ export default function B2BDashboard() {
 
                                     return (
                                         <>
-                                            <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Package size={16} color="var(--primary)" /> 
-                                                {cleanSearchQuery ? `Resultados de búsqueda para "${searchTerm}" (${filteredList.length})` : `${filterLabel} (${filteredList.length})`}
-                                                {selectedCategory && !cleanSearchQuery ? ` — ${t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)}` : ''}
-                                            </h4>
+                                            {(cleanSearchQuery || selectedCategory) && (
+                                                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.86rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Package size={15} color="var(--primary)" /> 
+                                                    {cleanSearchQuery ? `Resultados de búsqueda para "${searchTerm}" (${filteredList.length})` : `${filterLabel} (${filteredList.length})`}
+                                                    {selectedCategory && !cleanSearchQuery ? ` — ${t.categories[selectedCategory as keyof typeof t.categories] || (selectedCategory === 'PR' ? 'Procesados' : selectedCategory)}` : ''}
+                                                </h4>
+                                            )}
 
                                             {isLoadingCategory || (cleanSearchQuery.length >= 2 && isSearching && filteredList.length === 0) ? (
                                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t.b2b.dashboard.loadingItems}</p>
                                             ) : filteredList.length > 0 ? (
-                                                <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                                                    {filteredList.map(p => (
-                                                        <div
-                                                            key={p.id}
-                                                            onClick={() => {
-                                                                setModalQuantity(1);
-                                                                setSelectedProductForModal(p);
-                                                            }}
-                                                            style={{
-                                                                padding: '0',
-                                                                border: '1px solid var(--border)',
-                                                                borderRadius: 'var(--radius-md)',
-                                                                cursor: 'pointer',
-                                                                textAlign: 'center',
-                                                                backgroundColor: '#fff',
-                                                                transition: 'all 0.2s',
-                                                                display: 'flex',
-                                                                flexDirection: 'column'
-                                                            }}
-                                                            onMouseEnter={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                                                                e.currentTarget.style.borderColor = 'var(--primary)';
-                                                            }}
-                                                            onMouseLeave={(e) => {
-                                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                                e.currentTarget.style.boxShadow = 'none';
-                                                                e.currentTarget.style.borderColor = 'var(--border)';
-                                                            }}
-                                                        >
-                                                            <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px 4px 0 0' }} />
-                                                            <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                                <div>
-                                                                    <h5 style={{ margin: '0 0 0.35rem', fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
-                                                                        {locale === 'en' ? (p.name_en || p.name) : p.name}
-                                                                    </h5>
-                                                                </div>
+                                                <div className="mobile-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(162px, 1fr))', gap: '0.8rem' }}>
+                                                    {filteredList.map(p => {
+                                                        const qtyInOrder = orderItems
+                                                            .filter(i => i.product_id === p.id && Number(i.quantity) > 0)
+                                                            .reduce((acc, i) => acc + Number(i.quantity || 0), 0);
+                                                        const hasActiveOptions = Array.isArray(p.options_config) && p.options_config.some((opt: any) => Array.isArray(opt?.values) && opt.values.length > 0);
+                                                        const inCartBorder = qtyInOrder > 0 ? '1.5px solid #059669' : '1px solid var(--border)';
 
-                                                                <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
-                                                                    {agreementPricesMap[p.id] !== undefined ? (
-                                                                        <div>
-                                                                            <span style={{ display: 'block', fontSize: '0.95rem', fontWeight: '900', color: 'var(--primary)' }}>
-                                                                                ${formatPrice(agreementPricesMap[p.id])} / {p.unit_of_measure}
-                                                                            </span>
-                                                                            <span style={{
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                fontSize: '0.65rem',
-                                                                                fontWeight: '800',
-                                                                                color: '#065F46',
-                                                                                backgroundColor: '#D1FAE5',
-                                                                                padding: '2px 6px',
-                                                                                borderRadius: '4px',
-                                                                                marginTop: '3px'
-                                                                            }}>
-                                                                                <Tag size={10} strokeWidth={2.5} /> Precio de acuerdo
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div>
-                                                                            <span style={{ display: 'block', fontSize: '0.88rem', fontWeight: '800', color: '#64748B' }}>
-                                                                                Por cotizar / {p.unit_of_measure}
-                                                                            </span>
-                                                                            <span style={{
-                                                                                display: 'inline-flex',
-                                                                                alignItems: 'center',
-                                                                                gap: '3px',
-                                                                                fontSize: '0.64rem',
-                                                                                fontWeight: '700',
-                                                                                color: '#475569',
-                                                                                backgroundColor: '#F1F5F9',
-                                                                                border: '1px solid #E2E8F0',
-                                                                                padding: '2px 6px',
-                                                                                borderRadius: '4px',
-                                                                                marginTop: '3px'
-                                                                            }}>
-                                                                                <Info size={10} strokeWidth={2.5} /> Fuera de convenio
-                                                                            </span>
-                                                                        </div>
+                                                        return (
+                                                            <div
+                                                                key={p.id}
+                                                                onClick={() => {
+                                                                    setModalQuantity(1);
+                                                                    setSelectedProductForModal(p);
+                                                                }}
+                                                                style={{
+                                                                    padding: '0',
+                                                                    border: inCartBorder,
+                                                                    borderRadius: 'var(--radius-md)',
+                                                                    cursor: 'pointer',
+                                                                    textAlign: 'center',
+                                                                    backgroundColor: qtyInOrder > 0 ? '#F0FDF4' : '#fff',
+                                                                    transition: 'transform 0.2s, box-shadow 0.2s, border-color 0.2s',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    overflow: 'hidden'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
+                                                                    e.currentTarget.style.borderColor = 'var(--primary)';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                                    e.currentTarget.style.boxShadow = 'none';
+                                                                    e.currentTarget.style.borderColor = qtyInOrder > 0 ? '#059669' : 'var(--border)';
+                                                                }}
+                                                            >
+                                                                <div style={{ position: 'relative' }}>
+                                                                    <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '94px', objectFit: 'cover', display: 'block' }} />
+                                                                    {p.accounting_id && (
+                                                                        <span style={{
+                                                                            position: 'absolute',
+                                                                            top: '5px',
+                                                                            left: '5px',
+                                                                            backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                                                                            color: '#FFFFFF',
+                                                                            fontSize: '0.62rem',
+                                                                            fontWeight: 800,
+                                                                            padding: '2px 5px',
+                                                                            borderRadius: '5px',
+                                                                            fontFamily: 'monospace'
+                                                                        }}>
+                                                                            #{p.accounting_id}
+                                                                        </span>
+                                                                    )}
+                                                                    {qtyInOrder > 0 && (
+                                                                        <span style={{
+                                                                            position: 'absolute',
+                                                                            top: '5px',
+                                                                            right: '5px',
+                                                                            backgroundColor: '#059669',
+                                                                            color: '#FFFFFF',
+                                                                            fontSize: '0.62rem',
+                                                                            fontWeight: 800,
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: '9999px',
+                                                                            boxShadow: '0 2px 6px rgba(5, 150, 105, 0.35)'
+                                                                        }}>
+                                                                            En pedido: {formatQuantity(qtyInOrder)} {p.unit_of_measure || 'Kg'}
+                                                                        </span>
                                                                     )}
                                                                 </div>
+                                                                <div style={{ padding: '0.65rem 0.7rem', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                                    <div>
+                                                                        <h5 style={{ margin: '0 0 0.25rem', fontSize: '0.86rem', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                                                                            {locale === 'en' ? (p.name_en || p.name) : p.name}
+                                                                        </h5>
+                                                                    </div>
+
+                                                                    <div style={{ marginTop: 'auto', paddingTop: '0.35rem' }}>
+                                                                        {agreementPricesMap[p.id] !== undefined ? (
+                                                                            <div>
+                                                                                <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: '900', color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                    ${formatPrice(agreementPricesMap[p.id])} / {p.unit_of_measure}
+                                                                                </span>
+                                                                                <span style={{
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px',
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '800',
+                                                                                    color: '#065F46',
+                                                                                    backgroundColor: '#D1FAE5',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    marginTop: '2px'
+                                                                                }}>
+                                                                                    <Tag size={9} strokeWidth={2.5} /> Precio de acuerdo
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div>
+                                                                                <span style={{ display: 'block', fontSize: '0.84rem', fontWeight: '800', color: '#64748B' }}>
+                                                                                    Por cotizar / {p.unit_of_measure}
+                                                                                </span>
+                                                                                <span style={{
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px',
+                                                                                    fontSize: '0.62rem',
+                                                                                    fontWeight: '700',
+                                                                                    color: '#475569',
+                                                                                    backgroundColor: '#F1F5F9',
+                                                                                    border: '1px solid #E2E8F0',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    marginTop: '2px'
+                                                                                }}>
+                                                                                    <Info size={9} strokeWidth={2.5} /> Fuera de convenio
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (hasActiveOptions) {
+                                                                                    setModalQuantity(1);
+                                                                                    setSelectedProductForModal(p);
+                                                                                } else {
+                                                                                    handleQuickAdd(p, 1);
+                                                                                }
+                                                                            }}
+                                                                            title={hasActiveOptions ? 'Elegir presentación y agregar' : 'Agregar 1 unidad rápido al pedido'}
+                                                                            style={{
+                                                                                width: '100%',
+                                                                                marginTop: '6px',
+                                                                                padding: '0.32rem 0.5rem',
+                                                                                borderRadius: '8px',
+                                                                                border: qtyInOrder > 0 ? '1px solid #059669' : '1px solid #A7F3D0',
+                                                                                backgroundColor: qtyInOrder > 0 ? '#059669' : '#ECFDF5',
+                                                                                color: qtyInOrder > 0 ? '#FFFFFF' : '#065F46',
+                                                                                fontWeight: 800,
+                                                                                fontSize: '0.72rem',
+                                                                                cursor: 'pointer',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                gap: '4px',
+                                                                                transition: 'background-color 0.15s ease, color 0.15s ease'
+                                                                            }}
+                                                                        >
+                                                                            <Plus size={12} strokeWidth={2.8} />
+                                                                            <span>{hasActiveOptions ? 'Elegir' : (qtyInOrder > 0 ? 'Agregar +1' : 'Agregar')}</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             ) : (
                                                 <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
@@ -2033,24 +2118,25 @@ export default function B2BDashboard() {
                                 {/* Cart Header — Ultra-Compact Single Row */}
                                 <div className="b2b-sticky-cart-header" style={{
                                     backgroundColor: '#F8FAFC',
-                                    padding: '0.75rem 1.25rem',
+                                    padding: '0.55rem 1rem',
                                     borderBottom: `1px solid ${THEME.colors.border}`,
                                     borderRadius: `${THEME.radius.lg} ${THEME.radius.lg} 0 0`,
+                                    flexShrink: 0
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.45rem' }}>
                                         {/* Title */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <h3 style={{ 
                                                 fontFamily: THEME.typography.fontFamilyMain,
-                                                fontSize: '1.05rem', 
+                                                fontSize: '0.98rem', 
                                                 fontWeight: '800', 
                                                 margin: 0,
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '8px',
+                                                gap: '6px',
                                                 color: THEME.colors.textMain,
                                             }}>
-                                                <ShoppingCart size={18} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
+                                                <ShoppingCart size={17} strokeWidth={2} style={{ color: THEME.colors.primary }} /> {t.b2b.dashboard.cardTitle}
                                             </h3>
                                         </div>
 
@@ -2113,7 +2199,7 @@ export default function B2BDashboard() {
 
                                     {/* Historical Orders Pills Bar with ONLY Lucide Clock Icon */}
                                     {historicalOrders.length > 0 && (
-                                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #E2E8F0' }}>
+                                        <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid #E2E8F0' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                                 <span style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
                                                     <Clock size={12} strokeWidth={2} /> Repetir Pedido:
@@ -2163,10 +2249,11 @@ export default function B2BDashboard() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'space-between',
-                                        padding: '0.45rem 1.25rem',
+                                        padding: '0.35rem 1rem',
                                         backgroundColor: '#F1F5F9',
                                         borderBottom: '1px solid #E2E8F0',
-                                        fontSize: '0.72rem'
+                                        fontSize: '0.7rem',
+                                        flexShrink: 0
                                     }}>
                                         <span style={{ fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <Layers size={13} style={{ color: 'var(--primary)' }} /> Ordenar insumos:
@@ -2238,8 +2325,8 @@ export default function B2BDashboard() {
 
                                 {/* Items List */}
                                 {orderItems.length > 0 ? (
-                                    <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                        <div style={{ flex: 1, overflowY: 'auto' }}>
+                                    <div className="b2b-cart-items-wrapper" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                             {displayedCartItems.map((item) => {
                                                 const uPrice = Number(item.unit_price ?? agreementPricesMap[item.product_id] ?? 0);
                                                 const itemSubtotal = item.quantity * uPrice;
@@ -2254,184 +2341,183 @@ export default function B2BDashboard() {
                                                 return (
                                                     <div key={item.id} className="cart-item-row" style={{
                                                         display: 'flex',
-                                                        gap: '0.75rem',
-                                                        padding: '1rem 1.25rem',
-                                                        borderBottom: '1px solid #F3F4F6',
-                                                        alignItems: 'flex-start'
+                                                        gap: '0.6rem',
+                                                        padding: '0.5rem 1rem',
+                                                        borderBottom: '1px solid #F1F5F9',
+                                                        alignItems: 'center'
                                                     }}>
-                                                        <div style={{ width: '52px', height: '52px', backgroundColor: '#f0f0f0', borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
-                                                            {item.product_image && <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                        <div style={{ width: '38px', height: '38px', backgroundColor: '#F1F5F9', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {item.product_image ? <img src={item.product_image} alt={item.product_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={16} color="#94A3B8" />}
                                                         </div>
-                                                        
+
                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                                                <div>
-                                                                    <h4 style={{ 
-                                                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                                                        fontWeight: '800', 
-                                                                        fontSize: '0.95rem',
-                                                                        margin: 0,
-                                                                        color: 'var(--text-main)',
-                                                                        letterSpacing: '-0.01em',
-                                                                        lineHeight: '1.25',
-                                                                        wordBreak: 'break-word'
-                                                                    }}>{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
-                                                                        {item.variant_label && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '0.15rem' }}>{item.variant_label}</span>}
-                                                                    </h4>
-                                                                    
-                                                                    {/* Soft Warning Badges with Lucide React Icons */}
-                                                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                                                        {isNewItem && (
-                                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#6D28D9', backgroundColor: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #DDD6FE', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                                                <Sparkles size={11} strokeWidth={2} /> Insumo Nuevo
-                                                                            </span>
-                                                                        )}
-                                                                        {isUnusualQty && (
-                                                                            <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#92400E', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '3px' }} title={`Promedio histórico: ~${avgQtyBought.toFixed(1)} ${item.unit}`}>
-                                                                                <AlertTriangle size={11} strokeWidth={2} /> Cantidad Inusual (Sueles pedir ~{Math.round(avgQtyBought)} {item.unit})
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
+                                                            <h4
+                                                                title={locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}
+                                                                style={{
+                                                                    fontFamily: 'var(--font-outfit), sans-serif',
+                                                                    fontWeight: '800',
+                                                                    fontSize: '0.84rem',
+                                                                    margin: 0,
+                                                                    color: 'var(--text-main)',
+                                                                    letterSpacing: '-0.01em',
+                                                                    lineHeight: '1.2',
+                                                                    whiteSpace: 'nowrap',
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis'
+                                                                }}
+                                                            >{locale === 'en' ? (item.product_name_en || item.product_name) : item.product_name}</h4>
+                                                            {item.variant_label && <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.variant_label}</span>}
+                                                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', marginTop: '2px' }}>
+                                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>
+                                                                    ${formatPrice(uPrice)} / {item.unit}
+                                                                </span>
+                                                                {isNewItem && (
+                                                                    <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#6D28D9', backgroundColor: '#F3E8FF', padding: '1px 5px', borderRadius: '4px', border: '1px solid #DDD6FE', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                                        <Sparkles size={10} strokeWidth={2} /> Nuevo
+                                                                    </span>
+                                                                )}
+                                                                {isUnusualQty && (
+                                                                    <span style={{ fontSize: '0.6rem', fontWeight: '800', color: '#92400E', backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '4px', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '2px' }} title={`Promedio histórico: ~${avgQtyBought.toFixed(1)} ${item.unit}`}>
+                                                                        <AlertTriangle size={10} strokeWidth={2} /> Inusual (~{Math.round(avgQtyBought)} {item.unit})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', backgroundColor: '#F8FAFC', padding: '1px 3px', borderRadius: '7px', border: '1px solid #CBD5E1', flexShrink: 0 }}>
                                                                 <button
-                                                                    onClick={() => removeItem(item.id)}
+                                                                    onClick={() => {
+                                                                        const current = item.quantity;
+                                                                        const next = Math.max(0, Math.round((current - 1) * 10) / 10);
+                                                                        updateQuantity(item.id, next);
+                                                                    }}
                                                                     style={{
-                                                                        background: 'none',
+                                                                        width: '22px', height: '22px',
+                                                                        borderRadius: '5px',
                                                                         border: 'none',
-                                                                        color: '#EF4444',
+                                                                        backgroundColor: 'white',
                                                                         cursor: 'pointer',
-                                                                        padding: '2px',
+                                                                        fontSize: '0.82rem',
                                                                         display: 'flex',
                                                                         alignItems: 'center',
                                                                         justifyContent: 'center',
-                                                                        flexShrink: 0
+                                                                        transition: 'all 0.2s',
+                                                                        fontWeight: '900',
+                                                                        color: 'var(--text-main)',
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                                                     }}
-                                                                    title={t.b2b.dashboard.remove}
-                                                                >
-                                                                    <Trash2 size={16} strokeWidth={2} />
-                                                                </button>
-                                                            </div>
-                                                            
-                                                            {/* Unit Price, Subtotal display and Quantity Controls */}
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', gap: '0.5rem' }}>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                                                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                                                                        ${formatPrice(uPrice)} / {item.unit}
-                                                                    </span>
-                                                                    <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>
-                                                                        Total: ${formatPrice(itemSubtotal)}
-                                                                    </span>
+                                                                >−</button>
+
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 2px' }}>
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',')}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
+                                                                            setItemInputs(prev => ({ ...prev, [item.id]: val }));
+                                                                            const num = parseFloat(val.replace(',', '.'));
+                                                                            if (!isNaN(num) && num >= 0) {
+                                                                                updateQuantity(item.id, num);
+                                                                            }
+                                                                        }}
+                                                                        onBlur={() => {
+                                                                            const currentStr = itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',');
+                                                                            const num = parseFloat(currentStr.replace(',', '.')) || 0;
+                                                                            updateQuantity(item.id, num);
+                                                                            setItemInputs(prev => {
+                                                                                const copy = { ...prev };
+                                                                                delete copy[item.id];
+                                                                                return copy;
+                                                                            });
+                                                                        }}
+                                                                        style={{
+                                                                            width: '38px',
+                                                                            border: 'none',
+                                                                            textAlign: 'center',
+                                                                            fontWeight: '900',
+                                                                            fontSize: '0.8rem',
+                                                                            color: 'var(--primary)',
+                                                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                                                            outline: 'none',
+                                                                            backgroundColor: 'transparent'
+                                                                        }}
+                                                                    />
+                                                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#64748B', paddingRight: '2px' }}>{item.unit}</span>
                                                                 </div>
 
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', backgroundColor: '#F8FAFC', padding: '2px 4px', borderRadius: '8px', border: '1px solid #CBD5E1', flexShrink: 0 }}>
-                                                                     <button
-                                                                         onClick={() => {
-                                                                             const current = item.quantity;
-                                                                             const next = Math.max(0, Math.round((current - 1) * 10) / 10);
-                                                                             updateQuantity(item.id, next);
-                                                                         }}
-                                                                         style={{
-                                                                             width: '26px', height: '26px',
-                                                                             borderRadius: '6px',
-                                                                             border: 'none',
-                                                                             backgroundColor: 'white',
-                                                                             cursor: 'pointer',
-                                                                             fontSize: '0.85rem',
-                                                                             display: 'flex',
-                                                                             alignItems: 'center',
-                                                                             justifyContent: 'center',
-                                                                             transition: 'all 0.2s',
-                                                                             fontWeight: '900',
-                                                                             color: 'var(--text-main)',
-                                                                             boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                         }}
-                                                                     >−</button>
-                                                                     
-                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 2px' }}>
-                                                                         <input
-                                                                             type="text"
-                                                                             inputMode="decimal"
-                                                                             value={itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',')}
-                                                                             onChange={(e) => {
-                                                                                 const val = e.target.value.replace(/[^0-9.,]/g, '').replace('.', ',');
-                                                                                 setItemInputs(prev => ({ ...prev, [item.id]: val }));
-                                                                                 const num = parseFloat(val.replace(',', '.'));
-                                                                                 if (!isNaN(num) && num >= 0) {
-                                                                                     updateQuantity(item.id, num);
-                                                                                 }
-                                                                             }}
-                                                                             onBlur={() => {
-                                                                                 const currentStr = itemInputs[item.id] !== undefined ? itemInputs[item.id] : String(item.quantity).replace('.', ',');
-                                                                                 const num = parseFloat(currentStr.replace(',', '.')) || 0;
-                                                                                 updateQuantity(item.id, num);
-                                                                                 setItemInputs(prev => {
-                                                                                     const copy = { ...prev };
-                                                                                     delete copy[item.id];
-                                                                                     return copy;
-                                                                                 });
-                                                                             }}
-                                                                             style={{
-                                                                                 width: '46px',
-                                                                                 border: 'none',
-                                                                                 textAlign: 'center',
-                                                                                 fontWeight: '900',
-                                                                                 fontSize: '0.85rem',
-                                                                                 color: 'var(--primary)',
-                                                                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                                                                 outline: 'none',
-                                                                                 backgroundColor: 'transparent'
-                                                                             }}
-                                                                         />
-                                                                         <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748B', paddingRight: '2px' }}>{item.unit}</span>
-                                                                     </div>
-
-                                                                     <button
-                                                                         onClick={() => {
-                                                                             const current = item.quantity;
-                                                                             const next = Math.round((current + 1) * 10) / 10;
-                                                                             updateQuantity(item.id, next);
-                                                                         }}
-                                                                         style={{
-                                                                             width: '26px', height: '26px',
-                                                                             borderRadius: '6px',
-                                                                             border: 'none',
-                                                                             backgroundColor: 'var(--primary)',
-                                                                             color: 'white',
-                                                                             cursor: 'pointer',
-                                                                             fontSize: '0.85rem',
-                                                                             display: 'flex',
-                                                                             alignItems: 'center',
-                                                                             justifyContent: 'center',
-                                                                             transition: 'all 0.2s',
-                                                                             boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                                                             fontWeight: '900'
-                                                                         }}
-                                                                     >+</button>
-                                                                 </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const current = item.quantity;
+                                                                        const next = Math.round((current + 1) * 10) / 10;
+                                                                        updateQuantity(item.id, next);
+                                                                    }}
+                                                                    style={{
+                                                                        width: '22px', height: '22px',
+                                                                        borderRadius: '5px',
+                                                                        border: 'none',
+                                                                        backgroundColor: 'var(--primary)',
+                                                                        color: 'white',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '0.82rem',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        transition: 'all 0.2s',
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                                                        fontWeight: '900'
+                                                                    }}
+                                                                >+</button>
                                                             </div>
+
+                                                            <span style={{ minWidth: '68px', textAlign: 'right', fontSize: '0.82rem', fontWeight: '900', color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>
+                                                                ${formatPrice(itemSubtotal)}
+                                                            </span>
+
+                                                            <button
+                                                                onClick={() => removeItem(item.id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#EF4444',
+                                                                    cursor: 'pointer',
+                                                                    padding: '2px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0
+                                                                }}
+                                                                title={t.b2b.dashboard.remove}
+                                                            >
+                                                                <Trash2 size={15} strokeWidth={2} />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
 
-                                        {/* Total Summary */}
+                                        {/* Fixed Footer: Total Summary + Submit Button */}
                                         <div style={{
-                                            padding: '1rem 1.25rem',
+                                            flexShrink: 0,
+                                            padding: '0.6rem 1rem',
                                             borderTop: '1px solid #E2E8F0',
                                             backgroundColor: '#F8FAFC',
                                             display: 'flex',
                                             justifyContent: 'space-between',
                                             alignItems: 'center'
                                         }}>
-                                            <span style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--text-main)' }}>Total Subtotal:</span>
-                                            <span style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--primary)' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--text-main)' }}>
+                                                Total Subtotal <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#64748B' }}>({orderItems.filter(i => i.quantity > 0).length} insumos)</span>:
+                                            </span>
+                                            <span style={{ fontSize: '1.08rem', fontWeight: '900', color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>
                                                 ${formatPrice(orderItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price ?? agreementPricesMap[i.product_id] ?? 0)), 0))}
                                             </span>
                                         </div>
 
                                         {/* Submit Button Section */}
-                                        <div style={{ padding: '1rem 1.25rem', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}` }}>
+                                        <div style={{ flexShrink: 0, padding: '0 1rem 0.65rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: `0 0 ${THEME.radius.lg} ${THEME.radius.lg}` }}>
                                             {orderItems.filter(i => i.quantity > 0).length === 0 && (
                                                 <p style={{ 
                                                     color: '#DC2626', 
@@ -2472,8 +2558,8 @@ export default function B2BDashboard() {
                                                 className="btn-premium"
                                                 style={{
                                                     width: '100%',
-                                                    fontSize: '0.95rem',
-                                                    padding: '0.75rem',
+                                                    fontSize: '0.9rem',
+                                                    padding: '0.6rem 1rem',
                                                     backgroundColor: submitting || orderItems.filter(i => i.quantity > 0).length === 0 ? '#cbd5e1' : storeStatus === 'closed' ? (b2bCartSavedNotice ? '#047857' : '#0F172A') : 'var(--primary)',
                                                     color: 'white',
                                                     cursor: orderItems.filter(i => i.quantity > 0).length === 0 ? 'not-allowed' : 'pointer',
@@ -2523,35 +2609,36 @@ export default function B2BDashboard() {
                                 )}
                             </div>
 
-                            {/* Support Section - Below the card for cleaner look */}
+                            {/* Support Section - Compact Single-Row Strip */}
                             <div style={{
-                                marginTop: '1.5rem',
+                                marginTop: '0.55rem',
                                 backgroundColor: 'white',
                                 borderRadius: 'var(--radius-lg)',
-                                padding: '0.85rem 1.25rem',
-                                height: '124px',
+                                padding: '0.5rem 0.9rem',
                                 display: 'flex',
-                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
                                 gap: '0.75rem',
                                 border: '1px solid var(--border)',
-                                boxShadow: 'var(--shadow-sm)'
+                                boxShadow: 'var(--shadow-sm)',
+                                flexShrink: 0
                             }}>
-                                <div>
-                                    <h3 style={{ 
-                                        fontFamily: 'var(--font-outfit), sans-serif',
-                                        fontSize: '0.95rem', 
-                                        fontWeight: '800', 
-                                        margin: 0, 
-                                        color: 'var(--text-main)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}>
-                                        <Smile size={18} color="var(--primary)" strokeWidth={2.5} /> {t.b2b.dashboard.specialReqTitle}
-                                    </h3>
-                                    <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                                        {t.b2b.dashboard.specialReqDesc}
-                                    </p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                                    <Smile size={16} color="var(--primary)" strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                                    <div style={{ minWidth: 0 }}>
+                                        <h3 style={{ 
+                                            fontFamily: 'var(--font-outfit), sans-serif',
+                                            fontSize: '0.82rem', 
+                                            fontWeight: '800', 
+                                            margin: 0, 
+                                            color: 'var(--text-main)'
+                                        }}>
+                                            {t.b2b.dashboard.specialReqTitle}
+                                        </h3>
+                                        <p title={t.b2b.dashboard.specialReqDesc} style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {t.b2b.dashboard.specialReqDesc}
+                                        </p>
+                                    </div>
                                 </div>
                                 <a
                                     href={`https://wa.me/573015421761?text=${encodeURIComponent(`Hola Servicio al Cliente (Investments Cortés SAS), requiero asistencia comercial para la cuenta ${activeProfile?.company_name || activeProfile?.contact_name || profile?.company_name || 'B2B'} en FruFresco.`)}`}
@@ -2561,17 +2648,19 @@ export default function B2BDashboard() {
                                     style={{
                                         backgroundColor: '#075e54',
                                         color: 'white',
-                                        display: 'flex',
+                                        display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '0.5rem',
-                                        fontWeight: '900',
+                                        gap: '0.4rem',
+                                        fontWeight: '800',
                                         textDecoration: 'none',
-                                        padding: '0.55rem 1.25rem',
+                                        padding: '0.42rem 0.9rem',
                                         borderRadius: 'var(--radius-full)',
-                                        fontSize: '0.8rem',
+                                        fontSize: '0.74rem',
                                         fontFamily: 'var(--font-outfit), sans-serif',
-                                        boxShadow: '0 4px 10px rgba(7, 94, 84, 0.15)'
+                                        boxShadow: '0 2px 6px rgba(7, 94, 84, 0.15)',
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0
                                     }}
                                 >
                                     {t.b2b.dashboard.whatsappBtn}
@@ -4675,12 +4764,16 @@ export default function B2BDashboard() {
             />
 
             <style jsx global>{`
+                .cart-container,
+                .nav-mobile-actions a[href="/checkout"] {
+                    display: none !important;
+                }
                 .b2b-dashboard-grid {
                     display: grid;
                     grid-template-columns: 1fr;
-                    gap: 1.5rem;
+                    gap: 1.25rem;
                     width: 100%;
-                    max-width: 1400px;
+                    max-width: 1600px;
                     margin: 0 auto;
                 }
                 @media (max-width: 1023px) {
@@ -4709,7 +4802,7 @@ export default function B2BDashboard() {
                         max-height: 680px;
                         display: flex;
                         flex-direction: column;
-                        overflow: hidden;
+                        overflow: visible;
                     }
                     .b2b-catalog-container > div:last-child {
                         flex: 1;
@@ -4733,6 +4826,7 @@ export default function B2BDashboard() {
                     }
                     .b2b-cart-items-wrapper > div:first-child {
                         flex: 1;
+                        min-height: 0;
                         overflow-y: auto !important;
                     }
                     /* Tablas Responsivas */
@@ -4764,11 +4858,12 @@ export default function B2BDashboard() {
                     }
                     /* Columna 1 (Catálogo) con altura adaptativa al Viewport */
                     .b2b-catalog-container {
-                        height: calc(100vh - 120px);
-                        min-height: 720px;
+                        height: calc(100dvh - 175px);
+                        max-height: calc(100dvh - 175px);
+                        min-height: 480px;
                         display: flex;
                         flex-direction: column;
-                        overflow: hidden;
+                        overflow: visible;
                         position: relative;
                         box-sizing: border-box;
                     }
@@ -4777,12 +4872,13 @@ export default function B2BDashboard() {
                         flex: 1;
                         min-height: 0;
                         overflow-y: auto !important;
-                        padding: 1.5rem 1rem;
+                        padding: 0.85rem 1rem;
                     }
                     /* Contenedor de la Columna 2 (Carrito + Soporte) */
                     .b2b-cart-sidebar {
-                        height: calc(100vh - 120px);
-                        min-height: 720px;
+                        height: calc(100dvh - 175px);
+                        max-height: calc(100dvh - 175px);
+                        min-height: 480px;
                         display: flex;
                         flex-direction: column;
                         justify-content: space-between;
@@ -4798,17 +4894,17 @@ export default function B2BDashboard() {
                         position: relative;
                         box-sizing: border-box;
                     }
-                    /* Sección pequeña de Soporte WhatsApp */
+                    /* Sección compacta de Soporte WhatsApp */
                     .b2b-cart-sidebar > div:last-child {
                         height: auto;
-                        min-height: 110px;
-                        margin-top: 16px !important;
+                        min-height: 0;
+                        margin-top: 0.55rem !important;
                         box-sizing: border-box;
                         flex-shrink: 0;
                     }
                     .b2b-sticky-catalog-header {
                         position: relative;
-                        z-index: 10;
+                        z-index: 100;
                         background-color: white;
                         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
                         border-bottom: 1px solid var(--border);
@@ -4969,7 +5065,7 @@ export default function B2BDashboard() {
                                 </div>
                                 <div>
                                     <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', fontWeight: '800', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Edit2 size={16} style={{ color: 'var(--primary)' }} /> Modifica Cantidades o Agrega/Quita SKUs
+                                        <Edit2 size={16} style={{ color: 'var(--primary)' }} /> Modifica Cantidades o Agrega/Quita Insumos
                                     </h4>
                                     <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: '1.45' }}>
                                         Usa los botones <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>+</code></strong> y <strong><code style={{ backgroundColor: '#E2E8F0', padding: '1px 5px', borderRadius: '4px' }}>-</code></strong> para ajustar los kilos o unidades requeridos para hoy. Si hoy no necesitas algún producto, elimina ese renglón con la papelera <span style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#FEE2E2', padding: '2px 5px', borderRadius: '4px', border: '1px solid #FCA5A5' }}><Trash2 size={12} style={{ color: '#DC2626' }} /></span>. Si deseas añadir nuevos insumos, búscalos en el catálogo de la izquierda y haz clic en "Agregar".

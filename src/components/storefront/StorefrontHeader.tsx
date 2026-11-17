@@ -112,8 +112,8 @@ export default function StorefrontHeader({ config }: StorefrontHeaderProps) {
     return '/orders';
   }, [profile?.role]);
 
-  const isB2bUser = ['client', 'b2b', 'b2b_client'].includes((profile?.role || '').toLowerCase());
-  const portalHref = user
+  const isB2bUser = hydrated && ['client', 'b2b', 'b2b_client'].includes((profile?.role || '').toLowerCase());
+  const portalHref = hydrated && user
     ? '/b2b/dashboard'
     : locale === 'en'
       ? '/login?lang=en'
@@ -261,7 +261,7 @@ export default function StorefrontHeader({ config }: StorefrontHeaderProps) {
               })}
             </div>
 
-            {user ? (
+            {hydrated && user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Link href={dashboardHref} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 13px', borderRadius: '9999px', backgroundColor: '#FFFFFF', border: '1px solid #E5E0D8', color: '#081C15', fontSize: '0.875rem', fontWeight: 600, maxWidth: '160px' }}>
                   <User size={15} color="#0D7A57" aria-hidden="true" />
@@ -367,8 +367,8 @@ export default function StorefrontHeader({ config }: StorefrontHeaderProps) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Link href={user ? dashboardHref : '/login'} onClick={() => setMobileMenuOpen(false)} style={{ flex: 1, textAlign: 'center', padding: '9px 12px', borderRadius: '10px', backgroundColor: '#F4F1EA', color: '#081C15', fontWeight: 700, fontSize: '0.875rem' }}>
-                {user ? profile?.company_name || 'Mi Cuenta' : 'Ingresar'}
+              <Link href={hydrated && user ? dashboardHref : '/login'} onClick={() => setMobileMenuOpen(false)} style={{ flex: 1, textAlign: 'center', padding: '9px 12px', borderRadius: '10px', backgroundColor: '#F4F1EA', color: '#081C15', fontWeight: 700, fontSize: '0.875rem' }}>
+                {hydrated && user ? profile?.company_name || 'Mi Cuenta' : 'Ingresar'}
               </Link>
               <Link href={portalHref} onClick={() => setMobileMenuOpen(false)} style={{ flex: 1, textAlign: 'center', padding: '9px 12px', borderRadius: '10px', backgroundColor: '#ECFDF5', color: '#0D7A57', fontWeight: 700, fontSize: '0.875rem' }}>
                 {isB2bUser ? 'Mi Portal Institucional' : 'Portal Institucional'}

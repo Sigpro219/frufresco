@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Building2, CheckCircle2, Clock, FileCheck2, Loader2, Truck } from 'lucide-react';
 import type { Locale } from '@/lib/translations';
@@ -22,6 +22,7 @@ const inputStyle = {
 
 export default function HorecaExecutiveBand({ config, locale }: HorecaExecutiveBandProps) {
   const { user } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [nit, setNit] = useState('');
@@ -29,6 +30,10 @@ export default function HorecaExecutiveBand({ config, locale }: HorecaExecutiveB
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const savePrefill = () => {
     try {
@@ -127,7 +132,7 @@ export default function HorecaExecutiveBand({ config, locale }: HorecaExecutiveB
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <Link
-              href={user ? '/b2b/dashboard' : (locale === 'en' ? '/login?lang=en' : '/login')}
+              href={hydrated && user ? '/b2b/dashboard' : (locale === 'en' ? '/login?lang=en' : '/login')}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', backgroundColor: '#10B981', padding: '9px 16px', borderRadius: '9999px', color: '#051610', fontWeight: 800, fontSize: '0.86rem' }}
             >
               <span>{locale === 'en' ? 'Enter Institutional Portal' : 'Ingresar al Portal Institucional'}</span>
