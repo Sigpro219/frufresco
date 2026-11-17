@@ -9,6 +9,12 @@ import {
     formatStructuredSpecification,
     getOrderReplacementInfo
 } from '@/lib/orderUtils';
+import {
+    compareCanonicalBillingOrder,
+    buildCanonicalProjectedInvoiceMap,
+    isOrderEligibleForCanonicalBilling,
+    extractExistingInvoiceNumber,
+} from '@/lib/commercial/billingOrderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
 import { 
@@ -215,15 +221,17 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
         (order?.admin_notes || '').includes('SE DESPACHÓ SIN PRECIO') ||
         (order?.logistics_data?.is_off_agreement_split && !order?.logistics_data?.off_agreement_priced)
     );
-    const clientFiscalDocType = prof.document_type || parent?.document_type || (isB2B ? 'remission' : 'invoice');
+    const clientFiscalDocType = !isB2B ? 'remission' : (prof.document_type || parent?.document_type || 'remission');
     const isExplicitGift = Boolean(order?.logistics_data?.is_gift_remission || order?.logistics_data?.document_type_override === 'gift_remission');
     const rawDocType = isExplicitGift
         ? 'gift_remission'
-        : (isUnpricedOffAgreement
+        : !isB2B
             ? 'remission'
-            : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
-                ? order.logistics_data.document_type_override
-                : clientFiscalDocType));
+            : (isUnpricedOffAgreement
+                ? 'remission'
+                : ((order?.logistics_data?.document_type_override && !order?.logistics_data?.off_agreement_priced)
+                    ? order.logistics_data.document_type_override
+                    : clientFiscalDocType));
     const isPrinted = prof.print_invoice !== undefined ? prof.print_invoice : (parent?.print_invoice !== undefined ? parent.print_invoice : true);
     const isWithPrices = isUnpricedOffAgreement
         ? false
@@ -253,7 +261,7 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
             border: '#E9D5FF',
             icon: Gift
         };
-    } else if (rawDocType === 'remission') {
+    } else if (rawDocType === 'remission' || rawDocType === 'batch_remission') {
         if (isWithPrices) {
             docInfo = {
                 code: 'REM-VALOR',
@@ -1599,7 +1607,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, warehouse_spaces, invoice_id, billing_cut_id,
                     profiles:profile_id (
-                        id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
+                        id, company_name, razon_social, nit, billing_nit, billing_razon_social, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                     ),
                     order_items (
                         id, quantity, picked_quantity, unit_price, selected_options
@@ -1661,7 +1669,7 @@ export default function BillingDashboard() {
                     .select(`
                         id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, status, type, special_notes, admin_notes, purchase_order_number, payment_method, payment_status, shipping_address, logistics_data, invoice_id, billing_cut_id, warehouse_spaces,
                         profiles:profile_id (
-                            id, company_name, razon_social, nit, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
+                            id, company_name, razon_social, nit, billing_nit, billing_razon_social, payment_days, iva_responsible, print_invoice, document_type, remission_with_prices, address, phone, role, parent_id, is_corporate_parent, preferred_payment_method, delivery_restrictions, logistics_data
                         ),
                         order_items (
                             count
@@ -1700,7 +1708,7 @@ export default function BillingDashboard() {
                 if (parentIds.length > 0) {
                     const { data: parentsData } = await supabase
                         .from('profiles')
-                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
+                        .select('id, company_name, razon_social, nit, billing_nit, billing_razon_social, iva_responsible, logistics_data, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
                         .in('id', parentIds);
                     if (parentsData) {
                         const newMap = new Map();
@@ -1779,8 +1787,8 @@ export default function BillingDashboard() {
                         'Remision_No': orderSeq,
                         'Cliente': clientLabel,
                         'NIT': clientNit,
-                        'SKU': it.products?.sku || 'S/N',
-                        'Producto': it.products?.name || it.nickname || 'Producto',
+                        'ID_Contable': (it.accounting_id || it.products?.accounting_id) ? `#${it.accounting_id || it.products?.accounting_id}` : 'S/N',
+                        'Producto': it.products?.name || it.product_name || it.nickname || 'Producto',
                         'Unidad': it.unit || it.products?.unit_of_measure || 'Und',
                         'Cantidad_Despachada': billableQty,
                         'Costo_Referencia': it.reference_cost || 0,
@@ -2160,16 +2168,11 @@ export default function BillingDashboard() {
             return 2;
         };
 
-        // 3. Column Sorting (Por defecto: Facturas siempre arriba)
+        // 3. Column Sorting (Orden canonico: Facturas FV -> Remisiones REM -> Reposiciones/Obsequios, desempate sequence_id ASC)
         result = [...result].sort((a, b) => {
             if (!sortConfig.key || sortConfig.key === 'document_priority' || sortConfig.key === 'document') {
-                const prioA = getDocPriority(a);
-                const prioB = getDocPriority(b);
-                if (prioA !== prioB) {
-                    return sortConfig.direction === 'desc' ? prioB - prioA : prioA - prioB;
-                }
-                // Desempate dentro del mismo grupo: sequence_id descendente
-                return (Number(b.sequence_id || 0) - Number(a.sequence_id || 0));
+                const cmp = compareCanonicalBillingOrder(a, b, parentProfilesMap);
+                return sortConfig.direction === 'desc' ? -cmp : cmp;
             }
 
             let valA: any = '';
@@ -2218,23 +2221,15 @@ export default function BillingDashboard() {
         return result;
     }, [pendingOrders, billingSearchQuery, pendingStatusFilter, sortConfig, graceMinutes, cutCloseTime, parentProfilesMap]);
 
-    // Mapa de consecutivos de Factura Autoasignados en vivo (Estrictamente consecutivo para Facturas)
+    // Mapa de consecutivos de Factura Autoasignados en vivo (calculado sobre pendingOrders completo para invariancia ante filtros UI)
     const projectedInvoiceMap = useMemo(() => {
-        const map = new Map<string, { number: string; index: number }>();
-        const invoiceOrders = filteredPendingOrders.filter(o => {
-            const rep = getOrderReplacementInfo(o);
-            if (rep.isReplacement) return false;
-            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
-            return docInfo.type === 'invoice';
-        });
-
-        invoiceOrders.forEach((o, index) => {
-            const existingInv = o.billing_invoices?.invoice_number || o.invoice_number;
-            const num = existingInv || `${invoicePrefix}-${invoiceNextNumber + index}`;
-            map.set(o.id, { number: num, index: index + 1 });
-        });
-        return map;
-    }, [filteredPendingOrders, parentProfilesMap, invoicePrefix, invoiceNextNumber]);
+        return buildCanonicalProjectedInvoiceMap(
+            pendingOrders,
+            invoicePrefix,
+            invoiceNextNumber,
+            parentProfilesMap
+        );
+    }, [pendingOrders, parentProfilesMap, invoicePrefix, invoiceNextNumber]);
 
     // Filter Cuts
     const filteredCuts = useMemo(() => {
@@ -2262,15 +2257,20 @@ export default function BillingDashboard() {
         );
     }, [cuts, selectedBillingDate]);
 
-    // SDD Escenario 432: Conteo reactivo de pedidos con Factura Impresa pendientes por cortar en la tarde
+    // SDD Escenario 432 / 461: Conteo reactivo de pedidos FAC-IMP elegibles pendientes por cortar en la tarde
     const pendingFacImpOrdersCount = useMemo(() => {
         return pendingOrders.filter(o => {
-            const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
-            const docType = o.logistics_data?.document_type_override || o.document_type || prof.document_type;
+            if (o.billing_cut_id) return false;
             const matchesDate = selectedBillingDate === 'all' || o.delivery_date === selectedBillingDate;
-            return docType === 'invoice' && !o.billing_cut_id && matchesDate && ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido'].includes(o.status);
+            if (!matchesDate) return false;
+            if (!['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'].includes(o.status)) {
+                return false;
+            }
+            if (!isOrderEligibleForCanonicalBilling(o, parentProfilesMap)) return false;
+            const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+            return docInfo.type === 'invoice';
         }).length;
-    }, [pendingOrders, selectedBillingDate]);
+    }, [pendingOrders, selectedBillingDate, parentProfilesMap]);
 
 
     const filteredReturns = useMemo(() => {
@@ -2499,6 +2499,7 @@ export default function BillingDashboard() {
                     logistics_data,
                     origin_source,
                     profiles (
+                        id,
                         company_name,
                         razon_social,
                         nit,
@@ -2508,7 +2509,9 @@ export default function BillingDashboard() {
                         document_type,
                         remission_with_prices,
                         parent_id,
-                        role
+                        is_corporate_parent,
+                        role,
+                        logistics_data
                     )
                 `);
 
@@ -2527,7 +2530,7 @@ export default function BillingDashboard() {
             } else {
                 ordersQuery = ordersQuery.is('billing_cut_id', null);
                 if (slot === 'PM' || includeAllStatuses) {
-                    ordersQuery = ordersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido']);
+                    ordersQuery = ordersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
                 } else {
                     ordersQuery = ordersQuery.eq('status', 'delivered');
                 }
@@ -2541,28 +2544,29 @@ export default function BillingDashboard() {
 
             let targetOrders = rawOrders || [];
             if (slot !== 'ADJ') {
-                // Escenario 252 / Poka-Yoke: Excluir estrictamente pedidos acumulados por lote del ejercicio diario (AM / PM)
+                // Escenario 252 & 451: Excluir pedidos acumulados por lote respetando override is_batch_accumulated === false
                 targetOrders = targetOrders.filter(o => {
+                    if (o.logistics_data?.is_batch_accumulated === false) return true;
                     const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
                     return !o.logistics_data?.is_batch_accumulated && prof.document_type !== 'batch_remission';
                 });
             }
             if (slot === 'PM') {
-                // Escenario 432 / SDD v1.9.386: Corte Pre-Despacho Tarde (FAC-IMP).
-                // Filtra estrictamente los pedidos cuya configuración documental exige factura impresa en muelle (World Office)
-                targetOrders = targetOrders.filter(o => {
-                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : (o.profiles || {});
-                    const docType = o.logistics_data?.document_type_override || o.document_type || prof.document_type;
-                    return docType === 'invoice';
-                });
-            } else if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
-                targetOrders = targetOrders.filter(o => selectedOrderIds.includes(o.id));
-            } else if (slot !== 'ADJ') {
-                // Escenario 121: En cortes oficiales de Facturación Masiva (FV), excluir automáticamente reposiciones de garantía de SAC a $0 COP
+                // Escenario 432 / SDD: Corte Pre-Despacho Tarde (FAC-IMP).
+                // Filtra usando resolveOrderBillingInfo + exclusión de reposiciones/obsequios
                 targetOrders = targetOrders.filter(o => {
                     const rep = getOrderReplacementInfo(o);
-                    return !rep.isReplacement && o.origin_source !== 'customer_service';
+                    if (rep.isReplacement || o.origin_source === 'customer_service') return false;
+                    const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
+                    return docInfo.type === 'invoice';
                 });
+            } else if (slot !== 'ADJ' && selectedOrderIds.length > 0) {
+                targetOrders = targetOrders.filter(o =>
+                    selectedOrderIds.includes(o.id) && isOrderEligibleForCanonicalBilling(o, parentProfilesMap)
+                );
+            } else if (slot !== 'ADJ') {
+                // Excluir reposiciones, obsequios, acumulados en lote y splits $0 sin tarificar
+                targetOrders = targetOrders.filter(o => isOrderEligibleForCanonicalBilling(o, parentProfilesMap));
             }
 
             if (!targetOrders || targetOrders.length === 0) {
@@ -2600,19 +2604,8 @@ export default function BillingDashboard() {
                 }
             });
 
-            // Sort: 1. Route Plate -> 2. Stop sequence_number -> 3. order sequence_id
-            const sorted = [...targetOrders].sort((a, b) => {
-                const stopA = routeStopsMap.get(a.id);
-                const stopB = routeStopsMap.get(b.id);
-                const routeA = stopA?.routes?.vehicle_plate || 'ZZZZ';
-                const routeB = stopB?.routes?.vehicle_plate || 'ZZZZ';
-
-                if (routeA !== routeB) return routeA.localeCompare(routeB);
-                const seqA = stopA?.sequence_number ?? 999999;
-                const seqB = stopB?.sequence_number ?? 999999;
-                if (seqA !== seqB) return seqA - seqB;
-                return (a.sequence_id || 0) - (b.sequence_id || 0);
-            });
+            // Orden canonico unico: prioridad documental (1: FAC-IMP, 2: REM) y desempate estricto sequence_id ASC (paridad 1:1 con tabla y Excel WO)
+            const sorted = [...targetOrders].sort((a, b) => compareCanonicalBillingOrder(a, b, parentProfilesMap));
 
             // Atomic Sequence Re-Read from app_settings (Goldfish Safeguard 2)
             const { data: liveSettings } = await supabase
@@ -3107,6 +3100,132 @@ export default function BillingDashboard() {
         }
     };
 
+    const resolveExportParentsMap = async (orders: any[]) => {
+        const parentIds = Array.from(new Set((orders || []).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
+        const resolvedMap = new Map(parentProfilesMap);
+        const missingOrIncomplete = parentIds.filter(id => {
+            const existing = resolvedMap.get(id);
+            return !existing || existing.logistics_data === undefined || existing.billing_razon_social === undefined;
+        });
+        if (missingOrIncomplete.length > 0) {
+            const { data: extraParents } = await supabase
+                .from('profiles')
+                .select('id, company_name, razon_social, nit, billing_nit, billing_razon_social, iva_responsible, logistics_data, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
+                .in('id', missingOrIncomplete);
+            (extraParents || []).forEach((p: any) => resolvedMap.set(p.id, p));
+        }
+        return resolvedMap;
+    };
+
+    const buildWorldOfficeExportRows = (
+        orders: any[],
+        parentsMap: Map<string, any>,
+        options: {
+            tipoDocumento: 'FV' | 'NC';
+            resolveInvNum: (order: any) => number | string;
+            resolveFecha: (order: any) => string;
+            resolveObservaciones: (order: any) => string;
+        }
+    ) => {
+        const exportRows: any[] = [];
+        orders.forEach((order: any) => {
+            const isGiftOrReplacement = Boolean(
+                order.logistics_data?.is_gift_remission ||
+                order.logistics_data?.is_replacement ||
+                (order.admin_notes || '').includes('REMISIÓN DE OBSEQUIO') ||
+                (order.admin_notes || '').includes('REPOSICIÓN')
+            );
+            if (options.tipoDocumento === 'FV' && (Number(order.total || 0) <= 0 || isGiftOrReplacement)) return;
+
+            const prof = order.profiles || {};
+            const parentProf = prof.parent_id ? parentsMap.get(prof.parent_id) : null;
+            const nit = (prof.billing_nit || parentProf?.billing_nit || parentProf?.nit || prof.nit || '222222222222').trim();
+            const clientName = (
+                prof.logistics_data?.world_office_tercero_name ||
+                parentProf?.logistics_data?.world_office_tercero_name ||
+                parentProf?.razon_social ||
+                parentProf?.company_name ||
+                prof.razon_social ||
+                prof.company_name ||
+                prof.contact_name ||
+                'Cliente General'
+            ).trim();
+            const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
+            const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
+            const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
+
+            const rawInv = options.resolveInvNum(order);
+            const invNum = parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
+
+            // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
+            const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
+            // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
+            const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
+            const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+            const branchName = resolveWorldOfficeBranch(prof, parentProf);
+            const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
+
+            (order.order_items || []).forEach((item: any) => {
+                const baseItemQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+                    ? Number(item.picked_quantity)
+                    : (Number(item.quantity) || 0);
+
+                // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
+                const matchedReturn = (order.billing_returns || []).find((r: any) =>
+                    (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
+                    (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO')))) &&
+                    !(r.reason && (r.reason.includes('Reprogramado en Pedido') || r.reason.toLowerCase().includes('reposición') || r.reason.toLowerCase().includes('reposicion')))
+                );
+                const deductionQty = matchedReturn ? Number(matchedReturn.quantity_returned || 0) : 0;
+                const rawQty = Math.max(0, baseItemQty - deductionQty);
+                if (rawQty <= 0) return;
+
+                const rawUnitPrice = Number(item.unit_price) || 0;
+                const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
+                const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
+
+                const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
+                const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
+                const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
+
+                const lineTotal = qty * unitPrice;
+                const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
+                const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
+                const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
+
+                exportRows.push({
+                    tipoDocumento: options.tipoDocumento,
+                    numero: invNum,
+                    consecutivo: invNum,
+                    fecha: options.resolveFecha(order),
+                    identificacionTercero: nit,
+                    nitCliente: nit,
+                    razonSocial: clientName,
+                    sucursal: branchName,
+                    formaPago: isB2B ? 'Credito' : 'Contado',
+                    fechaEntrega: order.delivery_date || options.resolveFecha(order),
+                    diasCredito: paymentDays,
+                    codigoProducto: prodCode,
+                    descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
+                    bodega: woWarehouse || 'Principal',
+                    clasificacion: woClassification || '',
+                    unidadMedida: uom,
+                    cantidad: qty,
+                    valorUnitario: unitPrice,
+                    valorBase: lineBase,
+                    ivaRateDecimal: isIva ? 0.19 : 0,
+                    tarifaIva: isIva ? 19 : 0,
+                    valorIva: lineIva,
+                    totalLinea: lineTotal,
+                    descuento: discountDecimal,
+                    notaEncabezado: noteStr,
+                    observaciones: options.resolveObservaciones(order)
+                });
+            });
+        });
+        return exportRows;
+    };
+
     // Export an official cut to World Office (.xlsx)
     const exportToWorldOffice = async (cutId: string) => {
         try {
@@ -3116,9 +3235,9 @@ export default function BillingDashboard() {
             const { data: cutOrders, error: cutOrdersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
+                    id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
                         id, quantity, picked_quantity, selected_options, unit_price, nickname, unit, product_id,
@@ -3127,7 +3246,8 @@ export default function BillingDashboard() {
                         )
                     ),
                     billing_returns (
-                        id, product_id, quantity_returned, status, reason
+                        id, product_id, quantity_returned, status, reason,
+                        products:product_id ( id, name )
                     )
                 `)
                 .eq('billing_cut_id', cutId);
@@ -3150,99 +3270,14 @@ export default function BillingDashboard() {
             });
 
             // 2.1 Fetch parent profiles if any cut order belongs to a branch
-            const cutParentIds = Array.from(new Set((cutOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
-            const cutParentsMap = new Map(parentProfilesMap);
-            if (cutParentIds.length > 0) {
-                const missingParents = cutParentIds.filter(id => !cutParentsMap.has(id));
-                if (missingParents.length > 0) {
-                    const { data: extraParents } = await supabase
-                        .from('profiles')
-                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
-                        .in('id', missingParents);
-                    (extraParents || []).forEach((p: any) => cutParentsMap.set(p.id, p));
-                }
-            }
+            const cutParentsMap = await resolveExportParentsMap(cutOrders as any[]);
 
-            // 3. Build flattened 57-column export rows
-            const exportRows: any[] = [];
-            cutOrders.forEach((order: any) => {
-                const prof = order.profiles || {};
-                const parentProf = prof.parent_id ? cutParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
-                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
-                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
-                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
-
-                const rawInv = invoiceMap.get(order.id) || order.sequence_id;
-                const cleanInvNum = parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
-                const invNum = cleanInvNum;
-
-                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
-                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
-                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(prof, parentProf);
-                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
-
-                (order.order_items || []).forEach((item: any) => {
-                    const baseItemQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
-                        ? Number(item.picked_quantity)
-                        : (Number(item.quantity) || 0);
-                    // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
-                    // Solo se descuentan deducciones con destino expreso de AJUSTE FACTURA / sustracción.
-                    // Las reposiciones físicas ($0 COP en camión) NO descuentan de la Factura de Venta del padre.
-                    const matchedReturn = (order.billing_returns || []).find((r: any) =>
-                        (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
-                        (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO')))) &&
-                        !(r.reason && (r.reason.includes('Reprogramado en Pedido') || r.reason.toLowerCase().includes('reposición') || r.reason.toLowerCase().includes('reposicion')))
-                    );
-                    const deductionQty = matchedReturn ? Number(matchedReturn.quantity_returned || 0) : 0;
-                    const rawQty = Math.max(0, baseItemQty - deductionQty);
-                    if (rawQty <= 0) return; // Si la cantidad neta es 0, no viaja en la Factura de Venta
-                    const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
-                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
-
-                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
-                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
-                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
-
-                    const lineTotal = qty * unitPrice;
-                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
-                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-
-                    exportRows.push({
-                        tipoDocumento: 'FV',
-                        numero: invNum,
-                        consecutivo: invNum,
-                        fecha: targetCut?.scheduled_date || order.delivery_date || getBogotaDate(0),
-                        identificacionTercero: nit,
-                        nitCliente: nit,
-                        razonSocial: clientName,
-                        sucursal: branchName,
-                        formaPago: isB2B ? 'Credito' : 'Contado',
-                        fechaEntrega: order.delivery_date || targetCut?.scheduled_date || getBogotaDate(0),
-                        diasCredito: paymentDays,
-                        codigoProducto: prodCode,
-                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                        bodega: woWarehouse || 'Principal',
-                        clasificacion: woClassification || '',
-                        unidadMedida: uom,
-                        cantidad: qty,
-                        valorUnitario: unitPrice,
-                        valorBase: lineBase,
-                        ivaRateDecimal: isIva ? 0.19 : 0,
-                        tarifaIva: isIva ? 19 : 0,
-                        valorIva: lineIva,
-                        totalLinea: lineTotal,
-                        descuento: discountDecimal,
-                        notaEncabezado: noteStr,
-                        observaciones: `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
-                    });
-                });
+            // 3. Build flattened 57-column export rows using shared canonical builder
+            const exportRows = buildWorldOfficeExportRows(cutOrders as any[], cutParentsMap, {
+                tipoDocumento: targetCut?.cut_slot === 'ADJ' ? 'NC' : 'FV',
+                resolveInvNum: (order: any) => invoiceMap.get(order.id) || order.sequence_id,
+                resolveFecha: (order: any) => targetCut?.scheduled_date || order.delivery_date || getBogotaDate(0),
+                resolveObservaciones: (order: any) => `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
             });
 
             if (exportRows.length === 0) {
@@ -3456,7 +3491,12 @@ export default function BillingDashboard() {
 
     // Direct Export of Pending Orders to World Office (.xlsx)
     const handleExportPendingToWorldOffice = async () => {
-        const sourceList = subTab === 'batch_accumulated' ? filteredBatchAccumulatedOrders : filteredPendingOrders;
+        const rawSourceList = subTab === 'batch_accumulated' ? filteredBatchAccumulatedOrders : filteredPendingOrders;
+        const sourceList = subTab === 'batch_accumulated'
+            ? [...rawSourceList].sort((a, b) => Number(a?.sequence_id || 0) - Number(b?.sequence_id || 0))
+            : [...rawSourceList]
+                .filter(o => isOrderEligibleForCanonicalBilling(o, parentProfilesMap))
+                .sort((a, b) => compareCanonicalBillingOrder(a, b, parentProfilesMap));
         const targetOrders = selectedOrderIds.length > 0
             ? sourceList.filter(o => selectedOrderIds.includes(o.id))
             : sourceList;
@@ -3472,15 +3512,19 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
+                    id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, document_type, logistics_data
                     ),
                     order_items (
-                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options,
+                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options, product_id,
                         products (
-                            accounting_id, sku, name, unit_of_measure, iva_rate
+                            id, accounting_id, sku, name, unit_of_measure, iva_rate
                         )
+                    ),
+                    billing_returns (
+                        id, product_id, quantity_returned, status, reason,
+                        products:product_id ( id, name )
                     )
                 `)
                 .in('id', orderIds);
@@ -3491,103 +3535,38 @@ export default function BillingDashboard() {
                 return;
             }
 
-            // Mapeo canónico de números de factura fiscal según la posición en la vista activa (Pendientes o Lotes)
+            // Mapeo canonico de consecutivos FV: identico a projectedInvoiceMap y a handleOpenCutPreview
+            const canonicalMap = subTab === 'batch_accumulated'
+                ? buildCanonicalProjectedInvoiceMap(sourceList, invoicePrefix, invoiceNextNumber, parentProfilesMap)
+                : projectedInvoiceMap;
+
             const pendingInvoiceMap = new Map<string, { docNum: number; projected: string }>();
             sourceList.forEach((o, idx) => {
-                const proj = o.billing_invoices?.invoice_number || o.invoice_number || `${invoicePrefix}-${invoiceNextNumber + idx}`;
+                const proj = extractExistingInvoiceNumber(o)
+                    || canonicalMap.get(o.id)?.number
+                    || `${invoicePrefix}-${invoiceNextNumber + idx}`;
                 const clean = parseInt(String(proj).replace(/\D/g, ''), 10) || (invoiceNextNumber + idx);
                 pendingInvoiceMap.set(o.id, { docNum: clean, projected: proj });
             });
 
+            const orderedFullOrders = [...(fullOrders as any[])].sort((a, b) =>
+                subTab === 'batch_accumulated'
+                    ? (Number(a?.sequence_id || 0) - Number(b?.sequence_id || 0))
+                    : compareCanonicalBillingOrder(a, b, parentProfilesMap)
+            );
+
             // Respaldo de perfiles padre para resolución precisa de sucursales en WorldOffice
-            const pendingParentIds = Array.from(new Set((fullOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
-            const pendingParentsMap = new Map(parentProfilesMap);
-            if (pendingParentIds.length > 0) {
-                const missingParents = pendingParentIds.filter(id => !pendingParentsMap.has(id));
-                if (missingParents.length > 0) {
-                    const { data: extraParents } = await supabase
-                        .from('profiles')
-                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
-                        .in('id', missingParents);
-                    (extraParents || []).forEach((p: any) => pendingParentsMap.set(p.id, p));
-                }
-            }
+            const pendingParentsMap = await resolveExportParentsMap(orderedFullOrders);
 
-            const exportRows: any[] = [];
-            fullOrders.forEach((order: any) => {
-                // Omitir pedidos liquidados en $0 por SAC o con saldo no facturable
-                if (Number(order.total || 0) <= 0) return;
-
-                const prof = order.profiles || {};
-                const parentProf = prof.parent_id ? pendingParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
-                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
-                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
-                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
-
-                // Consecutivo Fiscal Oficial para WorldOffice (Columna D: estrictamente numérico puro, ej: 68494)
-                const mappedInv = pendingInvoiceMap.get(order.id);
-                const rawInv = order.billing_invoices?.invoice_number || mappedInv?.projected || `${invoicePrefix}-${invoiceNextNumber}`;
-                const cleanInvNum = mappedInv?.docNum || parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
-                const invNum = cleanInvNum;
-
-                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
-                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
-                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(prof, parentProf);
-                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
-
-                (order.order_items || []).forEach((item: any) => {
-                    const rawQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
-                        ? Number(item.picked_quantity)
-                        : (Number(item.quantity) || 0);
-                    // Omitir productos con cantidad 0 (no despachados o descontados 100% en PQR)
-                    if (rawQty <= 0) return;
-                    const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
-                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
-
-                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
-                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
-                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
-
-                    const lineTotal = qty * unitPrice;
-                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
-                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-
-                    exportRows.push({
-                        tipoDocumento: 'FV',
-                        numero: invNum,
-                        consecutivo: invNum,
-                        fecha: order.delivery_date || getBogotaDate(0),
-                        identificacionTercero: nit,
-                        nitCliente: nit,
-                        razonSocial: clientName,
-                        sucursal: branchName,
-                        formaPago: isB2B ? 'Credito' : 'Contado',
-                        fechaEntrega: order.delivery_date || getBogotaDate(0),
-                        diasCredito: paymentDays,
-                        codigoProducto: prodCode,
-                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                        bodega: woWarehouse || 'Principal',
-                        clasificacion: woClassification || '',
-                        unidadMedida: uom,
-                        cantidad: qty,
-                        valorUnitario: unitPrice,
-                        valorBase: lineBase,
-                        ivaRateDecimal: isIva ? 0.19 : 0,
-                        tarifaIva: isIva ? 19 : 0,
-                        valorIva: lineIva,
-                        totalLinea: lineTotal,
-                        descuento: discountDecimal,
-                        notaEncabezado: noteStr,
-                        observaciones: `Pedido #${order.sequence_id} (Pre-Corte)`
-                    });
-                });
+            const exportRows = buildWorldOfficeExportRows(orderedFullOrders, pendingParentsMap, {
+                tipoDocumento: 'FV',
+                resolveInvNum: (order: any) => {
+                    const mappedInv = pendingInvoiceMap.get(order.id);
+                    const rawInv = order.billing_invoices?.invoice_number || mappedInv?.projected || `${invoicePrefix}-${invoiceNextNumber}`;
+                    return mappedInv?.docNum || parseInt(String(rawInv).replace(/\D/g, ''), 10) || order.sequence_id;
+                },
+                resolveFecha: (order: any) => order.delivery_date || getBogotaDate(0),
+                resolveObservaciones: (order: any) => `Pedido #${order.sequence_id} (Pre-Corte)`
             });
 
             if (exportRows.length === 0) {
@@ -3634,7 +3613,7 @@ export default function BillingDashboard() {
                         warehouse_spaces, admin_notes, logistics_data,
                         billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                         profiles (
-                            id, company_name, razon_social, contact_name, role, phone, address,
+                            id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
                             document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
                         )
                     `)
@@ -3659,20 +3638,20 @@ export default function BillingDashboard() {
                             }
                         }
                     }
-                    targetOrders.sort((a: any, b: any) => Number(b.sequence_id || 0) - Number(a.sequence_id || 0));
                 }
             }
+
+            targetOrders.sort((a: any, b: any) => compareCanonicalBillingOrder(a, b, parentProfilesMap));
             
             await exportRelacionDocumentosWithPicker({
                 selectedDate: targetDate,
-                orders: targetOrders.map((o: any, idx: number) => {
+                orders: targetOrders.map((o: any) => {
                     const rep = getOrderReplacementInfo(o);
                     const { docInfo } = resolveOrderBillingInfo(o, parentProfilesMap);
-                    const isInvoice = docInfo.type === 'invoice' || subTab === 'batch_accumulated';
+                    const existingInv = extractExistingInvoiceNumber(o);
                     const invoiceInfo = subTab === 'batch_accumulated' ? null : projectedInvoiceMap.get(o.id);
-                    const finalInvoiceNumber = o.billing_invoices?.invoice_number 
-                        || o.invoice_number 
-                        || (isInvoice ? (invoiceInfo?.number || `${invoicePrefix}-${invoiceNextNumber + idx}`) : null);
+                    const finalInvoiceNumber = existingInv
+                        || (docInfo.type === 'invoice' && subTab !== 'batch_accumulated' ? (invoiceInfo?.number || null) : null);
                     
                     const prof = o.profiles || {};
                     const parentProf = prof.parent_id ? parentProfilesMap.get(prof.parent_id) : null;
@@ -3688,10 +3667,10 @@ export default function BillingDashboard() {
                         payment_method: o.payment_method,
                         delivery_date: o.delivery_date,
                         delivery_address: o.shipping_address,
-                        delivery_phone: o.customer_phone,
+                        delivery_phone: prof.contact_phone || prof.phone || null,
                         subtotal: o.subtotal,
-                        shipping_cost: Number(o.shipping_cost || 0),
-                        discount_amount: Number(o.discount_amount || 0),
+                        shipping_cost: Number(o.logistics_data?.shipping_cost || 0),
+                        discount_amount: Number(o.logistics_data?.discount_amount || 0),
                         tax: Number(o.tax || 0),
                         total_amount: o.total,
                         warehouse_spaces: o.warehouse_spaces,
@@ -3725,15 +3704,15 @@ export default function BillingDashboard() {
                 .from('orders')
                 .select(`
                     id, sequence_id, status, type, payment_method, delivery_date,
-                    shipping_address, customer_phone, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
+                    shipping_address, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
                     billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                     profiles (
-                        id, company_name, razon_social, contact_name, role, phone, address,
+                        id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
                         document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
                     )
                 `)
                 .eq('billing_cut_id', cutId)
-                .order('sequence_id', { ascending: false });
+                .order('sequence_id', { ascending: true });
 
             if (cutOrdersErr) throw cutOrdersErr;
             if (!cutOrders || cutOrders.length === 0) {
@@ -3749,7 +3728,7 @@ export default function BillingDashboard() {
                 if (missingIds.length > 0) {
                     const { data: parents } = await supabase
                         .from('profiles')
-                        .select('id, company_name, razon_social, nit, document_type, print_invoice, remission_with_prices, logistics_data')
+                        .select('id, company_name, razon_social, nit, billing_nit, billing_razon_social, iva_responsible, document_type, print_invoice, remission_with_prices, logistics_data')
                         .in('id', missingIds);
                     parents?.forEach(p => cutParentsMap.set(p.id, p));
                 }
@@ -3774,10 +3753,10 @@ export default function BillingDashboard() {
                         payment_method: o.payment_method,
                         delivery_date: o.delivery_date,
                         delivery_address: o.shipping_address,
-                        delivery_phone: o.customer_phone,
+                        delivery_phone: prof.contact_phone || prof.phone || null,
                         subtotal: o.subtotal,
-                        shipping_cost: Number(o.shipping_cost || 0),
-                        discount_amount: Number(o.discount_amount || 0),
+                        shipping_cost: Number(o.logistics_data?.shipping_cost || 0),
+                        discount_amount: Number(o.logistics_data?.discount_amount || 0),
                         tax: Number(o.tax || 0),
                         total_amount: o.total,
                         warehouse_spaces: o.warehouse_spaces,
@@ -3812,15 +3791,19 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: ordersErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, created_at, delivery_date, type, total, logistics_data, purchase_order_number,
+                    id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
                     ),
                     order_items (
-                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options,
+                        id, quantity, picked_quantity, unit_price, nickname, unit, selected_options, product_id,
                         products (
-                            accounting_id, sku, name, unit_of_measure, iva_rate
+                            id, accounting_id, sku, name, unit_of_measure, iva_rate
                         )
+                    ),
+                    billing_returns (
+                        id, product_id, quantity_returned, status, reason,
+                        products:product_id ( id, name )
                     )
                 `)
                 .in('id', orderIds);
@@ -3843,87 +3826,22 @@ export default function BillingDashboard() {
             });
 
             // Respaldo de perfiles padre para resolución precisa de sucursales en WorldOffice
-            const previewParentIds = Array.from(new Set((fullOrders as any[]).map((o: any) => o.profiles?.parent_id).filter(Boolean)));
-            const previewParentsMap = new Map(parentProfilesMap);
-            if (previewParentIds.length > 0) {
-                const missingParents = previewParentIds.filter(id => !previewParentsMap.has(id));
-                if (missingParents.length > 0) {
-                    const { data: extraParents } = await supabase
-                        .from('profiles')
-                        .select('id, company_name, razon_social, nit, payment_days, print_invoice, document_type, remission_with_prices, preferred_payment_method')
-                        .in('id', missingParents);
-                    (extraParents || []).forEach((p: any) => previewParentsMap.set(p.id, p));
-                }
-            }
+            const previewParentsMap = await resolveExportParentsMap(fullOrders as any[]);
 
-            const exportRows: any[] = [];
-            fullOrders.forEach((order: any) => {
-                const prof = order.profiles || {};
-                const parentProf = prof.parent_id ? previewParentsMap.get(prof.parent_id) : null;
-                const clientName = (parentProf?.razon_social || parentProf?.company_name || prof.razon_social || prof.company_name || prof.contact_name || 'Cliente General').trim();
-                const nit = (parentProf?.nit || prof.nit || '222222222222').trim();
-                const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
-                const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
-                const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
-
-                const mappedInv = previewMap.get(order.id);
-                const cleanInvNum = mappedInv?.docNum || parseInt(String(mappedInv?.projected || order.sequence_id).replace(/\D/g, ''), 10) || order.sequence_id;
-                const invNum = cleanInvNum;
-
-                // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
-                const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
-                // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-                const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
-                const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-                const branchName = resolveWorldOfficeBranch(prof, parentProf);
-                const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
-
-                (order.order_items || []).forEach((item: any) => {
-                    const rawQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
-                        ? Number(item.picked_quantity)
-                        : (Number(item.quantity) || 0);
-                    const rawUnitPrice = Number(item.unit_price) || 0;
-                    const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
-                    const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
-
-                    const qty = (isClientInLb && isKg) ? rawQty * 2 : rawQty;
-                    const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
-                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
-
-                    const lineTotal = qty * unitPrice;
-                    const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
-                    const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
-                    const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
-
-                    exportRows.push({
-                        tipoDocumento: isNcSlot ? 'NC' : 'FV',
-                        numero: invNum,
-                        consecutivo: invNum,
-                        fecha: selectedBillingDate === 'all' ? getBogotaDate(0) : selectedBillingDate,
-                        identificacionTercero: nit,
-                        nitCliente: nit,
-                        razonSocial: clientName,
-                        sucursal: branchName,
-                        formaPago: isB2B ? 'Credito' : 'Contado',
-                        fechaEntrega: order.delivery_date || getBogotaDate(0),
-                        diasCredito: paymentDays,
-                        codigoProducto: prodCode,
-                        descripcion: item.nickname || item.products?.name || 'Producto FruFresco',
-                        bodega: 'Principal',
-                        unidadMedida: uom,
-                        cantidad: qty,
-                        valorUnitario: unitPrice,
-                        valorBase: lineBase,
-                        ivaRateDecimal: isIva ? 0.19 : 0,
-                        tarifaIva: isIva ? 19 : 0,
-                        valorIva: lineIva,
-                        totalLinea: lineTotal,
-                        descuento: discountDecimal,
-                        notaEncabezado: noteStr,
-                        observaciones: `Pedido #${order.sequence_id} | Pre-Corte ${previewSlot}`
-                    });
-                });
+            const exportRows = buildWorldOfficeExportRows(fullOrders as any[], previewParentsMap, {
+                tipoDocumento: isNcSlot ? 'NC' : 'FV',
+                resolveInvNum: (order: any) => {
+                    const mappedInv = previewMap.get(order.id);
+                    return mappedInv?.docNum || parseInt(String(mappedInv?.projected || order.sequence_id).replace(/\D/g, ''), 10) || order.sequence_id;
+                },
+                resolveFecha: () => selectedBillingDate === 'all' ? getBogotaDate(0) : selectedBillingDate,
+                resolveObservaciones: (order: any) => `Pedido #${order.sequence_id} | Pre-Corte ${previewSlot}`
             });
+
+            if (exportRows.length === 0) {
+                showToast({ type: 'warning', message: 'Los pedidos de la previsualización no contienen ítems facturables para exportar.' });
+                return;
+            }
 
             await downloadWorldOfficeExcel(
                 exportRows,
@@ -4419,12 +4337,13 @@ export default function BillingDashboard() {
             const remNum = o.sequence_id ? `#${o.sequence_id}` : o.id.slice(0, 8);
             text += `• *Remisión ${remNum}* - ${client} (Entrega: ${o.delivery_date || 'N/A'})\n`;
             (o.unpriced_items || []).forEach((it: any) => {
-                const name = it.products?.name || it.nickname || 'Producto';
-                const sku = it.products?.sku || 'S/N';
+                const name = it.products?.name || it.product_name || it.nickname || 'Producto';
+                const rawAccId = it.accounting_id || it.products?.accounting_id;
+                const accountingRef = rawAccId ? `#${rawAccId}` : 'S/N';
                 const qty = it.billable_quantity ?? it.quantity ?? 0;
                 const unit = it.unit || it.products?.unit_of_measure || 'Und';
                 const refCost = it.reference_cost ? ` (Costo Ref: ${Number(it.reference_cost).toLocaleString('es-CO')})` : '';
-                text += `   - SKU ${sku}: ${name} x ${qty} ${unit}${refCost}\n`;
+                text += `   - Ref ${accountingRef}: ${name} x ${qty} ${unit}${refCost}\n`;
             });
             text += `\n`;
         });
@@ -6555,7 +6474,15 @@ export default function BillingDashboard() {
                                                                     const displayNum = order.billing_invoices?.invoice_number 
                                                                         || order.invoice_number 
                                                                         || invoiceInfo?.number 
-                                                                        || `${invoicePrefix}-${invoiceNextNumber}`;
+                                                                        || null;
+
+                                                                    if (!displayNum) {
+                                                                        return (
+                                                                            <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '700' }}>
+                                                                                Sin consecutivo (Excluido)
+                                                                            </span>
+                                                                        );
+                                                                    }
 
                                                                     return (
                                                                         <>
@@ -6601,9 +6528,14 @@ export default function BillingDashboard() {
                                                                             <Package size={10} style={{ color: '#64748B' }} />
                                                                             <span>REM-{order.sequence_id}</span>
                                                                         </div>
-                                                                        <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
-                                                                            Remisión Comercial
-                                                                        </div>
+                                                                        {(() => {
+                                                                            const remInv = projectedInvoiceMap.get(order.id);
+                                                                            return (
+                                                                                <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '2px' }}>
+                                                                                    {remInv ? `Remisión · Proy. ${remInv.number}` : 'Remisión Comercial'}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 );
                                                             })()}
@@ -8559,7 +8491,7 @@ export default function BillingDashboard() {
                     const projectedInvoiceNumber = selectedOrderDetail.billing_invoices?.invoice_number 
                         || selectedOrderDetail.invoice_number 
                         || modalInvoiceInfo?.number
-                        || `${invoicePrefix}-${invoiceNextNumber}`;
+                        || 'Pendiente de Corte';
 
                     const isB2B = modalBilling.isB2B;
                     const isIvaResponsible = Boolean(selectedOrderDetail.profiles?.iva_responsible);
@@ -9702,10 +9634,10 @@ export default function BillingDashboard() {
                                                                     <tr key={it.id} style={{ borderTop: '1px solid #F1F5F9' }}>
                                                                         <td style={{ padding: '0.5rem 0.75rem' }}>
                                                                             <div style={{ fontWeight: '800', color: '#0F172A' }}>
-                                                                                {it.products?.name || it.nickname || 'Producto'}
+                                                                                {it.products?.name || it.product_name || it.nickname || 'Producto'}
                                                                             </div>
                                                                             <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
-                                                                                {it.products?.accounting_id ? `#${it.products.accounting_id} · ` : ''}{it.unit || it.products?.unit_of_measure || 'Und'}
+                                                                                {(it.accounting_id || it.products?.accounting_id) ? `#${it.accounting_id || it.products?.accounting_id} · ` : ''}{it.unit || it.products?.unit_of_measure || 'Und'}
                                                                             </div>
                                                                         </td>
                                                                         <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '800' }}>

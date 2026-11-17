@@ -296,18 +296,97 @@ export async function ensureUniversalStagingSpaces(
 ): Promise<Record<string, number[]>> {
     if (!rawOrders || rawOrders.length === 0) return {};
 
+    // Separar por delivery_date para aislar bahías físicas entre fechas de entrega distintas
+    const distinctDates = Array.from(new Set(rawOrders.map(o => String(o?.delivery_date || "__NO_DATE__"))));
+    if (distinctDates.length > 1) {
+        const combinedMap: Record<string, number[]> = {};
+        for (const dateKey of distinctDates) {
+            const slice = rawOrders.filter(o => String(o?.delivery_date || "__NO_DATE__") === dateKey);
+            const sliceMap = await ensureUniversalStagingSpaces(slice, supabaseClient);
+            Object.assign(combinedMap, sliceMap);
+        }
+        return combinedMap;
+    }
+
+    interface StagingOrderCandidate {
+        id?: string;
+        sequence_id?: number | string | null;
+        status?: string | null;
+        delivery_date?: string | null;
+        warehouse_spaces?: number[] | null;
+    }
+
+    const targetDate = distinctDates[0];
+    let existingDateOrders: StagingOrderCandidate[] = [];
+    if (supabaseClient && typeof supabaseClient.from === "function" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+        const baseQuery = supabaseClient
+            .from("orders")
+            .select("id, sequence_id, status, delivery_date, warehouse_spaces")
+            .eq("delivery_date", targetDate);
+        const res = typeof baseQuery?.neq === "function"
+            ? await baseQuery.neq("status", "cancelled")
+            : await baseQuery;
+        if (res?.error) {
+            throw new Error(`Error consultando bahías ocupadas de ${targetDate}: ${res.error.message || JSON.stringify(res.error)}`);
+        }
+        if (Array.isArray(res?.data)) {
+            existingDateOrders = res.data;
+        }
+    }
+
+    const rawIds = new Set(rawOrders.map(o => o?.id).filter(Boolean));
+    const mergedById = new Map<string, any>();
+    existingDateOrders.forEach(dbOrder => {
+        if (dbOrder?.id) mergedById.set(dbOrder.id, dbOrder);
+    });
+    rawOrders.forEach(ro => {
+        if (!ro?.id) return;
+        const dbMatch = mergedById.get(ro.id);
+        mergedById.set(ro.id, {
+            ...dbMatch,
+            ...ro,
+            warehouse_spaces: (Array.isArray(ro.warehouse_spaces) && ro.warehouse_spaces.length > 0)
+                ? ro.warehouse_spaces
+                : (dbMatch?.warehouse_spaces ?? ro.warehouse_spaces),
+        });
+    });
+
     const spacesMap: Record<string, number[]> = {};
     const occupiedSlots = new Set<number>();
     const unallocatedOrders: any[] = [];
+    const unallocatedIds = new Set<string>();
 
-    // 1. Identificar bahías ya ocupadas y separar órdenes sin bahía
-    rawOrders.forEach(o => {
-        if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
-            spacesMap[o.id] = o.warehouse_spaces;
+    // 1. Identificar bahías ya ocupadas en la fecha (priorizando no-pendientes y sequence_id ASC ante colisiones)
+    const allocatedCandidates = Array.from(mergedById.values())
+        .filter(o => Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0)
+        .sort((a, b) => {
+            const pendA = a.status === "pending_approval" ? 1 : 0;
+            const pendB = b.status === "pending_approval" ? 1 : 0;
+            if (pendA !== pendB) return pendA - pendB;
+            const seqDiff = Number(a.sequence_id || Number.MAX_SAFE_INTEGER) - Number(b.sequence_id || Number.MAX_SAFE_INTEGER);
+            if (seqDiff !== 0) return seqDiff;
+            return String(a.id).localeCompare(String(b.id));
+        });
+
+    allocatedCandidates.forEach(o => {
+        const hasCollision = o.warehouse_spaces.some((slot: number) => occupiedSlots.has(slot));
+        if (!hasCollision) {
             o.warehouse_spaces.forEach((slot: number) => occupiedSlots.add(slot));
-        } else {
+            if (rawIds.has(o.id)) {
+                spacesMap[o.id] = o.warehouse_spaces;
+            }
+        } else if (rawIds.has(o.id)) {
             unallocatedOrders.push(o);
+            unallocatedIds.add(o.id);
         }
+    });
+
+    rawOrders.forEach(ro => {
+        const id = ro?.id;
+        if (!id || spacesMap[id] || unallocatedIds.has(id)) return;
+        const merged = mergedById.get(id) || ro;
+        unallocatedOrders.push(merged);
+        unallocatedIds.add(id);
     });
 
     if (unallocatedOrders.length === 0) {
@@ -385,24 +464,28 @@ export async function ensureUniversalStagingSpaces(
 
         spacesMap[item.raw.id] = assigned;
         updatesToPersist.push({ id: item.raw.id, spaces: assigned });
+    }
 
-        // Mutar en memoria para visualización reactiva inmediata
-        const foundOrder = rawOrders.find(o => o.id === item.raw.id);
-        if (foundOrder) {
-            foundOrder.warehouse_spaces = assigned;
+    // 5. Persistir atómicamente en Supabase verificando errores reales antes de confirmar mutación en memoria
+    if (supabaseClient && typeof supabaseClient.from === "function" && updatesToPersist.length > 0) {
+        const updateResponses = await Promise.all(
+            updatesToPersist.map(u =>
+                supabaseClient.from("orders").update({ warehouse_spaces: u.spaces }).eq("id", u.id)
+            )
+        );
+        const failedResponse = updateResponses.find(r => r && r.error);
+        if (failedResponse?.error) {
+            throw new Error(`Error persistiendo asignación de bahías en Supabase: ${failedResponse.error.message || JSON.stringify(failedResponse.error)}`);
         }
     }
 
-    // 5. Persistir atómicamente en Supabase si se suministra el cliente
-    if (supabaseClient && updatesToPersist.length > 0) {
-        Promise.all(
-            updatesToPersist.map(u => 
-                supabaseClient.from('orders').update({ warehouse_spaces: u.spaces }).eq('id', u.id)
-            )
-        ).catch(err => {
-            console.error('Error persistiendo auto-asignación universal de bahías:', err);
-        });
-    }
+    // 6. Confirmada la escritura en BD (o ejecución offline), sincronizar objetos rawOrders en memoria
+    updatesToPersist.forEach(u => {
+        const foundOrder = rawOrders.find(o => o.id === u.id);
+        if (foundOrder) {
+            foundOrder.warehouse_spaces = u.spaces;
+        }
+    });
 
     return spacesMap;
 }

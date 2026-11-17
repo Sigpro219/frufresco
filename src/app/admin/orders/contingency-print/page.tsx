@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, getOrderProcurementReferences } from '@/lib/orderUtils';
-import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, Gift, CheckSquare, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { isOrderInvoiceRequiredForPrint } from '@/lib/orders/printDocRules';
+import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, FileText, Gift, CheckSquare, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
@@ -41,6 +42,8 @@ interface OrderItem {
 interface OrderData {
     id: string;
     sequence_id?: number;
+    status?: string;
+    type?: string;
     warehouse_spaces?: number[];
     created_at: string;
     delivery_date: string;
@@ -59,7 +62,6 @@ interface OrderData {
     longitude?: number;
     shipping_address?: string;
     customer_name?: string;
-    customer_phone?: string;
     admin_notes?: string;
     special_notes?: string;
     profile_id?: string;
@@ -587,6 +589,8 @@ function ContingencyPrintContent() {
     const [selectedDate, setSelectedDate] = useState<string>(() => paramDate || (rawOrderIds ? '' : getBogotaDate(0)));
 
     const [orders, setOrders] = useState<OrderData[]>([]);
+    const [includeFacImpGuides, setIncludeFacImpGuides] = useState(false);
+    const [spaceSyncWarning, setSpaceSyncWarning] = useState<string | null>(null);
     const [stocks, setStocks] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const printDocRef = useRef<HTMLDivElement>(null);
@@ -645,7 +649,7 @@ function ContingencyPrintContent() {
                 let query = supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, delivery_slot, total, subtotal, tax, profile_id,
+                        id, sequence_id, status, type, created_at, delivery_date, delivery_slot, total, subtotal, tax, profile_id,
                         payment_method, payment_status,
                         total_weight_kg, crates_count, is_manual_delivery, manual_delivery_time, manual_delivery_margin, manual_delivery_note, logistics_data,
                         latitude, longitude, shipping_address, admin_notes, special_notes, warehouse_spaces,
@@ -717,8 +721,15 @@ function ContingencyPrintContent() {
                     console.error('Error cargando pedidos para contingencia:', ordersRes.error);
                 } else {
                     const rawOrders = (ordersRes.data as any[]) || [];
-                    // Escenario 299: Garantía universal de asignación de bahías por cubicaje y clúster
-                    await ensureUniversalStagingSpaces(rawOrders, supabase);
+                    setSpaceSyncWarning(null);
+                    try {
+                        // Escenario 299 / 461: Garantía universal de asignación de bahías aislada ante fallo de escritura
+                        await ensureUniversalStagingSpaces(rawOrders, supabase);
+                    } catch (spaceErr: any) {
+                        const msg = spaceErr?.message || 'Error al asignar/persistir espacios de bodega en Supabase.';
+                        console.error('Error asignando espacios en impresión (lote preservado):', spaceErr);
+                        setSpaceSyncWarning(`Advertencia de Bodega: ${msg} Se muestran los pedidos cargados con su última asignación conocida.`);
+                    }
                     const profileIds = Array.from(new Set(rawOrders.map(o => o.profile_id || o.profiles?.id).filter(Boolean)));
                     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -865,7 +876,7 @@ function ContingencyPrintContent() {
             const slotInfo = resolveDeliverySlotInfo(order);
             const locInfo = resolveLocalityAndCity(order);
             const addressClean = cleanAddress(order.shipping_address || order.profiles?.address);
-            const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone);
+            const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone);
             const bay = order.warehouse_spaces && order.warehouse_spaces.length > 0 
                 ? `Espacio ${formatSpaceLabel(order.warehouse_spaces)}` 
                 : '';
@@ -919,10 +930,24 @@ function ContingencyPrintContent() {
     const showRemissions = showAll || mode === 'remissions';
     const showDispatch = showAll || mode === 'dispatch';
 
-    // Pedidos activos para remisiones o despachos (renderizado universal de contingencia en piso)
+    const explicitOrderIdsList = useMemo(
+        () => rawOrderIds.split(',').map(s => s.trim()).filter(Boolean),
+        [rawOrderIds]
+    );
+    const isSingleExplicitOrder = explicitOrderIdsList.length === 1;
+
+    const excludedFacImpCount = useMemo(() => {
+        if (mode !== 'remissions' || isSingleExplicitOrder) return 0;
+        return orders.filter(o => isOrderInvoiceRequiredForPrint(o)).length;
+    }, [orders, mode, isSingleExplicitOrder]);
+
+    // Pedidos activos para remisiones o despachos (excluye FAC-IMP por defecto en lote de remisiones: 1 documento por carga)
     const activePrintOrders = useMemo(() => {
+        if (mode === 'remissions' && !isSingleExplicitOrder && !includeFacImpGuides) {
+            return orders.filter(o => !isOrderInvoiceRequiredForPrint(o));
+        }
         return orders;
-    }, [orders]);
+    }, [orders, mode, isSingleExplicitOrder, includeFacImpGuides]);
 
     const totalRemissionSheets = useMemo(() => {
         return activePrintOrders.reduce((acc, o) => acc + paginateRemissionItems(o.order_items || []).length * 2, 0);
@@ -1101,6 +1126,34 @@ function ContingencyPrintContent() {
                         <span style={{ fontSize: '0.68rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: '12px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
                             {activePrintOrders.length} {mode === 'dispatch' ? 'paradas' : 'ped.'} {mode === 'remissions' ? `(${totalRemissionSheets} hojas)` : ''}
                         </span>
+                        {mode === 'remissions' && excludedFacImpCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setIncludeFacImpGuides(prev => !prev)}
+                                title={includeFacImpGuides
+                                    ? 'Ocultar pedidos de Factura 1er Corte (regla 1 documento por carga)'
+                                    : 'Incluir temporalmente como guía interna los pedidos que ya viajan con Factura de 1er Corte'}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: '700',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    border: includeFacImpGuides ? '1px solid #F59E0B' : '1px solid #CBD5E1',
+                                    backgroundColor: includeFacImpGuides ? '#FEF3C7' : '#F8FAFC',
+                                    color: includeFacImpGuides ? '#92400E' : '#475569',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                <FileText size={11} />
+                                {includeFacImpGuides
+                                    ? `Incluyendo +${excludedFacImpCount} FAC-IMP`
+                                    : `FAC-IMP omitidos (${excludedFacImpCount})`}
+                            </button>
+                        )}
                     </div>
 
                     {/* Superbuscador Omnibox de Documentos & Navegador Secuencial (SpaceX Raptor 3) */}
@@ -1318,7 +1371,7 @@ function ContingencyPrintContent() {
                             const docName = mode === 'purchases' 
                                 ? `Planilla_Compras_${orders[0]?.delivery_date || selectedDate}`
                                 : mode === 'remissions'
-                                ? (orders.length === 1 ? `Remision_${getFriendlyOrderId(orders[0])}` : `Remisiones_Duplicadas_${orders[0]?.delivery_date || selectedDate}`)
+                                ? (activePrintOrders.length === 1 ? `Remision_${getFriendlyOrderId(activePrintOrders[0])}` : `Remisiones_Duplicadas_${activePrintOrders[0]?.delivery_date || selectedDate}`)
                                 : mode === 'dispatch'
                                 ? `Manifiesto_Flota_${orders[0]?.delivery_date || selectedDate}`
                                 : `Kit_Contingencia_${orders[0]?.delivery_date || selectedDate}`;
@@ -1360,7 +1413,7 @@ function ContingencyPrintContent() {
                                 title: mode === 'dispatch' 
                                     ? `Manifiesto de Ruta - ${orders.length} Paradas`
                                     : mode === 'remissions'
-                                    ? `Remisiones de Entrega - ${orders.length} Pedidos (${totalRemissionSheets} Hojas)`
+                                    ? `Remisiones de Entrega - ${activePrintOrders.length} Pedidos (${totalRemissionSheets} Hojas)`
                                     : `Kit de Contingencia - ${orders.length} Pedidos (${mode.toUpperCase()})`,
                                 paperSize: mode === 'dispatch' ? 'oficio' : 'letter',
                                 orientation: 'portrait',
@@ -1383,13 +1436,20 @@ function ContingencyPrintContent() {
                             whiteSpace: 'nowrap'
                         }}
                     >
-                        <Printer size={14} /> Imprimir {mode === 'remissions' ? `Remisiones (${orders.length})` : mode === 'dispatch' ? 'Manifiesto' : 'Kit'}
+                        <Printer size={14} /> Imprimir {mode === 'remissions' ? `Remisiones (${activePrintOrders.length})` : mode === 'dispatch' ? 'Manifiesto' : 'Kit'}
                     </button>
                 </div>
             </div>
 
             {/* Printable Container (Attached ref for clean new-window printing) */}
             <div ref={printDocRef} className="print-doc-wrapper" style={{ maxWidth: '850px', margin: '0.75rem auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                {spaceSyncWarning && (
+                    <div className="no-print" style={{ backgroundColor: '#FFFBEB', border: '1.5px solid #F59E0B', color: '#92400E', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ShieldAlert size={16} color="#D97706" style={{ flexShrink: 0 }} />
+                        <span>{spaceSyncWarning}</span>
+                    </div>
+                )}
 
                 {orders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3.5rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #CBD5E1', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
@@ -1440,6 +1500,35 @@ function ContingencyPrintContent() {
                             </button>
                         </div>
                     </div>
+                ) : mode === 'remissions' && activePrintOrders.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3rem 2rem', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #BFDBFE', maxWidth: '650px', margin: '2rem auto', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                        <FileText size={42} color="#1D4ED8" style={{ margin: '0 auto 1rem' }} />
+                        <h3 style={{ margin: '0 0 0.5rem', fontWeight: '800', fontSize: '1.05rem', color: '#0F172A' }}>
+                            Los {excludedFacImpCount} pedidos de esta jornada requieren Factura 1er Corte (FAC-IMP)
+                        </h3>
+                        <p style={{ margin: '0 0 1.25rem', color: '#475569', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                            Por regla de documento único por carga, las órdenes FAC-IMP se omiten del lote de remisiones porque viajan con factura física DIAN emitida en World Office.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setIncludeFacImpGuides(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1E40AF',
+                                border: '1px solid #93C5FD',
+                                fontSize: '0.8rem',
+                                fontWeight: '800',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <FileText size={14} /> Mostrar {excludedFacImpCount} guía(s) FAC-IMP de soporte
+                        </button>
+                    </div>
                 ) : (
                     <>
                         {/* ========================================================= */}
@@ -1463,7 +1552,7 @@ function ContingencyPrintContent() {
                                         title="Planilla Maestra de Compras (Corabastos)"
                                         subtitle={pageSubtitle}
                                         date={orders[0]?.delivery_date || selectedDate}
-                                        reference={`SKUs: ${consolidatedPurchases.length}`}
+                                        reference={`Ítems: ${consolidatedPurchases.length}`}
                                         badge="COMPRAS CORABASTOS"
                                         badgeVariant="dark"
                                         className="page-break"
@@ -1486,7 +1575,7 @@ function ContingencyPrintContent() {
                                                 <strong style={{ color: '#0F172A' }}>Instrucciones para Plaza:</strong> Registre el precio pactado por kilo/bulto y el puesto o bodega en Corabastos.
                                             </div>
                                             <div style={{ whiteSpace: 'nowrap', fontWeight: '800', color: '#0F172A', fontSize: '7.2pt' }}>
-                                                Pedidos amparados: {orders.length} &bull; Total SKUs: {consolidatedPurchases.length}
+                                                Pedidos amparados: {orders.length} &bull; Total Productos: {consolidatedPurchases.length}
                                             </div>
                                         </div>
 
@@ -1615,11 +1704,11 @@ function ContingencyPrintContent() {
                 {/* 2. REMISIONES DE ENTREGA FÍSICAS DE CONTINGENCIA          */}
                 {/*    (Regla de Duplicado Consecutivo: Original + Copia)     */}
                 {/* ========================================================= */}
-                {showRemissions && orders.map((order, orderIdx) => {
+                {showRemissions && activePrintOrders.map((order, orderIdx) => {
                     const prof = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
                     const parent = Array.isArray(prof?.parent) ? prof?.parent[0] : prof?.parent;
                     const rawDocType = (order.logistics_data as any)?.document_type_override || prof?.document_type || parent?.document_type || '';
-                    const isInvoiceRequired = rawDocType === 'invoice' || (order as any).document_type === 'invoice';
+                    const isInvoiceRequired = isOrderInvoiceRequiredForPrint(order);
 
                     const b2cGift = extractB2CGiftDetails(order);
                     const { parentName, branchName } = extractParentAndBranch(order);
@@ -1693,8 +1782,8 @@ function ContingencyPrintContent() {
                                         #{orderNum}
                                     </span>
                                     {isInvoiceRequired && (
-                                        <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', border: '1px solid #93C5FD', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.65rem' }}>
-                                            📄 FAC-IMP
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#DBEAFE', color: '#1E40AF', border: '1px solid #93C5FD', padding: '1px 6px', borderRadius: '4px', fontWeight: '800', fontSize: '0.65rem' }}>
+                                            <FileText size={11} /> FAC-IMP
                                         </span>
                                     )}
                                     <span style={{ color: '#1E293B', fontWeight: '700' }}>
@@ -1758,7 +1847,7 @@ function ContingencyPrintContent() {
                                     {/* Banner Poka-Yoke de Contingencia para Cliente con Factura Impresa DIAN */}
                                     {isInvoiceRequired && (
                                         <div style={{ backgroundColor: '#EFF6FF', border: '1.2px solid #3B82F6', padding: '3px 8px', borderRadius: '4px', marginBottom: '4px', fontSize: '6.8pt', color: '#1E40AF', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>📄 CONTROL DE ENTREGA / CONTINGENCIA: Pedido amparado bajo Factura DIAN física expedida en World Office. Documento oficial de soporte para firma y verificación en muelle.</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><FileText size={11} /> CONTROL DE ENTREGA / CONTINGENCIA: Pedido amparado bajo Factura DIAN física expedida en World Office. Documento oficial de soporte para firma y verificación en muelle.</span>
                                             <span style={{ backgroundColor: '#DBEAFE', color: '#1E40AF', padding: '1px 5px', borderRadius: '3px', fontSize: '6.2pt' }}>
                                                 CLIENTE FAC-IMP
                                             </span>
@@ -1798,7 +1887,7 @@ function ContingencyPrintContent() {
                                     {/* Poka-Yoke Banner Venta Empleado Nómina (NO COBRAR EN PUERTA) */}
                                     {order.payment_method === 'payroll_deduction' && (
                                         <div style={{ backgroundColor: '#FEF2F2', border: '1.5px solid #DC2626', padding: '4px 9px', borderRadius: '4px', marginBottom: '4px', fontSize: '7.2pt', color: '#991B1B', fontWeight: 900, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span>️ ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA.</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ShieldAlert size={11} /> ATENCIÓN TRANSPORTADOR: NO COBRAR EN PUERTA — VENTA EMPLEADO DEDUCCIÓN NÓMINA PRE-AUTORIZADA.</span>
                                             <span style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '1px 6px', borderRadius: '3px', fontSize: '6.2pt' }}>
                                                 PAGO POR NÓMINA ($0 EN ENTREGA)
                                             </span>
@@ -1823,14 +1912,14 @@ function ContingencyPrintContent() {
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DESTINATARIO (RECIBE):</strong> {b2cGift.recipientName}</div>
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DE PARTE DE (OBSEQUIA):</strong> {b2cGift.senderName}</div>
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
-                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO DESTINATARIO:</strong> {cleanPhoneNumber(b2cGift.recipientPhone || order.customer_phone || order.profiles?.contact_phone) || 'Sin registrar'}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO DESTINATARIO:</strong> {cleanPhoneNumber(b2cGift.recipientPhone || order.profiles?.contact_phone || order.profiles?.phone) || 'Sin registrar'}</div>
                                                 </>
                                             ) : (
                                                 <>
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>SUCURSAL:</strong> {branchName}</div>
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>NIT / C.C.:</strong> {order.profiles?.nit || 'N/A'}</div>
                                                     <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>DIRECCIÓN:</strong> {cleanAddress(order.shipping_address || order.profiles?.address)}</div>
-                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone) || 'Sin registrar'}</div>
+                                                    <div style={{ lineHeight: 1.3 }}><strong style={{ color: '#0F172A' }}>TELÉFONO:</strong> {cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone) || 'Sin registrar'}</div>
                                                 </>
                                             )}
                                         </div>
@@ -2175,7 +2264,7 @@ function ContingencyPrintContent() {
                                             const locInfo = resolveLocalityAndCity(order);
 
                                             const addressClean = cleanAddress(order.shipping_address || order.profiles?.address);
-                                            const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone || order.customer_phone);
+                                            const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone);
 
                                             return (
                                                 <tr key={order.id || orderIdx}>

@@ -6,6 +6,7 @@ import {
     OrderStagingInput, 
     allocateStagingSpacesGeographically, 
     calculateCratesAndSpaces,
+    ensureUniversalStagingSpaces,
     formatSpaceLabel 
 } from '@/lib/stagingSpaceAllocator';
 import { 
@@ -115,71 +116,64 @@ export default function ManualDispatchWizardModal({
         return orders.filter(o => selectedOrderIds.has(o.id));
     }, [orders, selectedOrderIds]);
 
-    // Inicializar mapa de bahías a partir de las órdenes recibidas
+    // Inicializar mapa de bahías de manera segura y sin colisiones contra toda la fecha en DB
     useEffect(() => {
         if (!isOpen) return;
-        const initialMap: Record<string, number[]> = {};
-        let ordersWithSpaces = 0;
-        selectedOrdersList.forEach(o => {
-            if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
-                initialMap[o.id] = o.warehouse_spaces;
-                ordersWithSpaces++;
-            }
-        });
+        let cancelled = false;
 
-        // Poka-Yoke: si las órdenes seleccionadas no tienen bahías en DB, calcularlas automáticamente
-        if (ordersWithSpaces === 0 && selectedOrdersList.length > 0) {
-            const rawInputs: OrderStagingInput[] = selectedOrdersList.map(o => {
-                const totalKg = Number(o.total_weight_kg) || 
-                    (o.order_items || []).reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.products?.weight_kg) || 1), 0);
-                return {
-                    id: o.id,
-                    sequence_id: o.sequence_id,
-                    client_id: o.profile_id || o.profiles?.id,
-                    customer_name: o.customer_name || o.profiles?.contact_name,
-                    company_name: o.profiles?.company_name || o.customer_name || 'Cliente sin nombre',
-                    shipping_address: o.shipping_address || o.profiles?.address || '',
-                    neighborhood: o.profiles?.neighborhood || '',
-                    delivery_slot: o.delivery_slot || '',
-                    manual_delivery_time: o.manual_delivery_time || '',
-                    is_manual_delivery: o.is_manual_delivery || false,
-                    total_weight_kg: totalKg > 0 ? totalKg : 15,
-                    existing_spaces: [],
-                    delivery_restrictions: o.profiles?.delivery_restrictions || o.delivery_restrictions || null,
-                    profile_logistics_data: o.profiles?.logistics_data || null,
-                    logistics_data: o.logistics_data || null
-                };
+        const syncInitialSpaces = async () => {
+            const initialMap: Record<string, number[]> = {};
+            let missingOrPartial = false;
+            selectedOrdersList.forEach(o => {
+                if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
+                    initialMap[o.id] = o.warehouse_spaces;
+                } else {
+                    missingOrPartial = true;
+                }
             });
-            const autoAssigned = allocateStagingSpacesGeographically(rawInputs, {
-                avg_kg_per_crate: 12.5,
-                space_capacity: 36,
-                max_spaces: 150
-            });
-            autoAssigned.forEach(a => {
-                initialMap[a.order_id] = a.assigned_spaces;
-            });
-            // Persistir inmediatamente en Supabase para que cualquier documento impreso en Paso 1 ya tenga LUGAR asignado
-            Promise.all(
-                Object.entries(initialMap).map(([orderId, spaces]) =>
-                    supabase.from('orders').update({ warehouse_spaces: spaces }).eq('id', orderId)
-                )
-            ).then(() => {
-                selectedOrdersList.forEach(o => {
-                    if (initialMap[o.id]) o.warehouse_spaces = initialMap[o.id];
-                });
-                setSpacesSavedSuccess(true);
-            }).catch(err => console.error('Error auto-persistiendo bahías iniciales:', err));
-        }
 
-        setManualSpacesMap(initialMap);
-        const initialTextMap: Record<string, string> = {};
-        Object.entries(initialMap).forEach(([orderId, spaces]) => {
-            if (Array.isArray(spaces) && spaces.length > 0) {
-                initialTextMap[orderId] = spaces.join(', ');
+            let resolvedMap = initialMap;
+            if (selectedOrdersList.length > 0) {
+                const safeFallbackDate = /^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) ? deliveryDate : getBogotaDateString();
+                try {
+                    // Verificar colisiones o bahías faltantes contra TODAS las órdenes de la misma fecha ISO real
+                    const universalMap = await ensureUniversalStagingSpaces(
+                        selectedOrdersList.map(o => ({
+                            ...o,
+                            delivery_date: (o?.delivery_date && /^\d{4}-\d{2}-\d{2}$/.test(o.delivery_date)) ? o.delivery_date : safeFallbackDate,
+                        })),
+                        supabase
+                    );
+                    if (Object.keys(universalMap).length > 0) {
+                        resolvedMap = universalMap;
+                        const allocatedAnyNew = missingOrPartial || selectedOrdersList.some(o => {
+                            const prev = Array.isArray(o.warehouse_spaces) ? o.warehouse_spaces.join(',') : '';
+                            const next = Array.isArray(universalMap[o.id]) ? universalMap[o.id].join(',') : '';
+                            return next !== '' && prev !== next;
+                        });
+                        if (allocatedAnyNew && !cancelled) {
+                            setSpacesSavedSuccess(true);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error sincronizando bahías sin colisión al abrir wizard:', err);
+                }
             }
-        });
-        setSpaceInputTexts(initialTextMap);
-    }, [isOpen, selectedOrdersList]);
+
+            if (cancelled) return;
+            setManualSpacesMap(resolvedMap);
+            const initialTextMap: Record<string, string> = {};
+            Object.entries(resolvedMap).forEach(([orderId, spaces]) => {
+                if (Array.isArray(spaces) && spaces.length > 0) {
+                    initialTextMap[orderId] = spaces.join(', ');
+                }
+            });
+            setSpaceInputTexts(initialTextMap);
+        };
+
+        syncInitialSpaces();
+        return () => { cancelled = true; };
+    }, [isOpen, selectedOrdersList, deliveryDate]);
 
     // Enriquecer pedidos para el algoritmo de asignación
     const preparedOrders: OrderStagingInput[] = useMemo(() => {
@@ -216,15 +210,77 @@ export default function ManualDispatchWizardModal({
         });
     }, [preparedOrders]);
 
-    // Aplicar asignación automática y persistir inmediatamente en base de datos
+    // Aplicar asignación automática y persistir inmediatamente en base de datos (segmentado por fecha de entrega ISO)
     const handleApplyAutoClustering = async () => {
+        const safeFallbackDate = /^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) ? deliveryDate : getBogotaDateString();
+        const orderDateById = new Map<string, string>();
+        const distinctIsoDates = new Set<string>();
+        selectedOrdersList.forEach(o => {
+            const d = (o?.delivery_date && /^\d{4}-\d{2}-\d{2}$/.test(o.delivery_date)) ? o.delivery_date : safeFallbackDate;
+            orderDateById.set(o.id, d);
+            distinctIsoDates.add(d);
+        });
+
+        const occupiedByDate = new Map<string, Set<number>>();
+        for (const isoDate of Array.from(distinctIsoDates)) {
+            const occupiedSet = new Set<number>();
+            try {
+                const { data: dateOrders, error: qErr } = await supabase
+                    .from('orders')
+                    .select('id, warehouse_spaces')
+                    .eq('delivery_date', isoDate)
+                    .neq('status', 'cancelled');
+                if (qErr) throw qErr;
+                (dateOrders || []).forEach((other: { id?: string; warehouse_spaces?: number[] | null }) => {
+                    if (other?.id && !selectedOrderIds.has(other.id) && Array.isArray(other.warehouse_spaces)) {
+                        other.warehouse_spaces.forEach((slot: number) => occupiedSet.add(slot));
+                    }
+                });
+            } catch (err: any) {
+                const msg = err?.message || 'Error consultando bahías ocupadas en Supabase.';
+                console.error(`Error consultando bahías ocupadas para ${isoDate} antes de clustering:`, err);
+                alert(`No se pudo aplicar clustering automático de forma segura porque falló la verificación de bahías ocupadas (${isoDate}):\n\n${msg}\n\nOperación abortada para prevenir colisiones en Espacio 1.`);
+                return;
+            }
+            orders.forEach(other => {
+                if (other?.id && !selectedOrderIds.has(other.id) && other.delivery_date === isoDate && other.status !== 'cancelled' && Array.isArray(other.warehouse_spaces)) {
+                    other.warehouse_spaces.forEach((slot: number) => occupiedSet.add(slot));
+                }
+            });
+            occupiedByDate.set(isoDate, occupiedSet);
+        }
+
+        const candidateByDate = new Map<string, number>();
         const newMap: Record<string, number[]> = {};
         const newTextMap: Record<string, string> = {};
         autoAllocations.forEach(a => {
-            newMap[a.order_id] = a.assigned_spaces;
-            if (Array.isArray(a.assigned_spaces) && a.assigned_spaces.length > 0) {
-                newTextMap[a.order_id] = a.assigned_spaces.join(', ');
+            const orderDate = orderDateById.get(a.order_id) || safeFallbackDate;
+            let occupiedForDate = occupiedByDate.get(orderDate);
+            if (!occupiedForDate) {
+                occupiedForDate = new Set<number>();
+                occupiedByDate.set(orderDate, occupiedForDate);
             }
+            let candidate = candidateByDate.get(orderDate) || 1;
+            const needed = Math.max(1, Array.isArray(a.assigned_spaces) ? a.assigned_spaces.length : 1);
+            let assigned: number[] = [];
+            while (assigned.length < needed) {
+                let allFree = true;
+                for (let offset = 0; offset < needed; offset++) {
+                    if (occupiedForDate.has(candidate + offset)) {
+                        allFree = false;
+                        candidate = candidate + offset + 1;
+                        break;
+                    }
+                }
+                if (allFree) {
+                    assigned = Array.from({ length: needed }, (_, idx) => candidate + idx);
+                    assigned.forEach(slot => occupiedForDate!.add(slot));
+                    candidate += needed;
+                }
+            }
+            candidateByDate.set(orderDate, candidate);
+            newMap[a.order_id] = assigned;
+            newTextMap[a.order_id] = assigned.join(', ');
         });
         setManualSpacesMap(newMap);
         setSpaceInputTexts(newTextMap);
@@ -285,7 +341,13 @@ export default function ManualDispatchWizardModal({
                 ...prev,
                 [orderId]: formatted
             }));
-            await supabase.from('orders').update({ warehouse_spaces: parsed }).eq('id', orderId);
+            const { error: blurUpdateErr } = await supabase.from('orders').update({ warehouse_spaces: parsed }).eq('id', orderId);
+            if (blurUpdateErr) {
+                console.error('Error guardando bahía manual:', blurUpdateErr);
+                setSpacesSavedSuccess(false);
+                alert(`No se pudo guardar el espacio en base de datos:\n\n${blurUpdateErr.message}`);
+                return;
+            }
             const targetOrder = selectedOrdersList.find(o => o.id === orderId);
             if (targetOrder) targetOrder.warehouse_spaces = parsed;
             setSpacesSavedSuccess(true);
@@ -842,7 +904,7 @@ export default function ManualDispatchWizardModal({
                         { num: 1, title: '1. Espacios & Bahías', subtitle: 'Asignación de espacios en piso', icon: Grid, confirmed: step1Confirmed },
                         { num: 2, title: '2. Compras & Recibo', subtitle: 'Corabastos e ingreso', icon: FileText, confirmed: step2Confirmed },
                         { num: 3, title: '3. Remisiones & Manifiesto', subtitle: 'Entrega a clientes y ruta', icon: Truck, confirmed: step3Confirmed },
-                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de producto (SKUs)', icon: Tag, confirmed: step4Confirmed }
+                        { num: 4, title: '4. Rótulos Térmicos', subtitle: 'Etiquetas de producto (#ID)', icon: Tag, confirmed: step4Confirmed }
                     ].map(step => {
                         const isActive = currentStep === step.num;
                         const isPast = currentStep > step.num;
@@ -1689,21 +1751,21 @@ export default function ManualDispatchWizardModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                         <div style={{ backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '16px', padding: '1.25rem' }}>
                             <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#7E22CE', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                Etiquetas Térmicas de Producto (SKUs Procesados)
+                                Etiquetas Térmicas de Producto (Productos #ID Procesados)
                             </div>
                             <p style={{ margin: 0, fontSize: '0.76rem', color: '#6B21A8', lineHeight: '1.4' }}>
-                                Impresión en rollo térmico continuo (100×50mm) exclusivamente para los SKUs del catálogo que tienen activada la marca <strong>Requiere Etiqueta Térmica</strong> (procesados, empacados, porcionados o lácteos).
+                                Impresión en rollo térmico continuo (100×50mm) exclusivamente para los productos del catálogo que tienen activada la marca <strong>Requiere Etiqueta Térmica</strong> (procesados, empacados, porcionados o lácteos).
                             </p>
                         </div>
 
-                        {/* Card Rótulos Térmicos de SKUs */}
+                        {/* Card Rótulos Térmicos de Productos */}
                         <div style={{ backgroundColor: '#FFFFFF', border: '1.5px solid #C084FC', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                             <div style={{ flex: 1, minWidth: '280px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#7E22CE', fontWeight: '900', fontSize: '0.84rem' }}>
                                     <Tag size={16} /> Productos con Etiquetado Obligatorio
                                 </div>
                                 <div style={{ fontWeight: '900', fontSize: '1rem', color: '#0F172A', marginTop: '6px' }}>
-                                    Etiquetas Térmicas de SKUs ({totalProductLabelsNeeded} etiquetas)
+                                    Etiquetas Térmicas de Producto ({totalProductLabelsNeeded} etiquetas)
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
                                     {itemsRequiringLabel.length > 0 ? (
@@ -1712,7 +1774,7 @@ export default function ManualDispatchWizardModal({
                                         </span>
                                     ) : (
                                         <span>
-                                            Ningún SKU de esta tanda requiere etiqueta térmica (todos los productos son a granel o frescos directos de plaza).
+                                            Ningún producto de esta tanda requiere etiqueta térmica (todos los productos son a granel o frescos directos de plaza).
                                         </span>
                                     )}
                                 </div>
@@ -1769,7 +1831,7 @@ export default function ManualDispatchWizardModal({
                                         pointerEvents: totalProductLabelsNeeded > 0 ? 'auto' : 'none',
                                         cursor: totalProductLabelsNeeded > 0 ? 'pointer' : 'default'
                                     }}
-                                    title={totalProductLabelsNeeded > 0 ? "Imprimir rótulos térmicos en rollo continuo 100x50mm" : "No hay SKUs que requieran rotulado"}
+                                    title={totalProductLabelsNeeded > 0 ? "Imprimir rótulos térmicos en rollo continuo 100x50mm" : "No hay productos que requieran rotulado"}
                                 >
                                     <Printer size={14} /> {totalProductLabelsNeeded > 0 ? `Imprimir Etiquetas (${totalProductLabelsNeeded} rót.)` : '0 Etiquetas Requeridas'} <ExternalLink size={10} />
                                 </Link>
@@ -1796,7 +1858,7 @@ export default function ManualDispatchWizardModal({
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: step4Confirmed ? '#166534' : '#64748B' }}>
                                     <CheckCircle2 size={16} color={step4Confirmed ? '#16A34A' : '#94A3B8'} />
-                                    4. Etiquetas térmicas de SKUs emitidas (o no requeridas en esta tanda)
+                                    4. Etiquetas térmicas de producto emitidas (o no requeridas en esta tanda)
                                 </div>
                             </div>
                         </div>
@@ -1859,7 +1921,7 @@ export default function ManualDispatchWizardModal({
                                 />
                                 {itemsRequiringLabel.length > 0 
                                     ? 'Etiquetas térmicas de producto verificadas e impresas.' 
-                                    : 'Verificado: Ningún SKU de esta tanda requiere etiqueta térmica.'}
+                                    : 'Verificado: Ningún producto de esta tanda requiere etiqueta térmica.'}
                             </label>
 
                             {step4Confirmed ? (

@@ -11,6 +11,7 @@
 import { supabase } from '@/lib/supabase';
 import { acquireSaveFileHandle, saveWorkbookWithPicker, isSavePickerAborted } from '@/lib/fileSavePicker';
 import { resolveWorldOfficeBranch } from '@/lib/worldOfficeExport';
+import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 
 const MONTH_NAMES_ES = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -114,6 +115,7 @@ export interface RelacionExportOrder {
         contact_name?: string | null;
         full_name?: string | null;
         role?: string | null;
+        contact_phone?: string | null;
         phone?: string | null;
         address?: string | null;
         document_type?: string | null;
@@ -172,14 +174,19 @@ export function buildRelacionDocumentosSheet(
 
         // 2. Columna Documento
         let documento = '';
-        const rawInv = o.invoice_number || o.projected_invoice_number;
+        const biRecord = (o as { billing_invoices?: { invoice_number?: string | null } | Array<{ invoice_number?: string | null }> | null }).billing_invoices;
+        const joinedInv = Array.isArray(biRecord) ? biRecord[0]?.invoice_number : biRecord?.invoice_number;
+        const rawInv = o.invoice_number || joinedInv || o.projected_invoice_number;
         if (isReplacement) {
             documento = `REP ${o.sequence_id || '---'}`;
         } else if (rawInv && String(rawInv).trim() && !/^REP/i.test(String(rawInv))) {
-            const cleanInv = String(rawInv).replace(/^FV-?/i, '').trim();
-            documento = `FV ${cleanInv}`;
-        } else if (prof.document_type === 'invoice') {
-            documento = `FV ${o.sequence_id || '---'}`;
+            const trimmedInv = String(rawInv).trim();
+            const matchPrefixed = trimmedInv.match(/^([A-Za-z]+)-?\s*(.+)$/);
+            if (matchPrefixed) {
+                documento = `${matchPrefixed[1].toUpperCase()} ${matchPrefixed[2].trim()}`;
+            } else {
+                documento = `FV ${trimmedInv}`;
+            }
         } else {
             documento = `REM ${o.sequence_id || '---'}`;
         }
@@ -215,19 +222,23 @@ export function buildRelacionDocumentosSheet(
             }
         }
 
-        // 4. Espacio en Bodega (Floor Staging)
+        // 4. Espacio en Bodega (Floor Staging - Rangos compactos)
         let espacioStr = '';
-        if (manualSpacesMap && manualSpacesMap[o.id] && manualSpacesMap[o.id].length > 0) {
-            espacioStr = manualSpacesMap[o.id].join(', ');
-        } else if (o.warehouse_spaces) {
-            if (Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
-                espacioStr = o.warehouse_spaces.join(', ');
-            } else if (typeof o.warehouse_spaces === 'number' || typeof o.warehouse_spaces === 'string') {
-                espacioStr = String(o.warehouse_spaces);
-            }
-        } else if (o.logistics_data?.warehouse_space || o.logistics_data?.warehouse_spaces) {
-            const sp = o.logistics_data?.warehouse_space || o.logistics_data?.warehouse_spaces;
-            espacioStr = Array.isArray(sp) ? sp.join(', ') : String(sp);
+        const candidateSpaces =
+            (manualSpacesMap && Array.isArray(manualSpacesMap[o.id]) && manualSpacesMap[o.id].length > 0)
+                ? manualSpacesMap[o.id]
+                : Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0
+                    ? o.warehouse_spaces
+                    : Array.isArray(o.logistics_data?.warehouse_spaces) && o.logistics_data.warehouse_spaces.length > 0
+                        ? o.logistics_data.warehouse_spaces
+                        : null;
+        if (candidateSpaces) {
+            const formatted = formatSpaceLabel(candidateSpaces);
+            espacioStr = formatted === 'S/A' ? '' : formatted;
+        } else if (typeof o.warehouse_spaces === 'number' || typeof o.warehouse_spaces === 'string') {
+            espacioStr = String(o.warehouse_spaces);
+        } else if (o.logistics_data?.warehouse_space) {
+            espacioStr = String(o.logistics_data.warehouse_space);
         }
 
         // 5. Valores numéricos coherentes (Cero discordancias)
@@ -246,7 +257,7 @@ export function buildRelacionDocumentosSheet(
         const vrPagar = total;
 
         // Contacto
-        const celular = String(prof.phone || o.delivery_phone || '').trim();
+        const celular = String(prof.contact_phone || prof.phone || o.delivery_phone || '').trim();
         const direccion = String(o.delivery_address || prof.address || '').replace(/[\r\n]+/g, ' ').trim();
 
         // Forma de pago
@@ -354,31 +365,33 @@ export async function exportRelacionDocumentosWithPicker(options: {
         }
     }
 
-    // Resolver órdenes completas con profiles
+    // Resolver órdenes completas con profiles cuando no se suministra arreglo explícito
     let finalOrders = options.orders;
-    if (!finalOrders || finalOrders.length === 0 || !finalOrders[0]?.profiles) {
+    if (!Array.isArray(finalOrders)) {
         const { data, error } = await supabase
             .from('orders')
             .select(`
                 id,
                 sequence_id,
-                invoice_number,
                 status,
                 type,
                 payment_method,
                 delivery_date,
-                delivery_address,
+                shipping_address,
                 subtotal,
+                tax,
                 total,
                 warehouse_spaces,
                 admin_notes,
                 logistics_data,
+                billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                 profiles:profile_id (
                     id,
                     company_name,
                     razon_social,
                     contact_name,
                     role,
+                    contact_phone,
                     phone,
                     address,
                     document_type,
@@ -391,7 +404,7 @@ export async function exportRelacionDocumentosWithPicker(options: {
             `)
             .eq('delivery_date', selectedDate)
             .neq('status', 'cancelled')
-            .order('sequence_id', { ascending: false })
+            .order('sequence_id', { ascending: true })
             .range(0, 4999);
 
         if (error) {
@@ -405,7 +418,7 @@ export async function exportRelacionDocumentosWithPicker(options: {
         if (parentIds.length > 0) {
             const { data: parents } = await supabase
                 .from('profiles')
-                .select('id, company_name, razon_social')
+                .select('id, company_name, razon_social, document_type')
                 .in('id', parentIds);
             parents?.forEach(p => fallbackParentsMap.set(p.id, p));
         }
@@ -413,8 +426,13 @@ export async function exportRelacionDocumentosWithPicker(options: {
         finalOrders = ((data as any[]) || []).map(o => {
             const prof = o.profiles || {};
             const parent = prof.parent_id ? fallbackParentsMap.get(prof.parent_id) : null;
+            const bi = o.billing_invoices;
+            const resolvedInv = Array.isArray(bi) ? bi[0]?.invoice_number : bi?.invoice_number;
             return {
                 ...o,
+                invoice_number: resolvedInv || null,
+                delivery_address: o.shipping_address || null,
+                delivery_phone: prof.contact_phone || prof.phone || null,
                 total_amount: o.total,
                 parent_company_name: parent?.company_name || null,
                 parent_razon_social: parent?.razon_social || null,

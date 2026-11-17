@@ -87,20 +87,29 @@ export default function BillingPrintPage() {
                 const { data: ordersData, error: ordersErr } = await supabase
                     .from('orders')
                     .select(`
-                        id, sequence_id, created_at, delivery_date, total, subtotal, document_type, remission_with_prices, payment_method, special_notes, admin_notes, logistics_data,
+                        id, sequence_id, created_at, delivery_date, total, subtotal, tax, type, payment_method, special_notes, admin_notes, logistics_data,
+                        billing_invoices!billing_invoices_order_id_fkey(invoice_number),
                         profiles:profile_id (
-                            id, company_name, razon_social, contact_name, contact_phone, phone, address, document_type, remission_with_prices, nit, payment_days, parent:parent_id (id, document_type, remission_with_prices)
+                            id, company_name, razon_social, contact_name, contact_phone, phone, address, role, document_type, remission_with_prices, nit, payment_days, parent:parent_id (id, document_type, remission_with_prices)
                         ),
                         order_items (
                             id, quantity, unit_price, nickname, variant_label, selected_options,
-                            products (id, name, sku, unit_of_measure)
+                            products (id, accounting_id, name, unit_of_measure, iva_rate)
                         )
                     `)
                     .eq('billing_cut_id', id)
                     .order('sequence_id', { ascending: true });
 
                 if (ordersErr) throw ordersErr;
-                setOrders(ordersData || []);
+                const sortedPrintOrders = [...(ordersData || [])].sort((a: any, b: any) => {
+                    const invA = Array.isArray(a.billing_invoices) ? a.billing_invoices[0]?.invoice_number : a.billing_invoices?.invoice_number;
+                    const invB = Array.isArray(b.billing_invoices) ? b.billing_invoices[0]?.invoice_number : b.billing_invoices?.invoice_number;
+                    const numA = parseInt(String(invA || '').replace(/\D/g, ''), 10);
+                    const numB = parseInt(String(invB || '').replace(/\D/g, ''), 10);
+                    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+                    return Number(a.sequence_id || 0) - Number(b.sequence_id || 0);
+                });
+                setOrders(sortedPrintOrders);
 
                 // 3. Fetch DIAN resolution settings
                 const { data: settingsData } = await supabase
@@ -413,14 +422,20 @@ export default function BillingPrintPage() {
                         const b2cRecipientName = (order.logistics_data?.recipient_name || (recMatch ? recMatch[1].trim() : '') || 'Destinatario Especial').trim();
                         const b2cRecipientPhone = (order.logistics_data?.recipient_phone || (recMatch && recMatch[2] ? recMatch[2].trim() : '') || '').trim();
 
-                        const docType = order.document_type || profile.document_type || profile.parent?.document_type || (isB2CGift ? 'gift_remission' : 'invoice');
-                        const isInvoice = docType === 'invoice' && !isB2CGift;
+                        const bi = Array.isArray(order.billing_invoices) ? order.billing_invoices[0] : order.billing_invoices;
+                        const officialInvoiceNumber = bi?.invoice_number || null;
+                        const isB2B = String(order.type || '').startsWith('b2b') || profile.role === 'b2b_client' || Boolean(profile.parent);
+                        const baseDocType = !isB2B
+                            ? 'remission'
+                            : (order.logistics_data?.document_type_override || profile.document_type || profile.parent?.document_type || 'remission');
+                        const docType = isB2CGift ? 'gift_remission' : baseDocType;
                         const isObsequio = isB2CGift || docType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO');
+                        const isInvoice = !isObsequio && (Boolean(officialInvoiceNumber) || docType === 'invoice');
                         
                         // Respetar política de precios o forzado global (En Obsequio se muestran siempre las columnas en $0)
                         const showPrices = forcePrices || isObsequio
                             ? true 
-                            : (isInvoice ? true : (order.remission_with_prices ?? profile.remission_with_prices ?? true));
+                            : (isInvoice ? true : (order.logistics_data?.remission_with_prices_override ?? profile.remission_with_prices ?? profile.parent?.remission_with_prices ?? true));
 
                         const titleText = isInvoice
                             ? 'FACTURA ELECTRÓNICA DE VENTA'
@@ -435,8 +450,9 @@ export default function BillingPrintPage() {
                             ? new Date(order.delivery_date).toLocaleDateString()
                             : new Date(order.created_at).toLocaleDateString();
 
-                        const subtotalOrder = isObsequio ? 0 : (order.subtotal || order.total || 0);
-                        const totalOrder = isObsequio ? 0 : (order.total || subtotalOrder);
+                        const taxOrder = isObsequio ? 0 : Number(order.tax || 0);
+                        const totalOrder = isObsequio ? 0 : Number(order.total || order.subtotal || 0);
+                        const subtotalOrder = isObsequio ? 0 : Number(order.subtotal || Math.max(0, totalOrder - taxOrder));
 
                         return (
                             <Letterhead 
@@ -446,7 +462,7 @@ export default function BillingPrintPage() {
                                     ? `DE PARTE DE (REMITENTE): ${b2cSenderName.toUpperCase()} • PARA: ${b2cRecipientName.toUpperCase()}`
                                     : `${profile.company_name || 'Cliente B2B'} • NIT: ${profile.nit || '222222222222'}`}
                                 date={deliveryDateFormatted}
-                                reference={`#${getFriendlyOrderId(order)}`}
+                                reference={officialInvoiceNumber ? `${officialInvoiceNumber} · Ped #${order.sequence_id || getFriendlyOrderId(order)}` : `#${getFriendlyOrderId(order)}`}
                                 badge={isInvoice ? 'DIAN VÁLIDA' : isObsequio ? 'CORTESÍA / OBSEQUIO' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
                                 badgeVariant={isInvoice ? 'dark' : (showPrices ? 'emerald' : 'light')}
                                 className="page-break"
@@ -566,7 +582,7 @@ export default function BillingPrintPage() {
                                         <thead>
                                             <tr>
                                                 <th style={{ width: '6%', textAlign: 'center' }}>#</th>
-                                                <th style={{ width: '14%' }}>REF / SKU</th>
+                                                <th style={{ width: '14%' }}>ID CONTABLE</th>
                                                 <th style={{ width: showPrices ? '40%' : '65%' }}>DESCRIPCIÓN DEL PRODUCTO</th>
                                                 <th style={{ width: '14%' }} className="text-right">CANTIDAD</th>
                                                 {showPrices && <th style={{ width: '13%' }} className="text-right">VALOR UNIT.</th>}
@@ -584,7 +600,7 @@ export default function BillingPrintPage() {
                                                             {i + 1}
                                                         </td>
                                                         <td style={{ fontFamily: 'monospace', color: '#475569', fontWeight: 600 }}>
-                                                            {item.products?.sku || '---'}
+                                                            {item.products?.accounting_id ? `#${item.products.accounting_id}` : '---'}
                                                         </td>
                                                         <td>
                                                             <strong style={{ color: '#0F172A' }}>
@@ -623,10 +639,10 @@ export default function BillingPrintPage() {
                                                 </tr>
                                                 <tr>
                                                     <td colSpan={4} className="text-right" style={{ fontWeight: 700, fontSize: '0.64rem', color: '#64748B' }}>
-                                                        IVA (0% - Bienes Excluidos Art. 424 E.T.):
+                                                        {taxOrder > 0 ? 'IVA / Impuestos:' : 'IVA (0% - Bienes Excluidos Art. 424 E.T.):'}
                                                     </td>
-                                                    <td colSpan={2} className="text-right" style={{ fontWeight: 700, fontSize: '0.68rem', color: '#64748B' }}>
-                                                        $0
+                                                    <td colSpan={2} className="text-right" style={{ fontWeight: 700, fontSize: '0.68rem', color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                                                        ${taxOrder.toLocaleString('es-CO')}
                                                     </td>
                                                 </tr>
                                                 <tr style={{ borderTop: '1px solid #CBD5E1', backgroundColor: '#F8FAFC' }}>

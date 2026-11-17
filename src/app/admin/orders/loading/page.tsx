@@ -19,6 +19,7 @@ import { getDocumentBadgeStyle } from '@/components/ClientsModule';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
 import { getBogotaDateString } from '@/lib/dateUtils';
+import { ensureUniversalStagingSpaces, formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { evaluateInventoryGateStatus, recordInventoryGateOverride, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import { 
     MessageSquare, 
@@ -3243,20 +3244,21 @@ useEffect(() => {
     const handleOpenLogisticsLaunch = () => {
         if (selectedOrders.size === 0) return;
 
+        const todayStr = getBogotaDateString();
         const tomorrowStr = getTomorrowDateStr();
         const selectedList = orders.filter(o => selectedOrders.has(o.id));
 
-        // 1. Validate Delivery Date: ONLY orders scheduled for tomorrow can be dispatched to logistics
-        const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
+        // 1. Validate Delivery Date: permit HOY (D+0) y MAÑANA (D+1) para operación continua
+        const invalidDateOrders = selectedList.filter(o => o.delivery_date !== todayStr && o.delivery_date !== tomorrowStr);
         if (invalidDateOrders.length > 0) {
-            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || Boolean(profile?.custom_permissions?.includes('*'));
             const distinctInvalidDates = Array.from(new Set(invalidDateOrders.map(o => o.delivery_date || 'Sin Fecha'))).join(', ');
             
             if (!isSuperAdmin) {
-                alert(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para mañana (${tomorrowStr}).`);
+                alert(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSolo es posible enviar al Proceso Logístico los pedidos cuya fecha de entrega sea HOY (${todayStr}) o MAÑANA (${tomorrowStr}).\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fechas no permitidas (${distinctInvalidDates}).\n\nPor favor filtra o selecciona únicamente los pedidos de entrega para hoy (${todayStr}) o mañana (${tomorrowStr}).`);
                 return;
             } else {
-                const forceDate = confirm(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fecha diferente a mañana (${distinctInvalidDates}).\n\n¿Deseas forzar el lanzamiento de todos modos con permisos de Administrador?`);
+                const forceDate = confirm(`RESTRICCIÓN DE FECHA OPERATIVA:\n\nSe detectaron ${invalidDateOrders.length} pedido(s) con fecha diferente a hoy (${todayStr}) o mañana (${tomorrowStr}): ${distinctInvalidDates}.\n\n¿Deseas forzar el lanzamiento de todos modos con permisos de Administrador?`);
                 if (!forceDate) return;
             }
         }
@@ -3266,10 +3268,10 @@ useEffect(() => {
             const bogota = getColombiaTime();
             const currentH = String(bogota.getHours()).padStart(2, '0');
             const currentM = String(bogota.getMinutes()).padStart(2, '0');
-            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || Boolean(profile?.custom_permissions?.includes('*'));
 
             if (!isSuperAdmin) {
-                alert(`FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
+                alert(`FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nEl lanzamiento a Proceso Logístico para hoy (${todayStr}) / mañana (${tomorrowStr}) está habilitado únicamente entre las 10:00 AM y las 23:50 PM (Hora Colombia).\n\nHora actual: ${currentH}:${currentM}.\n\nLa consolidación de compras y despacho opera dentro de este horario.`);
                 return;
             } else {
                 const forceTime = confirm(`FUERA DE LA VENTANA DE CORTE OPERATIVO:\n\nHora actual: ${currentH}:${currentM} (Ventana estándar: 10:00 AM - 23:50 PM).\n\n¿Deseas autorizar el lanzamiento logístico como Administrador?`);
@@ -3284,6 +3286,7 @@ useEffect(() => {
     const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false, skipInventoryGate: boolean = false) => {
         if (selectedOrders.size === 0) return;
         
+        const selectedList = orders.filter(o => selectedOrders.has(o.id));
         if (targetStatus === 'para_compra') {
             if (!skipInventoryGate && inventoryGateStatus && inventoryGateStatus.level !== 'green') {
                 setGateOverrideConfirmed(false);
@@ -3291,13 +3294,13 @@ useEffect(() => {
                 setShowInventoryGateModal(true);
                 return;
             }
+            const todayStr = getBogotaDateString();
             const tomorrowStr = getTomorrowDateStr();
-            const selectedList = orders.filter(o => selectedOrders.has(o.id));
-            const invalidDateOrders = selectedList.filter(o => o.delivery_date !== tomorrowStr);
-            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || profile?.custom_permissions?.includes('*') || hasPermission('admin.orders');
+            const invalidDateOrders = selectedList.filter(o => o.delivery_date !== todayStr && o.delivery_date !== tomorrowStr);
+            const isSuperAdmin = profile?.role === 'admin' || profile?.role === 'sys_admin' || Boolean(profile?.custom_permissions?.includes('*'));
 
             if (invalidDateOrders.length > 0 && !isSuperAdmin) {
-                alert(`No se puede proceder: Hay pedidos seleccionados con fecha diferente a mañana (${tomorrowStr}).`);
+                alert(`No se puede proceder: Hay pedidos seleccionados con fecha diferente a hoy (${todayStr}) o mañana (${tomorrowStr}).`);
                 return;
             }
             if (!isWithinCutoffWindow() && !isSuperAdmin) {
@@ -3321,11 +3324,34 @@ useEffect(() => {
 
             if (error) throw error;
 
+            let allocatedSpacesMap: Record<string, number[]> = {};
+            let spaceAllocErrorMsg: string | null = null;
+            if (targetStatus === 'para_compra' && selectedList.length > 0) {
+                try {
+                    allocatedSpacesMap = await ensureUniversalStagingSpaces(selectedList, supabase);
+                } catch (spaceErr: any) {
+                    spaceAllocErrorMsg = spaceErr?.message || 'Error desconocido al asignar espacios físicos.';
+                    console.warn('[handleBulkAction] Advertencia asignando bahías de alistamiento:', spaceErr);
+                }
+            }
+
             const launchedIds = new Set(selectedOrders);
             setSelectedOrders(new Set());
-            setOrders(prev => prev.map(o => launchedIds.has(o.id) ? { ...o, status: targetStatus } : o));
+            setOrders(prev => prev.map(o => {
+                if (!launchedIds.has(o.id)) return o;
+                const assignedSpaces = allocatedSpacesMap[o.id];
+                return {
+                    ...o,
+                    status: targetStatus,
+                    ...(Array.isArray(assignedSpaces) && assignedSpaces.length > 0 ? { warehouse_spaces: assignedSpaces } : {}),
+                };
+            }));
             setRefreshTrigger(prev => prev + 1); // Trigger refresh
-            if (!skipNativeConfirm) alert('Pedidos enviados a Proceso Logístico correctamente');
+            if (spaceAllocErrorMsg) {
+                alert(`Pedidos lanzados a Proceso Logístico, pero hubo una advertencia al asignar espacios físicos en bodega:\n\n${spaceAllocErrorMsg}\n\nVerifica las bahías antes de imprimir remisiones.`);
+            } else if (!skipNativeConfirm) {
+                alert('Pedidos enviados a Proceso Logístico correctamente');
+            }
 
         } catch (err: any) {
             console.error('Error in bulk update:', err);
@@ -4349,6 +4375,38 @@ useEffect(() => {
                             <span>{isExportingRelacion ? 'Exportando...' : 'Relación Doc (.xlsx)'}</span>
                         </button>
 
+                        {/* Imprimir Remisiones Universales (Apto para pendientes + aprobados mixtos) */}
+                        <a
+                            href={selectedOrders.size > 0
+                                ? `/admin/orders/contingency-print?mode=remissions&orderIds=${Array.from(selectedOrders).join(',')}&date=${/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getBogotaDateString()}`
+                                : `/admin/orders/contingency-print?mode=remissions&date=${/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getBogotaDateString()}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                height: '38px',
+                                padding: '0 12px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1D4ED8',
+                                border: '1.5px solid #BFDBFE',
+                                borderRadius: '8px',
+                                fontSize: '0.74rem',
+                                fontWeight: '800',
+                                textDecoration: 'none',
+                                boxShadow: '0 1px 2px rgba(29, 78, 216, 0.08)',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0
+                            }}
+                            title={selectedOrders.size > 0
+                                ? `Imprimir remisiones de los ${selectedOrders.size} pedido(s) seleccionados`
+                                : 'Abrir centro de impresión de remisiones para la fecha seleccionada (incluye pendientes y en compra)'}
+                        >
+                            <Printer size={15} />
+                            <span>{selectedOrders.size > 0 ? `Remisiones (${selectedOrders.size})` : 'Remisiones'}</span>
+                        </a>
+
                         {/* New Order Button */}
                         <Link href="/admin/orders/create" style={{ 
                             backgroundColor: THEME.colors.primary, 
@@ -4772,6 +4830,14 @@ useEffect(() => {
                                                                     <Home size={10} strokeWidth={2} /> Hogar
                                                                 </span>
                                                             )}
+                                                            {Array.isArray(order.warehouse_spaces) && order.warehouse_spaces.length > 0 && (
+                                                                <span
+                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.64rem', fontWeight: '800', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 6px', borderRadius: '4px' }}
+                                                                    title={`Espacio físico asignado: ${formatSpaceLabel(order.warehouse_spaces)}`}
+                                                                >
+                                                                    <Layers size={10} strokeWidth={2.2} /> Espacio {formatSpaceLabel(order.warehouse_spaces)}
+                                                                </span>
+                                                            )}
                                                             {duplicateInfo && (
                                                                 <span 
                                                                     title={duplicateInfo.alertMessage}
@@ -5152,7 +5218,16 @@ useEffect(() => {
                                                     Lanzamiento de Tanda Logística
                                                 </h2>
                                                 <span style={{ fontSize: '0.66rem', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: '800', padding: '2px 7px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
-                                                    MAÑANA ({getTomorrowDateStr()})
+                                                    {(() => {
+                                                        const todayStr = getBogotaDateString();
+                                                        const tomorrowStr = getTomorrowDateStr();
+                                                        const selectedDates = new Set(orders.filter(o => selectedOrders.has(o.id)).map(o => o.delivery_date));
+                                                        const hasToday = selectedDates.has(todayStr);
+                                                        const hasTomorrow = selectedDates.has(tomorrowStr);
+                                                        if (hasToday && !hasTomorrow) return `HOY (${todayStr})`;
+                                                        if (hasToday && hasTomorrow) return `HOY / MAÑANA (${todayStr} · ${tomorrowStr})`;
+                                                        return `MAÑANA (${tomorrowStr})`;
+                                                    })()}
                                                 </span>
                                             </div>
                                             <p style={{ color: '#64748B', margin: '2px 0 0', fontSize: '0.74rem' }}>
@@ -5926,7 +6001,7 @@ useEffect(() => {
                     onClose={() => setShowManualWizard(false)}
                     selectedOrderIds={selectedOrders}
                     orders={orders}
-                    deliveryDate={selectedDate || getTomorrowDateStr()}
+                    deliveryDate={/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr()}
                     onSuccess={() => {
                         setSelectedOrders(new Set());
                         setRefreshTrigger(prev => prev + 1);
@@ -9523,6 +9598,26 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                         </span>
                                     );
                                 })()}
+                                {Array.isArray(order.warehouse_spaces) && order.warehouse_spaces.length > 0 && (
+                                    <span
+                                        style={{
+                                            backgroundColor: '#E0F2FE',
+                                            color: '#0369A1',
+                                            border: '1.2px solid #BAE6FD',
+                                            borderRadius: '5px',
+                                            padding: '1px 6px',
+                                            fontSize: '0.66rem',
+                                            fontWeight: '900',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}
+                                        title={`Espacio físico de alistamiento: ${formatSpaceLabel(order.warehouse_spaces)}`}
+                                    >
+                                        <Layers size={10} strokeWidth={2.4} />
+                                        <span>Espacio {formatSpaceLabel(order.warehouse_spaces)}</span>
+                                    </span>
+                                )}
                                 {duplicateInfo && (
                                     <span style={{
                                         backgroundColor: '#DC2626',

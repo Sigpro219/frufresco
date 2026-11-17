@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
                     nickname,
                     products (
                         id,
+                        accounting_id,
                         name,
                         sku,
                         unit_of_measure,
@@ -147,8 +148,9 @@ export async function GET(req: NextRequest) {
                     id: it.id,
                     order_id: o.id,
                     product_id: prodId,
+                    accounting_id: prod.accounting_id || null,
+                    products: it.products || null,
                     product_name: prod.name || it.nickname || 'Producto',
-                    sku: prod.sku || '',
                     unit: it.unit || prod.unit_of_measure || 'Kg',
                     variant_label: it.variant_label || null,
                     quantity: Number(it.quantity) || 0,
