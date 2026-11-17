@@ -90,19 +90,41 @@ export async function POST(req: Request) {
             clean[k] = v;
           }
         }
+        if (clean.id === null || clean.id === '') {
+          delete clean.id;
+        }
         return clean;
       });
 
-      const { error: upsertErr } = await supabaseAdmin
-        .from('order_items')
-        .upsert(sanitizedItems);
+      const existingItems = sanitizedItems.filter((it) => Boolean(it.id));
+      const newItems = sanitizedItems.filter((it) => !it.id);
 
-      if (upsertErr) {
-        console.error('[Order Update API] Error en upsert de ítems:', upsertErr);
-        return NextResponse.json(
-          { success: false, error: `Error actualizando ítems: ${upsertErr.message}` }, 
-          { status: 500 }
-        );
+      if (existingItems.length > 0) {
+        const { error: upsertErr } = await supabaseAdmin
+          .from('order_items')
+          .upsert(existingItems);
+
+        if (upsertErr) {
+          console.error('[Order Update API] Error en upsert de ítems:', upsertErr);
+          return NextResponse.json(
+            { success: false, error: `Error actualizando ítems: ${upsertErr.message}` },
+            { status: 500 }
+          );
+        }
+      }
+
+      if (newItems.length > 0) {
+        const { error: insertErr } = await supabaseAdmin
+          .from('order_items')
+          .insert(newItems);
+
+        if (insertErr) {
+          console.error('[Order Update API] Error insertando nuevos ítems:', insertErr);
+          return NextResponse.json(
+            { success: false, error: `Error actualizando ítems: ${insertErr.message}` },
+            { status: 500 }
+          );
+        }
       }
     }
 
