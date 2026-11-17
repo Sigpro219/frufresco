@@ -121,7 +121,7 @@ export function decodeQuotedPrintable(input: string, charset: string = 'utf-8'):
 /**
  * Separa un bloque MIME en cabeceras desplegadas y cuerpo crudo.
  */
-function splitHeadersAndBody(rawBlock: string): { headers: Record<string, string>; body: string } {
+export function splitHeadersAndBody(rawBlock: string): { headers: Record<string, string>; body: string } {
   const match = rawBlock.match(/\r?\n\r?\n/);
   let rawHeaders = rawBlock;
   let body = '';
@@ -281,7 +281,7 @@ export function parseRfc822Email(rawEml: string): ParsedMimeEmail {
 /**
  * Formatea fecha en formato IMAP `DD-Mon-YYYY` (ej. `08-Nov-2026`).
  */
-function formatImapDate(date: Date): string {
+export function formatImapDate(date: Date): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const d = String(date.getUTCDate()).padStart(2, '0');
   const m = months[date.getUTCMonth()];
@@ -295,7 +295,12 @@ function formatImapDate(date: Date): string {
  * 1. Correos históricos migrados por "Importación de email" desde `@frufresco.com` (sin `@frufresco.co` en cabeceras).
  * 2. Correos automáticos de bienvenida/sistema de Hostinger (`team@email.hostinger.com`, `mailer-daemon`, etc.).
  */
-export function isGenuineChannel3CoEmail(headers: Record<string, string>, rawHeaderBlock = ''): boolean {
+export function isGenuineChannel3CoEmail(
+  headers: Record<string, string>,
+  rawHeaderBlock = '',
+  internalDateIso?: string | null,
+  transitionEpochIso = '2026-11-09T00:00:00-05:00'
+): boolean {
   const fromHeader = (headers['from'] || '').toLowerCase();
   if (
     fromHeader.includes('@email.hostinger.com') ||
@@ -315,8 +320,22 @@ export function isGenuineChannel3CoEmail(headers: Record<string, string>, rawHea
     rawHeaderBlock,
   ].join('\n');
 
-  // Debe contener explícitamente `@frufresco.co` con límite de dominio (no `@frufresco.com`)
-  return /@frufresco\.co(?![a-z0-9])/i.test(candidateRecipientBlock);
+  // 1. Coincidencia explícita con el dominio @frufresco.co
+  if (/@frufresco\.co(?![a-z0-9])/i.test(candidateRecipientBlock)) {
+    return true;
+  }
+
+  // 2. Anti-BCC: si fue entregado físicamente en este buzón después del epoch de transición, aceptarlo
+  const dateStr = internalDateIso || headers['date'] || '';
+  if (dateStr) {
+    const parsedMs = new Date(dateStr).getTime();
+    const epochMs = new Date(transitionEpochIso).getTime();
+    if (!isNaN(parsedMs) && !isNaN(epochMs) && parsedMs >= epochMs) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -525,7 +544,9 @@ async function fetchNewMessagesFromHostingerImap(params: {
         const uid = candidateUids[i];
         lastScannedUid = uid;
         const hdrTag = `H10${i}`;
-        const hdrResp = await sendCommand(hdrTag, `UID FETCH ${uid} (BODY.PEEK[HEADER])`);
+        const hdrResp = await sendCommand(hdrTag, `UID FETCH ${uid} (INTERNALDATE BODY.PEEK[HEADER])`);
+        const intDateMatch = hdrResp.match(/INTERNALDATE\s+"([^"]+)"/i);
+        const internalDateIso = intDateMatch ? intDateMatch[1] : null;
         const hdrLiteral = hdrResp.match(/BODY\[HEADER\]\s*\{(\d+)\}\r?\n([\s\S]*)/i);
         let rawHeaderBlock = '';
         if (hdrLiteral) {
@@ -537,9 +558,9 @@ async function fetchNewMessagesFromHostingerImap(params: {
 
         const { headers: parsedHeaders } = splitHeadersAndBody(rawHeaderBlock + '\r\n\r\n');
 
-        // Si el correo proviene de una importación histórica `.com` (sin `@frufresco.co` en cabeceras)
+        // Si el correo proviene de una importación histórica `.com` (sin `@frufresco.co` en cabeceras y anterior al epoch)
         // o es un correo automático de bienvenida de Hostinger, saltar y avanzar el puntero UID
-        if (!isGenuineChannel3CoEmail(parsedHeaders, rawHeaderBlock)) {
+        if (!isGenuineChannel3CoEmail(parsedHeaders, rawHeaderBlock, internalDateIso)) {
           skippedHistoricalToUid = Math.max(skippedHistoricalToUid ?? 0, uid);
           continue;
         }
@@ -569,28 +590,12 @@ async function fetchNewMessagesFromHostingerImap(params: {
   });
 }
 
-/**
- * Ejecuta un ciclo de sincronización directa de Canal 3 (`pedidos@frufresco.co`) hacia `/api/orders/email-ingest`.
- */
-export async function syncHostingerChannel3Orders(options?: { force?: boolean }): Promise<{
-  success: boolean;
-  skipped?: boolean;
-  reason?: string;
-  ingestedCount: number;
-  lastSyncedUid: number;
-  transitionEpochAt: string;
-  hasMoreInMailbox?: boolean;
-  remainingUids?: number;
-}> {
-  const supabaseAdmin = getSupabaseAdmin();
+export async function resolveHostingerImapCredentials(supabaseAdmin: any) {
   let host = process.env.HOSTINGER_IMAP_HOST || 'imap.hostinger.com';
   let port = parseInt(process.env.HOSTINGER_IMAP_PORT || '993', 10);
   let user = process.env.HOSTINGER_IMAP_USER || 'pedidos@frufresco.co';
   let pass = process.env.HOSTINGER_IMAP_PASS || '';
-  const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
 
-  // Fallback de Resiliencia Absoluta: Si no existen en process.env (ej. Vercel Preview / Prod sin env vars locales),
-  // se consultan de forma segura desde public.app_settings gobernado por Supabase Admin (Zero-Failure Architecture)
   if (!pass) {
     try {
       const { data: dbCreds } = await supabaseAdmin
@@ -610,6 +615,26 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
       console.warn('[Hostinger IMAP] Fallback app_settings lookup failed:', err?.message || err);
     }
   }
+
+  return { host, port, user, pass };
+}
+
+/**
+ * Ejecuta un ciclo de sincronización directa de Canal 3 (`pedidos@frufresco.co`) hacia `/api/orders/email-ingest`.
+ */
+export async function syncHostingerChannel3Orders(options?: { force?: boolean }): Promise<{
+  success: boolean;
+  skipped?: boolean;
+  reason?: string;
+  ingestedCount: number;
+  lastSyncedUid: number;
+  transitionEpochAt: string;
+  hasMoreInMailbox?: boolean;
+  remainingUids?: number;
+}> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { host, port, user, pass } = await resolveHostingerImapCredentials(supabaseAdmin);
+  const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
 
   if (!pass) {
     return {

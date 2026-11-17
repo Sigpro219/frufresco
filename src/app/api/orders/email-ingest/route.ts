@@ -1688,6 +1688,8 @@ export async function POST(req: Request) {
           extracted_items: [
             {
               isMetadata: true,
+              messageId: headers['message-id'] || headers['Message-ID'] || envelope.id || null,
+              hostingerUid: payload.hostingerUid || null,
               purchaseOrder: attPo,
               purchase_order: attPo,
               poNumber: attPo,
@@ -1758,6 +1760,8 @@ export async function POST(req: Request) {
         extracted_items: [
           {
             isMetadata: true,
+            messageId: headers['message-id'] || headers['Message-ID'] || envelope.id || null,
+            hostingerUid: payload.hostingerUid || null,
             purchaseOrder: primaryPo,
             purchase_order: primaryPo,
             poNumber: primaryPo,

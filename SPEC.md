@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.416 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..462)  
+> **Versión:** 1.9.419 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..463 | Pre-Vuelo: 464)  
 > **Fecha:** 17 de Noviembre, 2026  
-> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 462 Certificados (`/tirano` Ronda 3: 96%) | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
+> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 463 Certificados | 🟡 Escenario 464 en Pre-Vuelo `/goldfish` | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..462 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..464 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -24,11 +24,11 @@
 | **D5** | **Operaciones de Bodega Gemba (`/ops/*`)** | 17 | Capítulos 8, 9, 26, 27, 37 | Escenarios 159 a 175 (§37.1 - §37.17) | 🟢 100% |
 | **D6** | **Logística, Transporte, Flota y Conductores (TMS)** | 5 | Capítulos 18, 38 | Escenarios 107 a 108, 176 a 181, 204 a 205 (§38.1 - §38.8) | 🟢 100% |
 | **D7** | **Dirección Comercial, Precios y Campañas** | 10 | Capítulos 7, 11, 14, 15, 17 | Escenarios 69, 136 a 140, 142 a 145, 206 a 207, 227, 230 a 234, 237, 245, 251, 252, 253, 254, 261, 264, 265, 266, 268, 269, 270, 271, 274, 275, 276, 277, 301, 306, 429 (§7.1 - §7.20) | 🟢 100% |
-| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273, 461 (§39.1 - §39.7) | 🟢 100% |
+| **D8** | **Facturación Masiva, Cartera B2B & World Office** | 4 | Capítulos 21, 39 | Escenarios 182 a 185, 216 a 217, 221, 223, 235, 236, 239, 241, 242, 244, 246, 248, 250, 251, 252, 253, 254, 257, 259, 272, 273, 461, 464 (§39.1 - §39.7) | 🟢 100% |
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258, 430, 462 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL ONFRU** | **onFRU SCOS v1.9.416 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **462 Escenarios Canónicos (1..462)** | **🟢 100%** |
+| **TOTAL ONFRU** | **onFRU SCOS v1.9.419 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **464 Escenarios Canónicos (1..464)** | **🟡 Pre-Vuelo 464** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
@@ -17439,3 +17439,41 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - **Buscador en Servidor:** cuando `searchQuery` está activo, consulta directamente `order_drafts` en Supabase (`email_subject`, `client_detected_name`, `source_email`, `po_number`, `client_po_number`, `email_body`) con debounce de `350ms` sin restricción de fecha ni de ventana de 100 filas.
      - **Anti-Tormenta Realtime:** `fetchDrafts` implementa lock `in-flight` y debounce (`400ms`) para eventos `postgres_changes`.
      - **Poka-Yoke Asunto vs. Adjunto:** muestra advertencia visual en la tarjeta/detalle cuando el consecutivo de OC detectado en el asunto difiere de la OC extraída del PDF adjunto.
+
+### Escenario 463: Watchdog Independiente Hostinger `INBOX` ↔ `order_drafts` & Alerta Activa (SDD v1.9.418)
+- **Alcance Contractual:** Auditoría independiente de integridad buzón-a-BD y detección de correos faltantes sin DeepSeek en [`src/lib/orders/hostingerImapWatchdog.ts`](file:///c:/Projects/frufresco/src/lib/orders/hostingerImapWatchdog.ts), [`src/app/api/orders/imap-watchdog/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/imap-watchdog/route.ts), [`src/lib/orders/hostingerImapSync.ts`](file:///c:/Projects/frufresco/src/lib/orders/hostingerImapSync.ts), [`src/app/api/orders/email-ingest/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/email-ingest/route.ts) y [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx).
+- **Reglas de Negocio & Comportamiento:**
+  1. **Trazabilidad Persistente en `order_drafts` (`email-ingest/route.ts`):**
+     - Todo borrador persistido almacena `messageId` y `hostingerUid` dentro de `extracted_items[0]` para permitir reconciliación exacta 1-a-1 contra Hostinger.
+  2. **Protección Anti-BCC (`hostingerImapSync.ts`):**
+     - `isGenuineChannel3CoEmail` acepta además correos recibidos en el buzón `pedidos@frufresco.co` cuya `INTERNALDATE` sea posterior a `transitionEpochAt` (`2026-11-09`), evitando descartes por copia oculta (`BCC`) mientras mantiene bloqueados correos de sistema (`mailer-daemon`, `@email.hostinger.com`, `postmaster`).
+  3. **Watchdog Buzón ↔ Base de Datos (`hostingerImapWatchdog.ts` & `/api/orders/imap-watchdog`):**
+     - Inspecciona en solo lectura (`EXAMINE INBOX`) los correos reales de los últimos **7 días** (y `>= transitionEpochAt`) en Hostinger.
+     - Cruza contra `order_drafts` en dos niveles: **(a)** `messageId` / `hostingerUid` exacto, y **(b)** fallback `(remitente normalizado + asunto normalizado)` para cubrir correos históricos o ingresados por otro canal.
+     - Si detecta correos faltantes en `order_drafts`, los re-inyecta automáticamente (hasta 5 por corrida), registra el rescate en `audit_logs` (`WATCHDOG_RECOVER_EMAIL`) y persiste el estado en `app_settings` (`hostinger_watchdog_status`).
+  4. **Alerta Crítica en UI (`EmailDraftsModule.tsx`):**
+     - Ejecuta el Watchdog en segundo plano (con cooldown de 2 minutos en servidor) y renderiza un banner de alerta visible en la cabecera de la bandeja si existen correos faltantes, recuperados recientemente o errores de conexión con Hostinger, junto con botón manual **Auditar Buzón**.
+
+---
+
+### Escenario 464: Poka-Yoke Anti-Falso Positivo de `"Despachado Sin Precio ($0)"` y Saneamiento Automático al Editar Pedido (SDD v1.9.419)
+- **Given** un pedido B2B (ej. `#1811` de `DIPLOMAT EMBAJADA HOTEL TRYP - TRYP`) que nació con marca de ítem fuera de acuerdo sin precio (`admin_notes` con `DESPACHADO SIN PRECIO`, `logistics_data.off_agreement_priced: false`, `logistics_data.document_type_override: 'remission'`, `logistics_data.remission_with_prices_override: false`) y posteriormente recibe precios unitarios `> 0` en todos sus `order_items` mediante edición directa en Torre de Control ([`src/app/admin/orders/loading/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/loading/page.tsx)) o mediante el modal comercial:
+- **When** el pedido es evaluado por el motor de facturación ([`src/lib/commercial/billingOrderUtils.ts`](file:///c:/Projects/frufresco/src/lib/commercial/billingOrderUtils.ts) y [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx)), el dashboard comercial ([`src/components/CommercialUnifiedDashboard.tsx`](file:///c:/Projects/frufresco/src/components/CommercialUnifiedDashboard.tsx)), el endpoint comercial ([`src/app/api/commercial/billing/assign-off-agreement-prices/route.ts`](file:///c:/Projects/frufresco/src/app/api/commercial/billing/assign-off-agreement-prices/route.ts)), el motor de impresión ([`src/lib/orders/printDocRules.ts`](file:///c:/Projects/frufresco/src/lib/orders/printDocRules.ts) y [`src/app/admin/orders/contingency-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx)) o guardado tras edición de ítems en `loading/page.tsx`:
+- **Then** rigen de forma obligatoria las siguientes reglas de integridad:
+  1. **Detección Basada en Evidencia Real de `order_items` (`isOrderUnpricedOffAgreement(order)`):**
+     - `BillingOrderRecordLike` (`src/lib/commercial/billingOrderUtils.ts`) y `PrintOrderDocInput` (`src/lib/orders/printDocRules.ts`) tipan explícitamente `order_items?: Array<{ id?: string; unit_price?: number | null; count?: number }> | null` y `logistics_data.remission_with_prices_override?: boolean | null`.
+     - Se consagra el helper puro `isOrderUnpricedOffAgreement(order)` en `src/lib/commercial/billingOrderUtils.ts`:
+       - Filtra `detailedItems = (order.order_items || []).filter(it => it && typeof it.unit_price === 'number')` para **ignorar filas de solo conteo** (`[{ count: N }]` como en `allUnbilledOrders`).
+       - Si `detailedItems.length > 0`, evalúa si existe al menos un ítem con `Number(it.unit_price) <= 0`. Si **todos** los ítems detallados tienen `unit_price > 0`, retorna **`false`** de forma absoluta, ignorando cadenas históricas `DESPACHADO SIN PRECIO` en `admin_notes` o `off_agreement_priced: false`.
+       - Solo cuando `detailedItems` contiene ítems con `unit_price <= 0` (o cuando `detailedItems.length === 0` y además el pedido tiene la marca en `admin_notes`/`logistics_data` con `!off_agreement_priced` y `Number(order.total ?? order.total_amount ?? 0) === 0`), retorna `true`.
+     - Consumidores obligatorios unificados con `isOrderUnpricedOffAgreement`:
+       - `resolveCanonicalDocType` (`billingOrderUtils.ts`).
+       - `resolveOrderBillingInfo`, `getOrderGraceInfo`, `unpricedOffAgreementCount`, `openConsumptionCount`, `handleLiquidateSelectedOrAllOpenOrders`, `handleOpenCutPreview` (añadiendo `order_items(id, unit_price)` al `SELECT` y a `CutPreviewOrder`) y `handleConfirmGenerateCut` (`billing/page.tsx`).
+       - `isOrderInvoiceRequiredForPrint` (`printDocRules.ts`) y `contingency-print/page.tsx` (`L1710-L1724`).
+       - `CommercialUnifiedDashboard.tsx`: `unpricedOrdersRes` selecciona además `total, logistics_data, order_items(id, unit_price)` y filtra con `isOrderUnpricedOffAgreement`.
+     - **Descarte de Override Zombie:** Si `!isOrderUnpricedOffAgreement(order)` y el pedido conserva `logistics_data.document_type_override === 'remission'` junto con `logistics_data.remission_with_prices_override === false` y la marca histórica `DESPACHADO SIN PRECIO` en `admin_notes`, dicho override zombie no anula el `document_type` real del cliente (`invoice` / `remission`) ni en facturación ni en impresión.
+  2. **Limpieza Automática al Guardar Edición (`loading/page.tsx`) y al Asignar Tarifas (`assign-off-agreement-prices/route.ts`):**
+     - En `src/app/admin/orders/loading/page.tsx`: `fetchOrders` incluye `unit_price` en `order_items(...)`; en `handleUpdateOrder`, **únicamente cuando** el pedido tenía marca previa de fuera de acuerdo/sin precio (`DESPACHADO SIN PRECIO` u `off_agreement_priced === false`) y **no** es `gift_remission` ni `is_replacement`, si todos los ítems activos quedan con `unit_price > 0`, se limpian de `admin_notes` los prefijos `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO...]` / `[DESPACHADO SIN PRECIO...]`, se limpia `tarifa_pendiente` / `_off_agreement` en `order_items.selected_options`, y se sanea `logistics_data` (`off_agreement_priced: true`, eliminando `document_type_override: 'remission'` y `remission_with_prices_override: false` heredados del bloqueo `$0`).
+     - En `src/app/api/commercial/billing/assign-off-agreement-prices/route.ts`: al valorizar el pedido, se limpian los overrides zombie `document_type_override` y `remission_with_prices_override` heredados del bloqueo `$0` para respetar la modalidad fiscal real del perfil (`FAC-IMP` / `remission`).
+  3. **Saneamiento en Vivo de `#1811`:**
+     - Se sanean en Supabase los campos residuales de `#1811` (`80c13101-0180-474e-b112-ee08d91f95c8`) para restablecer su modalidad fiscal real (`FAC-IMP` de `DIPLOMAT EMBAJADA HOTEL TRYP - TRYP`, `$2.297.796`).

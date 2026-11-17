@@ -1878,6 +1878,28 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const fetchDraftsInFlightRef = useRef(false);
   const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [watchdogStatus, setWatchdogStatus] = useState<any | null>(null);
+  const [runningWatchdog, setRunningWatchdog] = useState(false);
+
+  const runImapWatchdog = async (force = false) => {
+    if (runningWatchdog) return;
+    setRunningWatchdog(true);
+    try {
+      const res = await fetch(`/api/orders/imap-watchdog${force ? '?force=true' : ''}`, { method: 'POST' });
+      const data = await res.json();
+      setWatchdogStatus(data);
+      if (data?.recoveredCount > 0) {
+        showToast(`Watchdog recuperó ${data.recoveredCount} correo(s) faltante(s) desde Hostinger.`, 'success');
+        fetchDrafts(true);
+      } else if (force && !data?.error && data?.missingCount === 0) {
+        showToast(`Buzón auditado (${data.mailboxCount7d || 0} correos últimos 7d): 0 faltantes.`, 'success');
+      }
+    } catch (err: any) {
+      if (force) showToast('Error al auditar buzón Hostinger.', 'error');
+    } finally {
+      setRunningWatchdog(false);
+    }
+  };
   const [selectedDate, setSelectedDate] = useState('');
   const todayBogotaStr = useMemo(() => getBogotaTodayStr(), []);
   const todayDraftsCount = useMemo(() => {
@@ -3854,6 +3876,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   useEffect(() => {
     fetchDrafts();
+    runImapWatchdog(false);
     fetchProducts();
     fetchConversions();
     fetchAliases();
@@ -7535,8 +7558,86 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             <span>Actualizar</span>
             <span style={{ opacity: 0.5, fontSize: '0.70rem', fontWeight: 600 }}>(Alt+A)</span>
           </button>
+
+          <button
+            type="button"
+            disabled={runningWatchdog}
+            onClick={() => runImapWatchdog(true)}
+            title="Auditar Hostinger INBOX vs Base de Datos (últimos 7 días)"
+            style={{
+              height: '32px',
+              padding: '0 0.7rem',
+              borderRadius: THEME.radius.md,
+              border: watchdogStatus?.missingCount > 0 || watchdogStatus?.error ? '1.5px solid #DC2626' : `1px solid ${THEME.colors.border}`,
+              backgroundColor: watchdogStatus?.missingCount > 0 || watchdogStatus?.error ? '#FEF2F2' : '#FFFFFF',
+              color: watchdogStatus?.missingCount > 0 || watchdogStatus?.error ? '#B91C1C' : THEME.colors.textMain,
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              cursor: runningWatchdog ? 'wait' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              transition: 'all 0.15s'
+            }}
+          >
+            {runningWatchdog ? <Loader2 size={13} className="animate-spin" /> : <ShieldAlert size={13} strokeWidth={2.2} />}
+            <span>{runningWatchdog ? 'Auditando...' : 'Auditar Buzón'}</span>
+          </button>
         </div>
       </div>
+
+      {/* Hostinger Watchdog Alert Banner (Escenario 463) */}
+      {watchdogStatus && (watchdogStatus.error || watchdogStatus.missingCount > 0 || watchdogStatus.recoveredCount > 0) && (
+        <div style={{
+          backgroundColor: watchdogStatus.error || watchdogStatus.missingCount > 0 ? '#FEF2F2' : '#ECFDF5',
+          border: `1.5px solid ${watchdogStatus.error || watchdogStatus.missingCount > 0 ? '#FCA5A5' : '#6EE7B7'}`,
+          borderRadius: '12px',
+          padding: '10px 16px',
+          marginBottom: '0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShieldAlert size={18} color={watchdogStatus.error || watchdogStatus.missingCount > 0 ? '#DC2626' : '#059669'} />
+            <div style={{ fontSize: '0.8rem', color: watchdogStatus.error || watchdogStatus.missingCount > 0 ? '#7F1D1D' : '#065F46', fontWeight: '700' }}>
+              {watchdogStatus.error ? (
+                <span>Alerta Watchdog Hostinger: {watchdogStatus.error}</span>
+              ) : watchdogStatus.missingCount > 0 ? (
+                <span>
+                  Alerta Watchdog: {watchdogStatus.missingCount} correo(s) en Hostinger aún pendientes de sincronizar
+                  {Array.isArray(watchdogStatus.missingSamples) && watchdogStatus.missingSamples.length > 0
+                    ? ` (${watchdogStatus.missingSamples.slice(0, 2).map((s: any) => s.subject).join(' · ')})`
+                    : ''}
+                </span>
+              ) : (
+                <span>
+                  Watchdog Hostinger: se rescataron automáticamente {watchdogStatus.recoveredCount} correo(s) faltante(s) hacia esta bandeja.
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={runningWatchdog}
+            onClick={() => runImapWatchdog(true)}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '8px',
+              border: '1px solid currentColor',
+              backgroundColor: 'white',
+              color: watchdogStatus.error || watchdogStatus.missingCount > 0 ? '#B91C1C' : '#047857',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              cursor: runningWatchdog ? 'wait' : 'pointer'
+            }}
+          >
+            {runningWatchdog ? 'Auditando...' : 'Re-auditar ahora'}
+          </button>
+        </div>
+      )}
 
       {/* AI Health Alert Banner */}
       {aiHealth && !aiBannerDismissed && (
