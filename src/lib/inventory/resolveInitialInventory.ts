@@ -502,12 +502,13 @@ export async function evaluateInventoryGateStatus(params: {
     const checklist = await getDailyManualChecklistStatus(supabase, lastOperatedDate);
     const coversLastOperated = Boolean(resolved.sourceDate && resolved.sourceDate >= lastOperatedDate);
 
+    const shortDateLabel = `${lastOperatedDate.slice(8, 10)}/${lastOperatedDate.slice(5, 7)}`;
+
     if (
         coversLastOperated &&
         resolved.sourceKind === 'official_closing' &&
         resolved.isOfficialLocked &&
-        !resolved.hasConflicts &&
-        checklist.pendingSteps.length === 0
+        !resolved.hasConflicts
     ) {
         return {
             level: 'green',
@@ -519,8 +520,8 @@ export async function evaluateInventoryGateStatus(params: {
             hasConflicts: false,
             conflictProductIds: [],
             pendingColumns: [],
-            headline: `Inventario Cerrado (${lastOperatedDate})`,
-            detail: `Cierre oficial sellado del ${lastOperatedDate} listo para heredar.`,
+            headline: `Inv. Cerrado (${shortDateLabel})`,
+            detail: `Cierre oficial sellado del ${lastOperatedDate} listo para heredar.${checklist.pendingSteps.length > 0 ? ` (Sin flags de novedad en: ${checklist.pendingSteps.join(', ')})` : ''}`,
         };
     }
 

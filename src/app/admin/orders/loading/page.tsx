@@ -3570,102 +3570,89 @@ useEffect(() => {
                         </button>
                         </div>
 
-                        {/* TARJETA SUPERIOR DE TANDA ACTIVA A 2 FILAS (SDD ESCENARIOS 426-427) */}
-                        {activeTab === 'orders' && (
-                            <div 
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '5px 12px',
-                                    borderRadius: '10px',
-                                    background: selectedDate === getTomorrowDateStr() 
-                                        ? 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)' 
-                                        : selectedDate === getTodayDateStr() 
-                                        ? 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)' 
-                                        : selectedDate === getYesterdayDateStr() 
-                                        ? 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)' 
-                                        : selectedDate === 'history15' 
-                                        ? 'linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)' 
-                                        : 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)',
-                                    border: `1.5px solid ${
-                                        selectedDate === getTomorrowDateStr() ? '#6EE7B7' :
-                                        selectedDate === getTodayDateStr() ? '#7DD3FC' :
-                                        selectedDate === getYesterdayDateStr() ? '#FCD34D' :
-                                        selectedDate === 'history15' ? '#D8B4FE' : '#CBD5E1'
-                                    }`,
-                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)'
-                                }}
-                            >
-                                <div style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backgroundColor: selectedDate === getTomorrowDateStr() ? '#059669' :
-                                        selectedDate === getTodayDateStr() ? '#0284C7' :
-                                        selectedDate === getYesterdayDateStr() ? '#D97706' :
-                                        selectedDate === 'history15' ? '#7C3AED' : '#475569',
-                                    color: '#FFFFFF',
-                                    flexShrink: 0
-                                }}>
-                                    {selectedDate === getTomorrowDateStr() ? (
-                                        <Sparkles size={16} strokeWidth={2.5} />
-                                    ) : selectedDate === getTodayDateStr() ? (
-                                        <Truck size={16} strokeWidth={2.5} />
-                                    ) : selectedDate === getYesterdayDateStr() ? (
-                                        <History size={16} strokeWidth={2.5} />
-                                    ) : selectedDate === 'history15' ? (
-                                        <Clock size={16} strokeWidth={2.5} />
-                                    ) : (
-                                        <Calendar size={16} strokeWidth={2.5} />
-                                    )}
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.25' }}>
-                                    <div style={{
-                                        fontSize: '0.78rem',
-                                        fontWeight: '900',
+                        {/* PILL UNIFICADO COMPACTO: TANDA ACTIVA + RELOJ CIERRE (1 SOLA LÍNEA) */}
+                        {activeTab === 'orders' && (() => {
+                            const bogotaNow = currentTime;
+                            const targetCutoff = new Date(bogotaNow);
+                            targetCutoff.setHours(cutoffHourState, 0, 0, 0);
+                            const diffMs = targetCutoff.getTime() - bogotaNow.getTime();
+                            const cutoffLabel = cutoffHourState > 12 ? `${cutoffHourState - 12}:00 PM` : `${cutoffHourState}:00 AM`;
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+                            const hours = Math.floor(totalSeconds / 3600);
+                            const minutes = Math.floor((totalSeconds % 3600) / 60);
+                            const seconds = totalSeconds % 60;
+                            const isImminent = cutoffRulesActive && diffMs > 0 && totalSeconds < 15 * 60;
+                            const shortTargetDate = selectedDate === getTomorrowDateStr()
+                                ? `${getTomorrowDateStr().slice(8, 10)}/${getTomorrowDateStr().slice(5, 7)}`
+                                : selectedDate === getTodayDateStr()
+                                    ? `${getTodayDateStr().slice(8, 10)}/${getTodayDateStr().slice(5, 7)}`
+                                    : selectedDate === getYesterdayDateStr()
+                                        ? `${getYesterdayDateStr().slice(8, 10)}/${getYesterdayDateStr().slice(5, 7)}`
+                                        : selectedDate;
+
+                            return (
+                                <div
+                                    title={cutoffRulesActive ? `Corte programado hoy a las ${cutoffLabel}.` : 'Horario flexible activo en Ajustes (/admin/settings).'}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '4px 10px',
+                                        borderRadius: '8px',
+                                        whiteSpace: 'nowrap',
+                                        background: selectedDate === getTomorrowDateStr() ? '#ECFDF5' :
+                                            selectedDate === getTodayDateStr() ? '#F0F9FF' :
+                                            selectedDate === getYesterdayDateStr() ? '#FEF3C7' :
+                                            selectedDate === 'history15' ? '#FAF5FF' : '#F8FAFC',
+                                        border: `1px solid ${
+                                            isImminent ? '#FCA5A5' :
+                                            selectedDate === getTomorrowDateStr() ? '#6EE7B7' :
+                                            selectedDate === getTodayDateStr() ? '#7DD3FC' :
+                                            selectedDate === getYesterdayDateStr() ? '#FCD34D' :
+                                            selectedDate === 'history15' ? '#D8B4FE' : '#CBD5E1'
+                                        }`,
+                                        boxShadow: isImminent ? '0 0 8px rgba(239, 68, 68, 0.25)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: '800',
                                         color: selectedDate === getTomorrowDateStr() ? '#065F46' :
                                             selectedDate === getTodayDateStr() ? '#075985' :
                                             selectedDate === getYesterdayDateStr() ? '#92400E' :
                                             selectedDate === 'history15' ? '#5B21B6' : '#1E293B',
-                                        letterSpacing: '-0.01em'
-                                    }}>
-                                        {selectedDate === getTomorrowDateStr() 
-                                            ? `TANDA ACTIVA: ENTREGA MAÑANA (${getTomorrowDateStr()})`
-                                            : selectedDate === getTodayDateStr()
-                                            ? `DESPACHO DE HOY EN RUTA (${getTodayDateStr()})`
-                                            : selectedDate === getYesterdayDateStr()
-                                            ? `CONCILIACIÓN DE AYER (${getYesterdayDateStr()})`
-                                            : selectedDate === 'history15'
-                                            ? `HISTORIAL OPERATIVO (ÚLTIMOS 15 DÍAS)`
-                                            : `ENTREGA PROGRAMADA (${selectedDate})`}
-                                    </div>
-                                    <div style={{
-                                        fontSize: '0.68rem',
-                                        fontWeight: '700',
-                                        color: selectedDate === getTomorrowDateStr() ? '#047857' :
-                                            selectedDate === getTodayDateStr() ? '#0369A1' :
-                                            selectedDate === getYesterdayDateStr() ? '#B45309' :
-                                            selectedDate === 'history15' ? '#6D28D9' : '#64748B'
-                                    }}>
-                                        {selectedDate === getTomorrowDateStr() 
-                                            ? (cutoffRulesActive ? `Corte de pedidos hoy a las ${cutoffHourState > 12 ? (cutoffHourState - 12) + ':00 PM' : cutoffHourState + ':00 AM'}` : 'Horario flexible')
-                                            : selectedDate === getTodayDateStr()
-                                            ? 'Seguimiento en vivo de entregas'
-                                            : selectedDate === getYesterdayDateStr()
-                                            ? 'Pedidos finalizados y entregados'
-                                            : selectedDate === 'history15'
-                                            ? 'Auditoría de despachos históricos'
-                                            : 'Consulta operativa'}
-                                        {' • '}
-                                        <span style={{ fontWeight: '800' }}>{filteredOrders.length} pedido(s) listos</span>
-                                    </div>
+                                    }}
+                                >
+                                    {selectedDate === getTomorrowDateStr() ? <Sparkles size={14} strokeWidth={2.4} /> :
+                                     selectedDate === getTodayDateStr() ? <Truck size={14} strokeWidth={2.4} /> :
+                                     selectedDate === getYesterdayDateStr() ? <History size={14} strokeWidth={2.4} /> :
+                                     <Calendar size={14} strokeWidth={2.4} />}
+                                    <span>
+                                        {selectedDate === getTomorrowDateStr() ? `Mañana (${shortTargetDate})` :
+                                         selectedDate === getTodayDateStr() ? `Hoy (${shortTargetDate})` :
+                                         selectedDate === getYesterdayDateStr() ? `Ayer (${shortTargetDate})` :
+                                         selectedDate === 'history15' ? 'Historial 15d' : shortTargetDate}
+                                        {' · '}{filteredOrders.length} listos
+                                    </span>
+                                    <span style={{ opacity: 0.35 }}>|</span>
+                                    {!cutoffRulesActive ? (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#047857' }}>
+                                            <Clock size={13} /> Sin límite ({cutoffLabel})
+                                        </span>
+                                    ) : diffMs <= 0 ? (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#475569' }}>
+                                            <Lock size={13} /> Corte {cutoffLabel}
+                                        </span>
+                                    ) : (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: isImminent ? '#991B1B' : 'inherit' }}>
+                                            <Clock size={13} />
+                                            <span style={{ fontFamily: 'monospace, monospace', fontWeight: '900', backgroundColor: 'rgba(255,255,255,0.85)', padding: '1px 5px', borderRadius: '4px' }}>
+                                                {pad(hours)}:{pad(minutes)}:{pad(seconds)}
+                                            </span>
+                                            <span style={{ opacity: 0.85 }}>({cutoffLabel})</span>
+                                        </span>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {/* BADGE ANDON DE CIERRE DE INVENTARIO (ESCENARIO 457) */}
                         {inventoryGateStatus && (
@@ -3676,9 +3663,10 @@ useEffect(() => {
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '7px',
-                                    padding: '5px 12px',
+                                    gap: '6px',
+                                    padding: '4px 10px',
                                     borderRadius: '8px',
+                                    whiteSpace: 'nowrap',
                                     textDecoration: 'none',
                                     backgroundColor:
                                         inventoryGateStatus.level === 'green'
@@ -3721,127 +3709,7 @@ useEffect(() => {
                             </Link>
                         )}
 
-                        {/* COUNTDOWN WIDGET / TELEMETRÍA EN VIVO DE CORTE OPERATIVO */}
-                        {(() => {
-                            const bogotaNow = currentTime;
-                            const targetCutoff = new Date(bogotaNow);
-                            targetCutoff.setHours(cutoffHourState, 0, 0, 0);
 
-                            const diffMs = targetCutoff.getTime() - bogotaNow.getTime();
-                            const cutoffLabel = cutoffHourState > 12 ? `${cutoffHourState - 12}:00 PM` : `${cutoffHourState}:00 AM`;
-
-                            if (!cutoffRulesActive) {
-                                return (
-                                    <div 
-                                        title="Las reglas de corte están desactivadas en Ajustes (/admin/settings). El equipo puede radicar y modificar pedidos para mañana a cualquier hora."
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            padding: '5px 14px',
-                                            borderRadius: '8px',
-                                            backgroundColor: '#ECFDF5',
-                                            border: '1px solid #A7F3D0',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                            cursor: 'default'
-                                        }}
-                                    >
-                                        <span style={{
-                                            width: '8px',
-                                            height: '8px',
-                                            borderRadius: '50%',
-                                            backgroundColor: '#10B981',
-                                            boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
-                                        }} />
-                                        <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#065F46', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-                                            Horario Flexible Activo
-                                        </span>
-                                        <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: '600' }}>
-                                            • Sin Límite de Corte (Sugerido {cutoffLabel})
-                                        </span>
-                                    </div>
-                                );
-                            }
-
-                            if (diffMs <= 0) {
-                                return (
-                                    <div 
-                                        title="La hora de corte para despacho de mañana ya finalizó. Pedidos nuevos o extemporáneos se programan automáticamente para D+2 salvo bypass administrativo."
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            padding: '5px 14px',
-                                            borderRadius: '8px',
-                                            backgroundColor: '#F1F5F9',
-                                            border: '1px solid #CBD5E1',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                            cursor: 'default'
-                                        }}
-                                    >
-                                        <Lock size={14} style={{ color: '#475569' }} />
-                                        <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                            Corte Finalizado ({cutoffLabel})
-                                        </span>
-                                        <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '600' }}>
-                                            • Nuevos pedidos pasan a D+2
-                                        </span>
-                                    </div>
-                                );
-                            }
-
-                            const totalSeconds = Math.floor(diffMs / 1000);
-                            const hours = Math.floor(totalSeconds / 3600);
-                            const minutes = Math.floor((totalSeconds % 3600) / 60);
-                            const seconds = totalSeconds % 60;
-                            const pad = (n: number) => String(n).padStart(2, '0');
-
-                            const isImminent = totalSeconds < 15 * 60;
-                            const isWarning = totalSeconds < 60 * 60;
-
-                            const bg = isImminent ? '#FEF2F2' : isWarning ? '#FFFBEB' : '#F0FDF4';
-                            const border = isImminent ? '#FCA5A5' : isWarning ? '#FDE68A' : '#BBF7D0';
-                            const textMain = isImminent ? '#991B1B' : isWarning ? '#92400E' : '#166534';
-
-                            return (
-                                <div 
-                                    title={`Corte de operaciones programado hoy a las ${cutoffLabel}. A partir de esa hora no se pueden recibir pedidos para entrega mañana.`}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '5px 14px',
-                                        borderRadius: '8px',
-                                        backgroundColor: bg,
-                                        border: `1px solid ${border}`,
-                                        boxShadow: isImminent ? '0 0 10px rgba(239, 68, 68, 0.25)' : '0 1px 3px rgba(0,0,0,0.04)',
-                                        cursor: 'default',
-                                        transition: 'all 0.3s ease'
-                                    }}
-                                >
-                                    <Clock size={15} style={{ color: textMain }} />
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '800', color: textMain, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                        {isImminent ? '⚠️ Cierre Inminente:' : 'Cierre de Operación:'}
-                                    </span>
-                                    <span style={{ 
-                                        fontFamily: 'monospace, monospace', 
-                                        fontSize: '0.88rem', 
-                                        fontWeight: '900', 
-                                        color: textMain,
-                                        backgroundColor: 'rgba(255,255,255,0.85)',
-                                        padding: '2px 7px',
-                                        borderRadius: '5px',
-                                        border: `1px solid ${border}`,
-                                        letterSpacing: '0.05em'
-                                    }}>
-                                        {pad(hours)}:{pad(minutes)}:{pad(seconds)}
-                                    </span>
-                                    <span style={{ fontSize: '0.71rem', color: textMain, opacity: 0.9, fontWeight: '700' }}>
-                                        ({cutoffLabel})
-                                    </span>
-                                </div>
-                            );
-                        })()}
                     </div>
 
                     {activeTab === 'orders' && (

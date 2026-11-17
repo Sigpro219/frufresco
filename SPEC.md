@@ -17030,7 +17030,7 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
 
   3. **Badge Pulsante Andon + Fricción Consciente en `/admin/orders/loading` y `ManualDispatchWizardModal`:**
      - En la barra superior de `/admin/orders/loading/page.tsx` (junto al widget `Cierre de Operación`) se renderiza en tiempo real el **Badge Andon de Cierre de Inventario** evaluando `lastOperatedDate` (`< hoyBogota`):
-       - **🟢 Verde (`Inv. Cerrado DD/MM`):** `sourceKind === 'official_closing'` (`is_locked === true`, no Excel baseline) cubriendo `lastOperatedDate` (o sin `lastOperatedDate` previa).
+       - **🟢 Verde (`Inv. Cerrado (DD/MM)`):** `sourceKind === 'official_closing'` (`is_locked === true`, `!hasConflicts`, no Excel baseline) cubriendo `lastOperatedDate` (o sin `lastOperatedDate` previa). No exige flags históricos de `"Sin novedad hoy"` en jornadas ya selladas con candado.
        - **🟡 Ámbar Pulsante (`OJO: Pendiente Cierre Oficial DD/MM`):** `sourceKind` es `'unclosed_counts'`, `'reopened_closing'` o `'excel_baseline'`, o `hasConflicts === true`, o faltan columnas manuales sin marcar `"Sin novedad hoy"`. Clicable directo a `/admin/commercial/inventory?date=YYYY-MM-DD`.
        - **🔴 Rojo Pulsante (`OJO: Inventario SIN cerrar DD/MM`):** `lastOperatedDate` existe pero no tiene ni cierre oficial ni conteos Col T (`sourceKind === 'none'`, o último cierre/conteo es anterior a `lastOperatedDate`).
      - **Fricción Consciente (Sin Parálisis de Planta):**
@@ -17047,3 +17047,17 @@ En operaciones con clientes institucionales (B2B Corporativo, ej. *El Carnal*, *
      - **Persistencia `"Sin novedad hoy"`:** Almacenada en `app_settings` bajo llave `daily_inventory_novedad_${balanceDate}` como JSON `{ [colKey in 'G' | 'QR' | 'X']: { marked: true, by: string, at: string } }`. Editable únicamente por usuarios con `canEditSheet === true`.
      - **Reapertura y Re-Cierre con Versionado:** `handleReopenClosing` verifica estrictamente rol autorizado (`admin`, `sys_admin` o jefatura de inventarios), cambia `is_locked = false` (lo que cambia el badge Andon a 🟡 `reopened_closing`), y al volver a ejecutar `handleOfficialClosing`, si ya existía un `snapshot_items` previo para esa fecha, respalda la versión anterior en `app_settings` (`closing_history_${balanceDate}_${timestamp}`) antes de actualizar `daily_inventory_closings`.
      - **Antiduplicado Col T en Todos los Escritores:** Al persistir Col T (`PhysicalSheetIngestModal.tsx`, `ops/inventory/page.tsx` y `DailyBalanceExcelImportModal.tsx`) para un `(product_id, fecha Bogotá)`, los escritores deben eliminar/reemplazar cualquier movimiento previo del mismo producto y fecha cuyo `reference_type` sea `'blind_count'` **o** `'blind_count_shift_close'` (evitando coexistencia de ambos tipos). *(Nota operativa: los registros históricos ya existentes del `2026-11-13` no se purgan automáticamente).*
+
+
+---
+
+### Escenario 458: Blindaje Poka-Yoke de Conversiones de Unidades (`product_conversions`) y Equivalencias Nativas de Paquetes a Kg (SDD v1.9.413)
+- **Contexto:** Se detectaron reglas corruptas en `public.product_conversions` con `from_unit == to_unit` y factor distinto de `1` (ej. `Cebolla puerro #18: Kg -> Kg = 0.7`, `Cilantro #22: Atado -> Atado = 0.1`), además de 7 productos con duplicados conflictivos (`0.2/0.1/0.3` vs `0.5`) y ausencia de factor nativo automático para `Paquete 250 gramos` (`0.25 Kg`) y `Paquete 500 gramos` (`0.5 Kg`) en `EmailDraftsModule.tsx`.
+- **Reglas de Blindaje Inmutables:**
+  1. **Prohibición de Auto-Conversión No Unitaria (`from_unit == to_unit`):**
+     - En lectura (`EmailDraftsModule.tsx`, cálculo inicial y recálculo por fila), cualquier fila de `product_conversions` donde `normalizeUnitName(from_unit) === normalizeUnitName(to_unit)` debe ignorarse estrictamente (prevaleciendo relación `1:1`).
+     - En escritura (`manageConversionsProduct` modal en `EmailDraftsModule.tsx`), queda bloqueado insertar una regla donde `normalizeUnitName(from_unit) === normalizeUnitName(to_unit)` con factor distinto de `1`.
+  2. **Equivalencias Físicas Nativas Hacia `Kg`:**
+     - Cuando no exista regla personalizada válida en `product_conversions`, `EmailDraftsModule.tsx` debe resolver hacia `Kg`: `Paquete 250 gramos = 0.25`, `Paquete 500 gramos = 0.5`, `Lb/Libra = 0.5`, `g/gr = 0.001`.
+  3. **Saneamiento de BD (`2026-11-16`):**
+     - Purgadas las 4 filas `sameUnitBad` (`#18`, `#22`, `#23`, `#24`) y los 7 duplicados conflictivos `0.5` (`#3`, `#4`, `#7`, `#10`, `#16`, `#46`, `#47`) en `product_conversions` sin afectar `products`, `#ID` contables ni acuerdos comerciales.
