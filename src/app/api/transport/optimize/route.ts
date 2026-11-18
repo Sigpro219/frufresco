@@ -104,7 +104,17 @@ export async function POST(request: Request) {
             let startLocal = fleet_start;
             let endLocal = fleet_end;
 
-            if (isB2B) {
+            if (o.is_manual_delivery && o.manual_delivery_time) {
+                const margin = Number(o.manual_delivery_margin) || 60;
+                const [mh, mm] = String(o.manual_delivery_time).split(':').map(Number);
+                if (!isNaN(mh) && !isNaN(mm)) {
+                    const pad = (n: number) => n.toString().padStart(2, '0');
+                    const sM = Math.max(0, mh * 60 + mm - margin);
+                    const eM = Math.min(1439, mh * 60 + mm + margin);
+                    startLocal = `${pad(Math.floor(sM / 60))}:${pad(sM % 60)}`;
+                    endLocal = `${pad(Math.floor(eM / 60))}:${pad(eM % 60)}`;
+                }
+            } else if (isB2B) {
                 // Scenario 1: Manual Override (takes precedence for B2B)
                 if (o.is_manual_delivery && o.logistics_data?.windows?.[0]) {
                     startLocal = o.logistics_data.windows[0].startTime || o.logistics_data.windows[0].start || startLocal;
@@ -206,6 +216,50 @@ export async function POST(request: Request) {
         // Check if fleet actually has certified refrigerated vehicles
         const hasRefrigeratedFleet = vehicles.some((v: any) => v.is_refrigerated === true || v.refrigerated === true);
 
+        // Co-asignación obligatoria de parejas 10A/10B (is_off_agreement_split) en el mismo camión
+        const splitChildrenByParent = new Map<string, any[]>();
+        const splitChildIds = new Set<string>();
+        const orderByIdMap = new Map<string, any>(orders.map((o: any) => [String(o.id), o]));
+        orders.forEach((o: any) => {
+            const pId = o?.logistics_data?.is_off_agreement_split ? o?.logistics_data?.parent_order_id : null;
+            if (pId && orderByIdMap.has(String(pId))) {
+                splitChildIds.add(String(o.id));
+                const list = splitChildrenByParent.get(String(pId)) || [];
+                list.push(o);
+                splitChildrenByParent.set(String(pId), list);
+            }
+        });
+
+        const routingOrders = orders.filter((o: any) => !splitChildIds.has(String(o.id))).map((o: any) => {
+            const children = splitChildrenByParent.get(String(o.id)) || [];
+            if (children.length === 0) return o;
+            const extraKg = children.reduce((acc, c) => acc + (parseFloat(c.total_weight_kg) || 0), 0);
+            const extraCrates = children.reduce((acc, c) => acc + (Number(c.crates) || 0), 0);
+            return {
+                ...o,
+                total_weight_kg: (parseFloat(o.total_weight_kg) || 0) + extraKg,
+                crates: o.crates ? Number(o.crates) + extraCrates : undefined
+            };
+        });
+
+        const expandSplitAssignments = (rawAssign: Record<string, string[]>, etas: Record<string, string>) => {
+            const out: Record<string, string[]> = {};
+            Object.entries(rawAssign).forEach(([vid, ids]) => {
+                const expanded: string[] = [];
+                ids.forEach(oid => {
+                    expanded.push(oid);
+                    const children = splitChildrenByParent.get(String(oid)) || [];
+                    children.forEach(c => {
+                        const cid = String(c.id);
+                        expanded.push(cid);
+                        if (etas[oid]) etas[cid] = etas[oid];
+                    });
+                });
+                out[vid] = expanded;
+            });
+            return out;
+        };
+
         const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
 
         const gcpRequest = {
@@ -213,7 +267,7 @@ export async function POST(request: Request) {
             model: {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
-                shipments: orders.map((o: any) => {
+                shipments: routingOrders.map((o: any) => {
                     const isB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
 
                     // 1. Poka-Yoke Sanitization for Weights and Crates
@@ -530,14 +584,15 @@ export async function POST(request: Request) {
                     reasons: s.reasons || []
                 }));
 
-                // Generate AI explanation of the routing plan
-                const assignedOrderIds = new Set(Object.values(assignments).flat());
+                // Generate AI explanation of the routing plan (expandiendo parejas 10A/10B)
+                const finalAssignments = expandSplitAssignments(assignments, stopEtas);
+                const assignedOrderIds = new Set(Object.values(finalAssignments).flat());
                 const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
-                const explanation = await generateAiExplanation(orders, vehicles, assignments, unassignedOrders);
+                const explanation = await generateAiExplanation(orders, vehicles, finalAssignments, unassignedOrders);
 
                 return NextResponse.json({
                     message: "Optimization generated by REAL Google Engine",
-                    routes: assignments,
+                    routes: finalAssignments,
                     route_start_times: routeStartTimes,
                     stop_etas: stopEtas,
                     theoretical_metrics: {
@@ -559,10 +614,11 @@ export async function POST(request: Request) {
         // --- SIMULATION MODE --- (Fallback)
         // Since we are in development/draft, we return the structured request 
         // and a simulated local assignment until the API Key is ready.
-        const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(orders, vehicles, fleet_start, fleet_end);
-        const assignedSimIds = new Set(Object.values(simulatedAssignments).flat());
+        const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(routingOrders, vehicles, fleet_start, fleet_end);
+        const finalSimAssignments = expandSplitAssignments(simulatedAssignments, simEtas);
+        const assignedSimIds = new Set(Object.values(finalSimAssignments).flat());
         const unassignedSimOrders = orders.filter(o => !assignedSimIds.has(String(o.id)));
-        const explanation = await generateAiExplanation(orders, vehicles, simulatedAssignments, unassignedSimOrders);
+        const explanation = await generateAiExplanation(orders, vehicles, finalSimAssignments, unassignedSimOrders);
 
         const simSkippedOrders = unassignedSimOrders.map(o => ({
             orderId: String(o.id),
@@ -574,7 +630,7 @@ export async function POST(request: Request) {
             debug_request: gcpRequest,
             status: "ready_for_key",
             simulation: true,
-            routes: simulatedAssignments,
+            routes: finalSimAssignments,
             route_start_times: simStartTimes,
             stop_etas: simEtas,
             theoretical_metrics: {

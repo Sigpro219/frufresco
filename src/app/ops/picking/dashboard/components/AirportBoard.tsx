@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 
 type BoardRow = {
     id: string; // Order ID
@@ -18,26 +19,19 @@ export default function AirportBoard() {
     const [rows, setRows] = useState<BoardRow[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date());
 
-    // Mock Zones map (in real app, fetch from DB)
-    const ZONE_MAP: Record<string, string> = {
-        '0': 'CENTRO',
-        '1': 'NORTE',
-        '2': 'SUR',
-        '3': 'ORIENTE',
-        '4': 'OCCIDENTE'
-    };
-
     // Load Data
     const fetchBoardData = async () => {
-        // Fetch active orders
+        const targetDate = getOperationalTargetDate(20);
+        // Fetch active orders for operational shift
         const { data: orders } = await supabase
             .from('orders')
             .select(`
-                id, status, updated_at,
+                id, status, updated_at, delivery_date, warehouse_spaces,
                 profiles:profile_id(id, company_name, contact_name, role, id_zr),
                 order_items(id, quantity, picked_quantity)
             `)
-            .in('status', ['approved', 'processing', 'picking', 'loading', 'para_compra'])
+            .eq('delivery_date', targetDate)
+            .in('status', ['approved', 'processing', 'picking', 'loading', 'para_compra', 'in_preparation', 'ready_for_dispatch'])
             .order('updated_at', { ascending: false });
 
         if (orders) {
@@ -57,8 +51,8 @@ export default function AirportBoard() {
                     status = 'delayed'; // 1hr no move
                 }
 
-                // Get Zone Name safely
-                const zoneId = o.profiles?.id_zr?.toString() || '0';
+                // Get Zone Name from DB id_zr
+                const zoneId = o.profiles?.id_zr?.toString();
                 
                 const p = o.profiles;
                 let customerName = 'Cliente';
@@ -71,7 +65,7 @@ export default function AirportBoard() {
                 return {
                     id: o.id,
                     customer_name: customerName,
-                    zone_name: ZONE_MAP[zoneId] || 'GEN',
+                    zone_name: zoneId ? `ZONA ${zoneId}` : 'GEN',
                     total_items: total,
                     picked_items: picked,
                     status,
@@ -168,28 +162,11 @@ export default function AirportBoard() {
                 </table>
 
                 {rows.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center text-4xl text-gray-600 animate-pulse">
-                        ESPERANDO DATOS...
+                    <div className="absolute inset-0 flex items-center justify-center text-2xl md:text-4xl text-gray-500">
+                        SIN ÓRDENES ACTIVAS PARA EL TURNO ACTUAL
                     </div>
                 )}
             </div>
-
-            {/* Footer Ticker */}
-            <div className="bg-yellow-500 text-black p-2 mt-4 font-bold text-xl overflow-hidden whitespace-nowrap">
-                <div className="animate-marquee inline-block">
-                    *** OPERACIÓN FLUIDA *** NO OLVIDAR EQUIPO DE PROTECCIÓN *** RUTAS NORTE SALIENDO A LAS 14:00 *** REPORTE CUALQUIER NOVEDAD AL SUPERVISOR ***
-                </div>
-            </div>
-
-            <style jsx>{`
-                .animate-marquee {
-                    animation: marquee 20s linear infinite;
-                }
-                @keyframes marquee {
-                    0% { transform: translateX(100%); }
-                    100% { transform: translateX(-100%); }
-                }
-            `}</style>
         </div>
     );
 }

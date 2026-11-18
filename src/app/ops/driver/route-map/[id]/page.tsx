@@ -16,6 +16,8 @@ interface RouteStop {
         id: string;
         customer_name: string;
         shipping_address: string;
+        latitude?: number | null;
+        longitude?: number | null;
         total: number;
     } | null;
 }
@@ -26,12 +28,13 @@ export default function RouteExecutionPage() {
     const [stops, setStops] = useState<RouteStop[]>([]);
     const [loading, setLoading] = useState(true);
     const [plate, setPlate] = useState<string>('');
+    const [hasActiveHardwareGps, setHasActiveHardwareGps] = useState<boolean>(false);
     const isMounted = useRef(true);
 
-    // Baliza GPS Móvil: Transmite telemetría continua para camiones alquilados o sin hardware Apps-360
+    // Baliza GPS Móvil: solo transmite en vehículos sin hardware Apps-360 activo reciente (< 5 min)
     const { isTracking, queueSize } = useMobileGpsTracker({
         plate,
-        enabled: Boolean(plate && plate.trim().length > 0)
+        enabled: Boolean(plate && plate.trim().length > 0 && !hasActiveHardwareGps)
     });
 
     useEffect(() => {
@@ -41,37 +44,29 @@ export default function RouteExecutionPage() {
             try {
                 setLoading(true);
 
-                // Handle Mock Route ID for Demo Mode
-                if (typeof id === 'string' && id.startsWith('mock')) {
-                    setPlate('FXX-002');
-                    const mockStops: RouteStop[] = [
-                        {
-                            id: 'ms1', sequence_number: 1, status: 'pending',
-                            orders: { id: 'mo1', customer_name: 'Minimercado La 80 (Mock)', shipping_address: 'Carrera 80 #45-12', total: 156000 }
-                        },
-                        {
-                            id: 'ms2', sequence_number: 2, status: 'pending',
-                            orders: { id: 'mo2', customer_name: 'Restaurante Central (Mock)', shipping_address: 'Calle 50 #10-20', total: 890000 }
-                        },
-                        {
-                            id: 'ms3', sequence_number: 3, status: 'pending',
-                            orders: { id: 'mo3', customer_name: 'Panadería El Girasol (Mock)', shipping_address: 'Transversal 5 #8-15', total: 45000 }
-                        }
-                    ];
-                    setStops(mockStops);
-                    setLoading(false);
-                    return;
-                }
-
                 const { data: routeInfo } = await supabase.from('routes').select('vehicle_plate').eq('id', id).single();
-                if (routeInfo) setPlate(routeInfo.vehicle_plate);
+                if (routeInfo?.vehicle_plate) {
+                    setPlate(routeInfo.vehicle_plate);
+                    const { data: fv } = await supabase
+                        .from('fleet_vehicles')
+                        .select('tracking_source, last_gps_sync, gps_imei')
+                        .ilike('plate', routeInfo.vehicle_plate)
+                        .maybeSingle();
+                    const recentHw = Boolean(
+                        fv?.gps_imei &&
+                        fv?.tracking_source === 'hardware_gps' &&
+                        fv?.last_gps_sync &&
+                        Date.now() - new Date(fv.last_gps_sync).getTime() < 5 * 60 * 1000
+                    );
+                    setHasActiveHardwareGps(recentHw);
+                }
 
                 const { data, error } = await supabase
                     .from('route_stops')
                     .select(`
                         id, sequence_number, status,
                         orders:order_id (
-                            id, shipping_address, total,
+                            id, shipping_address, latitude, longitude, total,
                             profiles:profile_id (
                                 id, company_name, contact_name, role
                             )
@@ -122,8 +117,15 @@ export default function RouteExecutionPage() {
     const nextStop = stops.find(s => s.status === 'pending');
     const completedStops = stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
 
-    const openGoogleMaps = (address: string) => {
-        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    const openGoogleMaps = (order?: RouteStop['orders'] | null) => {
+        if (!order) return;
+        const hasCoords = order.latitude && order.longitude && Number(order.latitude) !== 0 && Number(order.longitude) !== 0;
+        const query = hasCoords
+            ? `${order.latitude},${order.longitude}`
+            : encodeURIComponent(`${order.shipping_address || ''}, Bogotá, Colombia`);
+        const url = hasCoords
+            ? `https://www.google.com/maps/dir/?api=1&destination=${query}`
+            : `https://www.google.com/maps/search/?api=1&query=${query}`;
         window.open(url, '_blank');
     };
 
@@ -188,7 +190,7 @@ export default function RouteExecutionPage() {
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                         <button 
-                            onClick={() => openGoogleMaps(nextStop.orders?.shipping_address || '')}
+                            onClick={() => openGoogleMaps(nextStop.orders)}
                             style={{ 
                                 padding: '1rem', 
                                 borderRadius: '16px', 
@@ -260,15 +262,23 @@ export default function RouteExecutionPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <h4 style={{ color: '#059669', fontSize: '0.75rem', fontWeight: '800', margin: '0 0 0.5rem 0.5rem', letterSpacing: '0.5px' }}>RECORRIDO TOTAL</h4>
                 {stops.map(stop => (
-                    <div key={stop.id} style={{ 
+                    <div
+                        key={stop.id}
+                        onClick={() => {
+                            if (stop.status === 'pending' || stop.status === 'arrived') {
+                                router.push(`/ops/driver/delivery/${stop.id}`);
+                            }
+                        }}
+                        style={{ 
                         backgroundColor: 'rgba(30, 41, 59, 0.45)', 
                         borderRadius: '16px', 
                         padding: '1rem 1.2rem', 
                         border: '1px solid rgba(255, 255, 255, 0.08)',
-                        opacity: stop.status !== 'pending' ? 0.6 : 1,
+                        opacity: stop.status !== 'pending' && stop.status !== 'arrived' ? 0.6 : 1,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '1rem',
+                        cursor: stop.status === 'pending' || stop.status === 'arrived' ? 'pointer' : 'default',
                         transition: 'all 0.2s ease'
                     }} className="stop-item-card">
                         <div style={{ 

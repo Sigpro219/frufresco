@@ -4277,6 +4277,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     // SPEC.md Secc. 7.5.6: Jerarquía Canónica (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra Compartida)
     const activeAgreement = resolveActiveAgreementForClient(branchId, parentId, profile);
 
+    let hasValidAgreement = false;
     if (activeAgreement) {
       let expired = false;
       const metadata = getDraftMetadata(draft);
@@ -4290,6 +4291,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
 
       if (!expired) {
+        hasValidAgreement = true;
         const agreementMap = agreementPrices[activeAgreement.id];
         if (agreementMap) {
           const pr = agreementMap[productId];
@@ -4300,6 +4302,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           }
         }
       }
+    }
+
+    // SDD Escenario 466: Cliente con acuerdo vigente nunca hereda General Institucional; fuera de acuerdo = $0 COP
+    if (!foundBase && hasValidAgreement) {
+      return 0;
     }
 
     if (!foundBase) {

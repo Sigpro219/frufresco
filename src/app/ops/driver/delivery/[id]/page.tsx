@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Camera, X, Check, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, MapPin, Camera, X, Check, AlertTriangle, Package, CornerDownRight } from 'lucide-react';
 import RoleProcessGuide from '@/components/common/RoleProcessGuide';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
+import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
+import { useMobileGpsTracker } from '@/components/telemetry/MobileGpsTracker';
 
 interface DeliverableItem {
     id: string;
@@ -36,8 +38,16 @@ export default function DeliveryConfirmationPage() {
     const [canastillasDelivered, setCanastillasDelivered] = useState(0);
     const [canastillasReceived, setCanastillasReceived] = useState(0);
     const [evidenceUrl, setEvidenceUrl] = useState<string | null>(null);
+    const [crateDamageEvidenceUrl, setCrateDamageEvidenceUrl] = useState<string | null>(null);
     const [collectedAmount, setCollectedAmount] = useState<number | ''>('');
     const [collectedMethod, setCollectedMethod] = useState<'efectivo' | 'transferencia'>('efectivo');
+    const [routePlate, setRoutePlate] = useState<string>('');
+    const [hasHardwareGps, setHasHardwareGps] = useState<boolean>(false);
+
+    useMobileGpsTracker({
+        plate: routePlate,
+        enabled: Boolean(routePlate && !hasHardwareGps)
+    });
 
     const RETURN_REASONS = [
         "Producto en mal estado",
@@ -60,57 +70,19 @@ export default function DeliveryConfirmationPage() {
         try {
             setLoading(true);
 
-            // Handle Mock Stop IDs for Demo Mode
-            if (typeof id === 'string' && id.startsWith('ms')) {
-                const mockStops: Record<string, any> = {
-                    'ms1': { 
-                        id: 'ms1', 
-                        route_id: 'mock-1', 
-                        orders: { 
-                            id: 'mo1', 
-                            customer_name: 'Minimercado La 80 (Mock)', 
-                            shipping_address: 'Carrera 80 #45-12',
-                            order_items: [
-                                { id: 'item1', product_id: 'p1', quantity: 20, picked_quantity: 20, products: { name: 'Aguacate Hass', unit_of_measure: 'kg' } },
-                                { id: 'item2', product_id: 'p2', quantity: 15, picked_quantity: 15, products: { name: 'Tomate Chonto', unit_of_measure: 'kg' } }
-                            ]
-                        } 
-                    },
-                    'ms2': { id: 'ms2', route_id: 'mock-1', orders: { id: 'mo2', customer_name: 'Restaurante Central (Mock)', shipping_address: 'Calle 50 #10-20', order_items: [] } },
-                    'ms3': { id: 'ms3', route_id: 'mock-1', orders: { id: 'mo3', customer_name: 'Panadería El Girasol (Mock)', shipping_address: 'Transversal 5 #8-15', order_items: [] } }
-                };
-                const data = mockStops[id];
-                setStop(data);
-                setCollectedAmount(150000);
-                
-                // Populate items for mock data
-                if (data.orders?.order_items) {
-                    const formatted = data.orders.order_items.map((item: any) => ({
-                        id: item.id,
-                        product_id: item.product_id,
-                        product_name: item.products.name,
-                        quantity: item.quantity,
-                        picked_quantity: item.picked_quantity,
-                        returned_qty: 0,
-                        unit: item.products.unit_of_measure
-                    }));
-                    setItems(formatted);
-                }
-                return;
-            }
-
             const { data, error } = await supabase
                 .from('route_stops')
                 .select(`
                     id, route_id, status,
+                    routes:route_id ( vehicle_plate ),
                     orders:order_id (
-                        id, sequence_id, shipping_address, payment_method, payment_status, total,
+                        id, sequence_id, shipping_address, payment_method, payment_status, total, origin_source, admin_notes, billing_cut_id,
                         profiles:profile_id (
                             id, company_name, contact_name, role, needs_crates, crate_balance
                         ),
                         order_items (
                             id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
-                            products (id, name, unit_of_measure)
+                            products (id, name, unit_of_measure, accounting_id)
                         )
                     )
                 `)
@@ -118,6 +90,22 @@ export default function DeliveryConfirmationPage() {
                 .single();
 
             if (error) throw error;
+
+            const routeObj = Array.isArray((data as any)?.routes) ? (data as any).routes[0] : (data as any)?.routes;
+            if (routeObj?.vehicle_plate) {
+                setRoutePlate(routeObj.vehicle_plate);
+                const { data: fv } = await supabase
+                    .from('fleet_vehicles')
+                    .select('tracking_source, last_gps_sync, gps_imei')
+                    .ilike('plate', routeObj.vehicle_plate)
+                    .maybeSingle();
+                setHasHardwareGps(Boolean(
+                    fv?.gps_imei &&
+                    fv?.tracking_source === 'hardware_gps' &&
+                    fv?.last_gps_sync &&
+                    Date.now() - new Date(fv.last_gps_sync).getTime() < 5 * 60 * 1000
+                ));
+            }
 
             if (data && data.orders) {
                 const orderAny = data.orders as any;
@@ -136,12 +124,13 @@ export default function DeliveryConfirmationPage() {
                 setCollectedAmount((data.orders as any).total || 0);
             }
             
-            // Initialize items with 0 returned_qty
+            // Initialize items with 0 returned_qty (preserve picked_quantity = 0 without falsy fallback)
             const order = (data as any).orders;
             if (order?.order_items) {
                 const formattedItems = (order.order_items as any[]).map(item => {
                     const variant = item.variant_label || item.nickname || '';
-                    const dispName = variant ? `${item.products?.name || 'Producto'} (${variant})` : (item.products?.name || 'Producto');
+                    const prodName = item.products?.accounting_id ? `#${item.products.accounting_id} ${item.products?.name || 'Producto'}` : (item.products?.name || 'Producto');
+                    const dispName = variant ? `${prodName} (${variant})` : prodName;
                     const physicalInst = resolvePhysicalInstruction({
                         quantity: item.quantity,
                         unit: item.products?.unit_of_measure,
@@ -154,7 +143,7 @@ export default function DeliveryConfirmationPage() {
                         product_id: item.product_id || item.products?.id,
                         product_name: dispName,
                         quantity: item.quantity,
-                        picked_quantity: item.picked_quantity || item.quantity,
+                        picked_quantity: item.picked_quantity !== null && item.picked_quantity !== undefined ? Number(item.picked_quantity) : Number(item.quantity),
                         returned_qty: 0,
                         unit: item.products?.unit_of_measure || 'un',
                         physical_instruction: physicalInst
@@ -192,27 +181,21 @@ export default function DeliveryConfirmationPage() {
 
         try {
             setSaving(true);
-            let url = '';
-            
-            if (typeof id === 'string' && id.startsWith('ms')) {
-                url = URL.createObjectURL(file);
-            } else {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `ret_${itemId}_${Date.now()}.${fileExt}`;
-                const { error: uploadError } = await supabase.storage
-                    .from('delivery-evidence')
-                    .upload(fileName, file);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `ret_${itemId}_${Date.now()}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage
+                .from('delivery-evidence')
+                .upload(fileName, file);
 
-                if (uploadError) {
-                    diagnoseStorageError(uploadError, 'delivery-evidence');
-                    throw uploadError;
-                }
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('delivery-evidence')
-                    .getPublicUrl(fileName);
-                url = publicUrl;
+            if (uploadError) {
+                diagnoseStorageError(uploadError, 'delivery-evidence');
+                throw uploadError;
             }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('delivery-evidence')
+                .getPublicUrl(fileName);
+            const url = publicUrl;
 
             setItems(prev => prev.map(item => 
                 item.id === itemId ? { ...item, return_evidence_url: url } : item
@@ -231,14 +214,6 @@ export default function DeliveryConfirmationPage() {
 
         try {
             setSaving(true);
-
-            // SIMULATE UPLOAD FOR MOCK DATA
-            if (typeof id === 'string' && id.startsWith('ms')) {
-                // Return a local blob URL for immediate preview
-                const localUrl = URL.createObjectURL(file);
-                setEvidenceUrl(localUrl);
-                return;
-            }
 
             const fileExt = file.name.split('.').pop();
             const fileName = `${id}_${Date.now()}.${fileExt}`;
@@ -264,6 +239,27 @@ export default function DeliveryConfirmationPage() {
         }
     };
 
+    const handleCratePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            setSaving(true);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `crate_${id}_${Date.now()}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage.from('delivery-evidence').upload(fileName, file);
+            if (uploadError) {
+                diagnoseStorageError(uploadError, 'delivery-evidence');
+                throw uploadError;
+            }
+            const { data: { publicUrl } } = supabase.storage.from('delivery-evidence').getPublicUrl(fileName);
+            setCrateDamageEvidenceUrl(publicUrl);
+        } catch (err) {
+            console.error('Error uploading crate photo:', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleFinalize = async () => {
         if (!evidenceUrl && !hasNovedad) {
             if (!confirm('¿Deseas finalizar sin foto de evidencia?')) return;
@@ -272,16 +268,10 @@ export default function DeliveryConfirmationPage() {
         try {
             setSaving(true);
 
+            const activeShift = await fetchActiveShiftClient();
+            const isMirrorMode = activeShift?.mode === 'manual_mirror';
             const isTotalCancellation = hasNovedad && TOTAL_CANCELLATION_REASONS.includes(novedadReason);
 
-            // BYPASS DB UPDATES FOR MOCK DATA
-            if (typeof id === 'string' && id.startsWith('ms')) {
-                await new Promise(r => setTimeout(r, 1000)); // Simulate network
-                window.showToast?.(`MODO DEMO: Entrega ${isTotalCancellation ? 'CANCELADA' : 'FINALIZADA'} con éxito`, 'success');
-                router.push(`/ops/driver/route-map/${stop?.route_id || 'mock-1'}`);
-                return;
-            }
-            
             // 1. Update stop status
             const isContraEntrega = stop?.orders?.payment_method === 'contra_entrega';
             const finalCollectedAmount = (isContraEntrega && !isTotalCancellation) 
@@ -291,8 +281,6 @@ export default function DeliveryConfirmationPage() {
                 ? collectedMethod 
                 : 'none';
 
-            const targetOrderStatus = isTotalCancellation ? 'cancelled' : 'delivered';
-
             await supabase.from('route_stops').update({
                 status: isTotalCancellation ? 'failed' : 'delivered',
                 completion_time: new Date().toISOString(),
@@ -300,10 +288,12 @@ export default function DeliveryConfirmationPage() {
                 collected_method: finalCollectedMethod
             }).eq('id', id);
 
-            if (stop?.orders?.id) {
+            // En Modo Espejo (manual_mirror), no mutamos orders.status ni duplicamos novedades/Kardex sobre lo que ya procesa el flujo manual
+            if (!isMirrorMode && stop?.orders?.id) {
+                // Nunca pasar a 'cancelled' en cancelación en puerta porque borraría Col H Ventas y descuadraría FAC-IMP; se mantiene 'delivered' con novedad/devolución
                 const { error: orderStatusErr } = await supabase
                     .from('orders')
-                    .update({ status: targetOrderStatus })
+                    .update({ status: 'delivered' })
                     .eq('id', stop.orders.id);
                 if (orderStatusErr) {
                     console.error('Error updating order status on delivery:', orderStatusErr);
@@ -316,7 +306,7 @@ export default function DeliveryConfirmationPage() {
                 .select('id, status')
                 .eq('route_id', stop.route_id);
 
-            const hasPending = remainingStops?.some(s => s.id !== id && s.status === 'pending');
+            const hasPending = remainingStops?.some(s => s.id !== id && (s.status === 'pending' || s.status === 'arrived'));
             if (!hasPending) {
                 await supabase
                     .from('routes')
@@ -324,9 +314,14 @@ export default function DeliveryConfirmationPage() {
                     .eq('id', stop.route_id);
             }
 
-            // 2. Record Events
+            if (isMirrorMode) {
+                (window as any).showToast?.('Entrega validada en Modo Espejo (sin duplicar asientos manuales)', 'success');
+                router.push(`/ops/driver/route-map/${stop.route_id}`);
+                return;
+            }
+
+            // 2. Record Events (Modo Digital Nativo; Col O se registra una sola vez en /ops/devoluciones al descargar en muelle)
             if (isTotalCancellation) {
-                // Single event for total cancellation
                 await supabase.from('delivery_events').insert({
                     stop_id: id,
                     order_id: stop.orders.id,
@@ -335,41 +330,25 @@ export default function DeliveryConfirmationPage() {
                     evidence_url: evidenceUrl
                 });
 
-                // Automatic insertion into billing_returns for all items
                 if (items && items.length > 0) {
-                    const billingInserts = items.map(item => ({
-                        order_id: stop.orders.id,
-                        product_id: item.product_id,
-                        quantity_returned: item.picked_quantity || item.quantity,
-                        reason: `Cancelación Total en Entrega: ${novedadReason}`,
-                        photo_url: evidenceUrl,
-                        status: 'pending_review'
-                    }));
-                    await supabase.from('billing_returns').insert(billingInserts);
-
-                    // Inserción en inventory_movements para alimentar Col O (Devoluciones) y habilitar decisión en /ops/inventory
-                    try {
-                        const warehouseRes = await supabase.from('warehouses').select('id').limit(1).single();
-                        const defaultWarehouseId = warehouseRes.data?.id || null;
-
-                        const inventoryInserts = items.map(item => ({
+                    for (const item of items) {
+                        const qtyRet = item.picked_quantity ?? item.quantity;
+                        if (qtyRet <= 0) continue;
+                        const brPayload: Record<string, any> = {
+                            order_id: stop.orders.id,
                             product_id: item.product_id,
-                            warehouse_id: defaultWarehouseId,
-                            quantity: Number(item.picked_quantity || item.quantity) || 0,
-                            type: 'entry',
-                            reference_type: 'route_return',
-                            reference_id: stop.orders?.id || null,
-                            status_to: 'returned',
-                            notes: `[DEVOLUCIÓN RUTA - CANCELACIÓN TOTAL]: ${novedadReason} | Pedido #${stop.orders?.sequence_id || stop.orders?.id?.substring(0, 8) || 'S/N'}`,
-                            evidence_url: evidenceUrl,
-                            created_at: new Date().toISOString()
-                        })).filter(m => m.quantity > 0);
-
-                        if (inventoryInserts.length > 0) {
-                            await supabase.from('inventory_movements').insert(inventoryInserts);
+                            quantity_returned: qtyRet,
+                            reason: `Cancelación Total en Entrega: ${novedadReason}`,
+                            photo_url: evidenceUrl,
+                            status: 'pending_review',
+                            source: 'driver_app',
+                            dedup_key: `driver_${stop.orders.id}_${item.product_id}`
+                        };
+                        const { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
+                        if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
+                            const { source: _s, dedup_key: _d, ...legacy } = brPayload;
+                            await supabase.from('billing_returns').insert(legacy);
                         }
-                    } catch (invErr) {
-                        console.error('Error insertando movimientos de retorno por cancelación:', invErr);
                     }
                 }
 
@@ -390,7 +369,7 @@ export default function DeliveryConfirmationPage() {
                         : `[Conductor] Cancelación Total en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
 
                     const desc = isReplacement
-                        ? `️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                        ? `[ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                         : `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
                     await supabase.from('customer_service_pqrs').insert({
@@ -406,7 +385,6 @@ export default function DeliveryConfirmationPage() {
                     });
                 }
             } else if (hasNovedad) {
-                // Multiple events for partial returns
                 const isReplacement = stop.orders?.origin_source === 'customer_service' || (stop.orders?.admin_notes || '').includes('REPOSICIÓN');
                 const partialReturns = items.filter(i => i.returned_qty > 0);
                 for (const item of partialReturns) {
@@ -415,48 +393,27 @@ export default function DeliveryConfirmationPage() {
                         order_id: stop.orders.id,
                         event_type: 'partial_rejection',
                         description: `PRODUCTO: ${item.product_name} | MOTIVO: ${item.return_reason || 'No especificado'} | CANT: ${item.returned_qty}`,
-                        evidence_url: item.return_evidence_url || evidenceUrl // Use item photo or fall back to order photo
+                        evidence_url: item.return_evidence_url || evidenceUrl
                     });
-                }
 
-                // Automatic insertion into billing_returns
-                if (partialReturns.length > 0) {
-                    const returnInserts = partialReturns.map(item => ({
+                    const brPayload: Record<string, any> = {
                         order_id: stop.orders.id,
                         product_id: item.product_id,
                         quantity_returned: item.returned_qty,
                         reason: item.return_reason || `Novedad de entrega reportada por conductor`,
                         photo_url: item.return_evidence_url || evidenceUrl,
-                        status: 'pending_review'
-                    }));
-                    await supabase.from('billing_returns').insert(returnInserts);
-
-                    // Inserción en inventory_movements para alimentar Col O (Devoluciones) y habilitar decisión en /ops/inventory
-                    try {
-                        const warehouseRes = await supabase.from('warehouses').select('id').limit(1).single();
-                        const defaultWarehouseId = warehouseRes.data?.id || null;
-
-                        const inventoryInserts = partialReturns.map(item => ({
-                            product_id: item.product_id,
-                            warehouse_id: defaultWarehouseId,
-                            quantity: Number(item.returned_qty) || 0,
-                            type: 'entry',
-                            reference_type: 'route_return',
-                            reference_id: stop.orders?.id || null,
-                            status_to: 'returned',
-                            notes: `[DEVOLUCIÓN RUTA - PARCIAL]: ${item.return_reason || 'Rechazo en entrega'} | Pedido #${stop.orders?.sequence_id || stop.orders?.id?.substring(0, 8) || 'S/N'}`,
-                            evidence_url: item.return_evidence_url || evidenceUrl,
-                            created_at: new Date().toISOString()
-                        })).filter(m => m.quantity > 0);
-
-                        if (inventoryInserts.length > 0) {
-                            await supabase.from('inventory_movements').insert(inventoryInserts);
-                        }
-                    } catch (invErr) {
-                        console.error('Error insertando movimientos de retorno parcial:', invErr);
+                        status: 'pending_review',
+                        source: 'driver_app',
+                        dedup_key: `driver_${stop.orders.id}_${item.product_id}`
+                    };
+                    const { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
+                    if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
+                        const { source: _s, dedup_key: _d, ...legacy } = brPayload;
+                        await supabase.from('billing_returns').insert(legacy);
                     }
+                }
 
-                    // Automatic insertion into customer_service_pqrs
+                if (partialReturns.length > 0) {
                     const clientId = stop.orders?.profiles?.id;
                     if (clientId) {
                         const itemsSummary = partialReturns.map(i => `• ${i.product_name}: ${i.returned_qty} ${i.unit} devueltos (Motivo: ${i.return_reason || 'No especificado'})`).join('\n');
@@ -478,7 +435,7 @@ export default function DeliveryConfirmationPage() {
                             : `[Conductor] Rechazo Parcial en Entrega - Pedido #${stop.orders.sequence_id || stop.orders.id.substring(0, 8)}`;
 
                         const desc = isReplacement
-                            ? `️ [ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
+                            ? `[ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                             : `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
                         await supabase.from('customer_service_pqrs').insert({
@@ -540,6 +497,21 @@ export default function DeliveryConfirmationPage() {
                     balance_after: newBalance,
                     notes: `Despacho Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'}: ${canastillasDelivered} ent. / ${canastillasReceived} rec. (${stop.orders?.customer_name || 'Cliente'})`,
                     evidence_url: evidenceUrl || null
+                });
+            }
+
+            if (crateDamageEvidenceUrl) {
+                await supabase.from('asset_movements').insert({
+                    route_id: stop.route_id,
+                    order_id: stop.order_id || (stop.orders as any)?.id || null,
+                    profile_id: (stop.orders as any)?.profile_id || null,
+                    type: 'damage',
+                    movement_type: 'crate_damage',
+                    delivered_qty: 0,
+                    received_qty: 0,
+                    quantity: 0,
+                    notes: `Evidencia daño/pérdida de canastilla en Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'} (${stop.orders?.customer_name || 'Cliente'})`,
+                    evidence_url: crateDamageEvidenceUrl
                 });
             }
 
@@ -659,7 +631,7 @@ export default function DeliveryConfirmationPage() {
                                     </div>
                                     <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                                         <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#F3F4F6' }}>
-                                            {item.picked_quantity || item.quantity} {item.unit}
+                                            {item.picked_quantity ?? item.quantity} {item.unit}
                                         </span>
                                     </div>
                                 </div>
@@ -722,10 +694,11 @@ export default function DeliveryConfirmationPage() {
                         <div>
                             <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS ENTREGADAS</div>
                             <input 
-                                type="number" 
+                                type="text" 
+                                inputMode="numeric"
                                 className="input-op" 
                                 value={canastillasDelivered}
-                                onChange={(e) => setCanastillasDelivered(parseInt(e.target.value) || 0)}
+                                onChange={(e) => setCanastillasDelivered(parseInt(e.target.value.replace(/[^0-9]/g, ''), 10) || 0)}
                                 style={{ 
                                     width: '100%', 
                                     padding: '0.8rem', 
@@ -741,10 +714,11 @@ export default function DeliveryConfirmationPage() {
                         <div>
                             <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px' }}>CANASTILLAS RECIBIDAS</div>
                             <input 
-                                type="number" 
+                                type="text" 
+                                inputMode="numeric"
                                 className="input-op" 
                                 value={canastillasReceived}
-                                onChange={(e) => setCanastillasReceived(parseInt(e.target.value) || 0)}
+                                onChange={(e) => setCanastillasReceived(parseInt(e.target.value.replace(/[^0-9]/g, ''), 10) || 0)}
                                 style={{ 
                                     width: '100%', 
                                     padding: '0.8rem', 
@@ -761,8 +735,8 @@ export default function DeliveryConfirmationPage() {
 
                     <div style={{ marginTop: '0.8rem', textAlign: 'right' }}>
                         <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: '800', color: '#F87171', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                            <Camera size={12} /> Reportar Canastilla Dañada / Perdida (Foto)
-                            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+                            <Camera size={12} /> {crateDamageEvidenceUrl ? 'Foto Canastilla Adjunta' : 'Reportar Canastilla Dañada / Perdida (Foto)'}
+                            <input type="file" accept="image/*" capture="environment" onChange={handleCratePhotoUpload} style={{ display: 'none' }} />
                         </label>
                     </div>
                 </div>
@@ -784,11 +758,15 @@ export default function DeliveryConfirmationPage() {
                             <div>
                                 <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#9CA3AF', marginBottom: '0.4rem', letterSpacing: '0.3px', fontFamily: 'var(--font-inter), sans-serif' }}>VALOR COBRADO ($)</div>
                                 <input 
-                                    type="number" 
+                                    type="text" 
+                                    inputMode="numeric"
                                     className="input-op" 
                                     placeholder="0"
                                     value={collectedAmount}
-                                    onChange={(e) => setCollectedAmount(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                                    onChange={(e) => {
+                                        const clean = e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+                                        setCollectedAmount(clean === '' ? '' : parseInt(clean, 10) || 0);
+                                    }}
                                     style={{ 
                                         width: '100%', 
                                         padding: '0.8rem', 
@@ -872,7 +850,7 @@ export default function DeliveryConfirmationPage() {
                                     <optgroup label="CANCELACIÓN TOTAL" style={{ color: '#EF4444', backgroundColor: '#090D16' }}>
                                         {TOTAL_CANCELLATION_REASONS.map(r => <option key={r} value={r} style={{ backgroundColor: '#090D16', color: 'white' }}>{r}</option>)}
                                     </optgroup>
-                                    <optgroup label="DEVOLUCIÓN PARCIAL / SKU" style={{ color: '#059669', backgroundColor: '#090D16' }}>
+                                    <optgroup label="DEVOLUCIÓN PARCIAL / PRODUCTO" style={{ color: '#059669', backgroundColor: '#090D16' }}>
                                         <option value="devolucion_parcial" style={{ backgroundColor: '#090D16', color: 'white' }}>Reportar daños o faltantes por producto</option>
                                     </optgroup>
                                 </select>
@@ -904,11 +882,14 @@ export default function DeliveryConfirmationPage() {
                                                         <span style={{ fontSize: '0.7rem', color: '#EF4444', fontWeight: '800' }}>DV:</span>
                                                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                             <input 
-                                                                type="number"
-                                                                min="0"
-                                                                max={item.picked_quantity}
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 value={item.returned_qty}
-                                                                onChange={(e) => handleReturnQtyChange(item.id, parseFloat(e.target.value) || 0)}
+                                                                onChange={(e) => {
+                                                                    const clean = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.');
+                                                                    const num = Math.min(item.picked_quantity, Math.max(0, parseFloat(clean) || 0));
+                                                                    handleReturnQtyChange(item.id, num);
+                                                                }}
                                                                 style={{ 
                                                                     width: '85px', 
                                                                     padding: '0.4rem', 

@@ -613,44 +613,8 @@ export default function SupervisorDashboard() {
     }
   };
 
-  const toggleModuleAccess = async (collabId: string, moduleName: string, currentlyAllowed: boolean) => {
-    try {
-      const targetCollab = collaborators.find(c => c.id === collabId);
-      if (!targetCollab) return;
-
-      let updatedModules = [...targetCollab.allowed_modules];
-      if (currentlyAllowed) {
-        updatedModules = updatedModules.filter(m => m !== moduleName);
-      } else {
-        if (!updatedModules.includes(moduleName)) {
-          updatedModules.push(moduleName);
-        }
-      }
-
-      const { error } = await supabase
-        .from('collaborators')
-        .update({ allowed_modules: updatedModules })
-        .eq('id', collabId);
-
-      if (error) throw error;
-
-      // Log assignment change to audits
-      await supabase.from('audit_logs').insert([{
-        action: 'UPDATE_PERMISSIONS',
-        module: 'SUPERVISOR',
-        collaborator_id: collabId,
-        collaborator_name: targetCollab.contact_name,
-        details: { allowed_modules: updatedModules, changed_module: moduleName, operation: currentlyAllowed ? 'remove' : 'add' }
-      }]);
-
-      showToastMsg('Permisos actualizados correctamente');
-      
-      // Update local state instantly
-      setCollaborators(prev => prev.map(c => c.id === collabId ? { ...c, allowed_modules: updatedModules } : c));
-    } catch (err: any) {
-      console.error('Error updating permissions:', err);
-      showToastMsg('No se pudieron actualizar los permisos', 'error');
-    }
+  const toggleModuleAccess = async () => {
+    showToastMsg('Los permisos RBAC por módulo se gestionan centralmente en /admin/team (system_roles y custom_permissions).', 'error');
   };
 
   // Filter items based on search input
@@ -866,7 +830,7 @@ export default function SupervisorDashboard() {
             color: activeTab === 'discrepancy' ? 'white' : 'var(--ops-text-muted)'
           }}
         >
-          ️ Excedentes ({discrepancies.length})
+          Excedentes ({discrepancies.length})
         </button>
         <button 
           onClick={() => { setActiveTab('staff'); setSearchQuery(''); }}
@@ -910,7 +874,7 @@ export default function SupervisorDashboard() {
       <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
         <input 
           type="text" 
-          placeholder="Buscar por SKU, producto o proveedor..."
+          placeholder="Buscar por #ID Contable, producto o proveedor..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
@@ -1011,7 +975,7 @@ export default function SupervisorDashboard() {
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', color: 'var(--ops-text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-                      <span>SKU: <strong>{item.product.sku}</strong></span>
+                      <span>#ID: <strong>{(item.product as { accounting_id?: string | number }).accounting_id ?? 'S/N'}</strong></span>
                       <span>•</span>
                       <span>Proveedor: <strong>{item.provider?.name || 'No asignado'}</strong></span>
                       {item.variant_label && (
@@ -1167,11 +1131,11 @@ export default function SupervisorDashboard() {
                         alignItems: 'center',
                         gap: '4px'
                       }}>
-                        ️ Excedente de Peso: +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
+                        Excedente de Peso: +{formatNumber(item.excess_quantity)} {item.product.unit_of_measure}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', color: 'var(--ops-text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
-                      <span>SKU: <strong>{item.product.sku}</strong></span>
+                      <span>#ID: <strong>{(item.product as { accounting_id?: string | number }).accounting_id ?? 'S/N'}</strong></span>
                       <span>•</span>
                       <span>Proveedor: <strong>{item.purchase?.provider?.name || 'No asignado'}</strong></span>
                       {item.purchase?.variant_label && (
@@ -1373,7 +1337,7 @@ export default function SupervisorDashboard() {
                             <input 
                               type="checkbox"
                               checked={isAllowed}
-                              onChange={() => toggleModuleAccess(collab.id, mod.value, isAllowed)}
+                              onChange={() => toggleModuleAccess()}
                               style={{ 
                                 width: '16px', 
                                 height: '16px', 
@@ -1640,7 +1604,7 @@ export default function SupervisorDashboard() {
               fontFamily: 'Outfit, sans-serif',
               color: actionType === 'approve' ? '#10B981' : '#EF4444'
             }}>
-              {actionType === 'approve' ? '️ Autorizar Peso Excedente' : 'Confirmar Rechazo de Exceso'}
+              {actionType === 'approve' ? 'Autorizar Peso Excedente' : 'Confirmar Rechazo de Exceso'}
             </h3>
             
             <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', margin: '0 0 1.25rem 0', lineHeight: '1.4' }}>

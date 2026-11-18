@@ -169,3 +169,23 @@ Abrir el asistente de lanzamiento en Modo Manual (`ManualDispatchWizardModal`) s
     3. Todas las **Órdenes de Reposición `D+1` (`$0 COP`)** generadas por Calidad/SAC durante la mañana del jueves.
   - Repetir barrido `@sin_gps = 0`, `@duplicados = 0` y cero precios `$0` involuntarios.
 - [ ] **6.3 Corte 8:00 p.m. del Jueves 12/Nov:** Ejecutar nuevamente el **Bloque 2 completo** (Espacios `1–150` + **7 Documentos Manuales** + Sello a `para_compra`) para el despacho de madrugada del **Viernes 13/Nov**, y el viernes en la mañana cerrar el ciclo con **Bloques 4 y 5** (PQRS + Carga Masiva Facturación Viernes).
+
+---
+
+### BLOQUE 7 — Transición Híbrida (`Modo Espejo Manual` ➔ `Digital Nativo`, Escenario 468 — 17/Nov/2026)
+> [!NOTE]
+> **ESTADO: LISTO PARA PRUEBA EN VIVO (`Modo Espejo Manual`)**  
+> **Validaciones cerradas:** Migración SQL aplicada y verificada en Supabase (`20261117_unified_transport_ops_deploy.sql`), Auditoría Forense `/tirano` con **`🟢 CERTIFICACIÓN PLENA (100%)`**, `npx.cmd tsc --noEmit` en **`EXIT 0`** y revisión móvil (`390x844`) en `/ops/*` y `/admin/transport`.
+
+- [x] **7.1 Migración de Base de Datos Zero-Downtime (`supabase/migrations/20261117_unified_transport_ops_deploy.sql`):**
+  - Tabla `public.operational_shifts` creada y verificada (`shift_date`, `mode: 'manual_mirror' | 'digital_native'`, `status: 'open' | 'closed'`).
+  - Columnas de Kardex de canastillas agregadas en `public.asset_movements` (`order_id`, `profile_id`, `movement_type`, `delivered_qty`, `received_qty`, `balance_after`, `evidence_url`).
+  - Columna `estimated_arrival` agregada en `public.route_stops`.
+  - Trazabilidad RCA (`defect_category_l1`, `defect_subtype_l2`, `imputed_responsible`) e idempotencia (`source`, `dedup_key`, `idx_billing_returns_dedup_key`) verificadas en `billing_returns` y `customer_service_pqrs`.
+- [x] **7.2 Convergencia 8:00 p.m. en Paso 1 (`ManualDispatchWizardModal`):**
+  - Botón **"Optimizar con Google (LIFO + Flota)"** pre-impresión para sellar rutas, orden LIFO y bahías contiguas `1–150` antes de imprimir remisiones, con respaldo determinista **"Auto-Asignar (GPS + Hora)"** y preservación invariante de parejas `10A / 10B`.
+- [x] **7.3 Portal `/ops/*` Mobile-First, Cero Mocks y Cierre Diario (`/api/ops/shifts`):**
+  - Selector de modo **`ESPEJO MANUAL`** (sin doble impacto contable frente a planillas impresas) vs **`DIGITAL NATIVO`** y botón **"Cerrar Operación del Día"** en `/ops`.
+  - Erradicación total de datos mock, etiquetas `SKU` en UI e inputs `type="number"`, más barra inferior deslizable y piso tipográfico legible en celular (`390x844`).
+- [ ] **7.4 Prueba Operativa Controlada en Espejo & Despliegue (`main` + `liard`):**
+  - Ejecutar una tanda real de las 8:00 p.m. en `Modo Espejo Manual` validando bahías, picking por las 12 células, rectificación, ruta de conductor y cierre diario en `/ops`, previo a autorizar `git push` a `main` y `liard`.

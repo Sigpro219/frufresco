@@ -7136,17 +7136,18 @@ La Consola Central de Compras 360 es el punto neurálgico de gobernanza donde co
 
 #### B. Planilla Física de Control de Llegada e Ingreso a Bodega (`/admin/procurement/receiving-print`)
 1. **Diseño Industrial de Tabla Única (1 Columna A-Z de Ancho Completo):**
-   - Disposición de ancho completo (1 sola tabla de 5 columnas que aprovecha el 100% del ancho de hoja), ofreciendo espacio generoso para escritura manuscrita y evitando el apiñamiento de texto.
-   - **Parametrizador Dinámico de Filas por Hoja (Ocupar Toda la Hoja):** Control en barra superior (botones `+` / `-` e input interactivo) que permite al usuario ajustar en caliente la cantidad de filas por hoja (defecto: 36 en Carta, 46 en Oficio). El motor recalcula instantáneamente la altura proporcional de fila (`rowHeightPx`, entre 20px y 26px) para que el contenido se expanda armónicamente y ocupe el 100% del folio vertical sin desbordar hacia hojas fantasma.
+   - Disposición de ancho completo (1 sola tabla de 6 columnas que aprovecha el 100% del ancho de hoja), ofreciendo espacio generoso para escritura manuscrita y lectura OCR/IA sin cruce de columnas.
+   - **Parametrizador Dinámico de Filas por Hoja (Ocupar Toda la Hoja):** Control en barra superior (botones `+` / `-` e input interactivo) que permite al usuario ajustar en caliente la cantidad de filas por hoja (defecto: 32 en Carta, 41 en Oficio — +12% a +13% más de altura por renglón para escritura cómoda). El motor recalcula instantáneamente la altura proporcional de fila (`rowHeightPx`, ~26px–28px) para que el contenido se expanda armónicamente y ocupe el 100% del folio vertical sin desbordar hacia hojas fantasma.
    - **Blindaje Anti-Desbordamiento (Anti-Spillover):** Erradicación del fallo donde alturas excesivas forzaban al motor de impresión a cortar la tabla y expulsar 6 u 8 filas huérfanas a una hoja adicional con 80% de espacio en blanco.
    - **Cero Desperdicio de Tinta/Tóner (Zero Filler Rows):** Erradicación total de filas vacías ficticias o grillas dibujadas sin productos al pie de página. El documento únicamente renderiza los ítems existentes, dejando el resto de la hoja en blanco natural.
    - Membrete institucional con logotipo de *FruFresco* y razón social oficial *Investments Cortés S.A.S.*
-   - **Estructura Canónica de 5 Columnas de Entrada en Muelle (Resolutivo Gemba Octubre 2026):**
-     1. **`Producto` (36%):** Nombre limpio del producto sin sufijos numéricos ni IDs contables superfluos (`#{accounting_id}`), maximizando el espacio tipográfico para legibilidad inmediata.
-     2. **`Hora Llegada` (14%):** Casilla manuscrita para registrar el horario exacto de arribo del vehículo/camión a muelle (ej. `04:30 AM`).
-     3. **`Nombre Proveedor` (26%):** Casilla manuscrita para registrar con precisión el proveedor, distribuidor o puesto de plaza abastecedor.
-     4. **`KG` (12%):** Casilla de pesaje físico real en báscula de patio.
-     5. **`Calidad - Apto (SI/NO)` (12%):** Casilla de inspección sensorial de recibo para visto bueno o rechazo técnico con texto blanco de alto contraste sobre cabecera institucional.
+   - **Estructura Canónica de 6 Columnas de Entrada en Muelle (Resolutivo Gemba Noviembre 2026 - Escenario 466):**
+     1. **`ID` (7%):** Código contable oficial (`products.accounting_id`) al extremo izquierdo para anclaje exacto en lectura por IA (`GeminiExtractionItemSchema.accountingId`).
+     2. **`Producto` (31%):** Nombre limpio del producto alineado a la izquierda.
+     3. **`KG` (20%):** Casilla amplia contigua al producto para registrar cifras compuestas manuscritas (ej. `10 + 5 + 8`, fracciones `1/2k` o `70k`).
+     4. **`Nombre Proveedor` (22%):** Casilla manuscrita para registrar con precisión el proveedor, distribuidor o puesto de plaza abastecedor.
+     5. **`Hora Llegada` (11%):** Casilla manuscrita para registrar el horario exacto de arribo del vehículo/camión a muelle (ej. `04:30 AM`).
+     6. **`Calidad - Apto (SI/NO)` (9%):** Casilla de inspección sensorial de recibo para visto bueno o rechazo técnico con texto blanco de alto contraste sobre cabecera institucional.
 2. **Arquitectura Golden Print e Insumo Eficiente:**
    - Líneas de cuadrícula delgadas y eficientes en tóner (`1px solid #CBD5E1`) en lugar de marcos negros pesados que saturan la impresora.
    - Inyección de `extraStyles` en `printViaNewWindow` que anula los paddings inflados de `td` y respeta la altura exacta calculada (`height: ${rowHeightPx}px !important`).
@@ -17532,3 +17533,96 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - Se elimina la comparación ciega `cleanName.includes(compName.split(' ')[0])` en la Capa 3 de `resolveClientProfile`, exigiendo coincidencia completa (`includes`) o coincidencia de palabras clave distintivas (`nameKeywords`) con puntuación mínima (`score >= 20`) cuando hay múltiples candidatos.
   3. **Saneamiento de Mojibake UTF-8/Latin1 (`sanitizeDocText`):**
      - Repara secuencias corruptas de codificación como `Ã±`/`Ã'`/`Ã’` → `n` (ej. `BRETAÃ'A` → `bretana`) antes de la normalización NFKD, asegurando el emparejamiento exacto de sucursales con `Ñ` o tildes.
+
+---
+
+### Escenario 466: Restauración de Tarifa `$0 COP` y Partición Atómica A/B Fuera de Acuerdo + Unificación de Bahía Compartida WMS `10A` / `10B` (SDD v1.9.421)
+- **Given** un cliente institucional B2B con acuerdo comercial vigente (`quotes.status = 'agreement'`) y autorización de compras fuera de convenio (`allow_off_agreement_purchases = true`, ej. *Diplomat Wyndham Bogotá*), cuya modalidad documental sea **Factura** (`invoice`) o **Remisión** (`remission`),
+- **When** el cliente solicita productos dentro y/o fuera de su acuerdo comercial en cualquiera de las puertas de captura (`/api/orders/resolve-agreement-pricing`, `src/app/admin/orders/create/page.tsx`, `src/components/EmailDraftsModule.tsx`) y posteriormente pasa a asignación de espacios WMS (`src/lib/stagingSpaceAllocator.ts`, `ManualDispatchWizardModal.tsx`, `StagingSpacesManagement.tsx`, `alistamiento-print`, `contingency-print`):
+- **Then** rige de forma soberana la unificación Comercial-Logística (derogando la auto-inyección de *General Institucional* del Escenario 429 §3 y el *Cero Split*):
+  1. **Prohibición de Auto-Fallback a *General Institucional* en Acuerdos Vigentes (`/api/orders/resolve-agreement-pricing`):**
+     - Cuando `hasAssignedAgreement = true`, ningún SKU fuera de `agreementProductIds` hereda precios de *General Institucional* ni `products.base_price`; todo SKU fuera de acuerdo se resuelve estrictamente a **`$0 COP`** (`Remisión $0`).
+     - *General Institucional* aplica únicamente cuando el cliente B2B no posee acuerdo vigente asignado.
+  2. **Partición Atómica A/B en Captura (`orders/create` y `EmailDraftsModule`):**
+     - **Pedido Mixto (ítems dentro + fuera de acuerdo, tanto en Factura como en Remisión):** Se particiona atómicamente en **Pedido A (Principal)** con los ítems del acuerdo a tarifa contractual (preservando el `document_type` del cliente) y **Pedido B (Hijo Remisión `$0`)** con los ítems fuera de acuerdo en `$0 COP`, `logistics_data.is_off_agreement_split = true`, `logistics_data.parent_order_id = Pedido_A.id`, `logistics_data.parent_sequence_id = Pedido_A.sequence_id`, `logistics_data.document_type_override = 'remission'`, `logistics_data.remission_with_prices_override = false`, estampilla `[FUERA DE ACUERDO - DESPACHADO SIN PRECIO - PENDIENTE FIJAR TARIFA COMERCIAL: ...]` y creación de tarea urgente en `admin_tasks` para Comercial (`/admin/commercial`).
+     - **Pedido 100% Fuera de Acuerdo:** Se registra como único pedido forzado a `Remisión $0` con la misma estampilla y tarea comercial.
+  3. **Unificación Física de Bahía WMS `10A` / `10B`:**
+     - `allocateStagingSpacesGeographically` agrupa cada par `(Pedido A, Pedido B)` vinculado por `parent_order_id` (`is_off_agreement_split = true`), calcula canastillas y bahías sobre el **peso combinado (`A + B`)**, asigna exactamente el mismo `warehouse_spaces: number[]` (ej. `[10]`) a ambos documentos y genera el rótulo alfanumérico **`10A`** (Pedido A / Factura) y **`10B`** (Pedido B / Remisión `$0`) — o `10-11A` / `10-11B` si ocupa múltiples bahías — persistido en `logistics_data.assigned_space_label`.
+     - Las vistas WMS (`ManualDispatchWizardModal.tsx`, `StagingSpacesManagement.tsx`) permiten múltiples órdenes compartiendo la misma bahía en la grilla 150 y tanto `alistamiento-print` como `contingency-print` imprimen el rótulo exacto `10A` / `10B`.
+
+
+---
+
+### Escenario 466: Rediseño Ergonómico de Planilla de Llegada (`ID | Producto | KG` +12% Altura) & Preservación de `accountingId` en IA (SDD v1.9.421)
+- **Given** la planilla física de recepción en muelle ([`src/app/admin/procurement/receiving-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/procurement/receiving-print/page.tsx)) y su extractor OCR/IA ([`src/app/api/commercial/inventory/extract-physical-sheet/route.ts`](file:///c:/Projects/frufresco/src/app/api/commercial/inventory/extract-physical-sheet/route.ts)):
+- **When** se imprime la planilla para diligenciamiento manual y posteriormente se digitaliza mediante foto/PDF en el modal de carga física (`sheetType === 'entrada'`):
+- **Then** rigen de forma obligatoria:
+  1. **Orden Izquierda-a-Derecha `ID | Producto | KG` (6 Columnas = 100%):**
+     - `ID` (`7%`, centrado, `accounting_id`), `Producto` (`31%`), `KG` (`20%`, contigua al producto para sumas manuscritas como `10 + 5`), `Nombre Proveedor` (`22%`), `Hora Llegada` (`11%`) y `Calidad (SI/NO)` (`9%`).
+  2. **Mayor Altura de Fila (+12% a +13%):**
+     - Filas por hoja por defecto ajustadas a **`41` en Oficio** (`~26px`) y **`32` en Carta** (`~28px`), manteniendo el ajuste manual `+`/`-`.
+  3. **Integridad Zod (`accountingId`) y Prompt de IA:**
+     - `GeminiExtractionItemSchema` en `extract-physical-sheet/route.ts` declara explícitamente `accountingId: z.union([z.string(), z.number()]).optional().nullable()` para evitar que `safeParse` elimine el ID contable leído por Gemini antes de llegar a `normalizeGeminiItems`.
+     - El prompt de `sheetType === 'entrada'` instruye el nuevo orden de 6 columnas (`ID | Producto | KG | Nombre Proveedor | Hora Llegada | Calidad`), tomando `accountingId` de la columna 1 y `quantityKg` de la columna `KG` inmediatamente a la derecha de `Producto`.
+
+### Escenario 465: Casa Matriz `Matriz Obsequios`, Modelo Corporativo (Costo Base) & Remisión `$0` Sin Consecutivo `FV-` (SDD v1.9.420)
+- **Alcance Contractual:** Reagrupación contable de sucursales de cortesía bajo la casa matriz **`MATRIZ OBSEQUIOS`** con herencia obligatoria de `document_type = 'gift_remission'` y tarifa **`Modelo Corporativo` (`UTILIDAD 0%` / `A Costo Base`)** en [`src/lib/commercial/billingOrderUtils.ts`](file:///c:/Projects/frufresco/src/lib/commercial/billingOrderUtils.ts) y [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx).
+- **Reglas de Negocio & Comportamiento:**
+  1. **Casa Matriz `MATRIZ OBSEQUIOS`:**
+     - Se crea la casa matriz `MATRIZ OBSEQUIOS` (`is_corporate_parent = true`, `document_type = 'remission'`, `remission_with_prices = false`, `logistics_data.is_gift_remission = true` —respetando el constraint `profiles_document_type_check` en PostgreSQL— y `pricing_model_id` apuntando a `Modelo Corporativo`).
+     - Todas las sucursales `*OBSEQUIO*` vinculadas previamente a `INVESTMENTS CORTES` (`42bddbfa-377a-45ab-ac8c-800e00f94d87`) se reasignan a `parent_id = MATRIZ OBSEQUIOS`, con `document_type = 'remission'`, `remission_with_prices = false` y `pricing_model_id = null` (herencia directa del `Modelo Corporativo` a Costo Base).
+  2. **Precedencia Absoluta `gift_remission` y Cero Consecutivo `FV-`:**
+     - Tanto `resolveCanonicalDocType` en [`billingOrderUtils.ts`](file:///c:/Projects/frufresco/src/lib/commercial/billingOrderUtils.ts) como `resolveOrderBillingInfo` y `hasGiftOrRep` en [`billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx) y `isGiftRemissionClient` en [`create/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/create/page.tsx) detectan por `document_type = 'gift_remission'`, `logistics_data.is_gift_remission = true`, `parent.company_name = 'MATRIZ OBSEQUIOS'` o `\bOBSEQUIO\b` en `company_name`.
+     - Ningún pedido de `MATRIZ OBSEQUIOS` es elegible para consecutivo fiscal `FV-` (`isOrderEligibleForCanonicalBilling === false`).
+  3. **Sábana de Facturación (`Rem. $0 · Obsequio`) + Costo Base para Gasto:**
+     - En la sábana de facturación (`/admin/commercial/billing`), estos pedidos se muestran con insignia **`Rem. $0 · Obsequio`** (`REM-OBSEQUIO`, sin cobro ni factura al cliente), mientras en BD conservan la valorización interna al **Costo Base (`Modelo Corporativo`)** para su imputación contable al gasto de la compañía.
+
+---
+
+### Escenario 467: Corte de Concepto Pre-Despliegue Simultáneo (`Transporte + Despachos + /ops/*`) — Regla Espejo 1:1 del Modo Manual & Dictamen Goldfish en Frío (`SDD v1.9.422`)
+- **Estado del Contrato:** `🔴 VETO PREVENTIVO GOLDFISH` (en definición de los 6 candados contractuales antes de iniciar ejecución en código).
+- **Premisa Rectora ("Modo Manual como Fuente Única de Verdad 1:1"):**
+  - La operación estandarizada vigente en Modo Manual (`purchases-print`, `receiving-print`, `alistamiento-print`, `contingency-print`, bahías `1–150` / `10A-10B`, Sábana de 24 Columnas `Col E..X` y Facturación en 2 Cortes `FAC-IMP PM` / `Remisión AM` → `.xls` BIFF8 44 cols) constituye el contrato canónico inmutable.
+  - Todas las pantallas digitales en piso (`/ops/*`) y consolas TMS (`/admin/transport`) deben replicar **exactamente 1:1** los datos, agrupaciones, unidades normalizadas (`normalizeToKg`), `#accounting_id` y reglas contables de dichas planillas, sin desviaciones ni cálculos paralelos.
+  - **Única Pieza Diferenciada:** [`/ops/picking/dashboard`](file:///c:/Projects/frufresco/src/app/ops/picking/dashboard/page.tsx) ("Tablero de Juegos") para orquestar en tiempo real el avance de las células de alistamiento y habilitar el paso a Rectificación de Muelle cuando un vehículo alcance el `100%`.
+- **Inventario de Brechas Forenses Registradas en `SYSTEM_ATLAS.md` (`RED-14` a `RED-23`):**
+  1. **Identidad & RLS (`RED-14`):** `collaborators` (9 conductores, 9 líderes, auxiliares, comprador) sin cuentas en `auth.users`/`profiles`; `confirm/route.ts` falla al buscar `driver_id` en `profiles`; `OpsLayout` sin bloqueo RBAC por ruta.
+  2. **Conservación de Masa (`RED-15`, `RED-19`, `RED-21`):** Doble descuento `2x Venta` en `Col H` por coexistencia de `committedSalesMap` + trigger `order_item`; doble registro `Col O` entre `driver/delivery` y `/ops/devoluciones`; `cancelled` en cancelación total borra `Col H` e inventa stock en `Col O`; `Col G` inflada por cuarentenas/excedentes `in_process`; precio mock `$1.000` en compra rápida `<Zap />`.
+  3. **Estados, Bahías & `FAC-IMP` (`RED-16`, `RED-17`, `RED-18`):** `OPERATIONAL_STATUSES` omite `'in_preparation'`, `'ready_for_dispatch'` e `'in_transit'`; `/api/transport/confirm` sobrescribe bahías `1–150` asignadas a las 8 PM y omite `assigned_route_id`; `/api/transport/optimize` puede separar `10A` y `10B`; `/ops/rectificacion/[routeId]` muta `order_items.quantity` sin proteger `FAC-IMP` (`billing_cut_id IS NOT NULL`), guarda Base64 en BD e inserta columnas inexistentes; `driver/route/[id]` se bloquea si se alistó en papel (`picked_quantity = 0`); `driver/delivery/[id]` tiene bug falsy `picked_quantity || quantity`.
+  4. **Células, Tablero & Fecha Nocturna (`RED-20`):** Divergencia entre 12 células `KNOWN_CELLS` (`buying_team`) vs `work_cells_governance` vs `terminal` (`category` texto vs código); ceguera entre 8:00 PM y 11:59 PM en `/ops/picking`; error `401` en `/api/inventory/stocks` que activa bloqueo `DT-17`; `picking/dashboard` sin filtro de fecha y con `handleCellClick` (`window.prompt` mutando `items[0]`).
+  5. **Canastillas, Telemetría & Reglas `AGENTS.md` (`RED-22`, `RED-23`):** `asset_movements` sin 7 columnas en PostgreSQL; `4` furgones propios sin IMEI Apps-360; baliza PWA sobreescribiendo GPS satelital en los `3` con IMEI y apagándose al entrar a `delivery/[id]`; mocks visibles y exposición residual de `SKU` / `\uFE0F`.
+- **Estado del Contrato:** `🟢 CERRADO Y APROBADO EN ESCENARIO 468` (levantado el `🔴 VETO PREVENTIVO GOLDFISH` tras formalizar `operational_shifts`, Cierre de Jornada, Modo Espejo, Cero Mocks y Skin 1 Responsive/Mobile-First).
+- **Compuertas Cerradas en Escenario 468:**
+  - `[x]` **C1:** Fuente única oficial de las 12 células (`src/lib/ops/operationalCells.ts` alineada a `buying_team`) y regla `parent_id` Padre-Hijo en Picking/Recepción.
+  - `[x]` **C2:** Modelo de autenticación/RLS para `collaborators` + join en `/api/transport/confirm`.
+  - `[x]` **C3:** Preservación de `warehouse_spaces` (`1–150`) y co-asignación obligatoria `10A` / `10B` en `optimize` y `confirm`.
+  - `[x]` **C4:** Contrato `FAC-IMP` (`billing_cut_id IS NOT NULL` inmutable -> Nota Crédito `Corte ADJ`) vs Remisión (`billing_cut_id IS NULL` -> ajuste neto + reimpresión).
+  - `[x]` **C5:** Regla de `picking/dashboard` (Torre de Observación/Coordinación sin `window.prompt` destructivo) y helper compartido de Fecha Operativa Nocturna (corte 8:00 PM).
+  - `[x]` **C6:** Idempotencia en `billing_returns` (`(order_id, product_id, source)`), autoridad única `Col O`/`Col H`/`Col G`/`Col K`, reparación de `asset_movements` y eliminación de `picked_quantity || quantity`.
+
+---
+
+### Escenario 468: Arquitectura Unificada Pre-Despliegue Simultáneo (`Transporte + Despachos + /ops/*`) — Ciclo de Vida Diario, Modo Espejo vs Digital, Google/Cercanía Paso 1, Cero Mocks & Skin 1 Mobile-First (`SDD v1.9.423`)
+- **Estado del Contrato:** `🟢 APROBADO PARA EJECUCIÓN` (Compuertas `C1`–`C6` cerradas).
+- **Reglas Contractuales Vinculantes:**
+  1. **Ciclo de Vida Diario (`public.operational_shifts` / fallback `app_settings`) & Cierre de la Operación del Día:**
+     - Entidad `operational_shifts (id, shift_date, mode: 'manual_mirror' | 'digital_native', status: 'open' | 'closed', opened_by, closed_by, closed_at, notes)`.
+     - Endpoint [`/api/ops/shifts`](file:///c:/Projects/frufresco/src/app/api/ops/shifts/route.ts): `GET` y `POST` exigen sesión autenticada de staff/admin; gestiona el turno activo (`manual_mirror` por defecto o `digital_native`) y ejecuta el **Cierre de la Operación del Día**, transicionando órdenes conciliadas/facturadas con `delivery_date <= shift_date` a `'delivered'` y únicamente rutas abiertas cuyas paradas pertenezcan a `orders.delivery_date <= shift_date` a `'completed'` (verificando errores PostgREST en cada actualización).
+  2. **Candado Contable del Modo Espejo (`manual_mirror`):**
+     - En `manual_mirror`, las planillas impresas y `contingency-reconciliation` gobiernan la contabilidad y Kardex; las pantallas `/ops/rectificacion` y `/ops/driver` proyectan la tanda real para validación E2E (rutas, LIFO, GPS, POD) con protección anti-duplicado sobre `Col O` y `billing_returns`.
+  3. **Convergencia 8:00 PM en Paso 1 de `ManualDispatchWizardModal` & Respaldo Espacio-Temporal:**
+     - El botón del Paso 1 (`ManualDispatchWizardModal`) ofrece: (a) **Optimizar con Google (`optimizeTours`)** pre-impresión para sellar camiones, orden LIFO y bahías `1–150` contiguas antes de imprimir remisiones; y (b) **Motor Determinista de Cercanía Espacio-Temporal (`GPS lat/lng + ventana horaria`)** en [`stagingSpaceAllocator.ts`](file:///c:/Projects/frufresco/src/lib/stagingSpaceAllocator.ts) como respaldo en Modo Manual puro.
+     - [`/api/transport/confirm`](file:///c:/Projects/frufresco/src/app/api/transport/confirm/route.ts) **preserva** `orders.warehouse_spaces` si ya fueron asignados, estampa `orders.assigned_route_id`, resuelve `driver_id`/`driver_name` contra `collaborators` y persiste `estimated_arrival` en `route_stops`.
+     - [`/api/transport/optimize`](file:///c:/Projects/frufresco/src/app/api/transport/optimize/route.ts) lee `manual_delivery_time ± manual_delivery_margin` y mantiene juntas las parejas `10A` / `10B` (`is_off_agreement_split`).
+  4. **Células Únicas (`12` Células `buying_team`), Fecha Nocturna (8 PM) & Conservación de Masa:**
+     - Fuente compartida [`src/lib/ops/operationalCells.ts`](file:///c:/Projects/frufresco/src/lib/ops/operationalCells.ts) alineada 1:1 con `alistamiento-print`.
+     - `OPERATIONAL_STATUSES` incluye `'in_preparation'`, `'ready_for_dispatch'` e `'in_transit'`.
+     - `InventoryDailyBalanceTab` erradica el doble descuento `2x Venta` (`Col H`) y excluye cuarentenas `in_process` de `Col G`.
+     - `/ops/picking/dashboard` pasa a modo **Torre de Observación/Coordinación** (filtro por fecha operativa nocturna, `10A/10B`, progreso por camión y célula, sin `window.prompt` destructivo).
+  5. **Protección Fiscal `FAC-IMP` en Muelle & Reparación de Canastillas:**
+     - `/ops/rectificacion/[routeId]` prohíbe mutar `order_items.quantity` si `billing_cut_id IS NOT NULL` (`FAC-IMP` ya emitida en `Corte PM`), encolando únicamente `billing_returns` para Nota Crédito en `Corte ADJ`.
+     - `public.asset_movements` completa sus 7 columnas faltantes (`order_id`, `profile_id`, `movement_type`, `delivered_qty`, `received_qty`, `balance_after`, `evidence_url`).
+     - `/ops/driver/delivery/[id]` corrige `picked_quantity ?? quantity`, evita `cancelled` destructivo en `Col H`, y mantiene `useMobileGpsTracker` activo salvo que el furgón tenga `hardware_gps` reciente (`< 5 min`).
+  6. **Política Cero Mocks & Estandarización `/disenador-web` (Carril 1 Skin 1 + Mobile-First):**
+     - Eliminación total de `defaultPrice = 1000`, `MOCK_ROUTES`, `mockStops`, `demoMode` y `AirportBoard` mock.
+     - Reemplazo de `<input type="number">` críticos por inputs `5B` (`type="text" inputMode="decimal"`), erradicación de `SKU` visible y `\uFE0F` rotos, y clases responsive/mobile-first en `/ops/*` y `/admin/transport`.

@@ -14,7 +14,9 @@ const ConfirmRequestSchema = z.object({
     isOptimized: z.boolean().optional(),
     theoreticalMetrics: z.any().optional(),
     params: z.record(z.string(), z.any()).optional(),
-    routeStartTimes: z.record(z.string(), z.string()).optional()
+    routeStartTimes: z.record(z.string(), z.string()).optional(),
+    stopEtas: z.record(z.string(), z.string()).optional(),
+    preserveExistingSpaces: z.boolean().optional().default(true)
 });
 
 export async function POST(request: Request) {
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
             }, { status: 400, headers: { 'x-request-id': requestId } });
         }
 
-        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes } = parsed.data;
+        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes, stopEtas, preserveExistingSpaces } = parsed.data;
 
         const allOrderIds: string[] = Object.values(assignments).flat() as string[];
         if (allOrderIds.length === 0) {
@@ -208,11 +210,16 @@ export async function POST(request: Request) {
             const routeStartMin = departureMin - loadDuration - 15; // 15 min safety buffer
             const routeEndMin = departureMin;
             
-            // Check if the driver_id from fleet_vehicles actually exists in profiles
-            let validDriverId = null;
+            // Resolver conductor contra collaborators (fuente real de planta) y profiles (auth/RLS si existe)
+            let validDriverId: string | null = null;
+            let resolvedDriverName: string = vehicle?.driver_name || 'Sin Asignar';
             if (vehicle?.driver_id) {
-                const { data: profileCheck } = await supabase.from('profiles').select('id').eq('id', vehicle.driver_id).single();
+                const [{ data: profileCheck }, { data: collabCheck }] = await Promise.all([
+                    supabase.from('profiles').select('id').eq('id', vehicle.driver_id).maybeSingle(),
+                    supabase.from('collaborators').select('id, contact_name').eq('id', vehicle.driver_id).maybeSingle()
+                ]);
                 if (profileCheck) validDriverId = profileCheck.id;
+                if (collabCheck?.contact_name) resolvedDriverName = collabCheck.contact_name;
             }
             
             // 1. Create Route
@@ -221,6 +228,7 @@ export async function POST(request: Request) {
                 .insert({
                     vehicle_plate: vehicle?.plate,
                     driver_id: validDriverId,
+                    driver_name: resolvedDriverName,
                     status: 'loading',
                     is_optimized: isOptimized,
                     theoretical_distance_km: theoreticalMetrics?.distance_km || 0,
@@ -252,34 +260,33 @@ export async function POST(request: Request) {
                     route_id: route.id,
                     order_id: orderId,
                     sequence_number: i + 1,
-                    status: 'pending'
+                    status: 'pending',
+                    ...(stopEtas?.[orderId] ? { estimated_arrival: stopEtas[orderId] } : {})
                 });
 
-                // Allocate spaces (max 36 crates per space, dedicated spaces per order)
+                // Preservar bahías ya asignadas a las 8 PM (Escenario 468); solo asignar si está vacío
                 let cratesCount = 1;
                 let spacesAssigned: number[] = [];
+                const existingSpaces = Array.isArray(orderDetail?.warehouse_spaces) ? orderDetail.warehouse_spaces : [];
 
                 if (orderDetail) {
                     cratesCount = Math.ceil((orderDetail.total_weight_kg || 0) / avg_kg_per_crate) || 1;
-                    const spacesNeeded = Math.ceil(cratesCount / space_capacity);
-                    console.log(`[SPACE ALLOC] Order ${orderId}: weight=${orderDetail.total_weight_kg}, crates=${cratesCount}, spacesNeeded=${spacesNeeded}, routeStartMin=${routeStartMin}, routeEndMin=${routeEndMin}`);
-                    
-                    let spaceCandidate = 1;
-                    while (spacesAssigned.length < spacesNeeded && spaceCandidate <= 150) {
-                        // Un espacio es libre para esta ruta si no hay traslape con sus intervalos ocupados.
-                        // Dos intervalos [A, B] y [C, D] se traslapan si: A < D y C < B.
-                        const hasOverlap = spacesTimeline[spaceCandidate].some(interval => {
-                            return routeStartMin < interval.end && interval.start < routeEndMin;
-                        });
-
-                        if (!hasOverlap) {
-                            spacesAssigned.push(spaceCandidate);
-                            // Marcar el intervalo como ocupado en la línea de tiempo de este espacio
-                            spacesTimeline[spaceCandidate].push({ start: routeStartMin, end: routeEndMin });
+                    if (preserveExistingSpaces && existingSpaces.length > 0) {
+                        spacesAssigned = existingSpaces;
+                    } else {
+                        const spacesNeeded = Math.ceil(cratesCount / space_capacity);
+                        let spaceCandidate = 1;
+                        while (spacesAssigned.length < spacesNeeded && spaceCandidate <= 150) {
+                            const hasOverlap = spacesTimeline[spaceCandidate].some(interval => {
+                                return routeStartMin < interval.end && interval.start < routeEndMin;
+                            });
+                            if (!hasOverlap) {
+                                spacesAssigned.push(spaceCandidate);
+                                spacesTimeline[spaceCandidate].push({ start: routeStartMin, end: routeEndMin });
+                            }
+                            spaceCandidate++;
                         }
-                        spaceCandidate++;
                     }
-                    console.log(`[SPACE ALLOC] Assigned spaces for Order ${orderId}: [${spacesAssigned.join(', ')}]`);
                     routeSpacesList.push(...spacesAssigned);
                     orderSpacesMap[orderId] = spacesAssigned;
                 }
@@ -291,19 +298,25 @@ export async function POST(request: Request) {
                 });
             }
 
-            // Batch insert all route stops in ONE roundtrip
+            // Batch insert all route stops in ONE roundtrip (con fallback si estimated_arrival no existe aún)
             if (routeStopsToInsert.length > 0) {
-                const { error: stopsErr } = await supabase.from('route_stops').insert(routeStopsToInsert);
+                let { error: stopsErr } = await supabase.from('route_stops').insert(routeStopsToInsert);
+                if (stopsErr && /estimated_arrival/i.test(stopsErr.message || '')) {
+                    const cleanStops = routeStopsToInsert.map(({ estimated_arrival: _ea, ...rest }) => rest);
+                    const retry = await supabase.from('route_stops').insert(cleanStops);
+                    stopsErr = retry.error;
+                }
                 if (stopsErr) {
                     console.error('[CONFIRM] Failed to bulk insert route stops:', stopsErr);
                     throw stopsErr;
                 }
             }
 
-            // Concurrently update orders status and assigned spaces
+            // Concurrently update orders status, assigned_route_id and assigned spaces
             await Promise.all(ordersToUpdate.map(u => 
                 supabase.from('orders').update({
                     status: 'picking',
+                    assigned_route_id: route.id,
                     crates_count: u.cratesCount,
                     warehouse_spaces: u.spacesAssigned
                 }).eq('id', u.id)

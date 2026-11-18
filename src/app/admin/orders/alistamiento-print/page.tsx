@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification } from '@/lib/orderUtils';
-import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
+import { formatSpaceLabel, getOrderSpaceDisplayLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
@@ -553,7 +553,7 @@ export default function AlistamientoSabanaPrintPage() {
                 const clientType: 'I' | 'H' = isB2B ? 'I' : 'H';
 
                 const spaceLabel = (o.warehouse_spaces && o.warehouse_spaces.length > 0)
-                    ? formatSpaceLabel(o.warehouse_spaces)
+                    ? getOrderSpaceDisplayLabel(o, rawOrders)
                     : 'S/A';
 
                 const firstSpace = (o.warehouse_spaces && o.warehouse_spaces.length > 0)

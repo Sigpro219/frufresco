@@ -223,7 +223,16 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
     const ignoreZombieRemissionOverride = hasZombieUnpricedRemissionOverride(order, isUnpricedOffAgreement);
     const effectiveDocOverride = ignoreZombieRemissionOverride ? null : order?.logistics_data?.document_type_override;
     const clientFiscalDocType = !isB2B ? 'remission' : (prof.document_type || parent?.document_type || 'remission');
-    const isExplicitGift = Boolean(order?.logistics_data?.is_gift_remission || order?.logistics_data?.document_type_override === 'gift_remission');
+    const isExplicitGift = Boolean(
+        order?.logistics_data?.is_gift_remission ||
+        order?.logistics_data?.document_type_override === 'gift_remission' ||
+        prof.document_type === 'gift_remission' ||
+        parent?.document_type === 'gift_remission' ||
+        prof.logistics_data?.is_gift_remission ||
+        parent?.logistics_data?.is_gift_remission ||
+        /MATRIZ\s+OBSEQUIOS/i.test(parent?.company_name || '') ||
+        /\bOBSEQUIO\b/i.test(prof.company_name || '')
+    );
     const rawDocType = isExplicitGift
         ? 'gift_remission'
         : !isB2B
@@ -253,7 +262,7 @@ export function resolveOrderBillingInfo(order: any, parentsMap: Map<string, any>
     if (rawDocType === 'gift_remission') {
         docInfo = {
             code: 'REM-OBSEQUIO',
-            label: 'Remisión Obsequio',
+            label: 'Remisión $0 · Obsequio',
             type: 'gift_remission',
             isPrinted: true,
             isWithPrices: false,
@@ -4088,8 +4097,18 @@ export default function BillingDashboard() {
 
         const hasGiftOrRep = selected.some(o => {
             const rep = getOrderReplacementInfo(o);
-            const docType = o.document_type || o.profiles?.document_type;
-            return rep.isReplacement || o.origin_source === 'customer_service' || docType === 'gift_remission';
+            const parentProf = o.profiles?.parent_id ? parentProfilesMap.get(o.profiles.parent_id) : null;
+            const parentDocType = parentProf?.document_type;
+            const docType = o.document_type || o.profiles?.document_type || parentDocType;
+            const isGiftProf = Boolean(
+                o.logistics_data?.is_gift_remission ||
+                o.logistics_data?.document_type_override === 'gift_remission' ||
+                o.profiles?.logistics_data?.is_gift_remission ||
+                parentProf?.logistics_data?.is_gift_remission ||
+                /MATRIZ\s+OBSEQUIOS/i.test(parentProf?.company_name || '') ||
+                /\bOBSEQUIO\b/i.test(o.profiles?.company_name || '')
+            );
+            return rep.isReplacement || o.origin_source === 'customer_service' || docType === 'gift_remission' || parentDocType === 'gift_remission' || isGiftProf;
         });
         if (hasGiftOrRep) {
             showToast({
@@ -7035,6 +7054,25 @@ export default function BillingDashboard() {
                                                                             <div style={{ fontSize: '0.60rem', color: '#065F46', fontWeight: '800', backgroundColor: '#D1FAE5', border: '1px solid #A7F3D0', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
                                                                                 <CheckCircle2 size={9} style={{ color: '#059669', flexShrink: 0 }} />
                                                                                 <span>Garantía / Sin Cobro</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                const { docInfo: cellDocInfo } = resolveOrderBillingInfo(order, parentProfilesMap);
+                                                                if (cellDocInfo.type === 'gift_remission') {
+                                                                    const internalCost = Number(order.total || 0);
+                                                                    return (
+                                                                        <div>
+                                                                            <div style={{ fontWeight: '800', color: '#6B21A8', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem' }}>
+                                                                                $0 COP
+                                                                            </div>
+                                                                            <div
+                                                                                title={internalCost > 0 ? `Costo base interno al gasto: ${formatMoney(internalCost)}` : 'Remisión Obsequio sin cobro al cliente'}
+                                                                                style={{ fontSize: '0.60rem', color: '#6B21A8', fontWeight: '800', backgroundColor: '#FAF5FF', border: '1px solid #E9D5FF', padding: '1px 5px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}
+                                                                            >
+                                                                                <Gift size={9} style={{ color: '#7E22CE', flexShrink: 0 }} />
+                                                                                <span>{internalCost > 0 ? `Obsequio · Gasto ${formatMoney(internalCost)}` : 'Obsequio / Sin Cobro'}</span>
                                                                             </div>
                                                                         </div>
                                                                     );

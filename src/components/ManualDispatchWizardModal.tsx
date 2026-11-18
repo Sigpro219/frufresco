@@ -69,6 +69,8 @@ export default function ManualDispatchWizardModal({
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [loading, setLoading] = useState<boolean>(false);
     const [savingSpaces, setSavingSpaces] = useState<boolean>(false);
+    const [optimizingGoogleSpaces, setOptimizingGoogleSpaces] = useState<boolean>(false);
+    const [googleOptimizeNotice, setGoogleOptimizeNotice] = useState<string | null>(null);
     const [spacesSavedSuccess, setSpacesSavedSuccess] = useState<boolean>(false);
     const [finalizingLoading, setFinalizingLoading] = useState<boolean>(false);
     const [pdfBusyDoc, setPdfBusyDoc] = useState<DirectPdfDocKey | null>(null);
@@ -189,6 +191,8 @@ export default function ManualDispatchWizardModal({
                 company_name: o.profiles?.company_name || o.customer_name || 'Cliente sin nombre',
                 shipping_address: o.shipping_address || o.profiles?.address || '',
                 neighborhood: o.profiles?.neighborhood || '',
+                lat: o.latitude ?? o.profiles?.latitude ?? null,
+                lng: o.longitude ?? o.profiles?.longitude ?? null,
                 delivery_slot: o.delivery_slot || '',
                 manual_delivery_time: o.manual_delivery_time || '',
                 is_manual_delivery: o.is_manual_delivery || false,
@@ -253,7 +257,15 @@ export default function ManualDispatchWizardModal({
         const candidateByDate = new Map<string, number>();
         const newMap: Record<string, number[]> = {};
         const newTextMap: Record<string, string> = {};
+        const orderById = new Map(selectedOrdersList.map(o => [o.id, o]));
         autoAllocations.forEach(a => {
+            const rawOrd = orderById.get(a.order_id);
+            const parentId = rawOrd?.logistics_data?.is_off_agreement_split ? rawOrd?.logistics_data?.parent_order_id : null;
+            if (parentId && newMap[parentId]) {
+                newMap[a.order_id] = newMap[parentId];
+                newTextMap[a.order_id] = newMap[parentId].join(', ');
+                return;
+            }
             const orderDate = orderDateById.get(a.order_id) || safeFallbackDate;
             let occupiedForDate = occupiedByDate.get(orderDate);
             if (!occupiedForDate) {
@@ -285,6 +297,124 @@ export default function ManualDispatchWizardModal({
         setManualSpacesMap(newMap);
         setSpaceInputTexts(newTextMap);
         await handleSaveSpacesToDatabase(newMap);
+    };
+
+    // Bypass Pre-Impresión con Google Route Optimization API (6s): ordena camiones + LIFO y sella bahías contiguas antes de imprimir
+    const handleOptimizeSpacesWithGoogle = async () => {
+        if (selectedOrdersList.length === 0) return;
+        setOptimizingGoogleSpaces(true);
+        setGoogleOptimizeNotice(null);
+        try {
+            const { data: fleet, error: fErr } = await supabase
+                .from('fleet_vehicles')
+                .select('*')
+                .eq('status', 'available');
+            if (fErr) throw fErr;
+            if (!fleet || fleet.length === 0) {
+                alert('No hay vehículos disponibles en Flota para optimizar. Usando cálculo local por cercanía GPS.');
+                await handleApplyAutoClustering();
+                return;
+            }
+
+            const res = await fetch('/api/transport/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orders: selectedOrdersList,
+                    vehicles: fleet
+                })
+            });
+            const data = await res.json();
+            if (!res.ok || !data?.routes) {
+                throw new Error(data?.error || data?.detail || 'No se pudo optimizar con Google');
+            }
+
+            const orderById = new Map(selectedOrdersList.map(o => [String(o.id), o]));
+            const orderedIds: string[] = [];
+            const seen = new Set<string>();
+
+            // Orden LIFO por camión: primero la última parada (fondo del camión), al final la primera (puerta)
+            Object.values(data.routes as Record<string, string[]>).forEach((stopIds) => {
+                const lifo = [...(stopIds || [])].reverse();
+                lifo.forEach(oid => {
+                    const key = String(oid);
+                    if (orderById.has(key) && !seen.has(key)) {
+                        seen.add(key);
+                        orderedIds.push(key);
+                    }
+                });
+            });
+            // Cualquier pedido omitido queda al final
+            selectedOrdersList.forEach(o => {
+                const key = String(o.id);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    orderedIds.push(key);
+                }
+            });
+
+            // Asignar bahías contiguas respetando parejas 10A/10B y espacios ya ocupados de otras órdenes del día
+            const safeFallbackDate = /^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) ? deliveryDate : getBogotaDateString();
+            const occupiedSet = new Set<number>();
+            const { data: sameDateOrders } = await supabase
+                .from('orders')
+                .select('id, warehouse_spaces')
+                .eq('delivery_date', safeFallbackDate)
+                .neq('status', 'cancelled');
+            (sameDateOrders || []).forEach((other: any) => {
+                if (other?.id && !selectedOrderIds.has(other.id) && Array.isArray(other.warehouse_spaces)) {
+                    other.warehouse_spaces.forEach((s: number) => occupiedSet.add(s));
+                }
+            });
+
+            const newMap: Record<string, number[]> = {};
+            const newTextMap: Record<string, string> = {};
+            let candidate = 1;
+
+            for (const oid of orderedIds) {
+                const rawOrd = orderById.get(oid);
+                const parentId = rawOrd?.logistics_data?.is_off_agreement_split ? rawOrd?.logistics_data?.parent_order_id : null;
+                if (parentId && newMap[parentId]) {
+                    newMap[oid] = newMap[parentId];
+                    newTextMap[oid] = newMap[parentId].join(', ');
+                    continue;
+                }
+                const kg = Number(rawOrd?.total_weight_kg) || 15;
+                const { spaces: needed } = calculateCratesAndSpaces(kg, 12.5, 36);
+                let assigned: number[] = [];
+                while (assigned.length < needed && candidate <= 150) {
+                    let allFree = true;
+                    for (let off = 0; off < needed; off++) {
+                        if (occupiedSet.has(candidate + off)) {
+                            allFree = false;
+                            candidate = candidate + off + 1;
+                            break;
+                        }
+                    }
+                    if (allFree) {
+                        assigned = Array.from({ length: needed }, (_, i) => candidate + i);
+                        assigned.forEach(s => occupiedSet.add(s));
+                        candidate += needed;
+                    }
+                }
+                newMap[oid] = assigned;
+                newTextMap[oid] = assigned.join(', ');
+            }
+
+            setManualSpacesMap(newMap);
+            setSpaceInputTexts(newTextMap);
+            await handleSaveSpacesToDatabase(newMap);
+            setGoogleOptimizeNotice(
+                data.simulation
+                    ? 'Bahías LIFO asignadas con respaldo local (Google sin respuesta).'
+                    : 'Bahías LIFO selladas con Google Route Optimization (tráfico + flota + ventanas).'
+            );
+        } catch (err: any) {
+            console.error('[Wizard] Error optimizando bahías con Google:', err);
+            alert(`No se pudo optimizar con Google (${err?.message || 'Error'}). Puedes usar Auto-Asignar GPS local.`);
+        } finally {
+            setOptimizingGoogleSpaces(false);
+        }
     };
 
     // Parser ultra-resiliente que soporta:
@@ -985,6 +1115,24 @@ export default function ManualDispatchWizardModal({
 
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <button
+                                    onClick={handleOptimizeSpacesWithGoogle}
+                                    disabled={optimizingGoogleSpaces}
+                                    style={{
+                                        padding: '7px 14px', borderRadius: '8px',
+                                        border: '1.5px solid #1E3A5F',
+                                        backgroundColor: '#1E3A5F',
+                                        color: '#FFFFFF',
+                                        fontWeight: '900', fontSize: '0.75rem', cursor: optimizingGoogleSpaces ? 'wait' : 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(30,58,95,0.2)'
+                                    }}
+                                    title="Calcula camiones y secuencia LIFO con Google Route Optimization antes de imprimir"
+                                >
+                                    <Truck size={14} />
+                                    {optimizingGoogleSpaces ? 'Optimizando Google...' : 'Optimizar con Google (LIFO + Flota)'}
+                                </button>
+
+                                <button
                                     onClick={handleApplyAutoClustering}
                                     style={{
                                         padding: '7px 14px', borderRadius: '8px',
@@ -996,7 +1144,7 @@ export default function ManualDispatchWizardModal({
                                     }}
                                 >
                                     <Sparkles size={14} color={assignedCount === selectedOrdersList.length ? '#16A34A' : '#D97706'} />
-                                    {assignedCount === selectedOrdersList.length ? 'Re-calcular (LIFO)' : 'Auto-Asignar (LIFO + Clúster)'}
+                                    {assignedCount === selectedOrdersList.length ? 'Re-calcular GPS + Hora' : 'Auto-Asignar (GPS + Hora)'}
                                 </button>
 
                                 <button
@@ -1210,7 +1358,7 @@ export default function ManualDispatchWizardModal({
                                         </span>
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, 1fr)', gap: '4px', maxHeight: '200px', overflowY: 'auto', padding: '4px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))', gap: '4px', maxHeight: '200px', overflowY: 'auto', padding: '4px' }}>
                                     {floorGrid150.map(slot => (
                                         <div
                                             key={slot.slotNum}

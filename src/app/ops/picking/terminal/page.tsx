@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { isAbortError } from '@/lib/errorUtils';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
+import { OPERATIONAL_CELLS, getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { CornerDownRight, CheckCircle2 } from 'lucide-react';
 
 // Types
 type PickingItem = {
@@ -56,20 +58,21 @@ export default function PickingTerminal() {
     const [loading, setLoading] = useState(false);
     const [lastAction, setLastAction] = useState<string | null>(null);
 
-    // Categories (Cells)
-    const CELLS = ['Frutas', 'Verduras', 'Hortalizas', 'Tubérculos', 'Lácteos', 'Despensa'];
+    // 12 Células reales (buying_team alineado 1:1 con Sábana de Alistamiento)
+    const CELLS = OPERATIONAL_CELLS;
 
     // Load Tasks for Cell
     const loadTasks = useCallback(async (cell: string, signal?: AbortSignal) => {
         setLoading(true);
         try {
+            const targetDate = getOperationalTargetDate(20);
             const { data, error } = await supabase
                 .from('order_items')
                 .select(`
                     id, product_id, quantity, picked_quantity, variant_label, nickname, selected_options,
-                    products!inner (id, name, unit_of_measure),
+                    products!inner (id, name, unit_of_measure, buying_team, accounting_id),
                     orders!inner (
-                        status,
+                        status, delivery_date,
                         profiles:profile_id (
                             role,
                             company_name,
@@ -77,8 +80,9 @@ export default function PickingTerminal() {
                         )
                     )
                 `)
-                .eq('products.category', cell)
-                .in('orders.status', ['approved', 'processing'])
+                .ilike('products.buying_team', cell)
+                .eq('orders.delivery_date', targetDate)
+                .in('orders.status', ['para_compra', 'approved', 'picking'])
                 .abortSignal(signal as any);
 
             if (!isMounted.current) return;
@@ -241,8 +245,8 @@ export default function PickingTerminal() {
                         <div className="flex-1">
                             <h3 className="text-lg font-bold text-white">{item.product_name}</h3>
                             {item.physical_instruction && (
-                                <div className="text-emerald-400 text-xs font-bold mt-0.5">
-                                    ↳ {item.physical_instruction}
+                                <div className="text-emerald-400 text-xs font-bold mt-0.5 flex items-center gap-1">
+                                    <CornerDownRight size={12} /> {item.physical_instruction}
                                 </div>
                             )}
                             <div className="text-gray-400 text-sm mt-1">

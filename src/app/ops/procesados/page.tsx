@@ -124,10 +124,10 @@ export default function OpsProcesadosPage() {
                     parsedLogs.push({
                         id: String(m.id),
                         parent_product_id: String(meta.parent_product_id || ''),
-                        parent_product_name: parentProd?.name || String(meta.parent_product_name || 'SKU Padre'),
+                        parent_product_name: parentProd?.name || String(meta.parent_product_name || 'Producto Padre'),
                         parent_accounting_id: parentProd?.accounting_id ?? null,
                         child_product_id: String(meta.child_product_id || m.product_id || ''),
-                        child_product_name: childProd?.name || String(meta.child_product_name || 'SKU Hijo'),
+                        child_product_name: childProd?.name || String(meta.child_product_name || 'Producto Hijo'),
                         child_accounting_id: childProd?.accounting_id ?? null,
                         raw_input_kg: rawIn,
                         finished_output_kg: finOut,
@@ -539,7 +539,7 @@ export default function OpsProcesadosPage() {
                             +{summaryStats.finishedOut.toFixed(2)} Kg
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--ops-text-muted)', marginTop: '2px' }}>
-                            Convertido en SKU Hijo listo para despacho
+                            Convertido en Producto Hijo listo para despacho
                         </div>
                     </div>
 
@@ -639,7 +639,7 @@ export default function OpsProcesadosPage() {
                         </p>
 
                         <form onSubmit={handleSaveBatch} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-                            {/* 1. Selección de SKU Padre */}
+                            {/* 1. Selección de Producto Padre */}
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: 'var(--ops-text-muted)', marginBottom: '4px' }}>
                                     1. PRODUCTO PADRE BRUTO QUE ENTRA A PROCESO [P]
@@ -685,7 +685,7 @@ export default function OpsProcesadosPage() {
                                 </select>
                             </div>
 
-                            {/* 2. Selección de SKU Hijo */}
+                            {/* 2. Selección de Producto Hijo */}
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 800, color: 'var(--ops-text-muted)', marginBottom: '4px' }}>
                                     2. PRODUCTO HIJO PROCESADO RESULTANTE [H]
@@ -738,12 +738,11 @@ export default function OpsProcesadosPage() {
                                         MASA BRUTA ENTRADA PADRE (KG)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 50.00"
                                         value={rawInputKg}
-                                        onChange={e => setRawInputKg(e.target.value)}
+                                        onChange={e => setRawInputKg(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -763,12 +762,11 @@ export default function OpsProcesadosPage() {
                                         MASA NETA HIJO OBTENIDO (KG)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 42.00"
                                         value={finishedOutputKg}
-                                        onChange={e => setFinishedOutputKg(e.target.value)}
+                                        onChange={e => setFinishedOutputKg(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -791,12 +789,11 @@ export default function OpsProcesadosPage() {
                                         DESPERDICIO / AVERÍA (COL Q -)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 3.00"
                                         value={wasteDamageKg}
-                                        onChange={e => setWasteDamageKg(e.target.value)}
+                                        onChange={e => setWasteDamageKg(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -837,12 +834,11 @@ export default function OpsProcesadosPage() {
                                         </button>
                                     </div>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 5.00"
                                         value={wasteCleaningKg}
-                                        onChange={e => setWasteCleaningKg(e.target.value)}
+                                        onChange={e => setWasteCleaningKg(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',

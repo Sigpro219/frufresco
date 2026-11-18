@@ -59,5 +59,8 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
   1. Acuerdos Comerciales Vigentes del Cliente (`quotes` / `quote_items` en estado `'agreement'`).
   2. Modelos Dinámicos de Precios (`pricing_models` y `pricing_model_prices`, ej. General Institucional, Clientes Hogar).
   3. Matriz de Costos + Reglas de Margen Comercial (`commercial_cost_matrix` + `pricing_rules`).
-* **Poka-Yoke Anti-Falso Positivo:** Si un cliente B2B tiene acuerdo y `allow_off_agreement_purchases = true`, y pide un producto fuera del acuerdo que liquida tarifa en el modelo General Institucional, el ítem nace formalmente valorizado y queda estrictamente prohibido marcarlo como "despachado sin precio".
+* **Poka-Yoke Anti-Falso Positivo (Armonizado con Escenario 466):**
+  - Si un cliente B2B **no** tiene acuerdo vigente, los productos se valorizan con el modelo General Institucional (o el modelo asignado al perfil) y nunca en `$0 COP`.
+  - Si un cliente B2B **sí** tiene acuerdo vigente (`quotes.status = 'agreement'`) y `allow_off_agreement_purchases = true`, todo SKU fuera de acuerdo entra estrictamente en **`$0 COP`** como **Pedido B (`Remisión $0`, `is_off_agreement_split = true`)** para ajuste puntual al día siguiente por Comercial (sin heredar *General Institucional*), mientras **Pedido A** conserva únicamente los ítems del acuerdo.
+  - Si un ítem ya tiene `unit_price > 0` en `order_items` (por ejemplo tras ser valorizado por Comercial), queda estrictamente prohibido seguir marcándolo como `"despachado sin precio"`.
 

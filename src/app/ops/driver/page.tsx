@@ -22,14 +22,6 @@ interface MaintenanceAlert {
     estimated: string;
 }
 
-const MOCK_ROUTES: Route[] = [
-    { id: 'mock-1', vehicle_plate: 'FTX-902', status: 'planning', start_time: new Date().toISOString(), total_orders: 12, total_kilos: 450 },
-    { id: 'mock-2', vehicle_plate: 'GHK-112', status: 'loading', start_time: new Date().toISOString(), total_orders: 8, total_kilos: 320 },
-    { id: 'mock-3', vehicle_plate: 'ABC-789', status: 'in_transit', start_time: new Date().toISOString(), total_orders: 15, total_kilos: 600 },
-    { id: 'mock-4', vehicle_plate: 'XYZ-123', status: 'planning', start_time: new Date().toISOString(), total_orders: 5, total_kilos: 150 },
-    { id: 'mock-5', vehicle_plate: 'MNO-456', status: 'loading', start_time: new Date().toISOString(), total_orders: 10, total_kilos: 400 },
-];
-
 export default function DriverDashboard() {
     const [routes, setRoutes] = useState<Route[]>([]);
     const [plates, setPlates] = useState<string[]>([]);
@@ -40,7 +32,6 @@ export default function DriverDashboard() {
     const [inputOdometer, setInputOdometer] = useState<string>('');
     const [odometerConfirmed, setOdometerConfirmed] = useState(false);
     const [isUpdatingOdo, setIsUpdatingOdo] = useState(false);
-    const [demoMode, setDemoMode] = useState(false);
     const isMounted = useRef(true);
 
     const fetchVehicleContext = useCallback(async (plate: string) => {
@@ -113,15 +104,9 @@ export default function DriverDashboard() {
                 }
                 setMaintenanceAlert({ status: mStatus, task_name: mainTask, estimated });
             } else {
-                // Fallback stats for mock plates or new plates not yet in DB
-                const mockOdo = 45000 + Math.floor(Math.random() * 5000);
-                setOdometer(mockOdo);
-                setInputOdometer(''); // Blind entry
-                setMaintenanceAlert({ 
-                    status: 'upcoming', 
-                    task_name: 'Cambio de Aceite (Simulado)', 
-                    estimated: 'Faltan 500 KM' 
-                });
+                setOdometer(0);
+                setInputOdometer('');
+                setMaintenanceAlert(null);
             }
 
             // 2. Fetch Routes for this plate
@@ -133,17 +118,8 @@ export default function DriverDashboard() {
                 .order('created_at', { ascending: false });
             
             if (routeError) throw routeError;
-            
-            let finalRoutes = routeData || [];
-            if (demoMode) {
-                if (finalRoutes.length === 0) {
-                     finalRoutes = [
-                        { id: `mock-${plate}`, vehicle_plate: plate, status: 'planning', start_time: new Date().toISOString(), total_orders: 10, total_kilos: 350 }
-                     ];
-                }
-            }
 
-            if (isMounted.current) setRoutes(finalRoutes);
+            if (isMounted.current) setRoutes(routeData || []);
 
         } catch (err: unknown) {
             if (isAbortError(err)) return;
@@ -151,7 +127,7 @@ export default function DriverDashboard() {
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [demoMode]);
+    }, []);
 
     const fetchInitialData = useCallback(async () => {
         try {
@@ -163,21 +139,15 @@ export default function DriverDashboard() {
             
             if (vErr) throw vErr;
             
-            let platesList = vData?.map(v => v.plate) || [];
-            
-            // Fallback for empty database or for testing
-            if (platesList.length === 0) {
-                platesList = ['FTX-902', 'GHK-112', 'ABC-789', 'XYZ-123', 'MNO-456'];
-            }
+            const platesList = vData?.map(v => v.plate) || [];
 
             if (isMounted.current) {
                 setPlates(platesList);
             }
         } catch (err) {
             console.error('Error fetching plates:', err);
-            // Even on error, show fallback plates for testing
             if (isMounted.current) {
-                setPlates(['FTX-902', 'GHK-112', 'ABC-789', 'XYZ-123', 'MNO-456']);
+                setPlates([]);
             }
         } finally {
             if (isMounted.current) setLoading(false);
@@ -194,15 +164,12 @@ export default function DriverDashboard() {
         if (selectedPlate) {
             setOdometerConfirmed(false);
             fetchVehicleContext(selectedPlate);
-        } else if (demoMode) {
-            setRoutes(MOCK_ROUTES);
-            setMaintenanceAlert(null);
         } else {
             setRoutes([]);
             setMaintenanceAlert(null);
             setOdometerConfirmed(false);
         }
-    }, [selectedPlate, demoMode, fetchVehicleContext]);
+    }, [selectedPlate, fetchVehicleContext]);
 
     const handleConfirmOdometer = async () => {
         const val = parseInt(inputOdometer);
@@ -220,14 +187,12 @@ export default function DriverDashboard() {
             setIsUpdatingOdo(true);
             
             // Sync with DB
-            if (!demoMode) {
-                const { error } = await supabase
-                    .from('fleet_vehicles')
-                    .update({ current_odometer: val })
-                    .eq('plate', selectedPlate);
-                
-                if (error) throw error;
-            }
+            const { error } = await supabase
+                .from('fleet_vehicles')
+                .update({ current_odometer: val })
+                .eq('plate', selectedPlate);
+            
+            if (error) throw error;
 
             setOdometer(val);
             setOdometerConfirmed(true);
@@ -253,23 +218,6 @@ export default function DriverDashboard() {
                     </h1>
                     <p style={{ color: 'var(--ops-text-muted)', fontSize: '0.9rem', marginTop: '0.3rem' }}>Gestiona tu vehículo y tus rutas de hoy.</p>
                 </div>
-                <button 
-                    onClick={() => setDemoMode(!demoMode)}
-                    className="demo-btn"
-                    style={{ 
-                        padding: '0.6rem 1.2rem', 
-                        borderRadius: '12px', 
-                        fontSize: '0.7rem', 
-                        fontWeight: '800',
-                        backgroundColor: demoMode ? '#059669' : 'var(--ops-surface)',
-                        color: demoMode ? 'white' : 'var(--ops-text)',
-                        border: '1px solid var(--ops-border)',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
-                    {demoMode ? 'SIMULACIÓN: ON' : 'SIMULAR OPERACIÓN'}
-                </button>
             </header>
 
             {/* Vehicle Selection Dropdown */}
@@ -298,7 +246,7 @@ export default function DriverDashboard() {
                         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
                     }}
                 >
-                    <option value="" style={{ backgroundColor: 'var(--ops-bg)' }}>-- {demoMode ? 'TODOS LOS VEHÍCULOS' : 'Elige una placa'} --</option>
+                    <option value="" style={{ backgroundColor: 'var(--ops-bg)' }}>-- Elige una placa --</option>
                     {plates.map(p => (
                         <option key={p} value={p} style={{ backgroundColor: 'var(--ops-bg)' }}>{p}</option>
                     ))}
@@ -321,9 +269,10 @@ export default function DriverDashboard() {
                     
                     <div style={{ position: 'relative', marginBottom: '1rem' }}>
                         <input 
-                            type="number" 
+                            type="text" 
+                            inputMode="numeric"
                             value={inputOdometer}
-                            onChange={(e) => setInputOdometer(e.target.value)}
+                            onChange={(e) => setInputOdometer(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
                             placeholder="Ej: 45000"
                             style={{ 
                                 width: '100%', 
@@ -403,7 +352,7 @@ export default function DriverDashboard() {
                 </div>
             )}
 
-            {(selectedPlate && odometerConfirmed) || (demoMode && !selectedPlate) ? (
+            {(selectedPlate && odometerConfirmed) ? (
                 <>
                     {selectedPlate && (
                         <ActivityLog 

@@ -315,24 +315,7 @@ export default function OpsDevolucionesPage() {
 
             const { error: movErr } = await supabase.from('inventory_movements').insert(movementsToInsert);
             if (movErr) throw movErr;
-
-            // 4. Actualizar stock físico disponible con el neto apto (+numApprovedNetReentry)
-            if (numApprovedNetReentry > 0 && warehouseId) {
-                const { data: currentStock } = await supabase
-                    .from('inventory_stocks')
-                    .select('id, quantity')
-                    .eq('product_id', selectedProductId)
-                    .eq('warehouse_id', warehouseId)
-                    .eq('status', 'available')
-                    .maybeSingle();
-
-                if (currentStock?.id) {
-                    await supabase
-                        .from('inventory_stocks')
-                        .update({ quantity: Number(currentStock.quantity || 0) + numApprovedNetReentry })
-                        .eq('id', currentStock.id);
-                }
-            }
+            // Nota: trigger_inventory_movement actualiza inventory_stocks automáticamente al insertar en inventory_movements.
 
             // 5. Si venía de un billing_returns pendiente, marcar su nota como conciliada en muelle
             if (selectedReturnId) {
@@ -347,7 +330,7 @@ export default function OpsDevolucionesPage() {
 
             setFeedbackBanner({
                 type: 'success',
-                message: `Devolución conciliada en Balance D+1 (${selectedProd?.name || 'SKU'}): Col O +${numReported} | Col O2 -${numShortageColO2} | Col Q -${numWaste} => Neto Disponible +${numApprovedNetReentry}`
+                message: `Devolución conciliada en Balance D+1 (${selectedProd?.name || 'Producto'}): Col O +${numReported} | Col O2 -${numShortageColO2} | Col Q -${numWaste} => Neto Disponible +${numApprovedNetReentry}`
             });
 
             // Reset form
@@ -737,12 +720,11 @@ export default function OpsDevolucionesPage() {
                                         1. REPORTADO EN RUTA (COL O +)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 30"
                                         value={reportedReturnQty}
-                                        onChange={e => setReportedReturnQty(e.target.value)}
+                                        onChange={e => setReportedReturnQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -762,12 +744,11 @@ export default function OpsDevolucionesPage() {
                                         2. LLEGÓ FÍSICO EN CAMIÓN (KG)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 20"
                                         value={receivedInWarehouseQty}
-                                        onChange={e => setReceivedInWarehouseQty(e.target.value)}
+                                        onChange={e => setReceivedInWarehouseQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -789,12 +770,11 @@ export default function OpsDevolucionesPage() {
                                         3. DAÑADO / AVERÍA (COL Q -)
                                     </label>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         placeholder="Ej. 10"
                                         value={wasteDamageQty}
-                                        onChange={e => setWasteDamageQty(e.target.value)}
+                                        onChange={e => setWasteDamageQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',
@@ -814,11 +794,10 @@ export default function OpsDevolucionesPage() {
                                         CANASTILLAS RETORNADAS
                                     </label>
                                     <input
-                                        type="number"
-                                        step="1"
-                                        min="0"
+                                        type="text"
+                                        inputMode="numeric"
                                         value={cratesReturned}
-                                        onChange={e => setCratesReturned(e.target.value)}
+                                        onChange={e => setCratesReturned(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
                                         style={{
                                             width: '100%',
                                             height: '44px',

@@ -6,7 +6,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
     try {
-        const auth = await verifySessionAndPermission(request, 'admin.commercial.inventory.stock');
+        let auth = await verifySessionAndPermission(request, 'admin.commercial.inventory.stock');
+        if (!auth.authorized) {
+            auth = await verifySessionAndPermission(request, 'ops.picking');
+        }
+        if (!auth.authorized) {
+            auth = await verifySessionAndPermission(request, 'ops.picking.terminal');
+        }
+        if (!auth.authorized) {
+            auth = await verifySessionAndPermission(request, 'admin.orders');
+        }
         if (!auth.authorized) {
             return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
         }

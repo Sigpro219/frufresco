@@ -291,6 +291,7 @@ export interface ParsedRcaResult {
     auditedBy?: string;
     imputationMode?: 'global' | 'by_item';
     itemImputations?: ItemImputation[];
+    deductionAmount?: number;
 }
 
 // Helpers to encode & decode RCA metadata from resolution notes/descriptions
@@ -513,7 +514,8 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEvidenceNotes: parsed.imputedEvidenceNotes || parsed.notes || record.imputation_evidence_notes || '',
             auditedBy: parsed.auditedBy || undefined,
             imputationMode: parsed.imputationMode || (Array.isArray(parsed.itemImputations) && parsed.itemImputations.length > 0 ? 'by_item' : 'global'),
-            itemImputations: Array.isArray(parsed.itemImputations) ? parsed.itemImputations : undefined
+            itemImputations: Array.isArray(parsed.itemImputations) ? parsed.itemImputations : undefined,
+            deductionAmount: typeof parsed.deductionAmount === 'number' ? parsed.deductionAmount : undefined
         };
     }
 
@@ -548,7 +550,8 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEntityId: record.imputed_entity_id,
             imputedEntityName: record.imputed_entity_name,
             imputedEvidenceNotes: record.imputation_evidence_notes,
-            auditedBy: parsed?.auditedBy || undefined
+            auditedBy: parsed?.auditedBy || undefined,
+            deductionAmount: typeof parsed?.deductionAmount === 'number' ? parsed.deductionAmount : undefined
         };
     }
 
@@ -578,7 +581,8 @@ export function parseRcaFromRecord(record: any): ParsedRcaResult {
             imputedEntityId: parsed.imputedEntityId,
             imputedEntityName: parsed.imputedEntityName,
             imputedEvidenceNotes: parsed.imputedEvidenceNotes ? cleanHumanResolutionNotes(parsed.imputedEvidenceNotes) : cleanNotes,
-            auditedBy: parsed.auditedBy || undefined
+            auditedBy: parsed.auditedBy || undefined,
+            deductionAmount: typeof parsed.deductionAmount === 'number' ? parsed.deductionAmount : undefined
         };
     }
 

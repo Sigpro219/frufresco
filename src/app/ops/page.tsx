@@ -17,8 +17,12 @@ import {
   ShieldAlert,
   Monitor,
   ClipboardCheck,
-  Layers
+  Layers,
+  Lock,
+  Unlock,
+  Radio
 } from 'lucide-react';
+import type { OperationalShiftState } from '@/lib/ops/operationalShift';
 
 interface OpsStats {
     totalStockValue: number;
@@ -30,8 +34,60 @@ export default function OpsHome() {
         totalStockValue: 0,
         pendingAudits: 0
     });
+    const [shift, setShift] = useState<OperationalShiftState | null>(null);
+    const [staleOrdersCount, setStaleOrdersCount] = useState<number>(0);
+    const [shiftBusy, setShiftBusy] = useState<boolean>(false);
+    const [shiftFeedback, setShiftFeedback] = useState<string | null>(null);
 
     const isMounted = useRef(true);
+
+    const loadShiftState = async () => {
+        try {
+            const res = await fetch('/api/ops/shifts', { cache: 'no-store' });
+            const json = await res.json();
+            if (isMounted.current && json?.success && json.shift) {
+                setShift(json.shift);
+                setStaleOrdersCount(Number(json.stale_orders_count || 0));
+            }
+        } catch (err) {
+            console.error('Error cargando estado del turno operativo:', err);
+        }
+    };
+
+    const handleShiftAction = async (payload: { action: 'set_mode' | 'close_day' | 'reopen_day'; mode?: 'manual_mirror' | 'digital_native' }) => {
+        if (!shift || shiftBusy) return;
+        setShiftBusy(true);
+        setShiftFeedback(null);
+        try {
+            const res = await fetch('/api/ops/shifts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    ...payload,
+                    shift_date: shift.shift_date
+                })
+            });
+            const json = await res.json();
+            if (!res.ok || !json?.success) {
+                setShiftFeedback(json?.error || 'No se pudo actualizar el turno (requiere permisos de coordinación/admin).');
+            } else {
+                setShift(json.shift);
+                setShiftFeedback(
+                    payload.action === 'close_day'
+                        ? `Cierre ejecutado: ${json.closed_orders ?? 0} pedidos cerrados y ${json.closed_routes ?? 0} rutas completadas.`
+                        : payload.action === 'reopen_day'
+                        ? 'Turno reabierto correctamente.'
+                        : `Modo actualizado a ${json.shift?.mode === 'digital_native' ? 'Digital Nativo' : 'Espejo Manual'}.`
+                );
+                await loadShiftState();
+            }
+        } catch {
+            setShiftFeedback('Error de red al comunicar con /api/ops/shifts.');
+        } finally {
+            if (isMounted.current) setShiftBusy(false);
+        }
+    };
 
     useEffect(() => {
         isMounted.current = true;
@@ -71,6 +127,7 @@ export default function OpsHome() {
             }
         }
         fetchOpsData();
+        loadShiftState();
         return () => { 
             isMounted.current = false; 
         };
@@ -269,11 +326,130 @@ export default function OpsHome() {
                             color: stats.pendingAudits > 0 ? '#D97706' : 'var(--ops-text-muted)', 
                             fontWeight: stats.pendingAudits > 0 ? 700 : 'normal' 
                         }}>
-                            {stats.pendingAudits > 0 ? `️ ${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
+                            {stats.pendingAudits > 0 ? `${stats.pendingAudits} CONTEO(S) SOLICITADO(S)` : 'Operaciones de Piso'}
                         </div>
                     </div>
                 </Link>
             </div>
+
+            {/* CICLO DE VIDA OPERATIVO: MODO ESPEJO / DIGITAL + CIERRE DEL DÍA */}
+            {shift && (
+                <div style={{
+                    marginTop: '2rem',
+                    background: 'var(--ops-surface)',
+                    padding: '1.5rem',
+                    borderRadius: '20px',
+                    border: '1px solid var(--ops-border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <Radio size={18} color={shift.status === 'closed' ? '#EF4444' : '#10B981'} />
+                            <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: '800', fontSize: '0.95rem', color: 'var(--ops-text)' }}>
+                                Turno Operativo {shift.shift_date}
+                            </span>
+                            <span style={{
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                                backgroundColor: shift.status === 'closed' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                                color: shift.status === 'closed' ? '#EF4444' : '#10B981',
+                                border: `1px solid ${shift.status === 'closed' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)'}`
+                            }}>
+                                {shift.status === 'closed' ? 'CERRADO' : 'ABIERTO'}
+                            </span>
+                            <span style={{
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                                backgroundColor: shift.mode === 'digital_native' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                color: shift.mode === 'digital_native' ? '#3B82F6' : '#F59E0B',
+                                border: `1px solid ${shift.mode === 'digital_native' ? 'rgba(59,130,246,0.25)' : 'rgba(245,158,11,0.25)'}`
+                            }}>
+                                {shift.mode === 'digital_native' ? 'DIGITAL NATIVO' : 'ESPEJO MANUAL'}
+                            </span>
+                            {staleOrdersCount > 0 && (
+                                <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#F59E0B' }}>
+                                    {staleOrdersCount} rezagado(s) de días previos
+                                </span>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                            <button
+                                disabled={shiftBusy}
+                                onClick={() => handleShiftAction({
+                                    action: 'set_mode',
+                                    mode: shift.mode === 'manual_mirror' ? 'digital_native' : 'manual_mirror'
+                                })}
+                                style={{
+                                    padding: '0.55rem 0.9rem',
+                                    borderRadius: '10px',
+                                    border: '1px solid var(--ops-border)',
+                                    backgroundColor: 'var(--ops-bg)',
+                                    color: 'var(--ops-text)',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    cursor: shiftBusy ? 'wait' : 'pointer'
+                                }}
+                            >
+                                Cambiar a {shift.mode === 'manual_mirror' ? 'Digital Nativo' : 'Espejo Manual'}
+                            </button>
+
+                            {shift.status === 'closed' ? (
+                                <button
+                                    disabled={shiftBusy}
+                                    onClick={() => handleShiftAction({ action: 'reopen_day' })}
+                                    style={{
+                                        padding: '0.55rem 1rem',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        backgroundColor: '#10B981',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        cursor: shiftBusy ? 'wait' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <Unlock size={14} /> Reabrir Turno
+                                </button>
+                            ) : (
+                                <button
+                                    disabled={shiftBusy}
+                                    onClick={() => handleShiftAction({ action: 'close_day' })}
+                                    style={{
+                                        padding: '0.55rem 1rem',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        backgroundColor: '#0F172A',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '800',
+                                        cursor: shiftBusy ? 'wait' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <Lock size={14} /> Cerrar Operación del Día
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    {shiftFeedback && (
+                        <div style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--ops-primary)' }}>
+                            {shiftFeedback}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* CONNECTED INVENTORY STATUS */}
             <div style={{ 

@@ -43,6 +43,7 @@ import PqrAuditModal from './components/PqrAuditModal';
 import PqrTaxonomyModal from './components/PqrTaxonomyModal';
 import PqrNoveltyReviewModal from './components/PqrNoveltyReviewModal';
 import PqrLeanDashboard from './components/PqrLeanDashboard';
+import PqrDailyShiftReport from './components/PqrDailyShiftReport';
 import MissingOrdersGallery from './components/MissingOrdersGallery';
 
 export default function CustomerServicePage({ initialTab }: { initialTab?: 'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties' } = {}) {
@@ -68,8 +69,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
     const [customTaxonomy, setCustomTaxonomy] = useState<DefectCategoryL1[]>([]);
 
     // Navigation & Filtering
-    const [mainView, setMainView] = useState<'cases' | 'lean_dashboard' | 'missing_orders'>('cases');
-    const [leanSubTab, setLeanSubTab] = useState<'analytics' | 'daily_report'>('analytics');
+    const [mainView, setMainView] = useState<'cases' | 'lean_dashboard' | 'daily_report' | 'missing_orders'>('cases');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'novelties'>(initialTab || 'pending');
     const [showKpis, setShowKpis] = useState(true);
@@ -88,7 +88,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 setActiveTab(tab as any);
             }
             const view = params.get('view');
-            if (view && ['cases', 'lean_dashboard', 'missing_orders'].includes(view)) {
+            if (view && ['cases', 'lean_dashboard', 'daily_report', 'missing_orders'].includes(view)) {
                 setMainView(view as any);
             }
         }
@@ -196,7 +196,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                 .from('billing_returns')
                 .select(`
                     *,
-                    products(name, sku, unit_of_measure),
+                    products(name, accounting_id, sku, unit_of_measure),
                     orders(
                         sequence_id,
                         total,
@@ -568,6 +568,29 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
 
                             <button
                                 type="button"
+                                onClick={() => setMainView('daily_report')}
+                                style={{
+                                    padding: '7px 14px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: mainView === 'daily_report' ? '800' : '600',
+                                    color: mainView === 'daily_report' ? '#FFFFFF' : '#475569',
+                                    backgroundColor: mainView === 'daily_report' ? '#0D7A57' : 'transparent',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: mainView === 'daily_report' ? '0 2px 6px rgba(13, 122, 87, 0.3)' : 'none',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                <FileSpreadsheet size={14} />
+                                <span>Informe Diario de Cierre</span>
+                            </button>
+
+                            <button
+                                type="button"
                                 onClick={() => setMainView('missing_orders')}
                                 style={{
                                     padding: '7px 14px',
@@ -589,33 +612,6 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                 <span>Pedidos Pendientes</span>
                             </button>
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setLeanSubTab('daily_report');
-                                setMainView('lean_dashboard');
-                            }}
-                            title="Ver e imprimir Informe Diario de Cierre Operativo (Acta PDF & Excel)"
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '8px 14px',
-                                fontSize: '0.75rem',
-                                fontWeight: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '800' : '700',
-                                color: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#FFFFFF' : '#047857',
-                                backgroundColor: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#0D7A57' : '#ECFDF5',
-                                border: '1px solid #A7F3D0',
-                                borderRadius: '10px',
-                                cursor: 'pointer',
-                                boxShadow: '0 1px 3px rgba(13, 122, 87, 0.15)',
-                                transition: 'all 0.15s ease'
-                            }}
-                        >
-                            <FileSpreadsheet size={14} style={{ color: (mainView === 'lean_dashboard' && leanSubTab === 'daily_report') ? '#FFFFFF' : '#0D7A57' }} />
-                            <span>Informe Diario de Cierre (PDF)</span>
-                        </button>
 
                         <button
                             type="button"
@@ -695,7 +691,14 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                         customTaxonomy={customTaxonomy}
                         onRefresh={fetchData}
                         showToast={showToast}
-                        initialSubTab={leanSubTab}
+                    />
+                ) : mainView === 'daily_report' ? (
+                    <PqrDailyShiftReport
+                        pqrs={pqrs}
+                        novelties={novelties}
+                        onRefresh={fetchData}
+                        onOpenAuditModal={handleOpenAuditModal}
+                        onZoomPhoto={(url) => setZoomPhotoUrl(url)}
                     />
                 ) : mainView === 'missing_orders' ? (
                     <MissingOrdersGallery
@@ -1689,7 +1692,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                 </td>
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle' }}>
                                                     <div style={{ fontWeight: '800', color: '#1A231E', fontSize: '0.78rem' }}>{nov.products?.name || 'Producto'}</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace' }}>SKU: {nov.products?.sku || 'N/A'}</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace' }}>#ID: {nov.products?.accounting_id || 'N/A'}</div>
                                                 </td>
                                                 <td style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', verticalAlign: 'middle', fontWeight: '800', color: '#991B1B', fontSize: '0.78rem' }}>
                                                     -{qty} {nov.products?.unit_of_measure || 'Und'}

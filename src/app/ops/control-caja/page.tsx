@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import Link from 'next/link';
 import { 
     Coins, 
@@ -51,7 +52,7 @@ interface BuyerSummary {
 
 export default function OpsControlCajaPage() {
     const { profile, user } = useAuth();
-    const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(() => getBogotaDateString());
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [buyersData, setBuyersData] = useState<BuyerSummary[]>([]);
@@ -224,7 +225,7 @@ export default function OpsControlCajaPage() {
                         budgetId: `orphan-${orph.buyerId || orph.buyerName}`,
                         buyerId: orph.buyerId,
                         buyerName: orph.buyerName,
-                        zone: '️ Sin Fondo Asignado Previo',
+                        zone: 'Sin Fondo Asignado Previo',
                         assignedAmount: 0,
                         cashPurchasesTotal: cashTotal,
                         creditPurchasesTotal: creditTotal,
@@ -692,7 +693,7 @@ export default function OpsControlCajaPage() {
                                                                 display: 'inline-flex', alignItems: 'center', gap: '3px'
                                                             }}
                                                         >
-                                                            ️ Asignar
+                                                            Asignar
                                                         </button>
                                                     ) : isClosed ? (
                                                         <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#10B981', padding: '3px 6px', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
@@ -806,13 +807,12 @@ export default function OpsControlCajaPage() {
                                 <div style={{ position: 'relative' }}>
                                     <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', color: '#10B981' }}>$</span>
                                     <input 
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         required
-                                        min="1000"
-                                        step="1000"
                                         placeholder="Ej: 3000000"
                                         value={assignAmount}
-                                        onChange={e => setAssignAmount(e.target.value)}
+                                        onChange={e => setAssignAmount(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
                                         style={{ width: '100%', padding: '0.75rem 0.75rem 0.75rem 2rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0B132B', color: '#FFFFFF', fontSize: '1.1rem', fontWeight: '800', outline: 'none' }}
                                     />
                                 </div>

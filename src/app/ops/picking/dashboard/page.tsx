@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { 
     Monitor, 
     LayoutGrid, 
@@ -122,7 +124,7 @@ export default function PickingDashboard() {
 
     // STATE
     const [matrix, setMatrix] = useState<Record<string, Record<string, CellData>>>({});
-    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string, warehouse_spaces?: number[], crates_count?: number, departure_time?: string }[]>([]);
+    const [clients, setClients] = useState<{ id: string, company_name: string, order_short: string, zone_name: string, warehouse_spaces?: number[], space_label?: string, crates_count?: number, departure_time?: string }[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
@@ -207,11 +209,12 @@ export default function PickingDashboard() {
     const loadData = useCallback(async (signal?: AbortSignal, silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // 1. Fetch Active Orders
+            // 1. Fetch Active Orders para la tanda operativa vigente (corte 8 PM)
+            const targetOpDate = getOperationalTargetDate(20);
             let ordersQuery = supabase
                 .from('orders')
                 .select(`
-                    id, status, warehouse_spaces, crates_count, sequence_id,
+                    id, status, warehouse_spaces, crates_count, sequence_id, delivery_date, logistics_data,
                     profiles:profile_id (
                         id, company_name, contact_name, role, id_zr
                     ),
@@ -219,7 +222,8 @@ export default function PickingDashboard() {
                         id, product_id, quantity, picked_quantity, quality_status
                     )
                 `)
-                .in('status', ['para_compra', 'approved', 'picking']);
+                .eq('delivery_date', targetOpDate)
+                .in('status', ['para_compra', 'approved', 'picking', 'in_preparation']);
             
             if (signal) ordersQuery = ordersQuery.abortSignal(signal);
 
@@ -287,6 +291,7 @@ export default function PickingDashboard() {
                         order_short: shortId,
                         zone_name: plate,
                         warehouse_spaces: order.warehouse_spaces || [],
+                        space_label: getOrderSpaceDisplayLabel(order, activeOrders),
                         crates_count: order.crates_count || 1,
                         departure_time: depTime
                     };
@@ -431,37 +436,15 @@ export default function PickingDashboard() {
         };
     }, [loadData, debouncedLoadData]);
 
-    const handleCellClick = async (product: Product, clientId: string, clientName: string, cellData: CellData) => {
+    // Torre de Observación/Coordinación (SDD Escenario 468): lectura en vivo sin mutación ciega por prompt
+    const handleCellClick = (product: Product, _clientId: string, clientName: string, cellData: CellData) => {
         if (!cellData || cellData.ordered === 0) return;
-
-        const newPickedStr = window.prompt(
-            `Picking: ${product.name} para ${clientName}\n\nPedido: ${cellData.ordered}\nPicado Actual: ${cellData.picked}\n\nIngresa nueva cantidad picada total:`,
-            cellData.picked.toString()
-        );
-
-        if (newPickedStr === null) return;
-
-        const newPickedTotal = parseFloat(newPickedStr);
-        if (isNaN(newPickedTotal) || newPickedTotal < 0) return;
-
-        // Optimistic UI Update
-        const newMatrix = { ...matrix };
-        newMatrix[product.id][clientId] = {
-            ...cellData,
-            picked: newPickedTotal
-        };
-        setMatrix(newMatrix);
-
-        // Update Backend
-        if (cellData.items.length > 0) {
-            const firstItem = cellData.items[0];
-            const { error: updateError } = await supabase.from('order_items').update({ picked_quantity: newPickedTotal }).eq('id', firstItem.id);
-            if (updateError) {
-                console.error("Error updating picked quantity:", updateError);
-                return;
-            }
-
-            // Integración de Inventario: Se maneja automáticamente vía trigger de base de datos al actualizar picked_quantity.
+        const msg = `${product.name} · ${clientName}: Alistado ${cellData.picked} / Pedido ${cellData.ordered} ${product.unit_of_measure || 'Kg'}`;
+        const win = window as unknown as { showToast?: (m: string, t: string) => void };
+        if (win.showToast) {
+            win.showToast(msg, 'info');
+        } else {
+            alert(msg);
         }
     };
 
@@ -882,8 +865,12 @@ export default function PickingDashboard() {
                             }} title={`Parcial: ${percentPartial}%`}></div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: '600' }}>
-                            <span style={{ color: '#0D7A57' }}>⬤ {percentComplete}% OK</span>
-                            <span style={{ color: '#EAB308' }}>⬤ {percentPartial}% PARCIAL</span>
+                            <span style={{ color: '#0D7A57', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#0D7A57', display: 'inline-block' }} /> {percentComplete}% OK
+                            </span>
+                            <span style={{ color: '#EAB308', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#EAB308', display: 'inline-block' }} /> {percentPartial}% PARCIAL
+                            </span>
                         </div>
                     </div>
 
@@ -1306,15 +1293,18 @@ export default function PickingDashboard() {
                                         }}
                                         title={isClientsCollapsed ? "Desplegar nombres de clientes" : "Colapsar nombres de clientes"}
                                     >
-                                        <span>CLIENTES {isClientsCollapsed ? '▲' : '▼'}</span>
+                                        <span>CLIENTES</span>
                                         {isClientsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                                     </div>
                                     {!isClientsCollapsed && (
                                         <div style={{ 
                                             textAlign: 'left', 
-                                            color: '#34D399'
+                                            color: '#34D399',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
                                         }}>
-                                            ▼ PRODUCTOS
+                                            <ChevronDown size={12} /> PRODUCTOS
                                         </div>
                                     )}
                                 </div>
@@ -1359,9 +1349,9 @@ export default function PickingDashboard() {
                                                 flexShrink: 0,
                                                 letterSpacing: '-1px'
                                             }} title={`Canastillas: ${client.crates_count || 1}`}>
-                                                {client.warehouse_spaces && client.warehouse_spaces.length > 0 
+                                                {client.space_label || (client.warehouse_spaces && client.warehouse_spaces.length > 0 
                                                     ? client.warehouse_spaces.join(', ') 
-                                                    : '-'}
+                                                    : '-')}
                                             </div>
 
                                             {/* Vertical Name (Colapsable) */}

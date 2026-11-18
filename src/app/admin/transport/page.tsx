@@ -525,22 +525,22 @@ export default function TransportControlTower() {
                 {/* ── TOP HEADER & INTEGRATED KPIS ── */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: THEME.colors.primary, boxShadow: `0 0 8px ${THEME.colors.primary}80` }}></div>
-                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                                 CADENA DE SUMINISTRO &bull; TORRE DE CONTROL
                             </span>
-                            <span style={{ fontSize: '0.65rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.primaryLight, padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.primaryLight, padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
                                 Bodega Central Corabastos
                             </span>
                         </div>
-                        <h1 style={{ fontSize: '1.75rem', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.1 }}>
+                        <h1 style={{ fontSize: 'clamp(1.35rem, 5vw, 1.75rem)', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.1 }}>
                             Transporte &amp; Despachos
                         </h1>
                     </div>
 
                     {/* 4 Brand Harmonized KPI Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: '0.75rem', flex: '1 1 680px', maxWidth: '850px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', flex: '1 1 100%', minWidth: 0, maxWidth: '850px' }}>
                         <KPICard title="EN TRÁNSITO" value={formatNumber(stats.totalActive)} icon={<Truck size={17} strokeWidth={2} />} color={THEME.colors.primary} subtitle="Rutas en movimiento hoy" />
                         <KPICard title="ENTREGAS" value={formatNumber(stats.completedToday)} icon={<CheckCircle2 size={17} strokeWidth={2} />} color="#059669" subtitle="Rutas finalizadas hoy" />
                         <KPICard title="VOLUMEN TOTAL" value={`${formatNumber(stats.totalKilos)} kg`} icon={<Scale size={17} strokeWidth={2} />} color="#D97706" subtitle="Carga total a bordo" />
@@ -559,13 +559,14 @@ export default function TransportControlTower() {
                     boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)', 
                     border: `1px solid ${THEME.colors.border}`,
                     display: 'flex',
+                    flexWrap: 'wrap',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     marginBottom: '0.85rem',
-                    gap: '0.75rem',
+                    gap: '0.65rem',
                     backdropFilter: 'blur(8px)'
                 }}>
-                    <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none', flex: '1 1 320px', minWidth: 0, maxWidth: '100%' }}>
                         {[
                             { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
                             { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
@@ -609,7 +610,7 @@ export default function TransportControlTower() {
                         })}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                         {gpsSyncMessage && (
                             <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
                                 {gpsSyncMessage}
@@ -658,9 +659,9 @@ export default function TransportControlTower() {
                 {/* ── MAIN CONTENT AREA ── */}
                 <div style={{ position: 'relative', minHeight: 'calc(100vh - 220px)' }}>
                     {activeTab === 'map' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '390px 1fr', gap: '1.25rem', height: 'calc(100vh - 210px)' }}>
+                        <div className="grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-5 lg:h-[calc(100vh-210px)]">
                             {/* Route Feed & Operational Intelligence Sidebar */}
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem', minHeight: '320px' }}>
                                 
                                 {/* 1. Sidebar Header */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
@@ -668,7 +669,7 @@ export default function TransportControlTower() {
                                         <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: '900', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                             Estado de Rutas en Vivo
                                         </h3>
-                                        <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
+                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                             Despachos asignados para hoy
                                         </span>
                                     </div>
@@ -679,21 +680,21 @@ export default function TransportControlTower() {
 
                                 {/* 2. Fleet Overview Mini-Bar (Fills empty space with actionable data) */}
                                 <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.65rem 0.8rem', border: `1px solid ${THEME.colors.border}` }}>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
                                         Resumen Operativo de Flota
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', textAlign: 'center' }}>
                                         <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ fontSize: '1rem', fontWeight: '900', color: THEME.colors.primary }}>{vehiclesOnRoute}</div>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Ruta</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Ruta</div>
                                         </div>
                                         <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#059669' }}>{vehiclesAvailable}</div>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Patio</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Patio</div>
                                         </div>
                                         <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
                                             <div style={{ fontSize: '1rem', fontWeight: '900', color: '#D97706' }}>{avgKilosPerRoute}</div>
-                                            <div style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary }}>kg/Ruta Prom</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>kg/Ruta</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1273,8 +1274,11 @@ export default function TransportControlTower() {
                             {(() => {
                                 const activeCrateProfiles = crateProfiles.filter(p => p.needs_crates || (p.crate_balance || 0) > 0);
                                 const totalInCalle = activeCrateProfiles.reduce((acc, p) => acc + Number(p.crate_balance || 0), 0);
+                                const inTransitCrates = activeRoutes
+                                    .filter(r => r.status === 'in_transit' || r.status === 'loading')
+                                    .reduce((acc, r) => acc + Number((r as { total_crates?: number }).total_crates || 0), 0);
                                 const alertCount = activeCrateProfiles.filter(p => Number(p.crate_balance || 0) > 40).length;
-                                const totalSystemCrates = totalInCalle + patioStock;
+                                const totalSystemCrates = totalInCalle + patioStock + inTransitCrates;
                                 const callePct = totalSystemCrates > 0 ? ((totalInCalle / totalSystemCrates) * 100).toFixed(1) : '0';
                                 const patioPct = totalSystemCrates > 0 ? ((patioStock / totalSystemCrates) * 100).toFixed(1) : '0';
 
@@ -1289,7 +1293,7 @@ export default function TransportControlTower() {
 
                                             <div style={{ backgroundColor: '#F0F9FF', padding: '1rem', borderRadius: THEME.radius.lg, border: '1px solid #BAE6FD' }}>
                                                 <div style={{ fontSize: '0.68rem', fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' }}>EN TRÁNSITO HOY</div>
-                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0369A1', marginTop: '2px' }}>0 <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>und</span></div>
+                                                <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#0369A1', marginTop: '2px' }}>{inTransitCrates} <span style={{ fontSize: '0.75rem', fontWeight: '700' }}>und</span></div>
                                                 <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '2px', fontWeight: '600' }}>A bordo de rutas despachadas</div>
                                             </div>
 
@@ -1645,9 +1649,9 @@ function KPICard({ title, value, icon, color, subtitle }: any) {
                 {icon}
             </div>
             <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: '0.62rem', fontWeight: '800', color: THEME.colors.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, lineHeight: 1.1, margin: '1px 0' }}>{value}</div>
-                <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, letterSpacing: '0.03em', textTransform: 'uppercase', lineHeight: 1.2 }}>{title}</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: '900', color: THEME.colors.textMain, lineHeight: 1.1, margin: '2px 0' }}>{value}</div>
+                <div style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600', lineHeight: 1.25 }}>{subtitle}</div>
             </div>
         </div>
     );

@@ -8,6 +8,7 @@ import { PhysicalSheetType, RawExtractedSheetRow, normalizeGeminiItems } from '@
 
 const SheetTypeSchema = z.enum(['entrada', 'inv_manual', 'desperdicio', 'pedidos_desperdicio', 'donaciones']);
 const GeminiExtractionItemSchema = z.object({
+  accountingId: z.union([z.string(), z.number()]).optional().nullable(),
   rawProductName: z.string().optional().default(''),
   rawQuantityText: z.union([z.string(), z.number()]).optional().nullable(),
   quantityKg: z.number().optional().nullable(),
@@ -43,12 +44,16 @@ function buildPromptForSheetType(sheetType: PhysicalSheetType, balanceDate: stri
   const typeDescription =
     sheetType === 'entrada'
       ? `PLANILLA DE ENTRADAS / RECEPCIÓN DE MUELLE ("CONTROL DE LLEGADA DE PRODUCTOS" -> Columna G):
+         - Estructura de columnas de izquierda a derecha (6 columnas): "ID" | "Producto" | "KG" | "Nombre Proveedor" | "Hora Llegada" | "Calidad (SI/NO)".
+         - Columna 1 ("ID"): Contiene el código contable exacto (accountingId, ej. "106", "1504"). Extráelo SIEMPRE en el campo "accountingId" (solo dígitos).
+         - Columna 2 ("Producto"): Nombre limpio del producto ("rawProductName").
+         - Columna 3 ("KG"): Casilla inmediatamente A LA DERECHA de "Producto" en la MISMA fila. Lee de allí la cantidad recibida.
          - REGLA INNEGOCIABLE DE UNIDAD DE COMPRA DIRECTA (CERO RECÁLCULOS):
-           * En esta lectura SOLO deben entrar los productos por su "unidad de compra" directa (Kg o Unidades), tal como está escrito el número en la columna de cantidad recibida.
-           * PROHIBIDO hacer recálculos o multiplicaciones por bultos, canastillas, arrobas o docenas. Lee el número exacto escrito en la cantidad recibida.
-           * Únicamente si hay una suma explícita escrita con signo "+" (ej. "408 + 70"), suma los números (478).
-         - Captura también el Precio pagado si aparece ("unitCostPaid") y el Nombre del Proveedor ("supplierName").
-         - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla de cantidad, asígnale quantityKg: 0 y rawQuantityText: "0".`
+           * En esta lectura SOLO deben entrar los productos por su "unidad de compra" directa (Kg o Unidades), tal como está escrito el número en la columna "KG".
+           * PROHIBIDO hacer recálculos o multiplicaciones por bultos, canastillas, arrobas o docenas. Lee el número exacto escrito en la columna "KG".
+           * Si hay una suma explícita escrita con signo "+" (ej. "10 + 5" o "408 + 70"), suma los números en "quantityKg" (15 o 478) y conserva la expresión en "rawQuantityText".
+         - Captura también el Precio pagado si aparece ("unitCostPaid") y el Nombre del Proveedor ("supplierName") desde "Nombre Proveedor".
+         - Si un producto tiene una línea horizontal atravesada ("—", "-", raya) o no tiene valor en la casilla "KG", asígnale quantityKg: 0 y rawQuantityText: "0".`
       : sheetType === 'inv_manual'
       ? `PLANILLA DE CONTEO FÍSICO DE BODEGA EN DOS BLOQUES PARALELOS ("Inventario de bodega - fin de turno" -> Columna T):
          - Es un formato impreso de DOS TABLAS lado a lado por página, cada una con 4 columnas: "N°" | "ID" | "Producto" | "KG" (diligenciada a mano al cierre del turno).

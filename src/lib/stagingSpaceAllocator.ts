@@ -103,6 +103,28 @@ export function calculateCratesAndSpaces(
 /**
  * Genera el label formateado de espacio: "21" o "4-5" o "1-3"
  */
+/**
+ * Retorna el rótulo de bahía WMS unificado (ej. "10A" para Factura/Principal y "10B" para Remisión $0 hija).
+ */
+export function getOrderSpaceDisplayLabel(order: any, allOrders?: any[]): string {
+    if (order?.logistics_data?.assigned_space_label) {
+        return String(order.logistics_data.assigned_space_label);
+    }
+    const baseLabel = formatSpaceLabel(order?.warehouse_spaces);
+    if (baseLabel === 'S/A') return 'S/A';
+    const log = order?.logistics_data;
+    if (log?.is_off_agreement_split && log?.parent_order_id) {
+        return `${baseLabel}B`;
+    }
+    const hasSplitChild = Array.isArray(allOrders) && allOrders.some(
+        (c: any) => c?.id !== order?.id && c?.logistics_data?.is_off_agreement_split && c?.logistics_data?.parent_order_id === order?.id
+    );
+    if (hasSplitChild || log?.has_off_agreement_split) {
+        return `${baseLabel}A`;
+    }
+    return baseLabel;
+}
+
 export function formatSpaceLabel(spaces: number[]): string {
     if (!spaces || spaces.length === 0) return 'S/A';
     if (spaces.length === 1) return `${spaces[0]}`;
@@ -231,38 +253,93 @@ export function allocateStagingSpacesGeographically(
     });
 
     // 2. Ordenar por Clúster Geográfico, luego por Ventana de Entrega (temprana primero para LIFO), y luego por volumen
-    enriched.sort((a, b) => {
-        if (a.zone !== b.zone) {
-            return a.zone.localeCompare(b.zone);
-        }
-        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) {
-            return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
-        }
-        // Dentro de la misma ventana, los clientes más grandes primero para consolidar estiba
+    const CORABASTOS_LAT = 4.633653;
+    const CORABASTOS_LNG = -74.160647;
+    const hasValidGps = (lat?: number | null, lng?: number | null): lat is number =>
+        typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && lat >= 3.5 && lat <= 6.0 && lng >= -75.5 && lng <= -73.0;
+    const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const toRad = (deg: number) => (deg * Math.PI) / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const gpsItems = enriched.map(e => {
+        const rawLat = typeof e.raw.lat === 'number' ? e.raw.lat : parseFloat(String(e.raw.lat ?? ''));
+        const rawLng = typeof e.raw.lng === 'number' ? e.raw.lng : parseFloat(String(e.raw.lng ?? ''));
+        const valid = hasValidGps(rawLat, rawLng);
+        return {
+            ...e,
+            _lat: valid ? rawLat : null,
+            _lng: valid ? rawLng : null,
+            _validGps: valid,
+            _bearing: valid ? Math.atan2(rawLat - CORABASTOS_LAT, rawLng - CORABASTOS_LNG) : 0
+        };
+    });
+
+    const withGps = gpsItems.filter(e => e._validGps);
+    const withoutGps = gpsItems.filter(e => !e._validGps);
+    withoutGps.sort((a, b) => {
+        if (a.zone !== b.zone) return a.zone.localeCompare(b.zone);
+        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
         return b.raw.total_weight_kg - a.raw.total_weight_kg;
     });
 
+    const orderedGps: typeof gpsItems = [];
+    if (withGps.length > 0) {
+        const remaining = [...withGps].sort((a, b) =>
+            a.deliveryInfo.minutes !== b.deliveryInfo.minutes ? a.deliveryInfo.minutes - b.deliveryInfo.minutes : a._bearing - b._bearing
+        );
+        let current = remaining.shift()!;
+        orderedGps.push(current);
+        while (remaining.length > 0) {
+            let bestIdx = 0;
+            let bestCost = Infinity;
+            for (let i = 0; i < remaining.length; i++) {
+                const cand = remaining[i];
+                const travelMins = ((haversineKm(current._lat!, current._lng!, cand._lat!, cand._lng!) * 1.35) / 28) * 60;
+                const cost = travelMins + 0.5 * Math.abs(cand.deliveryInfo.minutes - current.deliveryInfo.minutes);
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    bestIdx = i;
+                }
+            }
+            current = remaining.splice(bestIdx, 1)[0];
+            orderedGps.push(current);
+        }
+    }
+    const orderedAll = [...orderedGps, ...withoutGps];
+
     // 3. Asignación secuencial de bahías contiguas en suelo (1..150)
+    const childByParentId = new Map<string, typeof enriched>();
+    const splitChildIds = new Set<string>();
+    enriched.forEach(item => {
+        const log = item.raw.logistics_data;
+        if (log?.is_off_agreement_split && log?.parent_order_id) {
+            splitChildIds.add(item.raw.id);
+            const list = childByParentId.get(log.parent_order_id) || [];
+            list.push(item);
+            childByParentId.set(log.parent_order_id, list);
+        }
+    });
+
     let currentSlot = 1;
     const results: StagingAllocationResult[] = [];
+    const resultsByOrderId = new Map<string, StagingAllocationResult>();
 
-    for (const item of enriched) {
-        let assigned: number[] = [];
-
-        if (currentSlot + item.spacesNeeded - 1 <= maxSpaces) {
-            for (let i = 0; i < item.spacesNeeded; i++) {
-                assigned.push(currentSlot + i);
-            }
-            currentSlot += item.spacesNeeded;
-        } else {
-            // Si sobrepasa 150, se asigna en zona de rebose (150+)
-            for (let i = 0; i < item.spacesNeeded; i++) {
-                assigned.push(currentSlot + i);
-            }
-            currentSlot += item.spacesNeeded;
-        }
-
-        results.push({
+    for (const item of orderedAll) {
+        if (splitChildIds.has(item.raw.id) && resultsByOrderId.has(item.raw.logistics_data.parent_order_id)) continue;
+        const linkedChildren = childByParentId.get(item.raw.id) || [];
+        const combinedWeight = item.raw.total_weight_kg + linkedChildren.reduce((sum, c) => sum + (c.raw.total_weight_kg || 0), 0);
+        const spacesToAssign = linkedChildren.length > 0
+            ? calculateCratesAndSpaces(combinedWeight, avgKg, capacity).spaces
+            : item.spacesNeeded;
+        const assigned: number[] = [];
+        for (let i = 0; i < spacesToAssign; i++) assigned.push(currentSlot + i);
+        currentSlot += spacesToAssign;
+        const baseLabel = formatSpaceLabel(assigned);
+        const parentRes: StagingAllocationResult = {
             order_id: item.raw.id,
             sequence_id: item.raw.sequence_id,
             customer_name: item.customerName,
@@ -271,10 +348,30 @@ export function allocateStagingSpacesGeographically(
             delivery_window_label: item.deliveryInfo.label,
             total_weight_kg: item.raw.total_weight_kg,
             estimated_crates: item.crates,
-            spaces_needed: item.spacesNeeded,
+            spaces_needed: spacesToAssign,
             assigned_spaces: assigned,
-            space_label: formatSpaceLabel(assigned),
+            space_label: linkedChildren.length > 0 ? baseLabel + 'A' : baseLabel,
             clientType: item.raw.clientType
+        };
+        results.push(parentRes);
+        resultsByOrderId.set(item.raw.id, parentRes);
+        linkedChildren.forEach(child => {
+            const childRes: StagingAllocationResult = {
+                order_id: child.raw.id,
+                sequence_id: child.raw.sequence_id,
+                customer_name: child.customerName,
+                shipping_address: child.raw.shipping_address || 'Sin dirección',
+                zone_name: child.zone,
+                delivery_window_label: child.deliveryInfo.label,
+                total_weight_kg: child.raw.total_weight_kg,
+                estimated_crates: child.crates,
+                spaces_needed: spacesToAssign,
+                assigned_spaces: assigned,
+                space_label: baseLabel + 'B',
+                clientType: child.raw.clientType
+            };
+            results.push(childRes);
+            resultsByOrderId.set(child.raw.id, childRes);
         });
     }
 
@@ -321,7 +418,7 @@ export async function ensureUniversalStagingSpaces(
     if (supabaseClient && typeof supabaseClient.from === "function" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
         const baseQuery = supabaseClient
             .from("orders")
-            .select("id, sequence_id, status, delivery_date, warehouse_spaces")
+            .select("id, sequence_id, status, delivery_date, warehouse_spaces, logistics_data")
             .eq("delivery_date", targetDate);
         const res = typeof baseQuery?.neq === "function"
             ? await baseQuery.neq("status", "cancelled")
@@ -352,6 +449,7 @@ export async function ensureUniversalStagingSpaces(
     });
 
     const spacesMap: Record<string, number[]> = {};
+    const allAllocatedSpaceMap: Record<string, number[]> = {};
     const occupiedSlots = new Set<number>();
     const unallocatedOrders: any[] = [];
     const unallocatedIds = new Set<string>();
@@ -369,9 +467,20 @@ export async function ensureUniversalStagingSpaces(
         });
 
     allocatedCandidates.forEach(o => {
+        const parentId = o.logistics_data?.is_off_agreement_split ? o.logistics_data?.parent_order_id : null;
+        const parentSpaces = parentId ? allAllocatedSpaceMap[parentId] : undefined;
+        if (parentId && parentSpaces && Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0) {
+            const matchesParent = o.warehouse_spaces.length === parentSpaces.length && o.warehouse_spaces.every((slot: number, i: number) => slot === parentSpaces[i]);
+            if (matchesParent) {
+                allAllocatedSpaceMap[o.id] = o.warehouse_spaces;
+                if (rawIds.has(o.id)) spacesMap[o.id] = o.warehouse_spaces;
+                return;
+            }
+        }
         const hasCollision = o.warehouse_spaces.some((slot: number) => occupiedSlots.has(slot));
         if (!hasCollision) {
             o.warehouse_spaces.forEach((slot: number) => occupiedSlots.add(slot));
+            allAllocatedSpaceMap[o.id] = o.warehouse_spaces;
             if (rawIds.has(o.id)) {
                 spacesMap[o.id] = o.warehouse_spaces;
             }
@@ -385,6 +494,11 @@ export async function ensureUniversalStagingSpaces(
         const id = ro?.id;
         if (!id || spacesMap[id] || unallocatedIds.has(id)) return;
         const merged = mergedById.get(id) || ro;
+        const parentId = merged.logistics_data?.is_off_agreement_split ? merged.logistics_data?.parent_order_id : null;
+        if (parentId && allAllocatedSpaceMap[parentId]) {
+            spacesMap[id] = [...allAllocatedSpaceMap[parentId]];
+            return;
+        }
         unallocatedOrders.push(merged);
         unallocatedIds.add(id);
     });
@@ -409,7 +523,8 @@ export async function ensureUniversalStagingSpaces(
             manual_delivery_time: o.manual_delivery_time || '',
             is_manual_delivery: o.is_manual_delivery || false,
             total_weight_kg: totalKg > 0 ? totalKg : 15,
-            existing_spaces: []
+            existing_spaces: [],
+            logistics_data: o.logistics_data
         };
     });
 
@@ -438,32 +553,57 @@ export async function ensureUniversalStagingSpaces(
     // 4. Asignar slots libres contiguos evitando colisión con occupiedSlots
     let currentCandidate = 1;
     const updatesToPersist: { id: string; spaces: number[] }[] = [];
+    const splitChildByParent = new Map<string, any[]>();
+    const splitChildOrderIds = new Set<string>();
+    unallocatedOrders.forEach(o => {
+        const log = o?.logistics_data;
+        if (log?.is_off_agreement_split && log?.parent_order_id) {
+            splitChildOrderIds.add(o.id);
+            const list = splitChildByParent.get(log.parent_order_id) || [];
+            list.push(o);
+            splitChildByParent.set(log.parent_order_id, list);
+        }
+    });
 
     for (const item of enriched) {
+        if (splitChildOrderIds.has(item.raw.id)) {
+            const pId = item.raw.logistics_data?.parent_order_id;
+            if (pId && spacesMap[pId]) {
+                spacesMap[item.raw.id] = spacesMap[pId];
+                updatesToPersist.push({ id: item.raw.id, spaces: spacesMap[pId] });
+                continue;
+            }
+        }
+        const linkedChildren = splitChildByParent.get(item.raw.id) || [];
+        const combinedWeight = item.raw.total_weight_kg + linkedChildren.reduce((sum, c) => sum + (Number(c.total_weight_kg) || 0), 0);
+        const spacesNeeded = linkedChildren.length > 0
+            ? calculateCratesAndSpaces(combinedWeight, 12.5, 36).spaces
+            : item.spacesNeeded;
         let assigned: number[] = [];
-        
-        while (assigned.length < item.spacesNeeded) {
+        while (assigned.length < spacesNeeded) {
             let allFree = true;
-            for (let offset = 0; offset < item.spacesNeeded; offset++) {
+            for (let offset = 0; offset < spacesNeeded; offset++) {
                 if (occupiedSlots.has(currentCandidate + offset)) {
                     allFree = false;
                     currentCandidate = currentCandidate + offset + 1;
                     break;
                 }
             }
-
             if (allFree) {
-                for (let offset = 0; offset < item.spacesNeeded; offset++) {
+                for (let offset = 0; offset < spacesNeeded; offset++) {
                     const slot = currentCandidate + offset;
                     assigned.push(slot);
                     occupiedSlots.add(slot);
                 }
-                currentCandidate += item.spacesNeeded;
+                currentCandidate += spacesNeeded;
             }
         }
-
         spacesMap[item.raw.id] = assigned;
         updatesToPersist.push({ id: item.raw.id, spaces: assigned });
+        linkedChildren.forEach(child => {
+            spacesMap[child.id] = assigned;
+            updatesToPersist.push({ id: child.id, spaces: assigned });
+        });
     }
 
     // 5. Persistir atómicamente en Supabase verificando errores reales antes de confirmar mutación en memoria

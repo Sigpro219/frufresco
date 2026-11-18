@@ -8,6 +8,8 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuth } from '@/lib/authContext';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
+import { getOperationalTargetDate, OPERATIONAL_CELLS, normalizeOperationalCell } from '@/lib/ops/operationalCells';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { 
     Calendar, 
     GraduationCap, 
@@ -96,7 +98,7 @@ export default function PickingExecutionPage() {
                     profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
-                        products (name, category, unit_of_measure, buying_team)
+                        products (name, category, unit_of_measure, buying_team, accounting_id)
                     )
                 `)
                 .in('status', ['para_compra', 'approved', 'picking']);
@@ -111,15 +113,8 @@ export default function PickingExecutionPage() {
             const cutoffEnabled = settings?.value !== 'false';
 
             if (cutoffEnabled) {
-                const bogotaOffsetMs = -5 * 60 * 60 * 1000;
-                const nowUTC = new Date();
-                const nowBogota = new Date(nowUTC.getTime() + bogotaOffsetMs);
-                const year = nowBogota.getUTCFullYear();
-                const month = String(nowBogota.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(nowBogota.getUTCDate()).padStart(2, '0');
-                const targetDate = `${year}-${month}-${day}`;
+                const targetDate = getOperationalTargetDate(20);
                 query = query.eq('delivery_date', targetDate);
-                console.log(`Picking filtered for operational date: ${targetDate}`);
             } else {
                 console.log("Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
             }
@@ -313,13 +308,13 @@ export default function PickingExecutionPage() {
                     if (itemsInCategory.length > 0) {
                         const idZr = (order as any).profiles?.id_zr;
                         const zone = getZoneName(idZr);
-                        // Key by order.id to treat each order as a separate picking task
+                        const spaceLabel = order.warehouse_spaces && order.warehouse_spaces.length > 0
+                            ? getOrderSpaceDisplayLabel(order, activeOrders || [])
+                            : '-';
                         formattedTasks[order.id] = {
                             id: order.id,
                             company_name: clientName,
-                            assigned_space: order.warehouse_spaces && order.warehouse_spaces.length > 0
-                                ? order.warehouse_spaces.join(', ')
-                                : '-',
+                            assigned_space: spaceLabel,
                                                         zone: zone,
                             items: itemsInCategory,
                             status: 'pending',
@@ -364,7 +359,11 @@ export default function PickingExecutionPage() {
         setLoading(true);
         try {
             const { data: prods } = (await supabase.from('products').select('buying_team').abortSignal(signal as any)) as { data: { buying_team: string }[] | null };
-            const uniqueCats = Array.from(new Set((prods || []).map((p: any) => p.buying_team))).filter(Boolean).sort() as string[];
+            const normalizedSet = new Set<string>(OPERATIONAL_CELLS);
+            (prods || []).forEach((p: { buying_team?: string }) => {
+                if (p.buying_team) normalizedSet.add(normalizeOperationalCell(p.buying_team));
+            });
+            const uniqueCats = Array.from(normalizedSet).filter(Boolean);
             
             if (isMounted.current) {
                 setCategories(uniqueCats);
@@ -550,10 +549,11 @@ export default function PickingExecutionPage() {
                 if (deltaOverweight > 0) {
                     const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
                         supabase.from('warehouses').select('id').limit(1).maybeSingle(),
-                        supabase.from('products').select('name, sku').eq('id', exceptionItem.product_id).maybeSingle()
+                        supabase.from('products').select('name, accounting_id').eq('id', exceptionItem.product_id).maybeSingle()
                     ]);
                     if (warehouseData?.id) {
-                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] SKU: ${prodMeta?.sku || exceptionItem.product_name} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`;
+                        const prodTag = prodMeta?.accounting_id ? `#${prodMeta.accounting_id}` : exceptionItem.product_name;
+                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] ${prodTag} (+${deltaOverweight} ${exceptionItem.unit}) | Picking #${exceptionItem.id}`;
                         await supabase.from('inventory_movements').delete().eq('reference_id', exceptionItem.id).in('reference_type', ['waste_weighing', 'additional_sale']);
                         await supabase.from('inventory_movements').insert([{
                             product_id: exceptionItem.product_id,
@@ -654,7 +654,7 @@ export default function PickingExecutionPage() {
                         <h1 
                             className="header-title-container"
                             onClick={() => router.push('/ops')}
-                            style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
+                            style={{ fontSize: "clamp(1.15rem, 4.5vw, 1.5rem)", fontWeight: "900", margin: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}
                         >
                             <span style={{ whiteSpace: "nowrap" }}>Alistamiento <span style={{ color: "#0D7A57" }}>Bodega</span></span>
                             <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
@@ -726,7 +726,7 @@ export default function PickingExecutionPage() {
                             <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "var(--ops-text-muted)" }}>
                                 {pendingTasks}
                             </div>
-                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                            <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
                                 PENDIENTE
                             </div>
                         </div>
@@ -736,7 +736,7 @@ export default function PickingExecutionPage() {
                             <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EAB308" }}>
                                 {partialTasks}
                             </div>
-                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                            <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
                                 PARCIAL
                             </div>
                         </div>
@@ -746,7 +746,7 @@ export default function PickingExecutionPage() {
                             <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EF4444" }}>
                                 {alertTasks}
                             </div>
-                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
+                            <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#EF4444", textTransform: "uppercase" }}>
                                 ALERTAS
                             </div>
                             {alertTasks > 0 && (
@@ -759,7 +759,7 @@ export default function PickingExecutionPage() {
                             <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#0D7A57" }}>
                                 {readyTasks}
                             </div>
-                            <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
+                            <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#64748B", textTransform: "uppercase" }}>
                                 LISTO
                             </div>
                         </div>
@@ -789,7 +789,7 @@ export default function PickingExecutionPage() {
                                 <div style={{ fontSize: "1.2rem", fontWeight: "900", color: "var(--ops-text)", lineHeight: "1" }}>
                                     {progress}%
                                 </div>
-                                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                <div style={{ fontSize: "0.75rem", fontWeight: "900", color: "var(--ops-text)", opacity: 0.85, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                                     AVANCE
                                 </div>
                             </div>

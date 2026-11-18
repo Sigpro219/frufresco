@@ -8,7 +8,7 @@ import { isOrderInvoiceRequiredForPrint } from '@/lib/orders/printDocRules';
 import { hasZombieUnpricedRemissionOverride, isOrderUnpricedOffAgreement } from '@/lib/commercial/billingOrderUtils';
 import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, FileText, Gift, CheckSquare, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
-import { formatSpaceLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
+import { formatSpaceLabel, getOrderSpaceDisplayLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
 import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { formatTimeWindow } from '@/lib/logistics-parser';
@@ -1734,7 +1734,7 @@ function ContingencyPrintContent() {
                     })();
                     const remissionPrefix = isReposicion ? 'REPOSICIÓN' : isObsequio ? 'REMISIÓN DE OBSEQUIO' : 'REMISIÓN';
                     const espacioNum = (order.warehouse_spaces && order.warehouse_spaces.length > 0)
-                        ? formatSpaceLabel(order.warehouse_spaces)
+                        ? getOrderSpaceDisplayLabel(order, orders)
                         : 'S/A';
                     // Ordenamiento Canónico Escenario 299: productos con precio comercial > 0 arriba (A-Z), productos a $0 COP al final (A-Z)
                     const items = [...(order.order_items || [])].sort((a: any, b: any) => {

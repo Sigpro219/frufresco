@@ -782,7 +782,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     return (
         <>
-            <div style={{ display: 'grid', gridTemplateColumns: '580px 1fr', gap: '1.25rem', height: 'calc(100vh - 180px)', minHeight: '520px', overflow: 'hidden' }}>
+            <div className="grid grid-cols-1 xl:grid-cols-[540px_1fr] gap-5 xl:h-[calc(100vh-180px)] min-h-[520px] xl:overflow-hidden">
             {/* Orders Sidebar */}
             <div 
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}

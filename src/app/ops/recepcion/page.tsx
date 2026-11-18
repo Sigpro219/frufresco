@@ -54,7 +54,8 @@ interface Purchase {
     product_id: string;
     product: Product;
     quantity: number; // Cantidad original comprada
-    picked_quantity?: number; // Cantidad recogida (si aplica)
+    picked_up_quantity?: number; // Cantidad recogida en plaza (si aplica)
+    picked_quantity?: number; // Alias legado
     status: string;
     cost_center_id?: string;
     rejection_reason?: string;
@@ -419,8 +420,8 @@ export default function ReceptionPage() {
                 }
             }
 
-            // Calculate excess (Sobrante)
-            const expected = selectedItem.picked_quantity || selectedItem.quantity;
+            // Calculate excess (Sobrante) usando picked_up_quantity real de Recogida
+            const expected = selectedItem.picked_up_quantity || selectedItem.picked_quantity || selectedItem.quantity;
             let notePrefix = '';
             if (finalStatus !== 'received_rejected' && receivedQty > expected) {
                 const diff = parseFloat((receivedQty - expected).toFixed(2));

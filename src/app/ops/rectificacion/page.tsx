@@ -102,9 +102,9 @@ export default function RectificacionListPage() {
                         vehicle_plate: plate || 'SIN PLACA',
                         driver_name: driverName,
                         status: computedStatus,
-                        total_orders: totalOrdersCount || r.total_orders || 12,
+                        total_orders: totalOrdersCount || r.total_orders || 0,
                         validated_orders: r.validated_orders || 0,
-                        total_kilos: r.total_kilos || Math.round(totalQty) || 450,
+                        total_kilos: r.total_kilos || Math.round(totalQty) || 0,
                         created_at: r.created_at,
                         evidence_url: r.check_evidence_url,
                         picking_pct: pickingPct
@@ -112,42 +112,7 @@ export default function RectificacionListPage() {
                 });
                 setRoutes(formatted);
             } else {
-                // Rutas Mock alineadas con la vista del tablero
-                setRoutes([
-                    {
-                        id: 'route-nhp287',
-                        vehicle_plate: 'NHP287',
-                        driver_name: 'GARCIA HENRY',
-                        status: 'in_picking',
-                        picking_pct: 21,
-                        total_orders: 25,
-                        validated_orders: 0,
-                        total_kilos: 3817,
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 'route-pmw071',
-                        vehicle_plate: 'PMW071',
-                        driver_name: 'ALARCÓN JORGE',
-                        status: 'in_picking',
-                        picking_pct: 39,
-                        total_orders: 5,
-                        validated_orders: 0,
-                        total_kilos: 1530,
-                        created_at: new Date(Date.now() - 3600000).toISOString()
-                    },
-                    {
-                        id: 'route-wfw369',
-                        vehicle_plate: 'WFW369',
-                        driver_name: 'TRUJILLO MANUEL',
-                        status: 'in_picking',
-                        picking_pct: 12,
-                        total_orders: 11,
-                        validated_orders: 0,
-                        total_kilos: 1552,
-                        created_at: new Date(Date.now() - 7200000).toISOString()
-                    }
-                ]);
+                setRoutes([]);
             }
         } catch (e) {
             console.error('Error fetching rectification routes:', e);
@@ -416,7 +381,7 @@ export default function RectificacionListPage() {
                                         style={{ textDecoration: 'none' }}
                                         onClick={(e) => {
                                             if (isPickingIncomplete) {
-                                                if (!confirm(`️ ALISTAMIENTO AL ${route.picking_pct}%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?`)) {
+                                                if (!confirm(`ALISTAMIENTO AL ${route.picking_pct}%: Este camión aún no ha completado el 100% de alistamiento en el Tablero. ¿Deseas ingresar a la lista de rectificación de todas formas?`)) {
                                                     e.preventDefault();
                                                 }
                                             }

@@ -978,7 +978,9 @@ export default function ProcurementPage() {
         product_id: selectedTask.product_id,
         novelty_type: 'shortage',
         quantity: qtyToDeclare,
-        notes: `Producto escaso: ${shortageReason}`,
+        unit: selectedTask.unit || null,
+        reason: shortageReason || 'Escasez en plaza',
+        description: `Producto escaso declarado en compras: ${shortageReason}`,
         resolved: true,
         resolution_action: 'marked_as_shortage'
       }]);
@@ -989,7 +991,7 @@ export default function ProcurementPage() {
           .from('orders')
           .select('id, profile_id, sequence_id, profiles(company_name, contact_name)')
           .eq('delivery_date', targetDate)
-          .in('status', ['draft', 'pending', 'approved', 'alistamiento']);
+          .in('status', ['para_compra', 'approved', 'picking', 'in_preparation']);
 
         if (targetOrders && targetOrders.length > 0) {
           for (const ord of targetOrders) {
@@ -1477,6 +1479,8 @@ export default function ProcurementPage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: "0.5rem",
             marginBottom: "0.5rem",
             padding: "0 0.5rem",
           }}
@@ -1484,7 +1488,7 @@ export default function ProcurementPage() {
           <div>
             <h1 
               className="header-title-container"
-              style={{ fontSize: "1.5rem", fontWeight: "900", margin: 0, display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "nowrap" }}
+              style={{ fontSize: "clamp(1.15rem, 4.5vw, 1.5rem)", fontWeight: "900", margin: 0, display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}
             >
               <span style={{ whiteSpace: "nowrap" }}>Compras <span style={{ color: "var(--ops-primary)" }}>Hoy</span></span>
               <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
@@ -1526,7 +1530,7 @@ export default function ProcurementPage() {
               </div>
             </h1>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
             <Link
               href="/ops/control-caja"
               style={{
@@ -1669,7 +1673,7 @@ export default function ProcurementPage() {
               </div>
               <div
                 style={{
-                  fontSize: "0.55rem",
+                  fontSize: "0.75rem",
                   fontWeight: "bold",
                   color: "var(--ops-text-muted)",
                   textTransform: "uppercase",
@@ -1692,7 +1696,7 @@ export default function ProcurementPage() {
               </div>
               <div
                 style={{
-                  fontSize: "0.55rem",
+                  fontSize: "0.75rem",
                   fontWeight: "bold",
                   color: "#F59E0B",
                   textTransform: "uppercase",
@@ -1720,7 +1724,7 @@ export default function ProcurementPage() {
               <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "var(--ops-primary)" }}>
                 {completedTasks}
               </div>
-              <div style={{ fontSize: "0.55rem", fontWeight: "bold", color: "var(--ops-primary)", textTransform: "uppercase" }}>
+              <div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "var(--ops-primary)", textTransform: "uppercase" }}>
                 Listos
               </div>
             </div>
@@ -1739,7 +1743,7 @@ export default function ProcurementPage() {
                 <div style={{ fontSize: "1.1rem", fontWeight: "900", color: "#EF4444" }}>
                   {noveltyCount}
                 </div>
-                <div style={{ fontSize: "0.55rem", fontWeight: "900", color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: "900", color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   Novedad
                 </div>
                 <div
@@ -1780,8 +1784,8 @@ export default function ProcurementPage() {
                 <div style={{ fontSize: "1.2rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", lineHeight: "1" }}>
                   {Math.round(totalProgress)}%
                 </div>
-                <div style={{ fontSize: "0.5rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", opacity: 0.8, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  TOTAL AVANCE
+                <div style={{ fontSize: "0.75rem", fontWeight: "900", color: totalProgress === 100 ? "white" : "var(--ops-text)", opacity: 0.85, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  AVANCE
                 </div>
               </div>
               <button
@@ -2366,12 +2370,20 @@ export default function ProcurementPage() {
                                     const qtyToBuy = (item.meta_neteo || 0) - item.total_purchased;
                                     if (qtyToBuy <= 0) return;
                                     
-                                    // Quick purchase register
-                                    if (!confirm(`¿Registrar compra rápida de ${qtyToBuy.toFixed(1)} ${item.unit} con el último proveedor?`)) return;
+                                    // Compra rápida sin precio mock: exige costo unitario real > 0
+                                    const rawPriceStr = window.prompt(
+                                      `Compra rápida de ${qtyToBuy.toFixed(1)} ${item.unit} (${item.product_name}).\nIngresa el precio unitario real por ${item.unit} (COP):`,
+                                      ''
+                                    );
+                                    if (rawPriceStr === null) return;
+                                    const realUnitPrice = parseFloat(rawPriceStr.replace(',', '.'));
+                                    if (isNaN(realUnitPrice) || realUnitPrice <= 0) {
+                                      alert('Precio inválido. Debe ingresar un precio unitario real mayor a $0.');
+                                      return;
+                                    }
                                     
                                     try {
-                                      const defaultPrice = 1000; // default/mock price
-                                      const cost = qtyToBuy * defaultPrice;
+                                      const cost = qtyToBuy * realUnitPrice;
                                       
                                       const { error: pErr } = await supabase.from("purchases").insert({
                                         task_id: item.id,
@@ -2379,7 +2391,7 @@ export default function ProcurementPage() {
                                         variant_label: item.variant_label,
                                         provider_id: provId,
                                         quantity: qtyToBuy,
-                                        unit_price: defaultPrice,
+                                        unit_price: realUnitPrice,
                                         total_cost: cost,
                                         purchase_unit: item.unit || "Kg",
                                         status: "pending_pickup",
@@ -2716,7 +2728,7 @@ export default function ProcurementPage() {
                     gap: "1rem",
                     textAlign: "left"
                   }}>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                       <span style={{ display: "flex", color: "#EF4444" }}><AlertTriangle size={24} /></span>
                       <div>
                         <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: "900", color: "#EF4444" }}>
@@ -3208,9 +3220,10 @@ export default function ProcurementPage() {
                       }}
                     >
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={qty}
-                        onChange={(e) => setQty(e.target.value)}
+                        onChange={(e) => setQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                         placeholder="50"
                         style={{
                           flex: 1,
@@ -3279,9 +3292,10 @@ export default function ProcurementPage() {
                       PRECIO UNIT.
                     </label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={price}
-                      onChange={(e) => setPrice(e.target.value)}
+                      onChange={(e) => setPrice(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                       placeholder="5000"
                       style={{
                         width: "100%",
@@ -3310,7 +3324,7 @@ export default function ProcurementPage() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(5, 1fr)",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(58px, 1fr))",
                       gap: "0.5rem",
                     }}
                   >
@@ -4000,10 +4014,10 @@ export default function ProcurementPage() {
                 CANTIDAD ESCASA ({selectedTask.unit})
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={shortageQty}
-                onChange={(e) => setShortageQty(e.target.value)}
+                onChange={(e) => setShortageQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                 placeholder="Cantidad no encontrada..."
                 style={{
                   width: "100%",

@@ -45,14 +45,14 @@ export default function LoadVerificationPage() {
         const hasStartedPicking = items.some(item => (item.picked_quantity || 0) > 0);
         const hasPendingItems = items.some(item => (item.picked_quantity || 0) === 0);
 
-        // Block if completely unpicked
-        if (items.length > 0 && !hasStartedPicking) {
-            alert(`ERROR DE CARGUE: El pedido de ${stop.orders?.customer_name} no ha sido alistado en bodega (todos los artículos están en 0). Por favor, espera a que el equipo de alistamiento termine.`);
+        // Si el muelle ya certificó la ruta (incluso por Planilla Papel donde picked_quantity puede ser 0), permitir el cargue
+        if (items.length > 0 && !hasStartedPicking && !isCertified && routeStatus !== 'rectified') {
+            alert(`ERROR DE CARGUE: El pedido de ${stop.orders?.customer_name} no ha sido alistado en bodega ni certificado en muelle.`);
             return;
         }
 
-        // Warn if partially unpicked (when checking for the first time)
-        if (hasPendingItems && !loadedStops.has(id)) {
+        // Warn if partially unpicked (only when not certified by paper sheet)
+        if (hasPendingItems && !loadedStops.has(id) && !isCertified && routeStatus !== 'rectified') {
             if (!confirm(`ALERTA: El pedido de ${stop.orders?.customer_name} tiene artículos sin alistar (0 Kg). ¿Confirmas que deseas cargarlo de todas formas?`)) {
                 return;
             }
@@ -69,46 +69,6 @@ export default function LoadVerificationPage() {
     const fetchRouteData = useCallback(async () => {
         try {
             setLoading(true);
-
-            // Handle Mock Route ID for Demo Mode
-            if (typeof id === 'string' && id.startsWith('mock')) {
-                const mockStops: RouteStop[] = [
-                    {
-                        id: 's1', sequence_number: 1, status: 'pending',
-                        orders: {
-                            id: 'o1', customer_name: 'Restaurante El Sabor (Mock)', shipping_address: 'Calle Falsa 123', warehouse_spaces: [12],
-                            order_items: [
-                                { id: 'oi1', products: { name: 'Papa Sabanera', unit_of_measure: 'KG' }, quantity: 50, picked_quantity: 50 },
-                                { id: 'oi2', products: { name: 'Cebolla Cabezona', unit_of_measure: 'KG' }, quantity: 20, picked_quantity: 20 }
-                            ]
-                        }
-                    },
-                    {
-                        id: 's2', sequence_number: 2, status: 'pending',
-                        orders: {
-                            id: 'o2', customer_name: 'Piqueteadero Central (Mock)', shipping_address: 'Av Siempre Viva 742', warehouse_spaces: [15],
-                            order_items: [
-                                { id: 'oi3', products: { name: 'Tomate Chonto', unit_of_measure: 'KG' }, quantity: 30, picked_quantity: 30 }
-                            ]
-                        }
-                    },
-                    {
-                        id: 's3', sequence_number: 3, status: 'pending',
-                        orders: {
-                            id: 'o3', customer_name: 'Frutería Express (Mock)', shipping_address: 'Carrera 15 #123', warehouse_spaces: [18, 19],
-                            order_items: [
-                                { id: 'oi4', products: { name: 'Limón Tahití', unit_of_measure: 'KG' }, quantity: 15, picked_quantity: 15 }
-                            ]
-                        }
-                    }
-                ];
-                setStops(mockStops);
-                setRouteStatus('rectified');
-                setIsCertified(true);
-                setCanBypass(true);
-                setLoading(false);
-                return;
-            }
 
             // 1. Fetch Route Header Info
             const { data: routeInfo } = await supabase
@@ -212,11 +172,6 @@ export default function LoadVerificationPage() {
 
         try {
             setSaving(true);
-            // Handle Mock Route ID for Demo Mode
-            if (typeof id === 'string' && id.startsWith('mock')) {
-                router.push(`/ops/driver/route-map/${id}`);
-                return;
-            }
 
             // Update route status to 'in_transit'
             const updatePayload: Record<string, any> = {

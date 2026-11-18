@@ -8,6 +8,9 @@ export interface BillingParentProfileInfo {
     document_type?: string | null;
     print_invoice?: boolean | null;
     remission_with_prices?: boolean | null;
+    logistics_data?: {
+        is_gift_remission?: boolean | null;
+    } | null;
 }
 
 export interface BillingOrderProfileInfo extends BillingParentProfileInfo {
@@ -135,7 +138,13 @@ export function resolveCanonicalDocType(
 
     const isExplicitGift = Boolean(
         order?.logistics_data?.is_gift_remission ||
-        order?.logistics_data?.document_type_override === 'gift_remission'
+        order?.logistics_data?.document_type_override === 'gift_remission' ||
+        prof.document_type === 'gift_remission' ||
+        parent?.document_type === 'gift_remission' ||
+        prof.logistics_data?.is_gift_remission ||
+        parent?.logistics_data?.is_gift_remission ||
+        /MATRIZ\s+OBSEQUIOS/i.test(parent?.company_name || '') ||
+        /\bOBSEQUIO\b/i.test(prof.company_name || '')
     );
 
     const effectiveDocOverride = ignoreZombieRemissionOverride

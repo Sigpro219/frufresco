@@ -28,14 +28,14 @@ export default function ReceivingPrintPage() {
     });
 
     const [paperFormat, setPaperFormat] = useState<'oficio' | 'letter'>('oficio');
-    const [rowsPerPage, setRowsPerPage] = useState<number>(46);
+    const [rowsPerPage, setRowsPerPage] = useState<number>(41);
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<ProductEntry[]>([]);
     const [generatedAt, setGeneratedAt] = useState<string>('');
 
-    // Sincronizar filas por defecto al cambiar formato de papel (Carta: 36, Oficio: 46)
+    // Sincronizar filas por defecto al cambiar formato de papel (Carta: 32, Oficio: 41 -> +12% a +13% de altura)
     useEffect(() => {
-        setRowsPerPage(paperFormat === 'oficio' ? 46 : 36);
+        setRowsPerPage(paperFormat === 'oficio' ? 41 : 32);
     }, [paperFormat]);
 
     // Altura calculada para ocupar toda la hoja armónicamente sin desbordar ni dejar huecos:
@@ -496,16 +496,20 @@ export default function ReceivingPrintPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7.5pt' }}>
                                         <thead>
                                             <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #CBD5E1', borderBottom: '1.5px solid #0F172A' }}>
-                                                <th style={{ width: '36%', textAlign: 'left', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Producto</th>
-                                                <th style={{ width: '14%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt' }}>Hora Llegada</th>
-                                                <th style={{ width: '26%', textAlign: 'center', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Nombre Proveedor</th>
-                                                <th style={{ width: '12%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>KG</th>
-                                                <th style={{ width: '12%', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt', lineHeight: 1.15 }}>Calidad<br/><span style={{ fontSize: '6.0pt', fontWeight: '700', color: '#FFFFFF', letterSpacing: '0.02em' }}>(SI/NO)</span></th>
+                                                <th style={{ width: '7%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>ID</th>
+                                                <th style={{ width: '31%', textAlign: 'left', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Producto</th>
+                                                <th style={{ width: '20%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>KG</th>
+                                                <th style={{ width: '22%', textAlign: 'center', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Nombre Proveedor</th>
+                                                <th style={{ width: '11%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt' }}>Hora Llegada</th>
+                                                <th style={{ width: '9%', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt', lineHeight: 1.15 }}>Calidad<br/><span style={{ fontSize: '6.0pt', fontWeight: '700', color: '#FFFFFF', letterSpacing: '0.02em' }}>(SI/NO)</span></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {page.map((it, idx) => (
                                                 <tr key={it.product_id || idx} style={{ height: `${rowHeightPx}px` }}>
+                                                    <td style={{ textAlign: 'center', padding: '2px 4px', border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box', fontWeight: '700', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {it.accounting_id ?? '—'}
+                                                    </td>
                                                     <td style={{ textAlign: 'left', padding: '2px 6px', border: '1px solid #CBD5E1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: `${rowHeightPx}px`, boxSizing: 'border-box' }} title={it.product_name}>
                                                         <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                     </td>

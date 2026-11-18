@@ -23,6 +23,7 @@ import {
 export default function OpsLayout({ children }: { children: ReactNode }) {
     const { profile, loading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
     const [isMounted, setIsMounted] = useState(false);
     const [isDarkMode, setIsDarkMode] = useState(true);
     const [dynamicLogosymbol, setDynamicLogosymbol] = useState<string | null>(null);
@@ -148,6 +149,32 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
         return checkUserPermission(profile, moduleKey, roles);
     };
 
+    const canAccessOpsRoute = (() => {
+        if (!pathname || pathname === '/ops') return true;
+        if (pathname.startsWith('/ops/compras') || pathname.startsWith('/ops/control-caja')) {
+            return hasPermission('ops.compras') || hasPermission('admin.orders');
+        }
+        if (pathname.startsWith('/ops/recogida')) {
+            return hasPermission('ops.recogida') || hasPermission('admin.orders');
+        }
+        if (pathname.startsWith('/ops/recepcion')) {
+            return hasPermission('ops.recepcion') || hasPermission('admin.orders');
+        }
+        if (pathname.startsWith('/ops/picking/dashboard')) {
+            return hasPermission('ops.picking.dashboard') || hasPermission('ops.picking') || hasPermission('admin.orders');
+        }
+        if (pathname.startsWith('/ops/picking')) {
+            return hasPermission('ops.picking.terminal') || hasPermission('ops.picking') || hasPermission('admin.orders');
+        }
+        if (pathname.startsWith('/ops/driver')) {
+            return hasPermission('ops.driver') || hasPermission('admin.transport.view');
+        }
+        if (pathname.startsWith('/ops/rectificacion') || pathname.startsWith('/ops/devoluciones') || pathname.startsWith('/ops/procesados') || pathname.startsWith('/ops/inventory')) {
+            return hasPermission('ops.recepcion') || hasPermission('ops.picking') || hasPermission('ops.picking.terminal') || hasPermission('admin.orders') || hasPermission('admin.transport.edit');
+        }
+        return true;
+    })();
+
     return (
         <div 
             className={`ops-theme-wrapper ${isDarkMode ? 'dark' : 'light'}`} 
@@ -205,7 +232,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                                 <span style={{ color: 'var(--ops-primary, #10B981)', fontWeight: 900 }}>FRU</span>
                             </div>
                             <span style={{ 
-                                fontSize: '9.5px', 
+                                fontSize: '11px', 
                                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                                 fontWeight: 800, 
                                 letterSpacing: '0.1em',
@@ -230,7 +257,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                                 boxShadow: '0 0 6px #10B981'
                             }} />
                             <span style={{ 
-                                fontSize: '8.5px', 
+                                fontSize: '11px', 
                                 fontWeight: 700, 
                                 letterSpacing: '0.2em', 
                                 color: 'var(--ops-text-muted, #94A3B8)', 
@@ -282,7 +309,17 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             </header>
 
             <main style={{ paddingBottom: '90px' }}>
-                {children}
+                {canAccessOpsRoute ? children : (
+                    <div style={{ maxWidth: '480px', margin: '4rem auto', padding: '2rem', borderRadius: '20px', backgroundColor: 'var(--ops-surface)', border: '1px solid var(--ops-border)', textAlign: 'center' }}>
+                        <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: 800, color: '#EF4444' }}>Acceso Restringido (RBAC)</h2>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--ops-text-muted)', marginBottom: '1.25rem' }}>
+                            Tu perfil operativo no tiene permiso asignado para este módulo ({pathname}).
+                        </p>
+                        <Link href="/ops" style={{ display: 'inline-block', padding: '0.65rem 1.25rem', borderRadius: '10px', backgroundColor: 'var(--ops-primary)', color: '#FFFFFF', fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}>
+                            Volver al Portal /ops
+                        </Link>
+                    </div>
+                )}
             </main>
 
             {/* Bottom Navigation for Mobile Speed */}
@@ -296,9 +333,12 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 WebkitBackdropFilter: 'blur(12px)',
                 borderTop: '1px solid var(--ops-border)',
                 display: 'flex',
-                justifyContent: 'space-around',
-                padding: '0.4rem 0',
-                paddingBottom: 'calc(0.4rem + env(safe-area-inset-bottom, 0px))',
+                justifyContent: 'space-between',
+                gap: '4px',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                padding: '0.45rem 0.5rem',
+                paddingBottom: 'calc(0.45rem + env(safe-area-inset-bottom, 0px))',
                 zIndex: 100,
                 boxShadow: '0 -4px 30px rgba(0,0,0,0.15)'
             }}>
@@ -408,7 +448,9 @@ function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: 
             flexDirection: 'column',
             alignItems: 'center',
             gap: '4px',
-            flex: 1,
+            flex: '1 0 auto',
+            minWidth: '68px',
+            padding: '0 4px',
             position: 'relative',
             transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s',
             transformOrigin: 'bottom center',
@@ -431,10 +473,11 @@ function NavItem({ href, icon: Icon, label }: { href: string, icon: any, label: 
                 }} />
             </div>
             <div style={{ 
-                fontSize: '0.55rem', 
+                fontSize: '0.72rem', 
                 fontWeight: isActive ? '900' : '700', 
-                letterSpacing: '0.06em', 
+                letterSpacing: '0.03em', 
                 marginTop: '1px',
+                whiteSpace: 'nowrap',
                 color: isActive ? 'var(--ops-primary)' : 'var(--ops-text-muted)',
                 transition: 'color 0.2s',
                 textShadow: isActive ? '0 0 8px rgba(16, 185, 129, 0.2)' : 'none'

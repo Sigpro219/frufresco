@@ -132,6 +132,7 @@ interface RawMovement {
     reference_id?: string | null;
     notes?: string | null;
     evidence_url?: string | null;
+    status_to?: string | null;
     created_at: string;
 }
 
@@ -1042,7 +1043,7 @@ interface CommittedSaleData {
                 const { data: movBatch, error: movErr } = await supabase
                     .from('inventory_movements')
                     .select(`
-                        id, product_id, warehouse_id, quantity, type, reference_type, reference_id, notes, evidence_url, created_at
+                        id, product_id, warehouse_id, quantity, type, reference_type, reference_id, notes, evidence_url, status_to, created_at
                     `)
                     .gte('created_at', startOfDayIso)
                     .order('created_at', { ascending: false })
@@ -1374,15 +1375,15 @@ interface CommittedSaleData {
                 if (ref === INVENTORY_MOVEMENT_SUBTYPES.CORRECTION || ref === 'production_transform' || (m.type === 'adjustment' && ref !== INVENTORY_MOVEMENT_SUBTYPES.BLIND_COUNT)) {
                     f_corrections += signedQty;
                 }
-                // G: Compra del día (+) — Coexistencia aditiva (DT-12 / Escenario 387) salvo reemplazo explícito de arbitraje o celda
-                else if (m.type === 'entry' && (ref === 'purchase_reception' || ref === 'purchase' || ref === 'entry')) {
+                // G: Compra del día (+) — Excluye cuarentenas/excedentes 'in_process' y 'rejected' hasta aprobación
+                else if (m.type === 'entry' && (ref === 'purchase_reception' || ref === 'purchase' || ref === 'entry') && m.status_to !== 'in_process' && m.status_to !== 'rejected') {
                     g_purchases += rawQty;
                     if ((m.notes || '').includes('AJUSTE AUTORIZADO') || (m.notes || '').includes('CONCILIACION_REEMPLAZO_OPS')) {
                         hasManualOrSheetPurchaseOverride = true;
                     }
                 }
-                // H: Venta del día KG (-) & I/J: Venta UN
-                else if (m.type === 'exit' && (ref === 'order_item' || ref === 'sale' || ref === 'dispatch')) {
+                // H: Venta del día KG (-) & I/J: Venta UN — Evitar doble descuento 2x cuando committedSalesMap ya leyó orders/order_items
+                else if (m.type === 'exit' && ((ref === 'order_item' && committedSalesMap.size === 0) || ref === 'sale' || ref === 'dispatch')) {
                     const weightMatch = (m.notes || '').match(/peso:\s*([0-9.,]+)/i);
                     const unitMatch = (m.notes || '').match(/(\d+)\s*(?:unds?|unidades?)(?:\s*de\s*([0-9.,]+\s*(?:gr|g|kg)))?/i);
 

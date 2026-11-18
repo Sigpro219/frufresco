@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
+import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
+import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
 import { 
   ArrowLeft, 
   Info, 
@@ -48,6 +51,8 @@ interface OrderStop {
     stop_number: number;
     location: string;
     crates_count: number;
+    is_invoiced_fac_imp?: boolean;
+    is_off_agreement_split?: boolean;
     items: MerchandiseItem[];
     is_validated: boolean;
     has_shortages?: boolean;
@@ -59,8 +64,8 @@ export default function RouteRectificationDetailPage() {
     const { profile } = useAuth();
 
     const [loading, setLoading] = useState(true);
-    const [vehiclePlate, setVehiclePlate] = useState('NHP287');
-    const [driverName, setDriverName] = useState('GARCIA HENRY');
+    const [vehiclePlate, setVehiclePlate] = useState('SIN PLACA');
+    const [driverName, setDriverName] = useState('Sin Asignar');
     const [stops, setStops] = useState<OrderStop[]>([]);
     
     // Modal Chequeo Manual por Papel
@@ -111,22 +116,11 @@ export default function RouteRectificationDetailPage() {
                 .single();
 
             if (routeData) {
-                setVehiclePlate(routeData.vehicle_plate || 'NHP287');
-                setDriverName(routeData.driver_name || 'GARCIA HENRY');
-            } else if (typeof routeId === 'string') {
-                if (routeId.includes('pmw071')) {
-                    setVehiclePlate('PMW071');
-                    setDriverName('ALARCÓN JORGE');
-                } else if (routeId.includes('wfw369')) {
-                    setVehiclePlate('WFW369');
-                    setDriverName('TRUJILLO MANUEL');
-                } else {
-                    setVehiclePlate('NHP287');
-                    setDriverName('GARCIA HENRY');
-                }
+                setVehiclePlate(routeData.vehicle_plate || 'SIN PLACA');
+                setDriverName(routeData.driver_name || 'Sin Asignar');
             }
 
-            // 2. Intentar cargar paradas reales desde route_stops
+            // 2. Cargar paradas reales desde route_stops
             let loadedStops: OrderStop[] = [];
             try {
                 const { data: routeStopsData, error: stopsError } = await supabase
@@ -134,13 +128,13 @@ export default function RouteRectificationDetailPage() {
                     .select(`
                         id, sequence_number, status,
                         orders:order_id (
-                            id, sequence_id, shipping_address, warehouse_spaces, crates_count, total, subtotal, tax, profile_id,
+                            id, sequence_id, shipping_address, warehouse_spaces, crates_count, total, subtotal, tax, profile_id, billing_cut_id, invoice_id, logistics_data,
                             profiles:profile_id (
                                 id, company_name, contact_name, role
                             ),
                             order_items (
                                 id, product_id, quantity, picked_quantity, unit, unit_price,
-                                products (id, name, unit_of_measure, sku)
+                                products (id, name, unit_of_measure, accounting_id)
                             )
                         )
                     `)
@@ -148,6 +142,7 @@ export default function RouteRectificationDetailPage() {
                     .order('sequence_number', { ascending: false });
 
                 if (!stopsError && routeStopsData && routeStopsData.length > 0) {
+                    const allOrdersInRoute = routeStopsData.map((s: any) => s.orders).filter(Boolean);
                     loadedStops = routeStopsData.map((rs: any, idx: number) => {
                         const ord = rs.orders || {};
                         const prof = ord.profiles || {};
@@ -159,28 +154,30 @@ export default function RouteRectificationDetailPage() {
                         const mappedItems: MerchandiseItem[] = rawItems.map((itm: any) => ({
                             id: itm.id,
                             product_id: itm.product_id,
-                            product_name: itm.products?.name || 'Producto',
+                            product_name: itm.products?.accounting_id ? `#${itm.products.accounting_id} ${itm.products?.name || 'Producto'}` : (itm.products?.name || 'Producto'),
                             quantity: Number(itm.quantity) || 1,
                             unit: itm.unit || itm.products?.unit_of_measure || 'Kg',
                             unit_price: Number(itm.unit_price) || 0,
                             checked: false,
                             is_shortage: false,
-                            actual_quantity: Number(itm.quantity) || 1,
+                            actual_quantity: itm.picked_quantity !== null && itm.picked_quantity !== undefined ? Number(itm.picked_quantity) : (Number(itm.quantity) || 1),
                             shortage_reason: ''
                         }));
 
-                        const spaces = ord.warehouse_spaces;
-                        const spaceLabel = Array.isArray(spaces) && spaces.length > 0 ? `ESP ${spaces.join(', ')}` : `ESP ${String(idx + 1).padStart(2, '0')}`;
+                        const label = getOrderSpaceDisplayLabel(ord, allOrdersInRoute);
+                        const spaceLabel = label !== 'S/A' ? `ESP ${label}` : 'Sin Espacio';
 
                         return {
                             id: rs.id,
-                            order_id: ord.id || `ord-${idx}`,
+                            order_id: ord.id,
                             sequence_id: ord.sequence_id,
                             client_id: ord.profile_id,
                             customer_name: custName,
                             stop_number: rs.sequence_number || (routeStopsData.length - idx),
                             location: spaceLabel,
                             crates_count: ord.crates_count || 10,
+                            is_invoiced_fac_imp: Boolean(ord.billing_cut_id || ord.invoice_id),
+                            is_off_agreement_split: Boolean(ord.logistics_data?.is_off_agreement_split),
                             is_validated: false,
                             has_shortages: false,
                             items: mappedItems
@@ -188,69 +185,10 @@ export default function RouteRectificationDetailPage() {
                     });
                 }
             } catch (stopsErr) {
-                console.warn('Could not load real route_stops, falling back to mock stops:', stopsErr);
+                console.warn('Error cargando paradas reales de route_stops:', stopsErr);
             }
 
-            if (loadedStops.length > 0) {
-                setStops(loadedStops);
-            } else {
-                // Mock Data LIFO ordered (Reverse stop numbers 25 to 1) para rutas demo o offline
-                const mockStops: OrderStop[] = [
-                    {
-                        id: 'stop-25',
-                        order_id: 'ord-25',
-                        sequence_id: 1045,
-                        customer_name: 'ADR WORK SAS - HOTEL SPOT CENTRO',
-                        stop_number: 25,
-                        location: 'ESP 32',
-                        crates_count: 14,
-                        is_validated: false,
-                        has_shortages: false,
-                        items: [
-                            { id: 'i1', product_id: 'prod-ciruela', product_name: 'Ciruela nacional', quantity: 24, unit: 'Kg', unit_price: 12000, checked: false, is_shortage: false, actual_quantity: 24 },
-                            { id: 'i2', product_id: 'prod-esparragos', product_name: 'Esparragos', quantity: 47, unit: 'Kg', unit_price: 18000, checked: false, is_shortage: false, actual_quantity: 47 },
-                            { id: 'i3', product_id: 'prod-lechuga', product_name: 'Lechuga romana', quantity: 49, unit: 'Kg', unit_price: 4500, checked: false, is_shortage: false, actual_quantity: 49 },
-                            { id: 'i4', product_id: 'prod-perejil', product_name: 'Perejil crespo', quantity: 53, unit: 'Kg', unit_price: 3800, checked: false, is_shortage: false, actual_quantity: 53 },
-                            { id: 'i5', product_id: 'prod-naranja', product_name: 'Naranja extra', quantity: 56, unit: 'Kg', unit_price: 3200, checked: false, is_shortage: false, actual_quantity: 56 },
-                            { id: 'i6', product_id: 'prod-ruibarbo', product_name: 'Ruibarbo', quantity: 30, unit: 'Kg', unit_price: 8000, checked: false, is_shortage: false, actual_quantity: 30 }
-                        ]
-                    },
-                    {
-                        id: 'stop-24',
-                        order_id: 'ord-24',
-                        sequence_id: 1044,
-                        customer_name: 'PEÑA INVESTMENTS S.A.S - LA MAR',
-                        stop_number: 24,
-                        location: 'ESP 18',
-                        crates_count: 8,
-                        is_validated: false,
-                        has_shortages: false,
-                        items: [
-                            { id: 'i7', product_id: 'prod-aguacate', product_name: 'Aguacate papelillo', quantity: 37, unit: 'Kg', unit_price: 9500, checked: false, is_shortage: false, actual_quantity: 37 },
-                            { id: 'i8', product_id: 'prod-platano', product_name: 'Platano verde institucional', quantity: 38, unit: 'Kg', unit_price: 4200, checked: false, is_shortage: false, actual_quantity: 38 },
-                            { id: 'i9', product_id: 'prod-tomate', product_name: 'Tomate chonto', quantity: 25, unit: 'Kg', unit_price: 4000, checked: false, is_shortage: false, actual_quantity: 25 }
-                        ]
-                    },
-                    {
-                        id: 'stop-23',
-                        order_id: 'ord-23',
-                        sequence_id: 1043,
-                        customer_name: 'INDUSTRIA DE RESTAURANTES CASUALES',
-                        stop_number: 23,
-                        location: 'ESP 05',
-                        crates_count: 22,
-                        is_validated: false,
-                        has_shortages: false,
-                        items: [
-                            { id: 'i10', product_id: 'prod-limon', product_name: 'Limon Tahiti extra', quantity: 60, unit: 'Kg', unit_price: 5200, checked: false, is_shortage: false, actual_quantity: 60 },
-                            { id: 'i11', product_id: 'prod-cebolla', product_name: 'Cebolla cabezona blanca', quantity: 100, unit: 'Kg', unit_price: 2800, checked: false, is_shortage: false, actual_quantity: 100 },
-                            { id: 'i12', product_id: 'prod-papa', product_name: 'Papa sabanera seleccionada', quantity: 150, unit: 'Kg', unit_price: 3600, checked: false, is_shortage: false, actual_quantity: 150 }
-                        ]
-                    }
-                ];
-
-                setStops(mockStops);
-            }
+            setStops(loadedStops);
         } catch (e) {
             console.error('Error loading route rectification details:', e);
         } finally {
@@ -401,18 +339,32 @@ export default function RouteRectificationDetailPage() {
         window.open(url, '_blank');
     };
 
-    // Subir foto de la planilla física en papel
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Subir foto de la planilla física en papel a Supabase Storage (evitar Base64 en BD)
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setUploadingPhoto(true);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setPaperPhotoUrl(reader.result as string);
+        try {
+            const fileExt = file.name.split('.').pop() || 'jpg';
+            const fileName = `rectificacion_${String(routeId)}_${Date.now()}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage
+                .from('delivery-evidence')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('delivery-evidence')
+                .getPublicUrl(fileName);
+
+            setPaperPhotoUrl(publicUrl);
+        } catch (err) {
+            console.error('Error subiendo planilla a Storage:', err);
+            alert('Error al subir la foto de la planilla. Verifica tu conexión.');
+        } finally {
             setUploadingPhoto(false);
-        };
-        reader.readAsDataURL(file);
+        }
     };
 
     // Paso 1: Confirmar Anexo de Foto en Papel -> Pasar a Pantalla de Certificación
@@ -455,6 +407,8 @@ export default function RouteRectificationDetailPage() {
                 order_id: s.order_id,
                 sequence_id: s.sequence_id,
                 client_id: s.client_id,
+                is_invoiced_fac_imp: Boolean(s.is_invoiced_fac_imp),
+                is_off_agreement_split: Boolean(s.is_off_agreement_split),
                 item_id: i.id,
                 product_id: i.product_id,
                 product_name: i.product_name,
@@ -478,24 +432,40 @@ export default function RouteRectificationDetailPage() {
         try {
             const now = new Date().toISOString();
             const mode = paperPhotoUrl ? 'paper' : 'digital';
+            const activeShift = await fetchActiveShiftClient();
+            const isMirrorMode = activeShift?.mode === 'manual_mirror';
 
             // 1. Radicación de Novedades de Escasez en Gestión de Calidad (Shift-Left)
-            if (allShortages.length > 0) {
+            // En Modo Espejo (manual_mirror), no duplicamos billing_returns ni mutamos facturas/totales reales
+            if (!isMirrorMode && allShortages.length > 0) {
+                const ordersToRecalc = new Set<string>();
+
                 for (const shortage of allShortages) {
                     try {
-                        // a. Inserción en billing_returns
-                        await supabase.from('billing_returns').insert({
+                        const dedupKey = `rectificacion_${shortage.order_id}_${shortage.product_id || shortage.item_id}`;
+                        // a. Inserción en billing_returns (para Nota Crédito ADJ si es FAC-IMP, o trazabilidad si es Remisión)
+                        const brPayload: Record<string, any> = {
                             order_id: shortage.order_id,
                             product_id: shortage.product_id || null,
                             quantity_returned: shortage.missing_quantity,
-                            reason: `[Faltante Cargue en Muelle - Escasez]: ${shortage.reason} | Parada #${shortage.stop_number} | Ruta ${vehiclePlate}`,
-                            defect_category_l1: 'comercial_cliente',
-                            defect_subtype_l2: 'producto_agotado_plaza',
-                            imputed_responsible: 'proveedor',
-                            status: 'pending_review'
-                        });
+                            reason: `[Faltante Cargue Muelle${shortage.is_invoiced_fac_imp ? ' · FAC-IMP Nota Crédito ADJ' : ''}]: ${shortage.reason} | Parada #${shortage.stop_number} | Ruta ${vehiclePlate}`,
+                            status: 'pending_review',
+                            source: 'rectificacion_muelle',
+                            dedup_key: dedupKey
+                        };
+                        let { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
+                        if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
+                            const { source: _s, dedup_key: _d, ...legacyBr } = brPayload;
+                            await supabase.from('billing_returns').insert(legacyBr);
+                        }
 
-                        // b. Inserción en customer_service_pqrs
+                        // b. Inserción en customer_service_pqrs con tag RCA estándar
+                        const rcaTag = buildRcaMetadataTag({
+                            categoryL1: 'comercial_cliente',
+                            subtypeL2: 'producto_agotado_plaza',
+                            responsible: 'proveedor',
+                            notes: `Faltante en rectificación de muelle (${shortage.is_invoiced_fac_imp ? 'FAC-IMP inmutable -> NC ADJ' : 'Remisión ajustada'})`
+                        });
                         await supabase.from('customer_service_pqrs').insert({
                             client_id: shortage.client_id || null,
                             order_id: shortage.order_id,
@@ -503,22 +473,32 @@ export default function RouteRectificationDetailPage() {
                             category: 'producto',
                             priority: 'high',
                             subject: `[Escasez Muelle] Faltante por Agotado: ${shortage.product_name} - Pedido #${shortage.sequence_id || shortage.order_id.substring(0, 8)}`,
-                            description: `En la rectificación de cargue de la ruta ${vehiclePlate} (Parada #${shortage.stop_number} - ${shortage.customer_name}) se detectó faltante de ${shortage.missing_quantity} ${shortage.unit} de ${shortage.product_name} por desabastecimiento en plaza mayorista. Cantidad efectivamente cargada: ${shortage.actual_quantity} ${shortage.unit}.`,
-                            defect_category_l1: 'comercial_cliente',
-                            defect_subtype_l2: 'producto_agotado_plaza',
-                            imputed_responsible: 'proveedor',
+                            description: `En la rectificación de cargue de la ruta ${vehiclePlate} (Parada #${shortage.stop_number} - ${shortage.customer_name}) se detectó faltante de ${shortage.missing_quantity} ${shortage.unit} de ${shortage.product_name}. Cantidad cargada: ${shortage.actual_quantity} ${shortage.unit}.\n\n${rcaTag}`,
                             status: 'pending'
                         });
 
-                        // c. Ajustar order_items en base de datos si es UUID real
-                        if (shortage.item_id && !shortage.item_id.startsWith('i')) {
+                        // c. Protección Fiscal FAC-IMP & Split $0: solo mutar order_items si NO es FAC-IMP facturada en Corte PM y NO es Split $0
+                        if (!shortage.is_invoiced_fac_imp && !shortage.is_off_agreement_split && shortage.item_id) {
                             await supabase.from('order_items').update({
                                 picked_quantity: shortage.actual_quantity,
                                 quantity: shortage.actual_quantity
                             }).eq('id', shortage.item_id);
+                            ordersToRecalc.add(shortage.order_id);
                         }
                     } catch (shortageErr) {
                         console.warn('Aviso registrando novedad de escasez en muelle:', shortageErr);
+                    }
+                }
+
+                // Recalcular subtotal/total en cabecera orders para Remisiones ajustadas
+                for (const ordId of Array.from(ordersToRecalc)) {
+                    const { data: ordItems } = await supabase
+                        .from('order_items')
+                        .select('quantity, unit_price')
+                        .eq('order_id', ordId);
+                    if (ordItems && ordItems.length > 0) {
+                        const newTotal = ordItems.reduce((acc, it: any) => acc + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+                        await supabase.from('orders').update({ subtotal: Math.round(newTotal), total: Math.round(newTotal) }).eq('id', ordId);
                     }
                 }
             }
@@ -1138,12 +1118,10 @@ export default function RouteRectificationDetailPage() {
                             </label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <input 
-                                    type="number" 
-                                    min="0"
-                                    max={selectedShortageItem.item.quantity}
-                                    step="0.1"
+                                    type="text" 
+                                    inputMode="decimal"
                                     value={shortageLoadedQty}
-                                    onChange={e => setShortageLoadedQty(e.target.value)}
+                                    onChange={e => setShortageLoadedQty(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, ''))}
                                     style={{
                                         flex: 1,
                                         padding: '0.65rem 0.85rem',
