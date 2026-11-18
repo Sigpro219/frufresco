@@ -1405,9 +1405,10 @@ export default function PricingSettingsPage({
                     if (p.sku) skuMap.set(p.sku.trim().toLowerCase(), p.id);
                 });
 
-                // Prepare rules to upsert or delete
+                // Prepare rules and direct price overrides to upsert or delete
                 const rulesToUpsert: any[] = [];
                 const ruleIdsToDelete: string[] = [];
+                const directPricesToUpsert: any[] = [];
                 
                 const { data: existingRules } = await supabase
                     .from('pricing_rules')
@@ -1432,25 +1433,16 @@ export default function PricingSettingsPage({
                     }
                     return undefined;
                 };
+                const matrixByIdMap = new Map<string, any>();
+                matrixData.forEach(m => { if (m?.id) matrixByIdMap.set(m.id, m); });
+
                 for (const row of rawData) {
-                    const rawId = pickCell(row, ['ID', 'ID ERP', 'ID Contable', 'accounting_id', 'Codigo', 'Código']);
+                    const rawId = pickCell(row, ['ID', 'ID ERP', 'IdProducto', 'idProducto', 'id_producto', 'ID Contable', 'accounting_id', 'Codigo', 'Código']);
                     const rawSku = pickCell(row, ['SKU', 'Referencia']);
                     const excelId = rawId !== undefined ? String(rawId).trim() : '';
                     const excelSku = rawSku !== undefined ? String(rawSku).trim().toLowerCase() : '';
-                    const excelMarginVal = pickCell(row, ['Margen (%)', 'Margen %', 'Margen', 'Utilidad (%)', 'Utilidad %', 'Utilidad']);
 
-                    if (excelMarginVal === undefined) {
-                        skippedCount++;
-                        continue;
-                    }
-
-                    const parsedMargin = parseFloat(String(excelMarginVal).replace('%', '').replace(',', '.').trim());
-                    if (isNaN(parsedMargin)) {
-                        skippedCount++;
-                        continue;
-                    }
-
-                    let productId = null;
+                    let productId: string | null = null;
                     if (excelId && idMap.has(excelId)) {
                         productId = idMap.get(excelId);
                     } else if (excelSku && skuMap.has(excelSku)) {
@@ -1462,19 +1454,60 @@ export default function PricingSettingsPage({
                         continue;
                     }
 
-                    const targetAdjustment = parsedMargin - selectedModel.base_margin_percent;
+                    const excelMarginVal = pickCell(row, ['Margen (%)', 'Margen %', 'Margen', 'Utilidad (%)', 'Utilidad %', 'Utilidad']);
+                    let parsedMargin = NaN;
+                    let hasDirectPrice = false;
 
-                    if (Math.abs(targetAdjustment) < 0.001) {
-                        const existingRuleId = existingRulesMap.get(productId);
-                        if (existingRuleId) {
-                            ruleIdsToDelete.push(existingRuleId);
-                        }
+                    if (excelMarginVal !== undefined) {
+                        parsedMargin = parseFloat(String(excelMarginVal).replace('%', '').replace(',', '.').trim());
                     } else {
-                        rulesToUpsert.push({
-                            model_id: selectedModel.id,
-                            product_id: productId,
-                            margin_adjustment: targetAdjustment
-                        });
+                        const excelPriceVal = pickCell(row, ['Precio Final con IVA', 'Precio Final', 'Precio', 'Precio Venta', 'Valor']);
+                        if (excelPriceVal !== undefined) {
+                            const targetPrice = typeof excelPriceVal === 'number'
+                                ? excelPriceVal
+                                : parseFloat(String(excelPriceVal).replace(/[$\s]/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.'));
+                            if (!isNaN(targetPrice) && targetPrice > 0) {
+                                hasDirectPrice = true;
+                                directPricesToUpsert.push({
+                                    model_id: selectedModel.id,
+                                    product_id: productId,
+                                    price: Math.round(targetPrice),
+                                    updated_at: new Date().toISOString()
+                                });
+                                const matrixRow = matrixByIdMap.get(productId);
+                                const baseCost = Number(matrixRow?.base_cost || 0);
+                                const rawIva = pickCell(row, ['IVA %', 'IVA (%)', 'IVA']);
+                                const ivaRate = rawIva !== undefined
+                                    ? (parseFloat(String(rawIva).replace('%', '').replace(',', '.').trim()) || 0)
+                                    : Number(matrixRow?.iva_rate || 0);
+                                if (baseCost > 0) {
+                                    const priceWithoutIva = targetPrice / (1 + ivaRate / 100);
+                                    parsedMargin = ((priceWithoutIva / baseCost) - 1) * 100;
+                                }
+                            }
+                        }
+                    }
+
+                    if (isNaN(parsedMargin) && !hasDirectPrice) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    if (!isNaN(parsedMargin)) {
+                        const targetAdjustment = parsedMargin - selectedModel.base_margin_percent;
+
+                        if (Math.abs(targetAdjustment) < 0.001) {
+                            const existingRuleId = existingRulesMap.get(productId);
+                            if (existingRuleId) {
+                                ruleIdsToDelete.push(existingRuleId);
+                            }
+                        } else {
+                            rulesToUpsert.push({
+                                model_id: selectedModel.id,
+                                product_id: productId,
+                                margin_adjustment: targetAdjustment
+                            });
+                        }
                     }
                     processedCount++;
                 }
@@ -1512,8 +1545,20 @@ export default function PricingSettingsPage({
                     await batchRecalculateAndSyncPrices(supabase, affectedIds).catch(e => console.warn('Excel pricing sync error:', e));
                 }
 
-                const skippedNote = skippedCount > 0 ? ` (${skippedCount} filas omitidas por falta de ID o margen válido)` : '';
-                setExcelSuccess(`Planilla cargada. Se procesaron ${processedCount} filas: ${rulesToUpsert.length} excepciones creadas/actualizadas y ${ruleIdsToDelete.length} reglas removidas.${skippedNote}`);
+                // Persist direct prices from Excel (takes precedence even if base_cost is $0)
+                if (directPricesToUpsert.length > 0) {
+                    for (let i = 0; i < directPricesToUpsert.length; i += 100) {
+                        const batch = directPricesToUpsert.slice(i, i + 100);
+                        const { error } = await supabase
+                            .from('pricing_model_prices')
+                            .upsert(batch, { onConflict: 'model_id,product_id' });
+                        if (error) throw error;
+                    }
+                }
+
+                const skippedNote = skippedCount > 0 ? ` (${skippedCount} filas omitidas por falta de ID o valor válido)` : '';
+                const directNote = directPricesToUpsert.length > 0 ? `, ${directPricesToUpsert.length} precios directos aplicados` : '';
+                setExcelSuccess(`Planilla cargada. Se procesaron ${processedCount} filas: ${rulesToUpsert.length} excepciones creadas/actualizadas, ${ruleIdsToDelete.length} reglas removidas${directNote}.${skippedNote}`);
                 await fetchMatrixData(selectedModel.id);
             } catch (err: any) {
                 console.error('Error importing Excel:', err);
