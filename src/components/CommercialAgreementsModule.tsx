@@ -302,6 +302,7 @@ export const SUPPLY_JUSTIFICATION_PRESETS = [
 export default function CommercialAgreementsModule() {
     const { user, profile } = useAuth();
     const [agreements, setAgreements] = useState<Agreement[]>([]);
+    const [historicalQuotes, setHistoricalQuotes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'warning' | 'expired'>('all');
@@ -573,6 +574,17 @@ export default function CommercialAgreementsModule() {
         });
     }, [b2bClients, agreements, sharedLinks]);
 
+    const getClientLastQuoteHistory = (client: any) => {
+        if (!historicalQuotes.length) return null;
+        const directMatch = historicalQuotes.find(q => q.client_id === client.id);
+        if (directMatch) return { quote: directMatch, inheritedFromParent: false };
+        if (client.parent_id) {
+            const parentMatch = historicalQuotes.find(q => q.client_id === client.parent_id);
+            if (parentMatch) return { quote: parentMatch, inheritedFromParent: true };
+        }
+        return null;
+    };
+
     const handleOpenCreateWithClient = (clientId: string) => {
         handleOpenCreateModal();
         setSelectedClientId(clientId);
@@ -650,6 +662,13 @@ export default function CommercialAgreementsModule() {
             }
             setSharedLinks(linksMap);
             setAgreements(data || []);
+
+            const { data: histData } = await supabase
+                .from('quotes')
+                .select('id, quote_number, client_id, client_name, model_snapshot_name, status, valid_until, created_at, updated_at')
+                .in('status', ['expired', 'superseded', 'cancelled', 'draft', 'sent'])
+                .order('updated_at', { ascending: false });
+            setHistoricalQuotes(histData || []);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Error desconocido';
             console.error('Error fetching agreements:', err);
@@ -11517,7 +11536,7 @@ export default function CommercialAgreementsModule() {
                     <div style={{
                         backgroundColor: '#FFFFFF',
                         borderRadius: '16px',
-                        maxWidth: '720px',
+                        maxWidth: 'min(1080px, 95vw)',
                         width: '100%',
                         maxHeight: '85vh',
                         display: 'flex',
@@ -11591,32 +11610,84 @@ export default function CommercialAgreementsModule() {
 
                         {/* Clients list */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-                            {clientsWithoutAgreement.filter(c => {
+                            {(() => {
                                 const term = clientsWithoutAgreementSearch.toLowerCase();
-                                return (c.company_name || '').toLowerCase().includes(term) || (c.vat_number || '').includes(term);
-                            }).length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
-                                    <Check size={36} color="#0D7A57" style={{ margin: '0 auto 12px' }} />
-                                    <p style={{ margin: 0, fontWeight: 600, color: '#0F172A' }}>
-                                        {clientsWithoutAgreement.length === 0 
-                                            ? '¡Excelente control! Todos los clientes institucionales tienen acuerdo comercial activo.'
-                                            : 'No se encontraron clientes con el filtro ingresado.'}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {clientsWithoutAgreement
-                                        .filter(c => {
-                                            const term = clientsWithoutAgreementSearch.toLowerCase();
-                                            return (c.company_name || '').toLowerCase().includes(term) || (c.nit || c.vat_number || '').includes(term);
-                                        })
-                                        .map(client => (
+                                const filteredList = clientsWithoutAgreement
+                                    .filter(c => (c.company_name || '').toLowerCase().includes(term) || (c.nit || c.vat_number || '').includes(term))
+                                    .sort((a, b) => {
+                                        const aIsSede = Boolean(a.parent_id) ? 1 : 0;
+                                        const bIsSede = Boolean(b.parent_id) ? 1 : 0;
+                                        if (aIsSede !== bIsSede) return aIsSede - bIsSede;
+                                        return (a.company_name || '').localeCompare(b.company_name || '');
+                                    });
+                                const matricesCount = filteredList.filter(c => !c.parent_id).length;
+                                const sedesCount = filteredList.filter(c => Boolean(c.parent_id)).length;
+
+                                if (filteredList.length === 0) {
+                                    return (
+                                        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                                            <Check size={36} color="#0D7A57" style={{ margin: '0 auto 12px' }} />
+                                            <p style={{ margin: 0, fontWeight: 600, color: '#0F172A' }}>
+                                                {clientsWithoutAgreement.length === 0 
+                                                    ? '¡Excelente control! Todos los clientes institucionales tienen acuerdo comercial activo.'
+                                                    : 'No se encontraron clientes con el filtro ingresado.'}
+                                            </p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {filteredList.map((client, idx) => {
+                                            const isFirstMatriz = idx === 0 && !client.parent_id;
+                                            const isFirstSede = Boolean(client.parent_id) && (idx === 0 || !filteredList[idx - 1].parent_id);
+                                            const historyInfo = getClientLastQuoteHistory(client);
+                                            const histQuote = historyInfo?.quote;
+                                            const histStatusLabel = histQuote?.status === 'expired'
+                                                ? 'VENCIDO'
+                                                : histQuote?.status === 'superseded'
+                                                ? 'REEMPLAZADO'
+                                                : histQuote?.status === 'cancelled'
+                                                ? 'CANCELADO'
+                                                : histQuote?.status === 'sent'
+                                                ? 'ENVIADO (SIN ACTIVAR)'
+                                                : histQuote?.status === 'draft'
+                                                ? 'BORRADOR'
+                                                : histQuote?.status?.toUpperCase();
+                                            const histBadgeBg = histQuote?.status === 'expired'
+                                                ? '#FEE2E2'
+                                                : histQuote?.status === 'superseded'
+                                                ? '#FEF3C7'
+                                                : histQuote?.status === 'cancelled'
+                                                ? '#F1F5F9'
+                                                : '#E0F2FE';
+                                            const histBadgeColor = histQuote?.status === 'expired'
+                                                ? '#B91C1C'
+                                                : histQuote?.status === 'superseded'
+                                                ? '#B45309'
+                                                : histQuote?.status === 'cancelled'
+                                                ? '#475569'
+                                                : '#0369A1';
+                                            const fmtDate = (d?: string | null) => d ? String(d).slice(0, 10) : 'N/A';
+
+                                            return (
+                                            <div key={client.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {isFirstMatriz && (
+                                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#4338CA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 4px 2px', borderBottom: '1px solid #E2E8F0' }}>
+                                                        Casas Matrices ({matricesCount})
+                                                    </div>
+                                                )}
+                                                {isFirstSede && (
+                                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px 4px 2px', borderBottom: '1px solid #E2E8F0' }}>
+                                                        Sedes / Sucursales ({sedesCount})
+                                                    </div>
+                                                )}
                                             <div
-                                                key={client.id}
                                                 style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
+                                                    gap: '12px',
                                                     padding: '12px 16px',
                                                     borderRadius: '10px',
                                                     border: '1px solid #E2E8F0',
@@ -11624,12 +11695,12 @@ export default function CommercialAgreementsModule() {
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                <div>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                         <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>
                                                             {client.company_name}
                                                         </span>
-                                                        {client.parent_id && (
+                                                        {client.parent_id ? (
                                                             <span style={{
                                                                 fontSize: '0.7rem',
                                                                 backgroundColor: '#F1F5F9',
@@ -11638,6 +11709,20 @@ export default function CommercialAgreementsModule() {
                                                                 borderRadius: '4px'
                                                             }}>
                                                                 Sede
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 700,
+                                                                backgroundColor: client.branchCount > 0 ? '#EEF2FF' : '#F8FAFC',
+                                                                color: client.branchCount > 0 ? '#4338CA' : '#64748B',
+                                                                border: `1px solid ${client.branchCount > 0 ? '#C7D2FE' : '#E2E8F0'}`,
+                                                                padding: '1px 7px',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                {client.branchCount > 0
+                                                                    ? `Matriz • Cobija ${client.branchCount} ${client.branchCount === 1 ? 'sede' : 'sedes'}`
+                                                                    : 'Matriz • Sin sedes'}
                                                             </span>
                                                         )}
                                                         <span style={{
@@ -11654,6 +11739,61 @@ export default function CommercialAgreementsModule() {
                                                     <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '2px' }}>
                                                         NIT: <strong style={{ color: '#334155' }}>{client.nit || client.vat_number || 'Sin NIT'}</strong> &bull; Contacto: {client.contact_name || client.phone || 'N/A'}
                                                     </div>
+                                                    {histQuote ? (
+                                                        <div style={{
+                                                            marginTop: '6px',
+                                                            padding: '6px 10px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: '#F8FAFC',
+                                                            border: '1px solid #E2E8F0',
+                                                            fontSize: '0.76rem',
+                                                            color: '#334155',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '2px'
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                {histQuote.quote_number && (
+                                                                    <span style={{
+                                                                        fontSize: '0.7rem',
+                                                                        fontWeight: 800,
+                                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                        padding: '1px 6px',
+                                                                        borderRadius: '4px',
+                                                                        backgroundColor: '#0F172A',
+                                                                        color: '#FFFFFF'
+                                                                    }}>
+                                                                        #{histQuote.quote_number}
+                                                                    </span>
+                                                                )}
+                                                                <span style={{
+                                                                    fontSize: '0.68rem',
+                                                                    fontWeight: 800,
+                                                                    padding: '1px 6px',
+                                                                    borderRadius: '4px',
+                                                                    backgroundColor: histBadgeBg,
+                                                                    color: histBadgeColor
+                                                                }}>
+                                                                    {histStatusLabel}
+                                                                </span>
+                                                                <span style={{ fontWeight: 600 }}>
+                                                                    {histQuote.model_snapshot_name || histQuote.client_name || 'Acuerdo sin nombre'}
+                                                                </span>
+                                                                {historyInfo?.inheritedFromParent && (
+                                                                    <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                                                        (Matriz: {client.parentName || 'Casa Matriz'})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ color: '#64748B', fontSize: '0.74rem' }}>
+                                                                Inicio: <strong style={{ color: '#334155' }}>{fmtDate(histQuote.created_at)}</strong> &bull; Venció / Hasta: <strong style={{ color: '#334155' }}>{fmtDate(histQuote.valid_until)}</strong>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ marginTop: '4px', fontSize: '0.74rem', color: '#94A3B8' }}>
+                                                            Sin historial de acuerdos previos registrados
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <button
                                                     onClick={() => handleOpenCreateWithClient(client.id)}
@@ -11669,15 +11809,19 @@ export default function CommercialAgreementsModule() {
                                                         fontWeight: 600,
                                                         fontSize: '0.8rem',
                                                         cursor: 'pointer',
+                                                        flexShrink: 0,
                                                         boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
                                                     }}
                                                 >
                                                     <Plus size={14} strokeWidth={2.5} /> Crear Acuerdo
                                                 </button>
                                             </div>
-                                        ))}
-                                </div>
-                            )}
+                                            </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         <div style={{
