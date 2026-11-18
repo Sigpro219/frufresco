@@ -1422,17 +1422,29 @@ export default function PricingSettingsPage({
                 let processedCount = 0;
                 let skippedCount = 0;
 
+                const pickCell = (obj: Record<string, any>, candidates: string[]) => {
+                    const keys = Object.keys(obj);
+                    for (const cand of candidates) {
+                        if (obj[cand] !== undefined && obj[cand] !== '') return obj[cand];
+                        const normCand = cand.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                        const hit = keys.find(k => k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === normCand);
+                        if (hit && obj[hit] !== undefined && obj[hit] !== '') return obj[hit];
+                    }
+                    return undefined;
+                };
                 for (const row of rawData) {
-                    const excelId = row['ID'] !== undefined ? String(row['ID']).trim() : '';
-                    const excelSku = row['SKU'] !== undefined ? String(row['SKU']).trim().toLowerCase() : '';
-                    const excelMarginVal = row['Margen (%)'] !== undefined ? row['Margen (%)'] : row['Margen'];
+                    const rawId = pickCell(row, ['ID', 'ID ERP', 'ID Contable', 'accounting_id', 'Codigo', 'Código']);
+                    const rawSku = pickCell(row, ['SKU', 'Referencia']);
+                    const excelId = rawId !== undefined ? String(rawId).trim() : '';
+                    const excelSku = rawSku !== undefined ? String(rawSku).trim().toLowerCase() : '';
+                    const excelMarginVal = pickCell(row, ['Margen (%)', 'Margen %', 'Margen', 'Utilidad (%)', 'Utilidad %', 'Utilidad']);
 
                     if (excelMarginVal === undefined) {
                         skippedCount++;
                         continue;
                     }
 
-                    const parsedMargin = parseFloat(String(excelMarginVal).replace(',', '.'));
+                    const parsedMargin = parseFloat(String(excelMarginVal).replace('%', '').replace(',', '.').trim());
                     if (isNaN(parsedMargin)) {
                         skippedCount++;
                         continue;
@@ -1467,6 +1479,11 @@ export default function PricingSettingsPage({
                     processedCount++;
                 }
 
+                if (processedCount === 0) {
+                    const detectedCols = Object.keys(rawData[0] || {}).join(', ') || 'ninguna';
+                    throw new Error(`No se procesó ninguna fila válida (0 de ${rawData.length}). Verifica columnas de ID (ID / ID ERP) y Margen (Margen (%) / Utilidad). Columnas detectadas: ${detectedCols}`);
+                }
+
                 // Execute deletes
                 if (ruleIdsToDelete.length > 0) {
                     for (let i = 0; i < ruleIdsToDelete.length; i += 100) {
@@ -1495,7 +1512,8 @@ export default function PricingSettingsPage({
                     await batchRecalculateAndSyncPrices(supabase, affectedIds).catch(e => console.warn('Excel pricing sync error:', e));
                 }
 
-                setExcelSuccess(`Planilla cargada. Se procesaron ${processedCount} filas: ${rulesToUpsert.length} excepciones creadas/actualizadas y ${ruleIdsToDelete.length} reglas removidas.`);
+                const skippedNote = skippedCount > 0 ? ` (${skippedCount} filas omitidas por falta de ID o margen válido)` : '';
+                setExcelSuccess(`Planilla cargada. Se procesaron ${processedCount} filas: ${rulesToUpsert.length} excepciones creadas/actualizadas y ${ruleIdsToDelete.length} reglas removidas.${skippedNote}`);
                 await fetchMatrixData(selectedModel.id);
             } catch (err: any) {
                 console.error('Error importing Excel:', err);
