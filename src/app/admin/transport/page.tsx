@@ -659,7 +659,25 @@ export default function TransportControlTower() {
                 {/* ── MAIN CONTENT AREA ── */}
                 <div style={{ position: 'relative', minHeight: 'calc(100vh - 220px)' }}>
                     {activeTab === 'map' ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-5 lg:h-[calc(100vh-210px)]">
+                        <div
+                            className="transport-monitor-grid"
+                            style={{
+                                display: 'grid',
+                                gap: '1.25rem',
+                            }}
+                        >
+                            <style jsx>{`
+                                .transport-monitor-grid {
+                                    grid-template-columns: minmax(0, 1fr);
+                                }
+                                @media (min-width: 960px) {
+                                    .transport-monitor-grid {
+                                        grid-template-columns: 390px minmax(0, 1fr);
+                                        height: calc(100vh - 210px);
+                                        min-height: 540px;
+                                    }
+                                }
+                            `}</style>
                             {/* Route Feed & Operational Intelligence Sidebar */}
                             <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem', minHeight: '320px' }}>
                                 
@@ -801,7 +819,7 @@ export default function TransportControlTower() {
                             </div>
 
                             {/* Map Container with Floating HUD */}
-                            <div style={{ borderRadius: THEME.radius.xl, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative' }}>
+                            <div style={{ borderRadius: THEME.radius.xl, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative', minHeight: '520px', height: '100%' }}>
                                 {apiKey ? (
                                     <>
                                         <Map defaultCenter={{ lat: 4.633653, lng: -74.160647 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>

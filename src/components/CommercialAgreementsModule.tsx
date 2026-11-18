@@ -560,6 +560,7 @@ export default function CommercialAgreementsModule() {
 
     const clientsWithoutAgreement = useMemo(() => {
         return b2bClients.filter(c => {
+            if (c.is_active === false) return false;
             const hasDirect = agreements.some(a => a.client_id === c.id);
             if (hasDirect) return false;
             const hasParent = c.parent_id ? agreements.some(a => a.client_id === c.parent_id) : false;
@@ -798,7 +799,7 @@ export default function CommercialAgreementsModule() {
             const { data, error } = await fetchAllRows<any>((from, to) =>
                 supabase
                     .from('profiles')
-                    .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone')
+                    .select('id, company_name, contact_name, nit, parent_id, is_corporate_parent, address, phone, is_active, pricing_model_id')
                     .eq('role', 'b2b_client')
                     .order('company_name')
                     .range(from, to)
@@ -11607,7 +11608,7 @@ export default function CommercialAgreementsModule() {
                                     {clientsWithoutAgreement
                                         .filter(c => {
                                             const term = clientsWithoutAgreementSearch.toLowerCase();
-                                            return (c.company_name || '').toLowerCase().includes(term) || (c.vat_number || '').includes(term);
+                                            return (c.company_name || '').toLowerCase().includes(term) || (c.nit || c.vat_number || '').includes(term);
                                         })
                                         .map(client => (
                                             <div
@@ -11624,7 +11625,7 @@ export default function CommercialAgreementsModule() {
                                                 }}
                                             >
                                                 <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                         <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>
                                                             {client.company_name}
                                                         </span>
@@ -11639,9 +11640,19 @@ export default function CommercialAgreementsModule() {
                                                                 Sede
                                                             </span>
                                                         )}
+                                                        <span style={{
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: 600,
+                                                            backgroundColor: client.pricing_model_id ? '#ECFDF5' : '#EFF6FF',
+                                                            color: client.pricing_model_id ? '#065F46' : '#1D4ED8',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '4px'
+                                                        }}>
+                                                            {client.pricing_model_id ? 'Modelo Dinámico' : 'General Institucional'}
+                                                        </span>
                                                     </div>
                                                     <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '2px' }}>
-                                                        NIT: <strong style={{ color: '#334155' }}>{client.vat_number || 'Sin NIT'}</strong> &bull; Contacto: {client.contact_name || client.phone || 'N/A'}
+                                                        NIT: <strong style={{ color: '#334155' }}>{client.nit || client.vat_number || 'Sin NIT'}</strong> &bull; Contacto: {client.contact_name || client.phone || 'N/A'}
                                                     </div>
                                                 </div>
                                                 <button
