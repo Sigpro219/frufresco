@@ -41,7 +41,8 @@ import {
     LayoutGrid,
     Navigation,
     Sparkles,
-    Sprout
+    Sprout,
+    X
 } from 'lucide-react';
 import Link from 'next/link';
 import { Map as GoogleMap, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
@@ -461,6 +462,13 @@ export default function CommercialUnifiedDashboard({
     // Scarcity state
     const [scarcityLockedMap, setScarcityLockedMap] = useState<Record<string, any>>({});
 
+    // Unpriced ($0) Orders Modal State
+    const [unpricedOrders, setUnpricedOrders] = useState<any[]>([]);
+    const [isUnpricedModalOpen, setIsUnpricedModalOpen] = useState(false);
+    const [unpricedPriceDrafts, setUnpricedPriceDrafts] = useState<Record<string, string>>({});
+    const [savingUnpricedOrderId, setSavingUnpricedOrderId] = useState<string | null>(null);
+    const [unpricedFeedback, setUnpricedFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
     // KPI Summary
     const [kpis, setKpis] = useState({
         totalSales: 0,
@@ -636,11 +644,11 @@ export default function CommercialUnifiedDashboard({
                     .maybeSingle(),
                 supabase
                     .from('orders')
-                    .select('id, sequence_id, created_at, delivery_date, total, admin_notes, logistics_data, order_items(id, unit_price), profiles (company_name, contact_name)')
+                    .select('id, sequence_id, created_at, delivery_date, subtotal, tax, total, admin_notes, logistics_data, order_items(id, product_id, quantity, unit_price, unit, selected_options, products(id, name, accounting_id, unit_of_measure, tax_rate)), profiles (company_name, contact_name)')
                     .or('admin_notes.ilike.%DESPACHADO SIN PRECIO%,admin_notes.ilike.%SE DESPACHÓ SIN PRECIO%')
                     .neq('status', 'cancelled')
                     .order('created_at', { ascending: false })
-                    .limit(10),
+                    .limit(50),
                 supabase
                     .from('app_settings')
                     .select('key, value')
@@ -1395,9 +1403,10 @@ export default function CommercialUnifiedDashboard({
             });
 
             // Alertas Críticas de Pedidos / Remisiones Despachados Sin Precio ($0 COP) - Escenario 121 / 221 / 464 SDD
-            (unpricedOrdersRes?.data || [])
-                .filter((uo: any) => isOrderUnpricedOffAgreement(uo))
-                .forEach((uo: any) => {
+            const validUnpriced = (unpricedOrdersRes?.data || [])
+                .filter((uo: any) => isOrderUnpricedOffAgreement(uo));
+            setUnpricedOrders(validUnpriced);
+            validUnpriced.forEach((uo: any) => {
                 const prof = Array.isArray(uo.profiles) ? uo.profiles[0] : uo.profiles;
                 const clientName = prof?.company_name || prof?.contact_name || 'Cliente';
                 const matchItems = uo.admin_notes?.match(/PENDIENTE FIJAR TARIFA COMERCIAL: ([^\]]+)\]/);
@@ -1607,19 +1616,19 @@ export default function CommercialUnifiedDashboard({
         <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.5rem 2rem 3rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
             
             {/* 1. HEADER & TIME RANGE SELECTOR */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', backgroundColor: 'white', padding: '1.25rem 1.5rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-                <div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <BarChart2 size={24} color={THEME.colors.primary} /> Cockpit Comercial & Telemetría BI
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', backgroundColor: 'white', padding: '1rem 1.25rem', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                <div style={{ minWidth: 0 }}>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: '900', color: THEME.colors.textMain, margin: 0, display: 'flex', alignItems: 'center', gap: '7px', whiteSpace: 'nowrap' }}>
+                        <BarChart2 size={20} color={THEME.colors.primary} /> Cockpit Comercial & Telemetría BI
                     </h1>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
+                    <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
                         Monitoreo en tiempo real de facturación, consumo de clientes, rotación y rentabilidad.
                     </p>
                 </div>
 
                 {/* Time range pills */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '9px', border: '1px solid #E2E8F0' }}>
                         {(
                             [
                                 { id: 'today', label: 'Hoy' },
@@ -1636,14 +1645,15 @@ export default function CommercialUnifiedDashboard({
                                     key={t.id}
                                     onClick={() => setTimeRange(t.id)}
                                     style={{
-                                        padding: '0.35rem 0.85rem',
-                                        fontSize: '0.78rem',
+                                        padding: '0.3rem 0.58rem',
+                                        fontSize: '0.73rem',
                                         fontWeight: isSelected ? '800' : '600',
                                         color: isSelected ? 'white' : THEME.colors.textSecondary,
                                         backgroundColor: isSelected ? THEME.colors.primary : 'transparent',
                                         border: 'none',
-                                        borderRadius: '7px',
+                                        borderRadius: '6px',
                                         cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
                                         transition: 'all 0.15s',
                                         boxShadow: isSelected ? '0 2px 4px rgba(13,122,87,0.2)' : 'none'
                                     }}
@@ -1674,7 +1684,7 @@ export default function CommercialUnifiedDashboard({
                     </button>
 
                     {/* CENTINELAS TÁCTICOS COMPACTOS (OPCIÓN A: HOVER POPOVERS FLOTANTES) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '0.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         
                         {/* 1. CENTINELA TÁCTICO: BOLETÍN AGRO-COMERCIAL */}
                         <div 
@@ -1688,38 +1698,39 @@ export default function CommercialUnifiedDashboard({
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '0.4rem 0.75rem',
-                                    borderRadius: '10px',
+                                    gap: '5px',
+                                    padding: '0.34rem 0.6rem',
+                                    borderRadius: '9px',
                                     border: '1px solid #1E293B',
                                     backgroundColor: hoveredSentinel === 'bulletin' ? '#0F172A' : '#1E293B',
                                     color: '#A7F3D0',
-                                    fontSize: '0.74rem',
+                                    fontSize: '0.72rem',
                                     fontWeight: '800',
+                                    whiteSpace: 'nowrap',
                                     cursor: 'pointer',
                                     transition: 'all 0.15s ease',
                                     boxShadow: '0 2px 5px rgba(15, 23, 42, 0.15)'
                                 }}
                             >
                                 <span style={{
-                                    width: '8px',
-                                    height: '8px',
+                                    width: '7px',
+                                    height: '7px',
                                     borderRadius: '999px',
                                     backgroundColor: '#10B981',
                                     boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.4)',
                                     display: 'inline-block'
                                 }} />
-                                <Sprout size={14} color="#34D399" />
-                                <span>Boletín Semanal</span>
+                                <Sprout size={13} color="#34D399" />
+                                <span>Boletín</span>
                                 <span style={{
                                     backgroundColor: 'rgba(5, 150, 105, 0.3)',
                                     color: '#6EE7B7',
-                                    padding: '1px 6px',
-                                    borderRadius: '6px',
-                                    fontSize: '0.68rem',
+                                    padding: '1px 5px',
+                                    borderRadius: '5px',
+                                    fontSize: '0.66rem',
                                     fontWeight: '900'
                                 }}>
-                                    {costDecreases.length > 0 ? costDecreases.length : 4}C / {costIncreases.length > 0 ? costIncreases.length : 3}A
+                                    {costDecreases.length > 0 ? costDecreases.length : 4}C/{costIncreases.length > 0 ? costIncreases.length : 3}A
                                 </span>
                             </button>
 
@@ -1820,28 +1831,29 @@ export default function CommercialUnifiedDashboard({
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '0.4rem 0.75rem',
-                                        borderRadius: '10px',
+                                        gap: '5px',
+                                        padding: '0.34rem 0.6rem',
+                                        borderRadius: '9px',
                                         border: '1px solid #FCA5A5',
                                         backgroundColor: hoveredSentinel === 'sla' ? '#FEE2E2' : '#FEF2F2',
                                         color: '#991B1B',
-                                        fontSize: '0.74rem',
+                                        fontSize: '0.72rem',
                                         fontWeight: '800',
+                                        whiteSpace: 'nowrap',
                                         cursor: 'pointer',
                                         transition: 'all 0.15s ease',
                                         boxShadow: '0 2px 5px rgba(220, 38, 38, 0.1)'
                                     }}
                                 >
                                     <span style={{
-                                        width: '8px',
-                                        height: '8px',
+                                        width: '7px',
+                                        height: '7px',
                                         borderRadius: '999px',
                                         backgroundColor: '#DC2626',
                                         boxShadow: '0 0 0 2px rgba(220, 38, 38, 0.4)',
                                         display: 'inline-block'
                                     }} />
-                                    <AlertTriangle size={14} color="#DC2626" />
+                                    <AlertTriangle size={13} color="#DC2626" />
                                     <span>{costAlertStats.expiredCount} Vencidos</span>
                                 </button>
 
@@ -1918,6 +1930,42 @@ export default function CommercialUnifiedDashboard({
                                 )}
                             </div>
                         )}
+
+                        {/* 3. CENTINELA PREPONDERANTE: REMISIONES DESPACHADAS EN $0 (SIN PRECIO) */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const initialDrafts: Record<string, string> = {};
+                                unpricedOrders.forEach((uo: any) => {
+                                    (uo.order_items || []).forEach((it: any) => {
+                                        initialDrafts[it.id] = Number(it.unit_price || 0) > 0 ? String(it.unit_price) : '';
+                                    });
+                                });
+                                setUnpricedPriceDrafts(initialDrafts);
+                                setUnpricedFeedback(null);
+                                setIsUnpricedModalOpen(true);
+                            }}
+                            title="Pedidos / remisiones despachados en $0 COP pendientes de fijar tarifa comercial"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '0.34rem 0.6rem',
+                                borderRadius: '9px',
+                                border: unpricedOrders.length > 0 ? '1px solid #F59E0B' : '1px solid #A7F3D0',
+                                backgroundColor: unpricedOrders.length > 0 ? '#FEF3C7' : '#ECFDF5',
+                                color: unpricedOrders.length > 0 ? '#92400E' : '#065F46',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                boxShadow: unpricedOrders.length > 0 ? '0 2px 6px rgba(245, 158, 11, 0.22)' : 'none'
+                            }}
+                        >
+                            <DollarSign size={13} color={unpricedOrders.length > 0 ? '#D97706' : '#059669'} />
+                            <span>{unpricedOrders.length} en $0</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3551,6 +3599,284 @@ export default function CommercialUnifiedDashboard({
 
                 </div>
             </div>
+
+            {/* MODAL URGENTE: TARIFAR REMISIONES DESPACHADAS EN $0 */}
+            {isUnpricedModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1100,
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        maxWidth: 'min(980px, 95vw)',
+                        width: '100%',
+                        maxHeight: '88vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #E2E8F0',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '16px 24px',
+                            borderBottom: '1px solid #F1F5F9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#FFFBEB'
+                        }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <DollarSign size={18} color="#D97706" />
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                                        Remisiones / Pedidos Despachados en $0 COP
+                                    </h3>
+                                    <span style={{
+                                        backgroundColor: unpricedOrders.length > 0 ? '#FEF3C7' : '#D1FAE5',
+                                        color: unpricedOrders.length > 0 ? '#92400E' : '#065F46',
+                                        border: `1px solid ${unpricedOrders.length > 0 ? '#FCD34D' : '#A7F3D0'}`,
+                                        fontSize: '0.75rem',
+                                        fontWeight: 800,
+                                        padding: '2px 8px',
+                                        borderRadius: '12px'
+                                    }}>
+                                        {unpricedOrders.length} pendientes
+                                    </span>
+                                </div>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                                    Asigna la tarifa unitaria real para recalcular el total, limpiar el bloqueo $0 y liberar el pedido a facturación.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsUnpricedModalOpen(false)}
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {unpricedFeedback && (
+                            <div style={{
+                                margin: '12px 24px 0',
+                                padding: '10px 14px',
+                                borderRadius: '10px',
+                                backgroundColor: unpricedFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                                border: `1px solid ${unpricedFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
+                                color: unpricedFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                                fontSize: '0.82rem',
+                                fontWeight: 700
+                            }}>
+                                {unpricedFeedback.message}
+                            </div>
+                        )}
+
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            {unpricedOrders.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                                    <CheckCircle2 size={36} color="#059669" style={{ margin: '0 auto 10px' }} />
+                                    <p style={{ margin: 0, fontWeight: 700, color: '#0F172A' }}>
+                                        ¡Al día! No hay remisiones ni pedidos pendientes de tarifa en $0.
+                                    </p>
+                                </div>
+                            ) : (
+                                unpricedOrders.map((uo: any) => {
+                                    const prof = Array.isArray(uo.profiles) ? uo.profiles[0] : uo.profiles;
+                                    const clientName = prof?.company_name || prof?.contact_name || 'Cliente';
+                                    const items: any[] = uo.order_items || [];
+                                    const isSavingThis = savingUnpricedOrderId === uo.id;
+
+                                    const handleSaveOrderPrices = async () => {
+                                        setSavingUnpricedOrderId(uo.id);
+                                        setUnpricedFeedback(null);
+                                        try {
+                                            let newSubtotal = 0;
+                                            let newTax = 0;
+                                            let allPriced = true;
+
+                                            for (const it of items) {
+                                                const rawVal = unpricedPriceDrafts[it.id] ?? String(it.unit_price || '');
+                                                const parsedPrice = parseFloat(String(rawVal).replace(',', '.')) || 0;
+                                                if (parsedPrice <= 0) allPriced = false;
+
+                                                const qty = Number(it.quantity || 0);
+                                                const taxRate = Number(it.products?.tax_rate || 0);
+                                                newSubtotal += qty * parsedPrice;
+                                                newTax += (qty * parsedPrice) * (taxRate / 100);
+
+                                                if (parsedPrice !== Number(it.unit_price || 0)) {
+                                                    const nextOpts = it.selected_options ? { ...it.selected_options } : {};
+                                                    if (parsedPrice > 0) {
+                                                        delete nextOpts.tarifa_pendiente;
+                                                        delete nextOpts._off_agreement;
+                                                    }
+                                                    const { error: itemErr } = await supabase
+                                                        .from('order_items')
+                                                        .update({ unit_price: parsedPrice, selected_options: nextOpts })
+                                                        .eq('id', it.id);
+                                                    if (itemErr) throw itemErr;
+                                                }
+                                            }
+
+                                            const roundedSub = Math.round(newSubtotal);
+                                            const roundedTax = Math.round(newTax);
+                                            const roundedTotal = roundedSub + roundedTax;
+
+                                            const updatePayload: any = {
+                                                subtotal: roundedSub,
+                                                tax: roundedTax,
+                                                total: roundedTotal
+                                            };
+
+                                            if (allPriced) {
+                                                const cleanedNotes = String(uo.admin_notes || '')
+                                                    .replace(/\[FUERA DE ACUERDO - DESPACHADO SIN PRECIO[^\]]*\]\s*/g, '')
+                                                    .replace(/\[DESPACHADO SIN PRECIO[^\]]*\]\s*/g, '')
+                                                    .trim();
+                                                updatePayload.admin_notes = cleanedNotes || null;
+
+                                                const nextLog = { ...(uo.logistics_data || {}), off_agreement_priced: true };
+                                                if (nextLog.document_type_override === 'remission' && nextLog.remission_with_prices_override === false) {
+                                                    delete nextLog.document_type_override;
+                                                    delete nextLog.remission_with_prices_override;
+                                                }
+                                                updatePayload.logistics_data = nextLog;
+                                            }
+
+                                            const { error: ordErr } = await supabase
+                                                .from('orders')
+                                                .update(updatePayload)
+                                                .eq('id', uo.id);
+                                            if (ordErr) throw ordErr;
+
+                                            setUnpricedFeedback({
+                                                type: 'success',
+                                                message: allPriced
+                                                    ? `Pedido #${uo.sequence_id || uo.id.slice(0, 8)} (${clientName}) tarifado en $${roundedTotal.toLocaleString('es-CO')} y liberado para facturación.`
+                                                    : `Precios parciales guardados en #${uo.sequence_id || uo.id.slice(0, 8)}. Aún quedan ítems en $0.`
+                                            });
+                                            handleRefresh();
+                                        } catch (err: any) {
+                                            setUnpricedFeedback({
+                                                type: 'error',
+                                                message: `Error guardando tarifas: ${err?.message || 'Error desconocido'}`
+                                            });
+                                        } finally {
+                                            setSavingUnpricedOrderId(null);
+                                        }
+                                    };
+
+                                    return (
+                                        <div key={uo.id} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px 16px', backgroundColor: '#F8FAFC' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', backgroundColor: '#0F172A', color: '#FFFFFF', padding: '2px 8px', borderRadius: '6px' }}>
+                                                            #{uo.sequence_id || uo.id.slice(0, 8)}
+                                                        </span>
+                                                        <span style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0F172A' }}>{clientName}</span>
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B' }}>
+                                                            Entrega: {uo.delivery_date || 'N/A'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <a
+                                                    href={`/admin/commercial/billing?search=${uo.sequence_id || uo.id.slice(0, 8)}&assign_price=1&order_id=${uo.id}${uo.delivery_date ? `&date=${uo.delivery_date}` : ''}`}
+                                                    style={{ fontSize: '0.76rem', fontWeight: 700, color: '#0D7A57', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    Abrir en Facturación <ExternalLink size={12} />
+                                                </a>
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {items.map((it: any) => {
+                                                    const currentDraft = unpricedPriceDrafts[it.id] ?? (Number(it.unit_price || 0) > 0 ? String(it.unit_price) : '');
+                                                    const isZero = (parseFloat(currentDraft) || 0) <= 0;
+                                                    return (
+                                                        <div key={it.id} style={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '1fr auto auto',
+                                                            alignItems: 'center',
+                                                            gap: '10px',
+                                                            padding: '8px 10px',
+                                                            borderRadius: '8px',
+                                                            backgroundColor: '#FFFFFF',
+                                                            border: isZero ? '1px solid #FCD34D' : '1px solid #E2E8F0'
+                                                        }}>
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>
+                                                                    {it.products?.accounting_id ? `#${it.products.accounting_id} • ` : ''}
+                                                                    {it.products?.name || 'Producto'}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                                                                    Cantidad: <strong>{it.quantity} {it.unit || it.products?.unit_of_measure || 'Und'}</strong>
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#64748B' }}>$</span>
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    placeholder="Precio unit."
+                                                                    value={currentDraft}
+                                                                    onChange={(e) => {
+                                                                        const clean = e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').replace(/^0+(?=\d)/, '');
+                                                                        setUnpricedPriceDrafts(prev => ({ ...prev, [it.id]: clean }));
+                                                                    }}
+                                                                    style={{
+                                                                        width: '120px',
+                                                                        padding: '6px 10px',
+                                                                        borderRadius: '8px',
+                                                                        border: isZero ? '1px solid #F59E0B' : '1px solid #CBD5E1',
+                                                                        fontWeight: 800,
+                                                                        fontSize: '0.85rem',
+                                                                        textAlign: 'right',
+                                                                        color: '#0F172A',
+                                                                        outline: 'none'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', minWidth: '85px', textAlign: 'right' }}>
+                                                                ${Math.round((parseFloat(currentDraft) || 0) * Number(it.quantity || 0)).toLocaleString('es-CO')}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                                                <button
+                                                    disabled={isSavingThis}
+                                                    onClick={handleSaveOrderPrices}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        backgroundColor: '#0D7A57',
+                                                        color: '#FFFFFF',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.8rem',
+                                                        cursor: isSavingThis ? 'wait' : 'pointer'
+                                                    }}
+                                                >
+                                                    {isSavingThis ? 'Guardando...' : 'Guardar Tarifas y Liberar Pedido'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* WEEKLY MARKET BULLETIN HITL MODAL */}
             <WeeklyMarketBulletinModal

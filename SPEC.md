@@ -17631,3 +17631,14 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
 - **Alcance Contractual:** Corrección del error `billing_cuts_cut_slot_check` en [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx#L4149-L4155).
 - **Reglas de Negocio:**
   - En el creador de cortes para lotes (`Facturar 1 a 1` y unificación de lote), se reemplaza `cut_slot: 'BATCH'` por `cut_slot: 'PM'` (respetando `billing_cuts_cut_slot_check` `'AM' | 'PM' | 'ADJ'` y evitando `'ADJ'` porque `ADJ` corresponde a Notas Crédito `NC` en exportación World Office).
+
+### Escenario 470: Centinela Preponderante `N en $0` en Cockpit Comercial + Trazabilidad Histórica de Acuerdos B2B (SDD v1.9.425)
+- **Alcance Contractual:** [`src/components/CommercialUnifiedDashboard.tsx`](file:///c:/Projects/frufresco/src/components/CommercialUnifiedDashboard.tsx) y [`src/components/CommercialAgreementsModule.tsx`](file:///c:/Projects/frufresco/src/components/CommercialAgreementsModule.tsx).
+- **Reglas de Negocio:**
+  1. **Cockpit Comercial (`N en $0` + Modal Directo de Tarifación):**
+     - La cabecera de `/admin/commercial` alinea en una sola línea (compacta) los selectores de rango, `Boletín`, `Vencidos` y el centinela siempre visible **`{count} en $0`**.
+     - Al hacer clic en **`{count} en $0`**, se abre un modal directo con los pedidos/remisiones filtrados por `isOrderUnpricedOffAgreement(uo)`, mostrando `#accounting_id`, producto, cantidad e input `5B` (`type="text" inputMode="decimal"`) para asignar tarifas unitarias reales, recalcular `subtotal`/`tax`/`total`, limpiar etiquetas `DESPACHADO SIN PRECIO` y overrides zombie (Escenario 464) y liberar el pedido a facturación sin salir del Cockpit.
+  2. **Modal "Clientes B2B Institucionales Sin Acuerdo Activo":**
+     - Excluye perfiles inactivos (`is_active === false`) del conteo y listado.
+     - Muestra el **NIT real** (`nit || vat_number`), badge de modelo tarifario (`Modelo Dinámico` vs `General Institucional`) e historial del último acuerdo/cotización (`#quote_number`, estado `VENCIDO`/`REEMPLAZADO`/`CANCELADO`/`ENVIADO`/`BORRADOR`, directo o heredado de `Casa Matriz`, fecha de inicio y vencimiento).
+     - Ordena jerárquicamente **Casas Matrices** arriba (indicando cuántas sedes cobija cada una) y **Sedes / Sucursales** abajo.
