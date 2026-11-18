@@ -1545,14 +1545,24 @@ export default function PricingSettingsPage({
                     await batchRecalculateAndSyncPrices(supabase, affectedIds).catch(e => console.warn('Excel pricing sync error:', e));
                 }
 
-                // Persist direct prices from Excel (takes precedence even if base_cost is $0)
+                // Persist direct prices from Excel via Admin API (bypasses browser RLS on pricing_model_prices)
                 if (directPricesToUpsert.length > 0) {
-                    for (let i = 0; i < directPricesToUpsert.length; i += 100) {
-                        const batch = directPricesToUpsert.slice(i, i + 100);
-                        const { error } = await supabase
-                            .from('pricing_model_prices')
-                            .upsert(batch, { onConflict: 'model_id,product_id' });
-                        if (error) throw error;
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const accessToken = sessionData?.session?.access_token;
+                    if (!accessToken) {
+                        throw new Error('Sesión expirada. Recarga la página e inicia sesión de nuevo.');
+                    }
+                    const apiRes = await fetch('/api/commercial/pricing-model-prices', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${accessToken}`,
+                        },
+                        body: JSON.stringify({ rows: directPricesToUpsert }),
+                    });
+                    const apiJson = await apiRes.json();
+                    if (!apiRes.ok) {
+                        throw new Error(apiJson?.error || 'Error guardando precios directos en servidor');
                     }
                 }
 
