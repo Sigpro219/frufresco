@@ -17626,3 +17626,8 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   6. **Política Cero Mocks & Estandarización `/disenador-web` (Carril 1 Skin 1 + Mobile-First):**
      - Eliminación total de `defaultPrice = 1000`, `MOCK_ROUTES`, `mockStops`, `demoMode` y `AirportBoard` mock.
      - Reemplazo de `<input type="number">` críticos por inputs `5B` (`type="text" inputMode="decimal"`), erradicación de `SKU` visible y `\uFE0F` rotos, y clases responsive/mobile-first en `/ops/*` y `/admin/transport`.
+
+### Escenario 469: Corrección de `cut_slot: 'PM'` para Facturación Individual / Unificación de Lotes Acumulados (SDD v1.9.424)
+- **Alcance Contractual:** Corrección del error `billing_cuts_cut_slot_check` en [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx#L4149-L4155).
+- **Reglas de Negocio:**
+  - En el creador de cortes para lotes (`Facturar 1 a 1` y unificación de lote), se reemplaza `cut_slot: 'BATCH'` por `cut_slot: 'PM'` (respetando `billing_cuts_cut_slot_check` `'AM' | 'PM' | 'ADJ'` y evitando `'ADJ'` porque `ADJ` corresponde a Notas Crédito `NC` en exportación World Office).

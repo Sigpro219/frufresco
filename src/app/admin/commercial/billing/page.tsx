@@ -4148,7 +4148,7 @@ export default function BillingDashboard() {
             .insert({
                 cut_number: nextCutNum,
                 scheduled_date: getBogotaDate(0),
-                cut_slot: 'BATCH',
+                cut_slot: 'PM',
                 status: 'closed',
                 total_orders: totalOrders,
                 total_amount: totalAmount
