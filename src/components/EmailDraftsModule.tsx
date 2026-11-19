@@ -6994,20 +6994,31 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   };
 
   const { draftsBeforeStatusFilter, filteredDrafts, countAll, countPending, countApproved, countRejected } = useMemo(() => {
-    const sourceUniverse = (searchQuery.trim().length >= 2 && serverSearchResults)
+    const trimmedSearch = searchQuery.trim();
+    const isGlobalSearch = trimmedSearch.length >= 2;
+    const normSearch = trimmedSearch.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const serverIdSet = new Set((serverSearchResults || []).map((r: any) => r.id));
+
+    const sourceUniverse = (isGlobalSearch && serverSearchResults)
       ? mergeDraftCollections([serverSearchResults, drafts])
       : drafts;
     const beforeStatus = sourceUniverse.filter(draft => {
-      const matchesSearch = searchQuery === '' || 
-        draft.client_detected_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        draft.source_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        draft.email_subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        draft.email_body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        getDraftMetadata(draft).address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        draft.id.toLowerCase().includes(searchQuery.toLowerCase());
+      const meta = getDraftMetadata(draft);
+      const norm = (val?: string | null) => String(val || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const matchesSearch = trimmedSearch === '' || 
+        serverIdSet.has(draft.id) ||
+        norm(draft.client_detected_name).includes(normSearch) ||
+        norm(draft.source_email).includes(normSearch) ||
+        norm(draft.email_subject).includes(normSearch) ||
+        norm(draft.email_body).includes(normSearch) ||
+        norm(meta.address).includes(normSearch) ||
+        norm(meta.orderId).includes(normSearch) ||
+        norm(draft.delivery_date).includes(normSearch) ||
+        norm(typeof draft.extracted_items === 'string' ? draft.extracted_items : JSON.stringify(draft.extracted_items || '')).includes(normSearch) ||
+        norm(draft.id).includes(normSearch);
 
       let matchesDate = true;
-      if (selectedDate) {
+      if (selectedDate && !isGlobalSearch) {
         const draftDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(draft.created_at));
         matchesDate = draftDate === selectedDate;
       }
@@ -8110,8 +8121,54 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       ) : sortedFilteredDrafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'white', borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
           <Mail size={32} style={{ opacity: 0.3, marginBottom: '1rem', color: '#9CA3AF' }} />
-          <h3 style={{ fontSize: '1.1rem', color: '#4B5563', margin: '0 0 4px 0' }}>Bandeja Vacía</h3>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>No se encontraron correos con los filtros actuales.</p>
+          <h3 style={{ fontSize: '1.1rem', color: '#4B5563', margin: '0 0 4px 0' }}>
+            {searchQuery.trim() && countAll > 0 && selectedStatus !== 'all'
+              ? `Sin coincidencias en ${selectedStatus === 'pending' ? 'Pendientes' : selectedStatus === 'approved' ? 'Gestionados' : 'Rechazados'}`
+              : 'Bandeja Vacía'}
+          </h3>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF' }}>
+            {searchQuery.trim() && countAll > 0 && selectedStatus !== 'all'
+              ? `Se encontraron ${countAll} correo(s) coincidente(s) en otros estados para "${searchQuery.trim()}".`
+              : 'No se encontraron correos con los filtros actuales.'}
+          </p>
+          {searchQuery.trim() && countAll > 0 && selectedStatus !== 'all' && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('all')}
+                style={{ padding: '7px 14px', borderRadius: '8px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+              >
+                Ver Todos ({countAll})
+              </button>
+              {countApproved > 0 && selectedStatus !== 'approved' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('approved')}
+                  style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #A7F3D0', backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  Gestionados ({countApproved})
+                </button>
+              )}
+              {countRejected > 0 && selectedStatus !== 'rejected' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('rejected')}
+                  style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #FECACA', backgroundColor: '#FEF2F2', color: '#991B1B', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  Rechazados ({countRejected})
+                </button>
+              )}
+              {countPending > 0 && selectedStatus !== 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('pending')}
+                  style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #FDE68A', backgroundColor: '#FFFBEB', color: '#92400E', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  Pendientes ({countPending})
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : viewMode === 'list' ? (
         <>
