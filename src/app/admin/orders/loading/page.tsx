@@ -533,6 +533,8 @@ function OrderLoadingContent() {
     const [filterChannel, setFilterChannel] = useState('');
     const [filterClientType, setFilterClientType] = useState('');
     const [showFiltersPopover, setShowFiltersPopover] = useState(false);
+    const [globalSearchOrders, setGlobalSearchOrders] = useState<any[] | null>(null);
+    const [isGlobalSearching, setIsGlobalSearching] = useState(false);
     const [openHeaderDropdown, setOpenHeaderDropdown] = useState<string | null>(null);
     const [sortField, setSortField] = useState<string | null>(null);
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -2002,6 +2004,101 @@ useEffect(() => {
         };
     }, [selectedDate, refreshTrigger, fetchDateCounts]);
 
+    // Buscador Global en Vivo (todas las fechas y todos los estados) aislado de `orders` y KPIs (Escenario 473)
+    useEffect(() => {
+        const raw = searchTerm.trim();
+        if (raw.length < 2 || raw.startsWith('@')) {
+            setGlobalSearchOrders(null);
+            setIsGlobalSearching(false);
+            return;
+        }
+
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            setIsGlobalSearching(true);
+            try {
+                const token = raw.split(',')[0].trim();
+                const safeToken = token.replace(/[,%()]/g, '').trim();
+                if (safeToken.length < 2) {
+                    if (!cancelled) {
+                        setGlobalSearchOrders(null);
+                        setIsGlobalSearching(false);
+                    }
+                    return;
+                }
+
+                const { data: matchedProfiles } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .or(`company_name.ilike.%${safeToken}%,contact_name.ilike.%${safeToken}%,nit.ilike.%${safeToken}%`)
+                    .limit(30);
+
+                const profileIds = (matchedProfiles || []).map((p: any) => p.id).filter(Boolean);
+                const numericDigits = safeToken.replace(/^#/, '');
+                const orParts = [
+                    `purchase_order_number.ilike.%${safeToken}%`,
+                    `admin_notes.ilike.%${safeToken}%`,
+                    `customer_name.ilike.%${safeToken}%`,
+                    `shipping_address.ilike.%${safeToken}%`,
+                    `special_notes.ilike.%${safeToken}%`
+                ];
+                if (/^\d+$/.test(numericDigits)) {
+                    orParts.push(`sequence_id.eq.${parseInt(numericDigits, 10)}`);
+                }
+                if (profileIds.length > 0) {
+                    orParts.push(`profile_id.in.(${profileIds.join(',')})`);
+                }
+
+                const { data: globalRows, error } = await supabase
+                    .from('orders')
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
+                    .or(orParts.join(','))
+                    .order('created_at', { ascending: false })
+                    .limit(60);
+
+                if (error) {
+                    console.error('Error en búsqueda global de pedidos:', error);
+                    return;
+                }
+
+                if (!cancelled) {
+                    const normalized = (globalRows || []).map((order: any) => {
+                        const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
+                        const customerName = order.profiles
+                            ? (isB2B
+                                ? (order.profiles.company_name || order.profiles.contact_name || order.customer_name || 'Cliente B2B')
+                                : (order.profiles.contact_name || order.profiles.company_name || order.customer_name || 'Cliente B2C'))
+                            : (order.customer_name || 'Cliente');
+                        const totalWeight = (order.order_items || []).reduce((sum: number, item: any) => {
+                            const unit = (item.unit || item.products?.unit_of_measure || '').toLowerCase().trim();
+                            const wf = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit) ? 0.5 : 1.0;
+                            return sum + wf * (parseFloat(item.quantity) || 0);
+                        }, 0) || order.total_weight_kg || 0;
+                        const hasGPS = Boolean((order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude));
+                        return {
+                            ...order,
+                            customer: customerName,
+                            totalKg: totalWeight,
+                            isComplete: Boolean((order.shipping_address || order.profiles?.address) && hasGPS),
+                            shipping_address: order.shipping_address || order.profiles?.address || 'Sin dirección',
+                            isGlobalMatch: true
+                        };
+                    });
+                    setGlobalSearchOrders(normalized);
+                }
+            } catch (err) {
+                console.error('Global search exception:', err);
+            } finally {
+                if (!cancelled) setIsGlobalSearching(false);
+            }
+        }, 350);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [searchTerm]);
+
 
 
     // Detección de Colisiones de Pedidos Duplicados (Mismo cliente, fecha de entrega y sede)
@@ -2018,7 +2115,17 @@ useEffect(() => {
     }, [duplicatesMap]);
 
     const filteredOrders = useMemo(() => {
-        const filtered = orders.filter(order => {
+        const sourceOrders = globalSearchOrders !== null
+            ? (() => {
+                const merged = new Map<string, any>();
+                orders.forEach(o => merged.set(o.id, o));
+                globalSearchOrders.forEach(o => {
+                    if (!merged.has(o.id)) merged.set(o.id, o);
+                });
+                return Array.from(merged.values());
+            })()
+            : orders;
+        const filtered = sourceOrders.filter(order => {
             const hasGPS = (order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude);
             const isB2B = order.type?.startsWith('b2b') || order.profiles?.role === 'b2b_client';
             const friendlyId = getFriendlyOrderId(order).toLowerCase();
@@ -2225,7 +2332,7 @@ useEffect(() => {
             const bTime = new Date(b.created_at || 0).getTime();
             return bTime - aTime;
         });
-    }, [orders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType, sortField, sortOrder]);
+    }, [orders, globalSearchOrders, duplicatesMap, selectedChannel, searchTerm, filterStatus, filterGps, filterChannel, filterClientType, sortField, sortOrder]);
 
     const filteredMetrics = useMemo(() => {
         const count = filteredOrders.length;
@@ -4030,14 +4137,14 @@ useEffect(() => {
 
                         </div>
 
-                        {/* Superbuscador Omnibox Universal FruFresco (SDD Escenario 57 / EFE-1) */}
+                        {/* Superbuscador Omnibox Universal FruFresco (SDD Escenario 57 / EFE-1 / Escenario 473) */}
                         <GalleryOmnibox
                             value={searchTerm}
                             onChange={setSearchTerm}
-                            placeholder="Buscar por ID (#1373), cliente, nit, dirección..."
+                            placeholder="Buscar en TODAS las fechas y estados (#ID, OC/SOLPED, cliente, NIT, dirección)..."
                             filteredCount={filteredOrders.length}
-                            totalCount={totalOrders}
-                            style={{ flex: 1, minWidth: '150px', maxWidth: 'none' }}
+                            totalCount={globalSearchOrders !== null ? filteredOrders.length : totalOrders}
+                            style={{ flex: 1, minWidth: '280px', maxWidth: 'none' }}
                         />
 
                         {/* Info Button for Commands */}
@@ -4108,8 +4215,8 @@ useEffect(() => {
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '0 0.85rem',
+                                    gap: '4px',
+                                    padding: '0 0.6rem',
                                     height: '38px',
                                     borderRadius: '8px',
                                     border: (filterClientType || filterChannel || filterGps || filterStatus) ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
@@ -4666,7 +4773,7 @@ useEffect(() => {
                             )}
                             {searchTerm && (
                                 <span style={{ fontSize: '0.7rem', backgroundColor: '#DCFCE7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    Texto: "{searchTerm}"
+                                    {globalSearchOrders !== null ? 'Búsqueda Global (todas las fechas/estados)' : 'Texto'}: "{searchTerm}" {isGlobalSearching ? '...' : ''}
                                     <X size={12} style={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
                                 </span>
                             )}
@@ -4828,6 +4935,11 @@ useEffect(() => {
                                                                     <Clock size={10} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
                                                                     <span>{formatCreatedAt(order.created_at)}</span>
                                                                 </span>
+                                                                {order.delivery_date && (
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#F1F5F9', color: '#334155', padding: '1px 5px', borderRadius: '4px', fontSize: '0.62rem', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                                                                        Ent: {order.delivery_date}
+                                                                    </span>
+                                                                )}
                                                                 {(() => {
                                                                     const audit = getOrderLastAudit(order);
                                                                     if (!audit) return null;
