@@ -11878,7 +11878,8 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
      - `Detalle: Bodega` (Columna AG) conserva siempre el valor `'Principal'` (bodega de despacho de FruFresco).
      - En cambio, `Encab: Sucursal` (Columna AD) representa la sucursal del tercero registrada en World Office:
        * Si el cliente posee sucursal hija (`EMPRESA - SUCURSAL` o `parent_id`), `resolveWorldOfficeBranch(profile, parentProfile)` retorna el nombre limpio de la **Sucursal** (ej. `EL CUBO`, `CATERING`, `YANUBA -150 CEDRITOS`).
-       * Si el cliente **NO tiene sucursales** (cliente único), retorna el **nombre de la Razón Social / Cliente** (`razon_social || company_name || contact_name`, ej. `AMA TU MASCOTA`, `CENTRO SOCIAL DE SUBOFICIALES Y NIVEL EJECUTIVO DE LA POLICIA NACIONAL`, `CREPES Y WAFFLES S A`), prohibiendo retornar `'Principal'`.
+       * Si el cliente **B2B NO tiene sucursales** (cliente institucional único), retorna el **nombre de la Razón Social / Cliente** (`razon_social || company_name || contact_name`, ej. `AMA TU MASCOTA`, `CENTRO SOCIAL DE SUBOFICIALES Y NIVEL EJECUTIVO DE LA POLICIA NACIONAL`, `CREPES Y WAFFLES S A`), prohibiendo retornar `'Principal'`.
+       * **Excepción Obligatoria Hogar (`B2C`):** Si el cliente es Hogar (`!isB2B` / `b2c_client` / persona natural sin atributos B2B), `Encab: Sucursal` **DEBE exportarse estrictamente en blanco (`undefined`)**, prohibiendo heredar nombre de persona o `razonSocial`.
   2. **Cálculo Efectivo de `Detalle: Vencimiento` (Columna AM):**
      - Cuando el pedido es de tipo `Credito` (cliente B2B), si `payment_days` en el perfil es `0` o `null`, aplica por defecto `30` días de plazo comercial (`Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0)`), y `calculateDueDate` soporta entradas tanto en formato ISO (`YYYY-MM-DD`) como `DD/MM/YYYY` para sumar los días exactos a la fecha de factura.
   3. **Normalización de Catálogo en `Detalle: UnidadDeMedida` (Columna AH):**
@@ -17642,3 +17643,16 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - Excluye perfiles inactivos (`is_active === false`) del conteo y listado.
      - Muestra el **NIT real** (`nit || vat_number`), badge de modelo tarifario (`Modelo Dinámico` vs `General Institucional`) e historial del último acuerdo/cotización (`#quote_number`, estado `VENCIDO`/`REEMPLAZADO`/`CANCELADO`/`ENVIADO`/`BORRADOR`, directo o heredado de `Casa Matriz`, fecha de inicio y vencimiento).
      - Ordena jerárquicamente **Casas Matrices** arriba (indicando cuántas sedes cobija cada una) y **Sedes / Sucursales** abajo.
+
+### Escenario 471: Bloqueo de `Encab: Sucursal` en Blanco para Clientes Hogar (`B2C`) en Migración World Office (SDD v1.9.426)
+- **Alcance Contractual:** [`src/lib/worldOfficeExport.ts`](file:///c:/Projects/frufresco/src/lib/worldOfficeExport.ts) y [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx).
+- **Reglas de Negocio:**
+  - `buildWorldOfficeExportRows` determina `isB2B` mediante la función canónica `resolveCanonicalDocType(order, parentsMap).isB2B` (evaluando `role`, `order.type`, `parent_id`, `is_corporate_parent` y `B2B_NAME_REGEX`), garantizando que los 3 queries de exportación seleccionen `is_corporate_parent` en `profiles(...)`.
+  - Cuando `isB2B === false` (Hogar / persona natural), `resolveWorldOfficeBranch(prof, parentProf, isB2B)` retorna `''` y `downloadWorldOfficeExcel` omite el fallback a `item.razonSocial` dejando `'Encab: Sucursal': undefined` (celda vacía en `.xls`), preservando `Encab: Nota` intacto.
+
+### Escenario 472: Modal de Confirmación Previa y Detector de Hermanas al Unificar en 1 Sola Factura (SDD v1.9.427)
+- **Alcance Contractual:** [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx).
+- **Reglas de Negocio:**
+  1. **Compuerta Pre-Modal (`handleOpenUnifyConfirmModal`):** Tanto desde *Por Facturar* (`pending`) como desde *Lotes* (`batch_accumulated`), pulsar **"Unificar"** ejecuta `validateBatchOrdersPokaYoke(selected, true)` y abre un modal de confirmación previa (`zIndex: 140`) con el detalle de pedidos (`#sequence_id`, sede, `OC/SOLPED`, subtotal/total) y el **Total Unificado**.
+  2. **Detector de Remisiones Hermanas del Mismo NIT:** Busca en memoria (`pendingOrders` + `batchAccumulatedOrders`) otros pedidos no seleccionados con igual `resolveOrderEffectiveNit` (destacando coincidencia de `OC/SOLPED`). Permite **`+ Incluir también`** únicamente si no violan los Poka-Yokes (`$0`, PQRS abierta, obsequio/reposición, `% descuento` distinto); de lo contrario muestra el motivo de bloqueo.
+  3. **Aviso de Destino Real & Transición a `Historial`:** Informa explícitamente antes de confirmar que los pedidos unificados saldrán de *Por Facturar* / *Lotes* hacia **`Historial` (`subTab = 'cuts'`)** y **`Cartera`**. Al emitir exitosamente la factura unificada, navega automáticamente a **`Historial` (`setSubTab('cuts')`)** mostrando el Corte y la factura generada.

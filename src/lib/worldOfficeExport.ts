@@ -69,6 +69,7 @@ export interface WorldOfficeExportItem {
     digitoVerificacion?: string;
     razonSocial: string;
     sucursal?: string;
+    isB2B?: boolean;
     clasificacion?: string;
     centroCostos?: string;
     cuentaContable?: string;
@@ -214,8 +215,18 @@ export function normalizeWorldOfficeUom(rawUom: string | null | undefined): stri
  * Prioritizes canonical pre-paired columns (`logistics_data.world_office_branch` and `billing_razon_social`)
  * so exports never depend on fragile text-splitting heuristics.
  */
-export function resolveWorldOfficeBranch(profile: any, parentProfile?: any): string {
+export function resolveWorldOfficeBranch(profile: any, parentProfile?: any, isB2B?: boolean): string {
     if (!profile && !parentProfile) return '';
+    if (isB2B === false) return '';
+    if (
+        isB2B === undefined &&
+        (profile?.role === 'b2c_client' || profile?.role === 'client') &&
+        !profile?.parent_id &&
+        !profile?.is_corporate_parent &&
+        !parentProfile
+    ) {
+        return '';
+    }
 
     // Prioridad 1 (Fuente Única Canónica): Columna pre-apareada en BD (preserva caracteres literales exactos)
     const canonicalBranch =
@@ -353,9 +364,11 @@ export async function downloadWorldOfficeExcel(
 
         const cleanTerceroInterno = Number(String(item.terceroInterno || '456282').replace(/\D/g, '')) || 456282;
         const cleanTerceroExterno = Number(cleanNit) || 222222222222;
-        const cleanSucursal = (typeof item.sucursal === 'string' && item.sucursal.trim().length > 0)
-            ? item.sucursal
-            : (item.razonSocial || '');
+        const cleanSucursal = item.isB2B === false
+            ? ''
+            : ((typeof item.sucursal === 'string' && item.sucursal.trim().length > 0)
+                ? item.sucursal
+                : (item.razonSocial || ''));
         const cleanProducto = typeof item.codigoProducto === 'number'
             ? item.codigoProducto
             : (/^\d+$/.test(String(item.codigoProducto || '').trim()) ? Number(String(item.codigoProducto).trim()) : item.codigoProducto);

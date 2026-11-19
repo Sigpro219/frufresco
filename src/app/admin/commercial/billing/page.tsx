@@ -16,6 +16,7 @@ import {
     isOrderUnpricedOffAgreement,
     hasZombieUnpricedRemissionOverride,
     extractExistingInvoiceNumber,
+    resolveCanonicalDocType,
 } from '@/lib/commercial/billingOrderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
@@ -1518,6 +1519,7 @@ export default function BillingDashboard() {
     const [revertWoConfirmed, setRevertWoConfirmed] = useState(false);
     const [isRevertingCut, setIsRevertingCut] = useState(false);
     const [zombieCutAlert, setZombieCutAlert] = useState<{ cut: any; stuckOrdersCount: number } | null>(null);
+    const [unifyConfirmOrderIds, setUnifyConfirmOrderIds] = useState<string[] | null>(null);
 
     // Central Data Fetching
     const fetchData = useCallback(async (silentOrEvent?: boolean | React.MouseEvent) => {
@@ -3159,7 +3161,7 @@ export default function BillingDashboard() {
                 'Cliente General'
             ).trim();
             const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
-            const isB2B = prof.role === 'b2b_client' || order.type === 'b2b' || !!prof.parent_id || !!parentProf;
+            const { isB2B } = resolveCanonicalDocType(order, parentsMap);
             const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
 
             const rawInv = options.resolveInvNum(order);
@@ -3170,7 +3172,7 @@ export default function BillingDashboard() {
             // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
             const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
             const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
-            const branchName = resolveWorldOfficeBranch(prof, parentProf);
+            const branchName = isB2B ? resolveWorldOfficeBranch(prof, parentProf, true) : '';
             const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
             (order.order_items || []).forEach((item: any) => {
@@ -3210,6 +3212,7 @@ export default function BillingDashboard() {
                     nitCliente: nit,
                     razonSocial: clientName,
                     sucursal: branchName,
+                    isB2B,
                     formaPago: isB2B ? 'Credito' : 'Contado',
                     fechaEntrega: order.delivery_date || options.resolveFecha(order),
                     diasCredito: paymentDays,
@@ -3245,7 +3248,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, is_corporate_parent, role, logistics_data
                     ),
                     order_items (
                         id, quantity, picked_quantity, selected_options, unit_price, nickname, unit, product_id,
@@ -3522,7 +3525,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, document_type, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, is_corporate_parent, role, document_type, logistics_data
                     ),
                     order_items (
                         id, quantity, picked_quantity, unit_price, nickname, unit, selected_options, product_id,
@@ -3801,7 +3804,7 @@ export default function BillingDashboard() {
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
                     profiles (
-                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, role, logistics_data
+                        id, nit, billing_nit, billing_razon_social, company_name, razon_social, contact_name, address, city, phone, payment_days, iva_responsible, parent_id, is_corporate_parent, role, logistics_data
                     ),
                     order_items (
                         id, quantity, picked_quantity, unit_price, nickname, unit, selected_options, product_id,
@@ -4159,6 +4162,14 @@ export default function BillingDashboard() {
         return newCut;
     };
 
+    const handleOpenUnifyConfirmModal = (targetOrderIds: string[]) => {
+        if (!targetOrderIds || targetOrderIds.length === 0) return;
+        const allKnown = [...pendingOrders, ...batchAccumulatedOrders];
+        const selected = allKnown.filter(o => targetOrderIds.includes(o.id));
+        if (!validateBatchOrdersPokaYoke(selected, true)) return;
+        setUnifyConfirmOrderIds(selected.map(o => o.id));
+    };
+
     const handleUnifyOrdersIntoSingleInvoice = async (targetOrderIds: string[]) => {
         if (!targetOrderIds || targetOrderIds.length === 0) return;
         const allKnown = [...pendingOrders, ...batchAccumulatedOrders];
@@ -4238,12 +4249,14 @@ export default function BillingDashboard() {
 
             showToast({
                 type: 'success',
-                title: 'Factura Unificada Generada',
-                message: `Se unificaron ${selected.length} pedidos en el Corte #${newCut.cut_number} (${invoiceNum}) por ${formatMoney(totalFinal)}.`
+                title: 'Factura Unificada Generada en Historial',
+                message: `Se unificaron ${selected.length} pedidos en el Corte #${newCut.cut_number} (${invoiceNum}) por ${formatMoney(totalFinal)}. Mostrando pestaña Historial.`
             });
 
+            setUnifyConfirmOrderIds(null);
             clearOrderSelection();
             await fetchData();
+            setSubTab('cuts');
         } catch (err: any) {
             if (createdCutId) {
                 try {
@@ -5641,7 +5654,7 @@ export default function BillingDashboard() {
                                                 return (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
+                                                        onClick={() => handleOpenUnifyConfirmModal(selectedOrderIds)}
                                                         style={{
                                                             backgroundColor: '#0D7A57',
                                                             color: 'white',
@@ -6045,7 +6058,7 @@ export default function BillingDashboard() {
                                                     return (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleUnifyOrdersIntoSingleInvoice(selectedOrderIds)}
+                                                            onClick={() => handleOpenUnifyConfirmModal(selectedOrderIds)}
                                                             disabled={isProcessing}
                                                             style={{
                                                                 backgroundColor: '#0D7A57',
@@ -10184,6 +10197,196 @@ export default function BillingDashboard() {
                 selectedDate={selectedBillingDate === 'all' ? undefined : selectedBillingDate}
                 onUpdated={() => fetchData()}
             />
+
+            {/* MODAL DE CONFIRMACIÓN PREVIA A UNIFICAR EN 1 SOLA FACTURA (ESCENARIO 472) */}
+            {unifyConfirmOrderIds && unifyConfirmOrderIds.length > 0 && (() => {
+                const allKnownMap = new Map<string, any>();
+                [...pendingOrders, ...batchAccumulatedOrders].forEach(o => {
+                    if (!allKnownMap.has(o.id)) allKnownMap.set(o.id, o);
+                });
+                const allKnown = Array.from(allKnownMap.values());
+                const selectedList = allKnown.filter(o => unifyConfirmOrderIds.includes(o.id));
+                if (selectedList.length === 0) return null;
+
+                const effectiveNit = resolveOrderEffectiveNit(selectedList[0]);
+                const baseDiscount = Number(selectedList[0].logistics_data?.agreement_discount_pct || 0);
+                const selectedPos = new Set(
+                    selectedList
+                        .map(o => String(o.purchase_order_number || '').trim().toUpperCase())
+                        .filter(Boolean)
+                );
+
+                // Detector de remisiones hermanas sin seleccionar con el mismo NIT efectivo
+                const siblings = allKnown.filter(o => {
+                    if (unifyConfirmOrderIds.includes(o.id)) return false;
+                    return resolveOrderEffectiveNit(o) === effectiveNit;
+                });
+
+                const getSiblingEligibility = (sib: any): { ok: boolean; reason?: string; samePo: boolean } => {
+                    const po = String(sib.purchase_order_number || '').trim().toUpperCase();
+                    const samePo = Boolean(po && selectedPos.has(po));
+                    const isUnpriced =
+                        isOrderUnpricedOffAgreement(sib) ||
+                        Number(sib.total || 0) <= 0;
+                    if (isUnpriced) return { ok: false, reason: 'En $0 / Pendiente tarifa', samePo };
+
+                    const hasOpenPqr = Array.isArray(sib.customer_service_pqrs) && sib.customer_service_pqrs.some((p: any) => p.status !== 'resolved' && p.status !== 'closed');
+                    if (hasOpenPqr) return { ok: false, reason: 'PQR abierta', samePo };
+
+                    const isGiftOrRep = Boolean(sib.logistics_data?.is_gift || sib.logistics_data?.is_replacement || sib.order_type === 'gift_remission');
+                    if (isGiftOrRep) return { ok: false, reason: 'Obsequio / Reposición', samePo };
+
+                    const sibDiscount = Number(sib.logistics_data?.agreement_discount_pct || 0);
+                    if (sibDiscount !== baseDiscount) return { ok: false, reason: `Dto. distinto (${sibDiscount}%)`, samePo };
+
+                    return { ok: true, samePo };
+                };
+
+                const totalUnified = selectedList.reduce((acc, o) => acc + Number(o.total || 0), 0);
+
+                return (
+                    <div style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 140,
+                        padding: '16px'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '16px',
+                            maxWidth: 'min(760px, 95vw)',
+                            width: '100%',
+                            maxHeight: '88vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            border: '1px solid #E2E8F0',
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{ padding: '16px 22px', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: '#065F46' }}>
+                                        Confirmar Unificación en 1 Sola Factura ({selectedList.length} remisiones)
+                                    </h3>
+                                    <p style={{ margin: '3px 0 0 0', fontSize: '0.76rem', color: '#047857' }}>
+                                        NIT Receptor: <strong>{effectiveNit}</strong> &bull; Total Unificado: <strong>{formatMoney(totalUnified)}</strong>
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setUnifyConfirmOrderIds(null)}
+                                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {/* Aviso explícito de destino real */}
+                                <div style={{ padding: '10px 12px', borderRadius: '10px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', fontSize: '0.78rem', color: '#1E40AF', fontWeight: 600 }}>
+                                    Al confirmar, estas <strong>{selectedList.length}</strong> remisiones saldrán de <strong>Por Facturar / Lotes</strong> y pasarán a la pestaña <strong>Historial</strong> (y Cartera) agrupadas bajo una única Factura de Venta.
+                                </div>
+
+                                {/* Detector de remisiones hermanas */}
+                                {siblings.length > 0 && (
+                                    <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: '#FFFBEB', border: '1px solid #FCD34D' }}>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#92400E', marginBottom: '8px' }}>
+                                            Detectamos {siblings.length} remisión(es) adicional(es) del mismo NIT sin marcar:
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {siblings.map(sib => {
+                                                const elig = getSiblingEligibility(sib);
+                                                return (
+                                                    <div key={sib.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: elig.samePo ? '1px solid #F59E0B' : '1px solid #E2E8F0' }}>
+                                                        <div style={{ fontSize: '0.76rem', color: '#0F172A' }}>
+                                                            <strong>#{sib.sequence_id}</strong> &bull; {sib.profiles?.company_name || 'Sede'}
+                                                            {sib.purchase_order_number ? ` • OC: ${sib.purchase_order_number}` : ''}
+                                                            {elig.samePo && <span style={{ marginLeft: '6px', fontSize: '0.68rem', fontWeight: 800, color: '#B45309', backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '4px' }}>Misma OC/SOLPED</span>}
+                                                            <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                                Entrega: {sib.delivery_date} &bull; Total: <strong>{formatMoney(Number(sib.total || 0))}</strong>
+                                                            </div>
+                                                        </div>
+                                                        {elig.ok ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setUnifyConfirmOrderIds(prev => prev ? [...prev, sib.id] : [sib.id])}
+                                                                style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: '#D97706', color: '#FFFFFF', fontSize: '0.73rem', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                            >
+                                                                + Incluir también
+                                                            </button>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#991B1B', backgroundColor: '#FEE2E2', padding: '3px 7px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                                                                {elig.reason}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Lista seleccionada */}
+                                <div>
+                                    <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: '6px' }}>
+                                        Remisiones a Unificar ({selectedList.length})
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                        {selectedList.map(ord => (
+                                            <div key={ord.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: '8px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '0.78rem' }}>
+                                                <div>
+                                                    <strong>#{ord.sequence_id}</strong> &bull; {ord.profiles?.company_name || 'Cliente'}
+                                                    {ord.purchase_order_number ? <span style={{ color: '#64748B' }}> &bull; {ord.purchase_order_number}</span> : null}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <strong>{formatMoney(Number(ord.total || 0))}</strong>
+                                                    {selectedList.length > 2 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setUnifyConfirmOrderIds(prev => prev ? prev.filter(id => id !== ord.id) : null)}
+                                                            style={{ border: 'none', background: 'transparent', color: '#94A3B8', cursor: 'pointer', fontSize: '0.72rem' }}
+                                                            title="Quitar de esta unificación"
+                                                        >
+                                                            Quitar
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ padding: '14px 22px', borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setUnifyConfirmOrderIds(null)}
+                                    style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isProcessing}
+                                    onClick={() => {
+                                        const finalList = allKnown.filter(o => unifyConfirmOrderIds.includes(o.id));
+                                        if (!validateBatchOrdersPokaYoke(finalList, true)) return;
+                                        handleUnifyOrdersIntoSingleInvoice(unifyConfirmOrderIds);
+                                    }}
+                                    style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', backgroundColor: '#0D7A57', color: '#FFFFFF', fontWeight: 800, fontSize: '0.8rem', cursor: isProcessing ? 'wait' : 'pointer' }}
+                                >
+                                    {isProcessing ? 'Emitiendo Factura...' : `Confirmar y Unificar (${selectedList.length})`}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </main>
     );
 }
