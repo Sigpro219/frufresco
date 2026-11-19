@@ -2271,8 +2271,9 @@ function ContingencyPrintContent() {
                                             const addressClean = cleanAddress(order.shipping_address || order.profiles?.address);
                                             const phone = cleanPhoneNumber(order.profiles?.contact_phone || order.profiles?.phone);
 
+                                            const rowBg = orderIdx % 2 === 0 ? '#FFFFFF' : '#CBD5E1';
                                             return (
-                                                <tr key={order.id || orderIdx}>
+                                                <tr key={order.id || orderIdx} style={{ backgroundColor: rowBg, borderBottom: '1px solid #64748B' }}>
                                                     <td style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '7.8pt' }}>{globalIdx}</td>
                                                     <td style={{ fontWeight: '800', whiteSpace: 'nowrap', fontSize: '7.8pt' }}>
                                                         #{orderNum}

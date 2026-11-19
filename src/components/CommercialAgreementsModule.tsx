@@ -125,6 +125,20 @@ export interface ExtractedExcelItem {
     accounting_id: string;
     product_name: string;
     unit_price: number;
+    source_unit?: string;
+}
+
+export function resolveAgreementUnitPrice(rawPrice: number, sourceUnit?: string, dbUnit?: string): number {
+    const src = normalizeExcelText(sourceUnit);
+    const dst = normalizeExcelText(dbUnit);
+    if (!src || !dst) return rawPrice;
+    const isSrcLibra = src === 'libra' || src === 'libras' || src === 'lb' || src === 'lbs';
+    const isSrcKg = src === 'kg' || src === 'kilo' || src === 'kilos' || src === 'kilogramo' || src === 'kilogramos';
+    const isDstKg = dst === 'kg' || dst === 'kilo' || dst === 'kilos' || dst === 'kilogramo' || dst === 'kilogramos';
+    const isDstLibra = dst === 'libra' || dst === 'libras' || dst === 'lb' || dst === 'lbs';
+    if (isSrcLibra && isDstKg) return Math.round(rawPrice * 2);
+    if (isSrcKg && isDstLibra) return Math.round(rawPrice / 2);
+    return rawPrice;
 }
 
 export function normalizeExcelText(str: any): string {
@@ -188,6 +202,7 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
     let idColIdx = -1;
     let nameColIdx = -1;
     let priceColIdx = -1;
+    let unitColIdx = -1;
     let bestScore = 0;
 
     const maxHeaderScan = Math.min(25, rawMatrix.length);
@@ -199,6 +214,7 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
         let curIdIdx = -1;
         let curNameIdx = -1;
         let curPriceIdx = -1;
+        let curUnitIdx = -1;
         let score = 0;
 
         row.forEach((cell, colIdx) => {
@@ -209,6 +225,11 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
             if (/(?:precio|valor|price|acordado|tarifa|costo|neto|unitario)/i.test(val)) {
                 curPriceIdx = colIdx;
                 score += 10;
+            }
+            // Detección de Unidad de Medida (Libra vs Kg)
+            else if (/(?:und|unidad|medida|uom|\bum\b)/i.test(val)) {
+                curUnitIdx = colIdx;
+                score += 4;
             }
             // Detección de Código / ID
             else if (/(?:id\s*prod|prod\s*id|accounting|cod|sku|ref|item|\bid\b)/i.test(val)) {
@@ -229,6 +250,7 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
                 idColIdx = curIdIdx;
                 nameColIdx = curNameIdx;
                 priceColIdx = curPriceIdx;
+                unitColIdx = curUnitIdx;
             }
         }
     }
@@ -270,6 +292,7 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
         const rawId = idColIdx !== -1 ? String(row[idColIdx] ?? '').trim() : '';
         const rawName = nameColIdx !== -1 ? String(row[nameColIdx] ?? '').trim() : '';
         const rawPrice = priceColIdx !== -1 ? row[priceColIdx] : '';
+        const rawUnit = unitColIdx !== -1 ? String(row[unitColIdx] ?? '').trim() : '';
 
         const unitPrice = parsePriceValue(rawPrice);
 
@@ -277,7 +300,8 @@ export function extractRowsFromExcelSheet(ws: any, XLSX: any): ExtractedExcelIte
             parsedItems.push({
                 accounting_id: rawId || rawName,
                 product_name: rawName || rawId,
-                unit_price: unitPrice
+                unit_price: unitPrice,
+                ...(rawUnit ? { source_unit: rawUnit } : {})
             });
         }
     }
@@ -1600,16 +1624,17 @@ export default function CommercialAgreementsModule() {
                         matchedCount++;
                         const isInactive = dbProduct.is_active === false;
                         if (isInactive) inactiveCount++;
+                        const resolvedPrice = resolveAgreementUnitPrice(item.unit_price, item.source_unit, dbProduct.unit_of_measure);
                         const costBasis = dbProduct.cost_basis || 0;
-                        const margin = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
+                        const margin = resolvedPrice > 0 ? Math.round(((resolvedPrice - costBasis) / resolvedPrice) * 10000) / 100 : 0;
                         const ivaRate = dbProduct.iva_rate || 0;
                         totalMargin += margin;
-                        subtotal += item.unit_price;
+                        subtotal += resolvedPrice;
 
                         previewItems.push({
                             accounting_id: dbProduct.accounting_id || item.accounting_id,
                             product_name: dbProduct.name || item.product_name,
-                            unit_price: item.unit_price,
+                            unit_price: resolvedPrice,
                             matched_product: dbProduct,
                             cost_basis: costBasis,
                             margin_percent: margin,
@@ -3365,15 +3390,16 @@ export default function CommercialAgreementsModule() {
                         matchCount++;
                         const isInactive = matched.is_active === false;
                         if (isInactive) inactiveCount++;
+                        const resolvedPrice = resolveAgreementUnitPrice(item.unit_price, item.source_unit, matched.unit_of_measure);
                         const costBasis = matched.cost_basis || 0;
-                        const marginPercent = item.unit_price > 0 ? Math.round(((item.unit_price - costBasis) / item.unit_price) * 10000) / 100 : 0;
+                        const marginPercent = resolvedPrice > 0 ? Math.round(((resolvedPrice - costBasis) / resolvedPrice) * 10000) / 100 : 0;
                         totalMarginSum += marginPercent;
-                        totalSubtotal += item.unit_price;
+                        totalSubtotal += resolvedPrice;
 
                         return {
                             accounting_id: matched.accounting_id || item.accounting_id,
                             product_name: matched.name || item.product_name,
-                            unit_price: item.unit_price,
+                            unit_price: resolvedPrice,
                             matched_product: matched,
                             cost_basis: costBasis,
                             margin_percent: marginPercent,

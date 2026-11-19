@@ -444,7 +444,7 @@ export default function PhysicalCountPrintPage() {
                                                 {Array.from({ length: rowCount }).map((_, idx) => {
                                                     const it = col1Items[idx];
                                                     const itemNum = idx + 1;
-                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
+                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#CBD5E1';
                                                     return (
                                                         <tr key={it ? it.id : `empty-left-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000', backgroundColor: rowBg }}>
                                                             <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#475569', fontSize: '5.2pt', fontWeight: '600', backgroundColor: rowBg }}>
@@ -477,7 +477,7 @@ export default function PhysicalCountPrintPage() {
                                                 {Array.from({ length: rowCount }).map((_, idx) => {
                                                     const it = col2Items[idx];
                                                     const itemNum = midPoint + idx + 1;
-                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
+                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#CBD5E1';
                                                     return (
                                                         <tr key={it ? it.id : `empty-right-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000', backgroundColor: rowBg }}>
                                                             <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#475569', fontSize: '5.2pt', fontWeight: '600', backgroundColor: rowBg }}>

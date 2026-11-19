@@ -657,7 +657,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
             return { typology: 'monounidad', grams: foundGrams >= 500 ? foundGrams : 2000, secondaryGrams: foundSecondary, pkg: 'Bandeja' };
         }
 
-        return { typology: 'granel', grams: 500, secondaryGrams: null, pkg: 'Bandeja' };
+        const granelGrams = (product.web_conversion_factor && product.web_conversion_factor > 0 && product.web_conversion_factor <= 1)
+            ? Math.round(product.web_conversion_factor * 1000)
+            : 500;
+        return { typology: 'granel', grams: granelGrams, secondaryGrams: null, pkg: 'Bandeja' };
     };
 
     const initialTypologyData = useMemo(() => detectInitialTypology(), []);
@@ -672,6 +675,21 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
     }, [product?.id]);
 
     // Sincronizador en caliente del Poka-Yoke hacia formData y options
+    const resolveGranelPresentation = (grams: number) => {
+        const effectiveGrams = grams > 0 ? grams : 500;
+        const factor = effectiveGrams / 1000;
+        if (effectiveGrams === 500) {
+            return { webUnit: 'Libra', factor, presentationValues: ['Libra 500g|500'] };
+        }
+        if (effectiveGrams === 250) {
+            return { webUnit: 'Media Libra', factor, presentationValues: ['Media Libra 250g|250'] };
+        }
+        if (effectiveGrams === 1000) {
+            return { webUnit: 'Kilo', factor, presentationValues: ['Kilo 1000g|1000'] };
+        }
+        return { webUnit: 'Porción', factor, presentationValues: [`Porción ${effectiveGrams} gr|${effectiveGrams}`] };
+    };
+
     const updatePokaYoke = (
         newTypology: CommercialTypology,
         newGrams: number,
@@ -713,9 +731,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                 presentationValues.push(`${newPkg} ${secGrams} gr|${secGrams}`);
             }
         } else if (newTypology === 'granel') {
-            newWebUnit = 'Libra';
-            newFactor = 0.5;
-            presentationValues = [`Libra 500g|500`];
+            const granelRes = resolveGranelPresentation(newGrams);
+            newWebUnit = granelRes.webUnit;
+            newFactor = granelRes.factor;
+            presentationValues = granelRes.presentationValues;
         }
 
         setFormData(prev => ({
@@ -1081,9 +1100,10 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                     presentationValues.push(`${packageType} ${secondaryGrams} gr|${secondaryGrams}`);
                 }
             } else if (commercialTypology === 'granel') {
-                finalWebUnit = 'Libra';
-                finalFactor = 0.5;
-                presentationValues = [`Libra 500g|500`];
+                const granelRes = resolveGranelPresentation(targetGrams);
+                finalWebUnit = granelRes.webUnit;
+                finalFactor = granelRes.factor;
+                presentationValues = granelRes.presentationValues;
             }
 
             // Unir 'Presentación' con las demás opciones (como Maduración)
@@ -3497,16 +3517,38 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
 
                                     {/* Caso 4: Granel */}
                                     {commercialTypology === 'granel' && (
-                                        <div style={{ backgroundColor: '#FFFBEB', padding: '0.8rem 1.2rem', borderRadius: '10px', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ backgroundColor: '#FFFBEB', padding: '0.9rem 1.2rem', borderRadius: '10px', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                                             <div>
-                                                <strong style={{ color: '#B45309', fontSize: '0.9rem' }}>Venta Continua por Libra (500 gramos)</strong>
+                                                <strong style={{ color: '#B45309', fontSize: '0.9rem' }}>Venta Continua a Granel / Porción</strong>
                                                 <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#78350F' }}>
-                                                    Unidad web fijada en Libra con factor 0.5 kg. Ideal para raíces, tubérculos y legumbres a granel.
+                                                    Permite vender por Libra (500g), Media Libra (250g) o porciones menores a 1 libra (100g–400g).
                                                 </p>
                                             </div>
-                                            <span style={{ padding: '4px 12px', backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '900', color: '#B45309' }}>
-                                                Factor: 0.5 kg
-                                            </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <select
+                                                    value={targetGrams}
+                                                    onChange={(e) => updatePokaYoke('granel', parseInt(e.target.value) || 500, packageType)}
+                                                    style={{
+                                                        padding: '0.45rem 0.75rem',
+                                                        borderRadius: '8px',
+                                                        border: '1.5px solid #D97706',
+                                                        fontSize: '0.82rem',
+                                                        fontWeight: '800',
+                                                        color: '#B45309',
+                                                        backgroundColor: '#FFFFFF',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {[100, 150, 200, 250, 300, 400, 500, 1000].map(g => (
+                                                        <option key={g} value={g}>
+                                                            {g === 250 ? 'Media Libra (250g)' : g === 500 ? 'Libra (500g)' : g === 1000 ? 'Kilo (1000g)' : `Porción ${g}g`}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <span style={{ padding: '4px 12px', backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '900', color: '#B45309' }}>
+                                                    Factor: {(targetGrams / 1000).toFixed(2).replace(/\.?0+$/, '')} kg
+                                                </span>
+                                            </div>
                                         </div>
                                     )}
 

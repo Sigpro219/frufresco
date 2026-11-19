@@ -277,10 +277,13 @@ export default function PurchasesPrintPage() {
 
             {/* Print Settings (Inyección DOM Nativa Directa para Hoja Oficio) */}
             <style dangerouslySetInnerHTML={{ __html: `
-                @media print {
+                    @media print {
                     @page {
                         size: legal portrait !important;
                         margin: 0.8cm 1.0cm !important;
+                    }
+                    .purchases-table td {
+                        border-bottom: 1px solid #64748B !important;
                     }
                     body {
                         background-color: #FFFFFF !important;
@@ -563,10 +566,10 @@ export default function PurchasesPrintPage() {
 
                                                 return pageItems.map((it, itemIdx) => {
                                                     const spanInfo = itemSpans[itemIdx];
-                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
+                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#CBD5E1';
 
                                                     return (
-                                                        <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>
+                                                        <tr key={it.id || itemIdx} style={{ backgroundColor: bg, borderBottom: '1px solid #64748B' }}>
                                                             {/* 1. Stock INV (Existencia de bodega: en línea base muestra el stock; en variantes hijas indica 'inc.') */}
                                                             <td
                                                                 style={{
@@ -574,10 +577,10 @@ export default function PurchasesPrintPage() {
                                                                     fontSize: '7.8pt',
                                                                     fontWeight: spanInfo.isFirst && it.stock_bodega > 0 ? '800' : '600',
                                                                     fontVariantNumeric: 'tabular-nums',
-                                                                    color: spanInfo.isFirst ? (it.stock_bodega > 0 ? '#0F172A' : '#94A3B8') : '#64748B',
-                                                                    backgroundColor: !spanInfo.isFirst ? '#F8FAFC' : undefined,
+                                                                    color: spanInfo.isFirst ? (it.stock_bodega > 0 ? '#0F172A' : '#64748B') : '#475569',
                                                                     verticalAlign: 'middle',
-                                                                    padding: '3px 4px'
+                                                                    padding: '3px 4px',
+                                                                    borderBottom: '1px solid #64748B'
                                                                 }}
                                                             >
                                                                 {spanInfo.isFirst 

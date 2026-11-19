@@ -506,7 +506,7 @@ export default function ReceivingPrintPage() {
                                         </thead>
                                         <tbody>
                                             {page.map((it, idx) => {
-                                                const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
+                                                const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#CBD5E1';
                                                 return (
                                                 <tr key={it.product_id || idx} style={{ height: `${rowHeightPx}px`, backgroundColor: rowBg }}>
                                                     <td style={{ textAlign: 'center', padding: '2px 4px', border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', fontWeight: '700', color: '#0F172A', fontVariantNumeric: 'tabular-nums', backgroundColor: rowBg }}>
