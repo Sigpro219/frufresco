@@ -444,18 +444,19 @@ export default function PhysicalCountPrintPage() {
                                                 {Array.from({ length: rowCount }).map((_, idx) => {
                                                     const it = col1Items[idx];
                                                     const itemNum = idx + 1;
+                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
                                                     return (
-                                                        <tr key={it ? it.id : `empty-left-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
-                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#64748B', fontSize: '5.2pt', fontWeight: '600', backgroundColor: '#FFFFFF' }}>
+                                                        <tr key={it ? it.id : `empty-left-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000', backgroundColor: rowBg }}>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#475569', fontSize: '5.2pt', fontWeight: '600', backgroundColor: rowBg }}>
                                                                 {it ? itemNum : ''}
                                                             </td>
-                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: '#FFFFFF', letterSpacing: '0.02em' }}>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: rowBg, letterSpacing: '0.02em' }}>
                                                                 {it?.accounting_id ? it.accounting_id : ''}
                                                             </td>
-                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000' }} title={it ? it.name : ''}>
+                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000', backgroundColor: rowBg }} title={it ? it.name : ''}>
                                                                 {it ? it.name : ''}
                                                             </td>
-                                                            <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>
+                                                            <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: rowBg }}></td>
                                                         </tr>
                                                     );
                                                 })}
@@ -476,18 +477,19 @@ export default function PhysicalCountPrintPage() {
                                                 {Array.from({ length: rowCount }).map((_, idx) => {
                                                     const it = col2Items[idx];
                                                     const itemNum = midPoint + idx + 1;
+                                                    const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
                                                     return (
-                                                        <tr key={it ? it.id : `empty-right-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000' }}>
-                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#64748B', fontSize: '5.2pt', fontWeight: '600', backgroundColor: '#FFFFFF' }}>
+                                                        <tr key={it ? it.id : `empty-right-${idx}`} style={{ height: '17px', borderBottom: '1px solid #000000', backgroundColor: rowBg }}>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#475569', fontSize: '5.2pt', fontWeight: '600', backgroundColor: rowBg }}>
                                                                 {it ? itemNum : ''}
                                                             </td>
-                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: '#FFFFFF', letterSpacing: '0.02em' }}>
+                                                            <td style={{ textAlign: 'center', padding: '1px 2px', border: '1px solid #000000', color: '#000000', fontSize: '7pt', fontWeight: '900', fontFamily: 'monospace', backgroundColor: rowBg, letterSpacing: '0.02em' }}>
                                                                 {it?.accounting_id ? it.accounting_id : ''}
                                                             </td>
-                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000' }} title={it ? it.name : ''}>
+                                                            <td style={{ textAlign: 'left', padding: '1px 3px', border: '1px solid #000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '115px', fontWeight: '600', color: '#000000', backgroundColor: rowBg }} title={it ? it.name : ''}>
                                                                 {it ? it.name : ''}
                                                             </td>
-                                                            <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: '#FFFFFF' }}></td>
+                                                            <td style={{ border: '1px solid #000000', textAlign: 'center', backgroundColor: rowBg }}></td>
                                                         </tr>
                                                     );
                                                 })}

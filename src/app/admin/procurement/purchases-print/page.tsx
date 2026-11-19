@@ -563,7 +563,7 @@ export default function PurchasesPrintPage() {
 
                                                 return pageItems.map((it, itemIdx) => {
                                                     const spanInfo = itemSpans[itemIdx];
-                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                                                    const bg = itemIdx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
 
                                                     return (
                                                         <tr key={it.id || itemIdx} style={{ backgroundColor: bg }}>

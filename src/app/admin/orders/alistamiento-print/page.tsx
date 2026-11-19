@@ -1187,8 +1187,8 @@ export default function AlistamientoSabanaPrintPage() {
 
                                     <tbody>
                                         {activeOrdersInCell.map((ord, oIdx) => {
-                                            // Zebra striping industrial de alto contraste para visibilidad en planta
-                                            const rowBg = oIdx % 2 === 0 ? '#FFFFFF' : '#F1F5F9';
+                                            // Zebra striping industrial de alto contraste B/N para impresoras láser de planta
+                                            const rowBg = oIdx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
 
                                             return (
                                                 <tr key={ord.id} style={{ backgroundColor: rowBg, minHeight: '30px' }}>

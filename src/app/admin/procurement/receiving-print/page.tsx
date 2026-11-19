@@ -505,20 +505,23 @@ export default function ReceivingPrintPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {page.map((it, idx) => (
-                                                <tr key={it.product_id || idx} style={{ height: `${rowHeightPx}px` }}>
-                                                    <td style={{ textAlign: 'center', padding: '2px 4px', border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box', fontWeight: '700', color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                            {page.map((it, idx) => {
+                                                const rowBg = idx % 2 === 0 ? '#FFFFFF' : '#DCE3EC';
+                                                return (
+                                                <tr key={it.product_id || idx} style={{ height: `${rowHeightPx}px`, backgroundColor: rowBg }}>
+                                                    <td style={{ textAlign: 'center', padding: '2px 4px', border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', fontWeight: '700', color: '#0F172A', fontVariantNumeric: 'tabular-nums', backgroundColor: rowBg }}>
                                                         {it.accounting_id ?? '—'}
                                                     </td>
-                                                    <td style={{ textAlign: 'left', padding: '2px 6px', border: '1px solid #CBD5E1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: `${rowHeightPx}px`, boxSizing: 'border-box' }} title={it.product_name}>
+                                                    <td style={{ textAlign: 'left', padding: '2px 6px', border: '1px solid #64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: `${rowHeightPx}px`, boxSizing: 'border-box', backgroundColor: rowBg }} title={it.product_name}>
                                                         <span style={{ fontWeight: '600', color: '#000000' }}>{it.product_name}</span>
                                                     </td>
-                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
-                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
-                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
-                                                    <td style={{ border: '1px solid #CBD5E1', height: `${rowHeightPx}px`, boxSizing: 'border-box' }}></td>
+                                                    <td style={{ border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', backgroundColor: rowBg }}></td>
+                                                    <td style={{ border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', backgroundColor: rowBg }}></td>
+                                                    <td style={{ border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', backgroundColor: rowBg }}></td>
+                                                    <td style={{ border: '1px solid #64748B', height: `${rowHeightPx}px`, boxSizing: 'border-box', backgroundColor: rowBg }}></td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
