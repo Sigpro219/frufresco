@@ -220,15 +220,26 @@ export default function GoldenPrintStyles({
             .letterhead-container td {
                 padding: 1.5px 4px;
                 font-size: 7.2pt;
-                border-bottom: 1px solid #E2E8F0 !important;
-                border-left: 1px solid #F1F5F9 !important;
-                border-right: 1px solid #F1F5F9 !important;
+                border-bottom: 1px solid #64748B !important;
+                border-left: 1px solid #94A3B8 !important;
+                border-right: 1px solid #94A3B8 !important;
                 color: #1E293B;
                 vertical-align: middle !important;
                 line-height: 1.15;
             }
 
             .letterhead-container tbody tr:nth-child(even) {
+                background-color: #CBD5E1 !important;
+            }
+
+            /* Preservar intacto el estilo original de Remisiones de Entrega */
+            .order-remission-group .letterhead-container td {
+                border-bottom: 1px solid #E2E8F0 !important;
+                border-left: 1px solid #F1F5F9 !important;
+                border-right: 1px solid #F1F5F9 !important;
+            }
+
+            .order-remission-group .letterhead-container tbody tr:nth-child(even) {
                 background-color: #F8FAFC !important;
             }
 

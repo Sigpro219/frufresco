@@ -2313,6 +2313,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         if (v && validOptionNames.has(k.toLowerCase())) opts[k] = String(v);
       });
     }
+    if (opts.nota_alistamiento === undefined && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+      opts.nota_alistamiento = exc.picking_note.trim();
+    }
 
     const presOpt = (freshProduct.options_config || []).find((opt: any) =>
       opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
@@ -3363,20 +3366,26 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     let factor = item.conversion_factor || nominalBaseWeight;
     const opts = { ...(item.selected_options || {}) };
 
-    // Purge obsolete options not in freshProduct.options_config
+    // Purge obsolete options not in freshProduct.options_config (preserving internal metadata and nota_alistamiento)
     const validOptionNames = new Set((freshProduct.options_config || []).map((o: any) => o.name.toLowerCase()));
     Object.keys(opts).forEach(k => {
-      if (!k.startsWith('_') && !validOptionNames.has(k.toLowerCase())) {
+      if (!k.startsWith('_') && k !== 'nota_alistamiento' && !validOptionNames.has(k.toLowerCase())) {
         delete opts[k];
       }
     });
 
-    // Pre-populate structured preferred options if exist
+    // Pre-populate structured preferred options and punctual picking_note if exist
     const exc = clientExceptions.find(e => e.product_id === freshProduct.id);
-    if (Object.keys(opts).length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
+    if (Object.keys(opts).filter(k => k !== 'nota_alistamiento').length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
       Object.entries(exc.preferred_options).forEach(([k, v]) => {
         if (v && validOptionNames.has(k.toLowerCase())) opts[k] = String(v);
       });
+    }
+    if (opts.nota_alistamiento === undefined && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+      opts.nota_alistamiento = exc.picking_note.trim();
+    }
+    if (opts.nota_alistamiento === undefined && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+      opts.nota_alistamiento = exc.picking_note.trim();
     }
 
     // Pre-populate default presentation option: ALWAYS defaults to 'Kg' (unless structured preferred_options exists)
@@ -15026,6 +15035,39 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       const evaluated = evaluateMathExpression(quantity);
                       const finalVal = evaluated > 0 ? String(evaluated).replace('.', ',') : (quantity || '1');
                       setCustomizingModalItem(prev => prev ? { ...prev, quantity: finalVal } : null);
+                    }}
+                  />
+                </div>
+
+                {/* Campo Excepcional de Nota de Alistamiento Físico (Solo este pedido) */}
+                <div style={{ textAlign: 'left', marginBottom: '0.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                      Nota de Alistamiento (Excepcional)
+                    </label>
+                    <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500' }}>
+                      Solo para este pedido (permanente solo en Ficha del Cliente)
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Ej: Sin malla, llamar al cliente, limpia..."
+                    value={options['nota_alistamiento'] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomizingModalItem((prev: any) => prev ? {
+                        ...prev,
+                        options: { ...(prev.options || {}), nota_alistamiento: val }
+                      } : null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.88rem',
+                      backgroundColor: '#F8FAFC',
+                      outline: 'none'
                     }}
                   />
                 </div>

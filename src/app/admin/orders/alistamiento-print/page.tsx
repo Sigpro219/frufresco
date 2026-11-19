@@ -591,7 +591,8 @@ export default function AlistamientoSabanaPrintPage() {
                         ...(exc?.preferred_options && typeof exc.preferred_options === 'object' ? exc.preferred_options : {}),
                         ...(it.selected_options && typeof it.selected_options === 'object' ? it.selected_options : {})
                     };
-                    if (exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
+                    const hasExplicitNotaKey = Object.prototype.hasOwnProperty.call(mergedOpts, 'nota_alistamiento');
+                    if (!hasExplicitNotaKey && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
                         const hasPicking =
                             mergedOpts.nota_alistamiento ||
                             mergedOpts['Nota alistamiento'] ||

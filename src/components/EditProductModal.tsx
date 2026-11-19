@@ -1588,6 +1588,9 @@ export default function EditProductModal({ product, allProducts, onClose, onSave
                                                 <option value="DESPENSA">DESPENSA</option>
                                                 <option value="FRUTA SELECCIONADA">FRUTA SELECCIONADA</option>
                                                 <option value="HORTALIZA SELECCIONADA">HORTALIZA SELECCIONADA</option>
+                                                <option value="PEDIDOS GINGER">PEDIDOS GINGER</option>
+                                                <option value="PEDIDOS JULIO">PEDIDOS JULIO</option>
+                                                <option value="PEDIDOS NELSON">PEDIDOS NELSON</option>
                                                 <option value="PLATANOS">PLATANOS</option>
                                                 <option value="TOMATE">TOMATE</option>
                                                 <option value="TUBERCULOS - PAPA">TUBERCULOS - PAPA</option>

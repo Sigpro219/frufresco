@@ -498,10 +498,10 @@ export default function ReceivingPrintPage() {
                                             <tr style={{ backgroundColor: '#F8FAFC', color: '#000000', borderTop: '1px solid #CBD5E1', borderBottom: '1.5px solid #0F172A' }}>
                                                 <th style={{ width: '7%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>ID</th>
                                                 <th style={{ width: '31%', textAlign: 'left', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Producto</th>
-                                                <th style={{ width: '20%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>KG</th>
-                                                <th style={{ width: '22%', textAlign: 'center', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Nombre Proveedor</th>
-                                                <th style={{ width: '11%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt' }}>Hora Llegada</th>
-                                                <th style={{ width: '9%', textAlign: 'center', padding: '3px 2px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt', lineHeight: 1.15 }}>Calidad<br/><span style={{ fontSize: '6.0pt', fontWeight: '700', color: '#FFFFFF', letterSpacing: '0.02em' }}>(SI/NO)</span></th>
+                                                <th style={{ width: '17%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>KG</th>
+                                                <th style={{ width: '11%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}># Bultos</th>
+                                                <th style={{ width: '22%', textAlign: 'center', padding: '3px 6px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.2pt' }}>Proveedor</th>
+                                                <th style={{ width: '12%', textAlign: 'center', padding: '3px 4px', border: '1px solid #CBD5E1', fontWeight: 'bold', fontSize: '7.0pt' }}>Hora de llegada</th>
                                             </tr>
                                         </thead>
                                         <tbody>

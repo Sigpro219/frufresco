@@ -246,7 +246,7 @@ export default function ProcurementPage() {
     let initialCategory = profile?.specialty || "";
     
     if (hasCategoryRestrictions) {
-      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
+      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PEDIDOS GINGER", "PEDIDOS JULIO", "PEDIDOS NELSON", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
         customPerms.includes(`ops.compras.category:${cat}`) || 
         customPerms.includes(`ops.compras.category:${cat.toUpperCase()}`) || 
         customPerms.includes(`ops.compras.category:${cat.toLowerCase()}`) ||
@@ -1287,6 +1287,9 @@ export default function ProcurementPage() {
     "DESPENSA",
     "FRUTA SELECCIONADA",
     "HORTALIZA SELECCIONADA",
+    "PEDIDOS GINGER",
+    "PEDIDOS JULIO",
+    "PEDIDOS NELSON",
     "PLATANOS",
     "TOMATE",
     "TUBERCULOS - PAPA",
@@ -1311,7 +1314,7 @@ export default function ProcurementPage() {
     const customPerms = profile.custom_permissions || [];
     const hasCategoryRestrictions = customPerms.some(p => p.startsWith('ops.compras.category:'));
     if (hasCategoryRestrictions) {
-      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
+      const allowed = ["DESPENSA", "FRUTA SELECCIONADA", "HORTALIZA SELECCIONADA", "PEDIDOS GINGER", "PEDIDOS JULIO", "PEDIDOS NELSON", "PLATANOS", "TOMATE", "TUBERCULOS - PAPA", "VERDURAS"].filter(cat => 
         customPerms.includes(`ops.compras.category:${cat}`) || 
         customPerms.includes(`ops.compras.category:${cat.toUpperCase()}`) || 
         customPerms.includes(`ops.compras.category:${cat.toLowerCase()}`) ||

@@ -12068,7 +12068,7 @@ ${primaryAdminNotes}`.trim();
                                         Nota de Alistamiento (Excepcional)
                                     </label>
                                     <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '500' }}>
-                                        Solo para bodega (no altera catálogo)
+                                        Solo para este pedido (permanente solo en Ficha del Cliente)
                                     </span>
                                 </div>
                                 <input

@@ -17551,6 +17551,15 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - `allocateStagingSpacesGeographically` agrupa cada par `(Pedido A, Pedido B)` vinculado por `parent_order_id` (`is_off_agreement_split = true`), calcula canastillas y bahías sobre el **peso combinado (`A + B`)**, asigna exactamente el mismo `warehouse_spaces: number[]` (ej. `[10]`) a ambos documentos y genera el rótulo alfanumérico **`10A`** (Pedido A / Factura) y **`10B`** (Pedido B / Remisión `$0`) — o `10-11A` / `10-11B` si ocupa múltiples bahías — persistido en `logistics_data.assigned_space_label`.
      - Las vistas WMS (`ManualDispatchWizardModal.tsx`, `StagingSpacesManagement.tsx`) permiten múltiples órdenes compartiendo la misma bahía en la grilla 150 y tanto `alistamiento-print` como `contingency-print` imprimen el rótulo exacto `10A` / `10B`.
 
+---
+
+### Escenario 467: Porciones Fraccionales `< 500g` en Tipología Granel y Sublistas Operativas de Compras (`PEDIDOS GINGER`, `PEDIDOS JULIO`, `PEDIDOS NELSON`) (SDD v1.9.422)
+- **Given** la gestión del catálogo Maestro SKU (`EditProductModal.tsx`, `CreateProductModal.tsx`) y la operación de abastecimiento en plaza (`ops/compras/page.tsx`, `purchases-print/page.tsx`),
+- **When** el administrador configura presentaciones web menores a 1 libra en tipología **Granel** o asigna un SKU a las sublistas de compradores específicos,
+- **Then** rigen de forma canónica las siguientes capacidades:
+  1. **Fracciones `< 500g` en Tipología Granel (`EditProductModal.tsx`):** El helper unificado `resolveGranelPresentation` y el selector de Pestaña 3 (`3. Venta Web (Poka-Yoke)`) habilitan porciones de `100g`, `150g`, `200g`, `Media Libra (250g)`, `300g`, `400g`, `Libra (500g)` y `Kilo (1000g)` calculando `web_conversion_factor = gramos / 1000` y preservando dicha configuración al abrir, editar y guardar el producto.
+  2. **Nuevas Sublistas de Compras:** Se habilitan **`PEDIDOS GINGER`**, **`PEDIDOS JULIO`** y **`PEDIDOS NELSON`** en `Sublista de Compra` (`EditProductModal.tsx`, `CreateProductModal.tsx`) y en la consola operativa `src/app/ops/compras/page.tsx`, agrupándose dinámicamente en `PLANILLA DE COMPRAS CORABASTOS` (`purchases-print/page.tsx`).
+
 
 ---
 
@@ -17663,3 +17672,10 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   1. **Estado Aislado `globalSearchOrders` (Cero Corrupción de KPIs / Polling):** Cuando `searchTerm.trim().length >= 2` y no empieza por `@`, un `useEffect` con debounce de `350ms` ejecuta búsqueda global en Supabase sin restricción de `delivery_date` ni `status` (cualquier fecha y estado: `pending_approval`, `para_compra`, `picking`, `in_transit`, `delivered`, `cancelled`, etc.).
   2. **Query PostgREST Desacoplada:** Primero consulta `profiles` (`company_name`, `contact_name`, `nit`) y luego `orders` por `profile_id.in.(...)`, `sequence_id.eq.N` (si es numérico) y `.or(...)` sobre columnas raíz (`purchase_order_number`, `admin_notes`, `customer_name`, `shipping_address`, `special_notes`), sin alterar `orders` ni los 5 KPIs del turno.
   3. **Ancho Ampliado + Popover Preservado + Fecha de Entrega Visible:** `<GalleryOmnibox />` pasa a `minWidth: '280px'` compactando el botón `Filtros` (conservando el popover completo de Escenario 427 §3.3), y cada fila de tabla muestra explícitamente `Ent: YYYY-MM-DD` (`delivery_date`).
+
+### Escenario 474: Nota de Alistamiento Puntual por Pedido (Edición/Creación/Supresión en Todos los Canales vs. Regla Permanente en Ficha del Cliente) (SDD v1.9.429)
+- **Alcance Contractual:** [`src/app/admin/orders/create/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/create/page.tsx), [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx), [`src/app/admin/orders/loading/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/loading/page.tsx) y [`src/app/admin/orders/alistamiento-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/alistamiento-print/page.tsx).
+- **Reglas de Negocio:**
+  1. **Homologación en Todos los Canales de Carga de Pedidos:** En el modal de producto de Creación Manual/Excel/IA (`orders/create`), Bandeja de Correos (`EmailDraftsModule`) y Torre de Control (`orders/loading`), el operador dispone del campo **`Nota de Alistamiento (Excepcional)`** (`selected_options.nota_alistamiento`).
+  2. **Solo Para Ese Pedido (Disciplina Maestra):** Si el cliente ya posee una nota fija en `product_nicknames.picking_note`, el campo viene pre-llenado y puede editarse o suprimirse **por una sola vez para ese pedido puntual**. Si el cliente no posee nota para ese SKU, el operador puede crearla únicamente para ese pedido. Las reglas permanentes solo se crean o modifican desde la Ficha del Cliente (`ClientsModule` / *Consulta de Excepciones Logísticas*).
+  3. **Inmunidad ante Borrado Explícito en Sábana de Alistamiento (`alistamiento-print`):** Si `order_items.selected_options` contiene explícitamente la clave `nota_alistamiento` (incluso vacía `""` tras haberla borrado el operador), `alistamiento-print` respeta la decisión puntual del pedido y **no** re-inyecta `product_nicknames.picking_note`.
