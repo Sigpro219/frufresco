@@ -13,6 +13,7 @@ const getSupabaseAdmin = () => {
 };
 
 import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
+import { hasExplicitLibraWord, isKgUnitName } from '@/lib/orders/unitConversionEngine';
 import {
   extractDraftSummary,
   filterCandidateDraftsForClient,
@@ -929,7 +930,7 @@ export async function POST(req: Request) {
             attProgrammaticExcelItems = (progItems || []).map(p => ({
               originalName: p.originalName,
               quantity: p.quantity,
-              unit: p.unit || 'Kg',
+              unit: p.unit || '',
               observations: p.observations || ''
             }));
 
@@ -1606,18 +1607,19 @@ export async function POST(req: Request) {
           return !isNaN(numQty) && numQty > 0;
         })
         .map((itm: any) => {
-        let originalName = String(itm.originalName || itm.name || '').trim();
-        originalName = originalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim();
-        const nameLower = originalName.toLowerCase();
+        const rawDocumentUnit = itm.unit && String(itm.unit).trim() !== '' ? String(itm.unit).trim() : null;
+        const rawOriginalName = String(itm.originalName || itm.name || '').trim();
+        const matchNameQuery = rawOriginalName.replace(/\s*[xX]\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|kl|kls|lb|lbs|oz|ml|l|lt|lts|unid|unidades|und|unds)\b.*$/i, '').trim() || rawOriginalName;
+        const nameLower = rawOriginalName.toLowerCase();
         let observations = itm.observations || '';
-        let assignedUnit = itm.unit;
+        let assignedUnit = rawDocumentUnit || '';
 
-        if (nameLower.includes('libra') || nameLower.includes('lb')) {
+        if (!isKgUnitName(assignedUnit) && hasExplicitLibraWord(rawOriginalName)) {
           assignedUnit = 'Lb';
           if (!observations.toLowerCase().includes('libra')) {
             observations = `Solicitado en Libras. ${observations}`.trim();
           }
-        } else if (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt')) {
+        } else if (!isKgUnitName(assignedUnit) && (nameLower.includes('litro') || nameLower.includes('litros') || nameLower.includes(' l ') || nameLower.includes(' lt ') || nameLower.endsWith(' l') || nameLower.endsWith(' lt'))) {
           assignedUnit = 'Litro';
           if (!observations.toLowerCase().includes('litro')) {
             observations = `Solicitado en Litros. ${observations}`.trim();
@@ -1627,14 +1629,14 @@ export async function POST(req: Request) {
         let matchedProductId = itm.matched_product_id || null;
         let resolvedUnitPrice = itm.unit_price || 0;
 
-        if (!matchedProductId && originalName) {
-          const bestMatch = findBestProductMatch(originalName, globalDbProducts || []);
+        if (!matchedProductId && matchNameQuery) {
+          const bestMatch = findBestProductMatch(matchNameQuery, globalDbProducts || []);
           if (bestMatch) {
             matchedProductId = bestMatch.id;
             resolvedUnitPrice = 0;
-            const normAssigned = (assignedUnit || '').toLowerCase().trim();
-            if (!assignedUnit || normAssigned === 'unidad' || normAssigned === 'und' || normAssigned === 'uds' || normAssigned === 'unidades' || normAssigned === 'u') {
-              assignedUnit = bestMatch.unit_of_measure || 'Kg';
+            // Only populate unit from catalog when the document left it blank; never overwrite UN/UND/Bandeja
+            if (!assignedUnit) {
+              assignedUnit = bestMatch.unit_of_measure || 'Unidad';
             }
           }
         }
@@ -1642,8 +1644,9 @@ export async function POST(req: Request) {
         return {
           ...itm,
           deliveryDate: sanitizeIngestedDeliveryDate(itm.deliveryDate),
-          originalName,
-          unit: assignedUnit || 'Kg',
+          originalName: rawOriginalName,
+          rawDocumentUnit,
+          unit: assignedUnit || 'Unidad',
           matched_product_id: matchedProductId,
           unit_price: resolvedUnitPrice,
           observations,

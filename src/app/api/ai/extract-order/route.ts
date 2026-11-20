@@ -52,7 +52,7 @@ export async function POST(req: Request) {
         2. Extrae todos los productos solicitados junto con su cantidad numérica y su UNIDAD DE MEDIDA O PRESENTACIÓN exacta:
            - REGLAS DE NORMALIZACIÓN DE UNIDADES Y JERGA EN COLOMBIA / CORABASTOS:
              * "kL", "kl", "KL", "kilo", "kilos", "Kg", "kg" -> interpreta siempre como unidad "KG" (Kilogramos). Los clientes en chat escriben frecuentemente "kL" queriendo decir Kilo.
-             * "500 gr", "500g", "1/2 kg", "medio kilo", "libra", "1 libra", "lb" -> si el ítem es por peso, extrae cantidad numérica (ej. 0.5 si es medio kilo o 1 libra) y unidad "KG" o "LIBRA" / "500 GR".
+             * "500 gr", "500g", "1/2 kg", "medio kilo", "libra", "1 libra", "lb" -> NUNCA devuelvas cantidad ya convertida (0.5) combinada con unidad "LIBRA" o "500 GR". Si conservas la unidad "LIBRA" o "500 GR", deja el número original de libras/paquetes (ej. quantity: 1, unit: "LIBRA" para "1 libra"); o si conviertes a kilos, usa quantity: 0.5 con unit: "KG". Para gramos sueltos (ej. "500 gr"), usa quantity: 500 con unit: "GR" (o quantity: 0.5 con unit: "KG").
              * "gr", "gramos", "g" -> conserva la cantidad numérica y unidad "GR".
              * "unidad", "unidades", "und", "u", "pza", "cabeza" -> unidad "UND".
              * Si viene solo el número sin unidad (ej: "Plátano maduro 2"), asigna cantidad 2 y unit "UND".

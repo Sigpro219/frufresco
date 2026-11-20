@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
+import { resolveCanonicalConversion } from '@/lib/orders/unitConversionEngine';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 
 const getSupabaseAdmin = () => {
@@ -163,7 +164,7 @@ ${csvContent}`;
               extractedData.items.push({
                 name: it.originalName,
                 quantity: it.quantity,
-                unit: it.unit || 'Kg',
+                unit: it.unit || '',
                 observations: it.observations || '',
                 source_attachment_name: att.name,
                 purchase_order: gJson?.purchaseOrder || undefined,
@@ -296,13 +297,19 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       }
     }
 
-    // Load active products catalog for automatic SKU matching
-    const { data: allProducts } = await supabase
-      .from('products')
-      .select('id, name, sku, unit_of_measure, weight_kg, options_config')
-      .eq('is_active', true);
+    // Load active products catalog & product_conversions for automatic SKU matching and canonical unit resolution
+    const [{ data: allProducts }, { data: allConversions }] = await Promise.all([
+      supabase
+        .from('products')
+        .select('id, name, sku, unit_of_measure, weight_kg, options_config')
+        .eq('is_active', true),
+      supabase
+        .from('product_conversions')
+        .select('product_id, from_unit, to_unit, conversion_factor')
+    ]);
 
     const productCatalog = allProducts || [];
+    const conversionsList = allConversions || [];
 
     // Load client exceptions / nicknames memory if profile is assigned
     let learnedMemory: any[] = [];
@@ -329,35 +336,31 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       const itName = it.name.trim();
       const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
       const matchedProd = matchResult.product;
-      const rawUnit = (it.unit || '').trim();
-      const normUnit = rawUnit.toLowerCase();
-      
-      const isLibra = normUnit === 'libra' || normUnit === 'libras' || normUnit === 'lb' || normUnit === 'lbs' || normUnit.includes('500') || itName.toLowerCase().includes('libra') || itName.toLowerCase().includes('500');
-      const isGram = normUnit === 'gramo' || normUnit === 'gramos' || normUnit === 'gr' || normUnit === 'g';
-      
-      let convFactor = 1;
-      let targetUnit = matchedProd?.unit_of_measure || (rawUnit || 'Kg');
-      
-      if (isLibra && (!matchedProd || matchedProd.unit_of_measure?.toLowerCase() === 'kg' || matchedProd.unit_of_measure?.toLowerCase() === 'kilo')) {
-        convFactor = 0.5;
-        targetUnit = 'Kg';
-      } else if (isGram && (!matchedProd || matchedProd.unit_of_measure?.toLowerCase() === 'kg' || matchedProd.unit_of_measure?.toLowerCase() === 'kilo')) {
-        convFactor = 0.001;
-        targetUnit = 'Kg';
-      } else if (matchedProd?.unit_of_measure) {
-        targetUnit = matchedProd.unit_of_measure;
-      }
+      const rawDocUnit = it.unit && String(it.unit).trim() !== '' ? String(it.unit).trim() : null;
+      const prodConversions = matchedProd
+        ? conversionsList.filter((c: any) => c.product_id === matchedProd.id)
+        : [];
 
-      const calculatedQty = parseFloat((it.quantity * convFactor).toFixed(3));
+      const conv = resolveCanonicalConversion({
+        rawName: itName,
+        rawDocumentUnit: rawDocUnit,
+        currentUnit: rawDocUnit || undefined,
+        observations: it.observations || '',
+        quantity: Number(it.quantity),
+        product: matchedProd,
+        productConversions: prodConversions,
+      });
 
       return {
         originalName: itName,
         name: matchedProd ? matchedProd.name : itName,
-        originalQuantity: it.quantity,
-        originalUnit: rawUnit || (isLibra ? 'Lb' : 'Und'),
-        quantity: calculatedQty,
-        conversion_factor: convFactor,
-        unit: targetUnit,
+        rawDocumentUnit: conv.rawDocumentUnit,
+        originalQuantity: conv.originalQty,
+        originalUnit: conv.originalUnit,
+        quantity: conv.billingQty,
+        conversion_factor: 1,
+        unit: conv.billingUnit,
+        _conversionApplied: true,
         matched_product_id: matchedProd ? matchedProd.id : null,
         confidenceScore: matchResult.confidenceScore,
         confidence: matchResult.confidence,

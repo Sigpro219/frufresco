@@ -23,6 +23,18 @@ import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets'
 import { useAuth } from '@/lib/authContext';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
 import { fetchPendingDraftsComplete, fetchDraftsByStatusPage, fetchDraftTabCounts, searchOrderDraftsServer, detectPoSubjectMismatch, type DraftTabCounts } from '@/lib/orders/draftInboxQuery';
+import {
+    normalizeCanonicalUnit,
+    hasExplicitLibraWord,
+    hasExplicitUnitWord,
+    hasExplicitKiloWord,
+    hasWholeWord,
+    isKgUnitName,
+    resolveCanonicalConversion,
+    computeLineWeightKg,
+    getSafeProductMinSaleKg,
+    extractPackWeightKgFromText
+} from '@/lib/orders/unitConversionEngine';
 
 const getChannelBadge = (source: string) => {
     switch (source) {
@@ -222,77 +234,55 @@ const getAccountingIdDisplay = (product: any) => {
 };
 
 const formatDetectedUnit = (qty: number, unit: string) => {
-    const u = (unit || '').toLowerCase();
-    let cleanUnit = u;
+    const norm = normalizeCanonicalUnit(unit);
+    let cleanUnit = norm.toLowerCase();
     let suffix = qty === 1 ? 'detectado' : 'detectados';
-    
-    if (u.includes('libra') || u.includes('lb')) {
+
+    if (norm === 'Lb') {
         cleanUnit = qty === 1 ? 'libra' : 'libras';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('unidad') || u.includes('und') || u.includes('ud') || u.includes('un')) {
+    } else if (norm === 'Unidad') {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('kilo') || u.includes('kg')) {
+    } else if (norm === 'Kg') {
         cleanUnit = qty === 1 ? 'kilo' : 'kilos';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('paquete') || u.includes('paq') || u.includes('pq')) {
+    } else if (norm === 'Paquete') {
         cleanUnit = qty === 1 ? 'paquete' : 'paquetes';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('litro') || u.includes('lt')) {
+    } else if (norm === 'Litro') {
         cleanUnit = qty === 1 ? 'litro' : 'litros';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('frasco')) {
+    } else if (norm === 'Frasco') {
         cleanUnit = qty === 1 ? 'frasco' : 'frascos';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else if (u.includes('bolsa')) {
+    } else if (norm === 'Bolsa') {
         cleanUnit = qty === 1 ? 'bolsa' : 'bolsas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('caja')) {
+    } else if (norm === 'Caja') {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (u.includes('atado')) {
+    } else if (norm === 'Canasta') {
+        cleanUnit = qty === 1 ? 'canasta' : 'canastas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Bandeja') {
+        cleanUnit = qty === 1 ? 'bandeja' : 'bandejas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Atado') {
         cleanUnit = qty === 1 ? 'atado' : 'atados';
         suffix = qty === 1 ? 'detectado' : 'detectados';
-    } else {
+    } else if (norm === 'g') {
+        cleanUnit = qty === 1 ? 'gramo' : 'gramos';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (!cleanUnit) {
         cleanUnit = qty === 1 ? 'unidad' : 'unidades';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     }
-    
+
     return `${qty} ${cleanUnit} ${suffix}`;
 };
 
-const getParsedWeight = (str: string): number | null => {
-    if (!str) return null;
-    const lower = str.toLowerCase();
-
-    // 1. Grams pattern
-    const grMatch = lower.match(/(?:x\s*|de\s*|\s+)?(\d+(?:[.,]\d+)?)\s*(?:gr|g|gramos|gramo)(?!\w)/);
-    if (grMatch) {
-        const val = parseFloat(grMatch[1].replace(',', '.'));
-        if (!isNaN(val) && val > 0) return parseFloat((val / 1000).toFixed(4));
-    }
-
-    // 2. Kilos pattern
-    const kgMatch = lower.match(/(?:x\s*|de\s*|\s+)?(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilogramos|kilogramo|kilos)(?!\w)/);
-    if (kgMatch) {
-        const val = parseFloat(kgMatch[1].replace(',', '.'));
-        if (!isNaN(val) && val > 0) return val;
-    }
-
-    // 3. Libras pattern
-    const lbMatch = lower.match(/(?:x\s*|de\s*|\s+)?(\d+(?:[.,]\d+)?)\s*(?:lb|lbs|libra|libras)(?!\w)/);
-    if (lbMatch) {
-        const val = parseFloat(lbMatch[1].replace(',', '.'));
-        if (!isNaN(val) && val > 0) return parseFloat((val * 0.5).toFixed(4));
-    }
-
-    // 4. Standalone 'libra'
-    if (lower.includes('libra') && !lower.includes('libras')) {
-        return 0.5;
-    }
-
-    return null;
-};
+const getParsedWeight = (str: string): number | null => extractPackWeightKgFromText(str);
 
 const evaluateMathExpression = (val: string | number | null | undefined): number => {
     if (val === undefined || val === null || val === '') return 0;
@@ -342,48 +332,9 @@ const formatWeightKg = (val: number | null | undefined): string => {
     });
 };
 
-const getProductMinSaleKg = (product: any): number | null => {
-    if (!product) return null;
-    const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
-    if (!isWeightProd) return null;
-
-    let minKg = product.weight_kg !== undefined && product.weight_kg !== null && Number(product.weight_kg) > 0
-        ? Number(product.weight_kg)
-        : 0.1;
-
-    const presentationWeights: number[] = [];
-
-    const nameWeight = getParsedWeight(product.name);
-    if (nameWeight !== null && nameWeight > 0) {
-        presentationWeights.push(nameWeight);
-    }
-
-    if (Array.isArray(product.options_config)) {
-        product.options_config.forEach((opt: any) => {
-            if (opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad') || opt.name.toLowerCase().includes('tamaño') || opt.name.toLowerCase().includes('gramaje'))) {
-                (opt.values || []).forEach((val: string) => {
-                    const pw = getParsedWeight(val);
-                    if (pw !== null && pw > 0) {
-                        presentationWeights.push(pw);
-                    }
-                });
-            }
-        });
-    }
-
-    if (presentationWeights.length > 0) {
-        const minVariantWeight = Math.min(...presentationWeights);
-        if (minVariantWeight > minKg) {
-            minKg = minVariantWeight;
-        }
-    }
-
-    return minKg;
-};
+const getProductMinSaleKg = (product: any): number | null => getSafeProductMinSaleKg(product);
 
 const detectUnitFromName = (originalName: string, product: any, productConversions: any[]) => {
-    const cleanName = originalName.toLowerCase();
-    
     // 1. Obtener todas las unidades posibles para este producto
     const possibleUnits: { unit: string; factor: number }[] = [];
     
@@ -421,19 +372,12 @@ const detectUnitFromName = (originalName: string, product: any, productConversio
                         const defaultUnit = product.web_unit || product.unit_of_measure;
                         if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
                             factor = parseFloat(product.web_conversion_factor) || 1;
+                        } else if (val.includes('|')) {
+                            const grams = parseFloat(val.split('|')[1]);
+                            if (!isNaN(grams) && grams > 0) factor = grams / 1000;
                         } else {
-                            // Intentar calcular factor dinámico usando parseWeight
-                            if (val.includes('|')) {
-                                const grams = parseFloat(val.split('|')[1]);
-                                if (!isNaN(grams) && grams > 0) factor = grams / 1000;
-                            } else {
-                                const clean = cleanUnit.toLowerCase();
-                                const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
-                                if (kgMatch) factor = parseFloat(kgMatch[1]);
-                                const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
-                                if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
-                                if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
-                            }
+                            const pw = extractPackWeightKgFromText(cleanUnit);
+                            if (pw !== null && pw > 0) factor = pw;
                         }
                         possibleUnits.push({ unit: cleanUnit, factor });
                     }
@@ -441,27 +385,26 @@ const detectUnitFromName = (originalName: string, product: any, productConversio
             }
         });
     }
-    
-    // 2. Buscar en originalName qué unidad coincide mejor
+
+    // Check explicit Kilos BEFORE Libra/substrings so "Albahaca Paquete X 1 Kilo" never resolves to 0.5
+    if (hasExplicitKiloWord(originalName)) {
+        const kgUnit = possibleUnits.find(u => isKgUnitName(u.unit));
+        if (kgUnit) return kgUnit;
+    }
+
+    // 2. Buscar en originalName por palabra completa (word boundary estricto, jamás substrings como a[lb]ahaca o seg[und]a)
     for (const u of possibleUnits) {
-        const unitLower = u.unit.toLowerCase();
-        if (unitLower.length > 2) {
-            if (cleanName.includes(unitLower)) {
-                return u;
-            }
+        if (u.unit.length > 2 && hasWholeWord(originalName, u.unit)) {
+            return u;
         }
     }
     
-    if (cleanName.includes('libra') || cleanName.includes('lb')) {
-        const lbUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('libra') || u.unit.toLowerCase().includes('lb'));
+    if (hasExplicitLibraWord(originalName)) {
+        const lbUnit = possibleUnits.find(u => hasExplicitLibraWord(u.unit) || normalizeCanonicalUnit(u.unit) === 'Lb');
         if (lbUnit) return lbUnit;
     }
-    if (cleanName.includes('kilo') || cleanName.includes('kg')) {
-        const kgUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('kilo') || u.unit.toLowerCase().includes('kg'));
-        if (kgUnit) return kgUnit;
-    }
-    if (cleanName.includes('unidad') || cleanName.includes('ud') || cleanName.includes('und')) {
-        const undUnit = possibleUnits.find(u => u.unit.toLowerCase().includes('unidad') || u.unit.toLowerCase().includes('und') || u.unit.toLowerCase().includes('ud'));
+    if (hasExplicitUnitWord(originalName)) {
+        const undUnit = possibleUnits.find(u => normalizeCanonicalUnit(u.unit) === 'Unidad');
         if (undUnit) return undUnit;
     }
     
@@ -1385,6 +1328,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     product: any;
     rowIndex: number;
     duplicateIndex: number;
+    rowId?: string;
+    duplicateId?: string;
   } | null>(null);
   const [showFloatingEmail, setShowFloatingEmail] = useState(true);
   const [activeTab, setActiveTab] = useState<'email' | 'attachment'>('email');
@@ -1477,6 +1422,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   // Product Customization Modal State (Image 1 replica)
   const [customizingModalItem, setCustomizingModalItem] = useState<{
     rowIndex: number;
+    rowId?: string;
     product: any;
     originalText: string;
     originalQuantity: number;
@@ -1659,6 +1605,29 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     };
   }, [selectedDraft, activeTab, selectedAttachmentIndex]);
 
+  const serializeDraftItemForStorage = (itm: any) => ({
+    id: itm.id || undefined,
+    name: itm.name || itm.originalName,
+    originalName: itm.originalName,
+    quantity: itm.quantity,
+    originalQuantity: itm.originalQuantity !== undefined ? itm.originalQuantity : itm.quantity,
+    unit: itm.unit,
+    originalUnit: itm.originalUnit || itm.unit,
+    rawDocumentUnit: itm.rawDocumentUnit !== undefined ? itm.rawDocumentUnit : null,
+    conversion_factor: 1,
+    _conversionApplied: true,
+    isManuallyEditedQty: Boolean(itm.isManuallyEditedQty),
+    matched_product_id: itm.matched_product_id,
+    observations: itm.observations,
+    selected_options: itm.selected_options,
+    variant_label: itm.variant_label,
+    isDeleted: itm.isDeleted,
+    deliveryDate: itm.deliveryDate || null,
+    source_attachment_name: itm.source_attachment_name,
+    purchase_order: itm.purchase_order,
+    attachment_index: itm.attachment_index
+  });
+
   const handleSelectAttachment = (idx: number) => {
     if (!selectedDraft) return;
     
@@ -1671,16 +1640,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           ...updatedAttachments[selectedAttachmentIndex],
           deliveryDate: deliveryDate,
           deliverySlot: editableDeliverySlot,
-          items: editableItems.map(itm => ({
-            name: itm.name || itm.originalName,
-            originalName: itm.originalName,
-            quantity: itm.quantity,
-            unit: itm.unit,
-            matched_product_id: itm.matched_product_id,
-            observations: itm.observations,
-            selected_options: itm.selected_options,
-            isDeleted: itm.isDeleted
-          }))
+          items: editableItems.map(serializeDraftItemForStorage)
         };
       }
       
@@ -1763,10 +1723,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         nit: editableClientNit || metadata.nit,
         clientType: editableClientType || metadata.clientType,
         items: groupItems.map(itm => ({
-          originalName: itm.originalName || itm.name,
-          quantity: itm.quantity,
-          unit: itm.unit,
-          observations: itm.observations,
+          ...serializeDraftItemForStorage(itm),
           deliveryDate: groupDate
         }))
       };
@@ -1788,6 +1745,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       ...selectedDraft,
       extracted_items: updatedExtractedItems
     };
+    forceRehydrateRef.current = true;
     setSelectedDraft(localDraftUpdated);
     setDrafts(prev => prev.map(d => d.id === selectedDraft.id ? localDraftUpdated : d));
     
@@ -1851,6 +1809,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   }, [cutoffSettings]);
   const getMinDeliveryDate = () => minDeliveryDate;
   const lastDraftIdRef = useRef<string | null>(null);
+  const lastHydratedScopeKeyRef = useRef<string | null>(null);
+  const lastHydratedHadProductsRef = useRef<boolean>(false);
+  const forceRehydrateRef = useRef<boolean>(false);
+  const skipNextSkuBlurRef = useRef<number | null>(null);
+  const skipNextQtyBlurRef = useRef<string | number | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
@@ -2133,6 +2096,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [focusedProductIndex, setFocusedProductIndex] = useState<number>(-1);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<any | null>(null);
   const [selectedRowForVariant, setSelectedRowForVariant] = useState<number | null>(null);
+  const [selectedRowIdForVariant, setSelectedRowIdForVariant] = useState<string | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [variantQuantity, setVariantQuantity] = useState<string>('1');
   const [selectedUnit, setSelectedUnit] = useState<string>('Kg');
@@ -2300,10 +2264,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   const openVariantModalForItem = (product: any, rowIndex: number) => {
     const freshProduct = products.find(p => p.id === product.id) || product;
+    const item = editableItems[rowIndex] || {};
     setSelectedProductForVariant(freshProduct);
     setSelectedRowForVariant(rowIndex);
+    setSelectedRowIdForVariant(item.id || null);
     
-    const item = editableItems[rowIndex] || {};
     const opts = { ...(item.selected_options || {}) };
     const validOptionNames = new Set((freshProduct.options_config || []).map((o: any) => o.name.toLowerCase()));
     
@@ -2321,10 +2286,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
     );
     if (presOpt) {
-      const isKg = (freshProduct.unit_of_measure || 'Kg').toLowerCase() === 'kg';
+      const isKg = isKgUnitName(freshProduct.unit_of_measure || 'Kg');
       const kgVal = (presOpt.values || []).find((v: string) => {
         const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-        return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+        return isKgUnitName(clean);
       }) || (isKg ? 'Kg' : (presOpt.values?.[0] || ''));
 
       const hasClientPref = exc?.preferred_options && (
@@ -2355,6 +2320,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     const idx = selectedRowForVariant;
     setSelectedProductForVariant(null);
     setSelectedRowForVariant(null);
+    setSelectedRowIdForVariant(null);
     if (idx !== null) {
       setTimeout(() => {
         const currentInput = productInputRefs.current[idx];
@@ -2370,47 +2336,60 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     if (selectedRowForVariant === null || !selectedProductForVariant) return;
     
     const idx = selectedRowForVariant;
-    const newEdits = [...editableItems];
+    const rowId = selectedRowIdForVariant;
+    const targetProduct = selectedProductForVariant;
     const qty = parseQuantity(variantQuantity) || 0;
     
     const dual = buildDualUnitMetadata({
       quantity: qty,
       unit: selectedUnit,
       selectedOptions,
-      product: selectedProductForVariant
+      product: targetProduct
     });
 
-    if (dual) {
-      newEdits[idx].quantity = dual.billingQuantity;
-      newEdits[idx].quantity_text = undefined;
-      newEdits[idx].unit = dual.billingUnit;
-      newEdits[idx].conversion_factor = dual.conversionFactor;
-      newEdits[idx].selected_options = {
-        ...selectedOptions,
-        _original_qty: dual.originalQty,
-        _original_unit: dual.originalUnit,
-        _unit_weight_gr: dual.unitWeightGr,
-        _conversion_factor: dual.conversionFactor,
-        _physical_instruction: dual.physicalInstruction
-      };
-      newEdits[idx].isConfirmed = true;
-    } else {
-      newEdits[idx].quantity = qty;
-      newEdits[idx].quantity_text = undefined;
-      newEdits[idx].unit = selectedUnit;
-      newEdits[idx].conversion_factor = selectedConversionFactor;
-      newEdits[idx].selected_options = selectedOptions;
-      newEdits[idx].isConfirmed = true;
-      
-      const origQty = parseFloat(newEdits[idx].originalQuantity || newEdits[idx].quantity || 0) || 1;
-      if (newEdits[idx].originalQuantity) {
-        newEdits[idx].conversion_factor = parseFloat((qty / origQty).toFixed(3));
+    setEditableItems(prev => prev.map((it, i) => {
+      const isTarget = rowId ? it.id === rowId : i === idx;
+      if (!isTarget) return it;
+      if (dual) {
+        return {
+          ...it,
+          quantity: dual.billingQuantity,
+          quantity_text: undefined,
+          originalQuantity: dual.originalQty,
+          originalUnit: dual.originalUnit,
+          unit: dual.billingUnit,
+          conversion_factor: 1,
+          _conversionApplied: true,
+          isManuallyEditedQty: true,
+          selected_options: {
+            ...selectedOptions,
+            _original_qty: dual.originalQty,
+            _original_unit: dual.originalUnit,
+            _unit_weight_gr: dual.unitWeightGr,
+            _conversion_factor: dual.conversionFactor,
+            _physical_instruction: dual.physicalInstruction
+          },
+          isConfirmed: true
+        };
       }
-    }
-    
-    setEditableItems(newEdits);
+      const canonicalBillingUnit = targetProduct.unit_of_measure || selectedUnit || 'Kg';
+      return {
+        ...it,
+        quantity: qty,
+        quantity_text: undefined,
+        originalQuantity: qty,
+        originalUnit: canonicalBillingUnit,
+        unit: canonicalBillingUnit,
+        conversion_factor: 1,
+        _conversionApplied: true,
+        isManuallyEditedQty: true,
+        selected_options: selectedOptions,
+        isConfirmed: true
+      };
+    }));
     setSelectedProductForVariant(null);
     setSelectedRowForVariant(null);
+    setSelectedRowIdForVariant(null);
 
     // Auto-focus next row's product input
     setTimeout(() => {
@@ -2425,102 +2404,92 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }, 80);
   };
 
-  const selectProduct = (product: any, rowIndex: number) => {
-    // Check if product is already matched in another row
+  const selectProduct = (product: any, rowIndex: number, rowId?: string): any => {
+    const targetIdx = rowId ? editableItems.findIndex(item => item.id === rowId) : rowIndex;
+    const resolvedRowIdx = targetIdx >= 0 ? targetIdx : rowIndex;
+    // Check if product is already matched in another row (strictly excluding by id first)
     const duplicateIndex = editableItems.findIndex((item, idx) =>
-      idx !== rowIndex && !item.isDeleted && !item.isMetadata && item.matched_product_id === product.id
+      (rowId ? item.id !== rowId : idx !== resolvedRowIdx) &&
+      !item.isDeleted &&
+      !item.isMetadata &&
+      item.matched_product_id === product.id
     );
 
     if (duplicateIndex >= 0) {
       setDuplicateMatchConfirm({
         isOpen: true,
         product,
-        rowIndex,
-        duplicateIndex
+        rowIndex: resolvedRowIdx,
+        duplicateIndex,
+        rowId: rowId || editableItems[resolvedRowIdx]?.id,
+        duplicateId: editableItems[duplicateIndex]?.id
       });
-      return;
+      return null;
     }
 
-    executeSelectProduct(product, rowIndex);
+    return executeSelectProduct(product, resolvedRowIdx, rowId || editableItems[resolvedRowIdx]?.id);
   };
 
-  const executeSelectProduct = (product: any, rowIndex: number) => {
+  const executeSelectProduct = (product: any, rowIndex: number, rowId?: string): any => {
     const newEdits = [...editableItems];
-    newEdits[rowIndex].matched_product_id = product.id;
-    newEdits[rowIndex].name = product.name;
-    newEdits[rowIndex].searchQuery = `${product.name} (${getAccountingIdDisplay(product)})`;
-    newEdits[rowIndex].skuQuery = product.sku || '';
-    newEdits[rowIndex].isConfirmed = true;
-    
-    const currentOriginalUnit = newEdits[rowIndex].originalUnit || newEdits[rowIndex].unit || 'Kg';
-    let conversionFactor = 1;
-    let targetUnit = product.unit_of_measure || 'Kg';
-    let foundDbConversion = false;
+    const targetIdx = rowId ? newEdits.findIndex(r => r.id === rowId) : rowIndex;
+    const resolvedIdx = targetIdx >= 0 ? targetIdx : rowIndex;
+    const currentRow = newEdits[resolvedIdx];
+    if (!currentRow) return null;
 
-    if (conversions && conversions.length > 0) {
-      const dbConv = conversions.find(c => 
-        c.product_id === product.id &&
-        normalizeUnitName(c.from_unit) === normalizeUnitName(currentOriginalUnit) &&
-        normalizeUnitName(c.to_unit) === normalizeUnitName(targetUnit) &&
-        normalizeUnitName(c.from_unit) !== normalizeUnitName(c.to_unit)
-      );
-      if (dbConv) {
-        conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-        targetUnit = dbConv.to_unit || product.unit_of_measure;
-        foundDbConversion = true;
-      }
+    // Idempotencia: si el producto NO cambió y la fila ya pasó por conversión canónica,
+    // no recalcular ni multiplicar nuevamente la cantidad.
+    if (currentRow.matched_product_id === product.id && currentRow._conversionApplied) {
+      newEdits[resolvedIdx] = {
+        ...currentRow,
+        name: product.name,
+        searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
+        skuQuery: product.sku || '',
+        conversion_factor: 1,
+        isConfirmed: true
+      };
+      setEditableItems(newEdits);
+      setActiveSearchRowIndex(null);
+      return newEdits[resolvedIdx];
     }
 
-    if (!foundDbConversion) {
-      const u = (product.unit_of_measure || '').toLowerCase().trim();
-      let normalizedUnit = 'Kg';
-      if (u === 'libra' || u === 'libras' || u === 'lb') normalizedUnit = 'Lb';
-      else if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') normalizedUnit = 'Litro';
-      else if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') normalizedUnit = 'Unidad';
-      else if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) normalizedUnit = 'Paquete 500 gramos';
-      else if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) normalizedUnit = 'Paquete 250 gramos';
-      else if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos') {
-        normalizedUnit = getSmartFallbackUnit(product.name, 'Kg');
-      }
-      else if (product.unit_of_measure) {
-        normalizedUnit = getSmartFallbackUnit(product.name, product.unit_of_measure);
-      }
-      targetUnit = normalizedUnit;
+    newEdits[resolvedIdx].matched_product_id = product.id;
+    newEdits[resolvedIdx].name = product.name;
+    newEdits[resolvedIdx].searchQuery = `${product.name} (${getAccountingIdDisplay(product)})`;
+    newEdits[resolvedIdx].skuQuery = product.sku || '';
+    newEdits[resolvedIdx].isConfirmed = true;
 
-      const uNorm = currentOriginalUnit.toLowerCase().trim();
-      const isKg = uNorm === 'kg' || uNorm === 'kilo' || uNorm === 'kilos' || uNorm === 'kilogramo' || uNorm === 'kilogramos';
-      const isLibra = uNorm === 'lb' || uNorm === 'libra' || uNorm === 'libras';
-      const isGram = uNorm === 'g' || uNorm === 'gr' || uNorm === 'gramo' || uNorm === 'gramos';
-      const isUnits = uNorm === 'unidad' || uNorm === 'unidades' || uNorm === 'und' || uNorm === 'unds' || uNorm === 'ud' || uNorm === 'uds';
+    const prodConvs = (conversions || []).filter(c => c.product_id === product.id);
+    const rawNameForConv = newEdits[resolvedIdx].originalName || product.name || '';
+    const rawDocUnitForConv =
+      newEdits[resolvedIdx].rawDocumentUnit !== undefined
+        ? newEdits[resolvedIdx].rawDocumentUnit
+        : (newEdits[resolvedIdx].originalUnit || newEdits[resolvedIdx].unit || null);
+    const qtySourceForConv = newEdits[resolvedIdx].isManuallyEditedQty
+      ? Number(newEdits[resolvedIdx].quantity || 0)
+      : Number(newEdits[resolvedIdx].originalQuantity ?? newEdits[resolvedIdx].quantity ?? 0);
 
-      const packMatch = product?.name ? product.name.match(/\bx\s*(\d+(?:[.,]\d+)?)\s*(?:und|unid|unidades|paq|pqt|gr|g|kg)?\b/i) : null;
-      const packSize = packMatch ? parseFloat(packMatch[1].replace(',', '.')) : null;
+    const conv = resolveCanonicalConversion({
+      rawName: rawNameForConv,
+      rawDocumentUnit: rawDocUnitForConv,
+      currentUnit: newEdits[resolvedIdx].unit,
+      observations: newEdits[resolvedIdx].initial_observations ?? newEdits[resolvedIdx].originalObservations ?? newEdits[resolvedIdx].observations,
+      quantity: qtySourceForConv,
+      product,
+      productConversions: prodConvs,
+      isManuallyEditedQty: Boolean(newEdits[resolvedIdx].isManuallyEditedQty)
+    });
 
-      const isPack250 = uNorm.includes('250 g') || uNorm.includes('250g') || uNorm.includes('250 gramos');
-      const isPack500 = uNorm.includes('500 g') || uNorm.includes('500g') || uNorm.includes('500 gramos');
-
-      if (isLibra) {
-        conversionFactor = 0.5;
-      } else if (isPack250 && targetUnit === 'Kg') {
-        conversionFactor = 0.25;
-      } else if (isPack500 && targetUnit === 'Kg') {
-        conversionFactor = 0.5;
-      } else if (isGram && targetUnit === 'Kg') {
-        conversionFactor = 0.001;
-      } else if (isUnits && packSize && packSize > 1) {
-        conversionFactor = parseFloat((1 / packSize).toFixed(5));
-      } else {
-        conversionFactor = 1;
-      }
-    }
-
-    newEdits[rowIndex].conversion_factor = conversionFactor;
-    newEdits[rowIndex].unit = targetUnit;
-    const origQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || 0);
-    newEdits[rowIndex].quantity = parseFloat((origQty * conversionFactor).toFixed(3));
+    newEdits[resolvedIdx].rawDocumentUnit = conv.rawDocumentUnit;
+    newEdits[resolvedIdx].originalQuantity = conv.originalQty;
+    newEdits[resolvedIdx].originalUnit = conv.originalUnit;
+    newEdits[resolvedIdx].conversion_factor = 1;
+    newEdits[resolvedIdx].unit = conv.billingUnit;
+    newEdits[resolvedIdx].quantity = conv.billingQty;
+    newEdits[resolvedIdx]._conversionApplied = true;
     
     const autoSelectedOptions: Record<string, string> = {};
-    const rawOriginalName = newEdits[rowIndex].originalName || '';
+    const rawOriginalName = newEdits[resolvedIdx].originalName || '';
     let extraDescription = '';
     if (product && product.name) {
       const origClean = rawOriginalName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "").trim();
@@ -2530,9 +2499,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
       extraDescription = extraWords.join(' ');
     }
-    const baseObs = newEdits[rowIndex].initial_observations !== undefined 
-      ? newEdits[rowIndex].initial_observations 
-      : (newEdits[rowIndex].originalObservations || '');
+    const baseObs = newEdits[resolvedIdx].initial_observations !== undefined 
+      ? newEdits[resolvedIdx].initial_observations 
+      : (newEdits[resolvedIdx].originalObservations || '');
     let finalObservations = [baseObs, extraDescription].filter(Boolean).join(' ').trim();
     const distinctWords = Array.from(new Set(finalObservations.split(/\s+/).filter(Boolean)));
     finalObservations = distinctWords.join(' ');
@@ -2576,8 +2545,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       });
     }
     
-    newEdits[rowIndex].selected_options = autoSelectedOptions;
-    newEdits[rowIndex].observations = finalObservations;
+    newEdits[resolvedIdx].selected_options = autoSelectedOptions;
+    newEdits[resolvedIdx].observations = finalObservations;
     
     // Guardar preferencia inmediata para este cliente y término
     if (typeof window !== 'undefined' && product?.id) {
@@ -2597,34 +2566,85 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     setEditableItems(newEdits);
     setActiveSearchRowIndex(null);
+    return newEdits[resolvedIdx];
   };
 
   const handleMergeDuplicateMatch = () => {
     if (!duplicateMatchConfirm) return;
-    const { product, rowIndex, duplicateIndex } = duplicateMatchConfirm;
+    const { product, rowIndex, duplicateIndex, rowId, duplicateId } = duplicateMatchConfirm;
     
-    const newEdits = [...editableItems];
-    
-    const currentOriginalQty = parseFloat(newEdits[rowIndex].originalQuantity || newEdits[rowIndex].quantity || '0');
-    const existingOriginalQty = parseFloat(newEdits[duplicateIndex].originalQuantity || newEdits[duplicateIndex].quantity || '0');
-    const sumOriginalQty = parseFloat((existingOriginalQty + currentOriginalQty).toFixed(3));
-    
-    const factor = newEdits[duplicateIndex].conversion_factor || 1;
-    newEdits[duplicateIndex].originalQuantity = sumOriginalQty;
-    newEdits[duplicateIndex].quantity = parseFloat((sumOriginalQty * factor).toFixed(3));
-    newEdits[duplicateIndex].isConfirmed = true;
-    
-    newEdits[rowIndex].isDeleted = true;
-    newEdits[rowIndex].matched_product_id = null;
-    
-    if (newEdits[rowIndex].observations) {
-      newEdits[duplicateIndex].observations = [
-        newEdits[duplicateIndex].observations,
-        newEdits[rowIndex].observations
-      ].filter(Boolean).join(' | ');
-    }
-    
-    setEditableItems(newEdits);
+    setEditableItems(prev => {
+      const newEdits = [...prev];
+      const currIdx = rowId ? newEdits.findIndex(r => r.id === rowId) : rowIndex;
+      const dupIdx = duplicateId ? newEdits.findIndex(r => r.id === duplicateId) : duplicateIndex;
+      if (currIdx < 0 || dupIdx < 0 || !newEdits[currIdx] || !newEdits[dupIdx]) return prev;
+
+      const resolvedProduct = product || products.find(p => p.id === newEdits[dupIdx].matched_product_id);
+      const prodConvs = resolvedProduct ? (conversions || []).filter(c => c.product_id === resolvedProduct.id) : [];
+
+      let currentQty = parseFloat(String(newEdits[currIdx].quantity ?? newEdits[currIdx].originalQuantity ?? 0).replace(',', '.')) || 0;
+      if (resolvedProduct && (!newEdits[currIdx]._conversionApplied || newEdits[currIdx].matched_product_id !== resolvedProduct.id) && !newEdits[currIdx].isManuallyEditedQty) {
+        const rawDocUnitCurr = newEdits[currIdx].rawDocumentUnit !== undefined
+          ? newEdits[currIdx].rawDocumentUnit
+          : (newEdits[currIdx].originalUnit || newEdits[currIdx].unit || null);
+        const qtySrcCurr = Number(newEdits[currIdx].originalQuantity ?? newEdits[currIdx].quantity ?? 0);
+        currentQty = resolveCanonicalConversion({
+          rawName: newEdits[currIdx].originalName || resolvedProduct.name || '',
+          rawDocumentUnit: rawDocUnitCurr,
+          currentUnit: newEdits[currIdx].unit,
+          observations: newEdits[currIdx].initial_observations ?? newEdits[currIdx].originalObservations ?? newEdits[currIdx].observations,
+          quantity: qtySrcCurr,
+          product: resolvedProduct,
+          productConversions: prodConvs,
+          alreadyNormalized: false,
+          isManuallyEditedQty: false
+        }).billingQty;
+      }
+
+      let existingQty = parseFloat(String(newEdits[dupIdx].quantity ?? newEdits[dupIdx].originalQuantity ?? 0).replace(',', '.')) || 0;
+      if (resolvedProduct && !newEdits[dupIdx]._conversionApplied && !newEdits[dupIdx].isManuallyEditedQty) {
+        const rawDocUnitDup = newEdits[dupIdx].rawDocumentUnit !== undefined
+          ? newEdits[dupIdx].rawDocumentUnit
+          : (newEdits[dupIdx].originalUnit || newEdits[dupIdx].unit || null);
+        const qtySrcDup = Number(newEdits[dupIdx].originalQuantity ?? newEdits[dupIdx].quantity ?? 0);
+        existingQty = resolveCanonicalConversion({
+          rawName: newEdits[dupIdx].originalName || resolvedProduct.name || '',
+          rawDocumentUnit: rawDocUnitDup,
+          currentUnit: newEdits[dupIdx].unit,
+          observations: newEdits[dupIdx].initial_observations ?? newEdits[dupIdx].originalObservations ?? newEdits[dupIdx].observations,
+          quantity: qtySrcDup,
+          product: resolvedProduct,
+          productConversions: prodConvs,
+          alreadyNormalized: false,
+          isManuallyEditedQty: false
+        }).billingQty;
+      }
+
+      const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+      const billingUnit = resolvedProduct?.unit_of_measure || newEdits[dupIdx].unit || 'Kg';
+
+      newEdits[dupIdx] = {
+        ...newEdits[dupIdx],
+        quantity: sumQty,
+        originalQuantity: sumQty,
+        unit: billingUnit,
+        originalUnit: billingUnit,
+        conversion_factor: 1,
+        _conversionApplied: true,
+        isManuallyEditedQty: true,
+        isConfirmed: true,
+        observations: newEdits[currIdx].observations
+          ? [newEdits[dupIdx].observations, newEdits[currIdx].observations].filter(Boolean).join(' | ')
+          : newEdits[dupIdx].observations
+      };
+
+      newEdits[currIdx] = {
+        ...newEdits[currIdx],
+        isDeleted: true,
+        matched_product_id: null
+      };
+      return newEdits;
+    });
     setDuplicateMatchConfirm(null);
     setActiveSearchRowIndex(null);
     showToast('Cantidad acumulada en la línea existente y fila duplicada descartada.', 'success');
@@ -2632,8 +2652,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   const handleKeepBothMatches = () => {
     if (!duplicateMatchConfirm) return;
-    const { product, rowIndex } = duplicateMatchConfirm;
-    executeSelectProduct(product, rowIndex);
+    const { product, rowIndex, rowId } = duplicateMatchConfirm;
+    executeSelectProduct(product, rowIndex, rowId);
     setDuplicateMatchConfirm(null);
   };
 
@@ -2668,13 +2688,17 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
         if (map.has(key)) {
           const existing = { ...map.get(key) };
-          const currentOrigQty = parseFloat(item.originalQuantity || item.quantity || '0');
-          const existingOrigQty = parseFloat(existing.originalQuantity || existing.quantity || '0');
-          const sumOrigQty = parseFloat((existingOrigQty + currentOrigQty).toFixed(3));
+          const currentQty = parseFloat(String(item.quantity ?? item.originalQuantity ?? 0).replace(',', '.')) || 0;
+          const existingQty = parseFloat(String(existing.quantity ?? existing.originalQuantity ?? 0).replace(',', '.')) || 0;
+          const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+          const billingUnit = existing.unit || item.unit || 'Kg';
 
-          const factor = existing.conversion_factor || item.conversion_factor || 1;
-          existing.originalQuantity = sumOrigQty;
-          existing.quantity = parseFloat((sumOrigQty * factor).toFixed(3));
+          existing.quantity = sumQty;
+          existing.originalQuantity = sumQty;
+          existing.unit = billingUnit;
+          existing.originalUnit = billingUnit;
+          existing.conversion_factor = 1;
+          existing._conversionApplied = true;
           existing.isConfirmed = true;
 
           if (item.observations) {
@@ -2702,6 +2726,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     setEditableItems(prev => [
       ...prev,
       {
+        id: crypto.randomUUID(),
         originalName: '',
         name: '',
         quantity: 1,
@@ -2709,6 +2734,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         searchQuery: '',
         skuQuery: '',
         unit: 'Kg',
+        conversion_factor: 1,
+        _conversionApplied: false,
         observations: '',
         isConfirmed: false
       }
@@ -2777,7 +2804,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     const hasValidQty = isQty && r.hasQty && r.qtyVal;
                     return `
                       <td class="${hasValidQty ? 'qty-cell' : ''} ${isName && r.hasQty ? 'name-cell' : ''}">
-                        ${hasValidQty ? `<span class="badge-qty">${r.qtyVal} ${r.unitVal}</span>` : c}
+                        ${hasValidQty ? `<span class="badge-qty">${[r.qtyVal, r.unitVal].filter(Boolean).join(' ')}</span>` : c}
                       </td>
                     `;
                   }).join('')}
@@ -2920,6 +2947,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
       
       if (Array.isArray(data.items) && data.items.length > 0) {
+        forceRehydrateRef.current = true;
         setEditableItems(data.items);
         setSelectedDraft(prev => {
           if (!prev) return null;
@@ -3347,24 +3375,31 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     }
   };
 
-  const openCustomizingModal = (product: any, rowIndex: number) => {
+  const openCustomizingModal = (product: any, rowIndex: number, itemOverride?: any) => {
     if (!product) return;
     const freshProduct = products.find(p => p.id === product.id) || product;
-    const item = editableItems[rowIndex] || {};
+    const item = itemOverride || editableItems[rowIndex] || {};
+    const defaultUnit = freshProduct.unit_of_measure || 'Kg';
+    const isKg = isKgUnitName(defaultUnit);
+    const nominalBaseWeight = !isKg && freshProduct.weight_kg && Number(freshProduct.weight_kg) > 0 ? Number(freshProduct.weight_kg) : 1;
+    const opts = { ...(item.selected_options || {}) };
+
+    // Determinar si el ítem conserva instrucción discreta explícita (ej. "10 Unidades 700 gr = 7 Kg")
+    const hasExplicitDualCount = Boolean(
+      opts._original_qty &&
+      opts._conversion_factor &&
+      Number(opts._conversion_factor) !== 1 &&
+      !item.isManuallyEditedQty
+    );
+
+    const currQtyNum = Number(hasExplicitDualCount ? opts._original_qty : item.quantity);
     const origQtyNum = Number(item.originalQuantity);
-    const currQtyNum = Number(item.quantity);
     let initialQtyStr = '1';
     if (!isNaN(currQtyNum) && currQtyNum > 0) {
       initialQtyStr = Number(currQtyNum.toFixed(3)).toString().replace('.', ',');
     } else if (!isNaN(origQtyNum) && origQtyNum > 0) {
       initialQtyStr = Number(origQtyNum.toFixed(3)).toString().replace('.', ',');
     }
-    const defaultUnit = freshProduct.unit_of_measure || 'Kg';
-    const isKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
-    const nominalBaseWeight = !isKg && freshProduct.weight_kg && Number(freshProduct.weight_kg) > 0 ? Number(freshProduct.weight_kg) : 1;
-    let unit = (item.conversion_factor && item.conversion_factor !== 1) ? (item.originalUnit || item.unit || defaultUnit) : defaultUnit;
-    let factor = item.conversion_factor || nominalBaseWeight;
-    const opts = { ...(item.selected_options || {}) };
 
     // Purge obsolete options not in freshProduct.options_config (preserving internal metadata and nota_alistamiento)
     const validOptionNames = new Set((freshProduct.options_config || []).map((o: any) => o.name.toLowerCase()));
@@ -3376,7 +3411,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     // Pre-populate structured preferred options and punctual picking_note if exist
     const exc = clientExceptions.find(e => e.product_id === freshProduct.id);
-    if (Object.keys(opts).filter(k => k !== 'nota_alistamiento').length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
+    if (Object.keys(opts).filter(k => !k.startsWith('_') && k !== 'nota_alistamiento').length === 0 && exc?.preferred_options && typeof exc.preferred_options === 'object') {
       Object.entries(exc.preferred_options).forEach(([k, v]) => {
         if (v && validOptionNames.has(k.toLowerCase())) opts[k] = String(v);
       });
@@ -3384,11 +3419,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     if (opts.nota_alistamiento === undefined && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
       opts.nota_alistamiento = exc.picking_note.trim();
     }
-    if (opts.nota_alistamiento === undefined && exc?.picking_note && typeof exc.picking_note === 'string' && exc.picking_note.trim()) {
-      opts.nota_alistamiento = exc.picking_note.trim();
-    }
 
-    // Pre-populate default presentation option: ALWAYS defaults to 'Kg' (unless structured preferred_options exists)
+    // Siempre alinear Presentación con la unidad actual de `initialQtyStr`:
+    // cuando la fila ya viene convertida a Kg y no tiene _original_qty discreto,
+    // evitar preseleccionar valores web/pesados ("Libra 500g|500", "Unidad 700 gr") que causarían doble multiplicación al dar Enter.
+    const itemIsAlreadyBillingUnit = Boolean(item._conversionApplied || isKgUnitName(item.unit)) && !hasExplicitDualCount;
+    let unit = defaultUnit;
+    let factor = isKg ? 1 : nominalBaseWeight;
+
     const presOpt = (freshProduct.options_config || []).find((opt: any) =>
       opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
     );
@@ -3398,36 +3436,42 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
       }) || (isKg ? 'Kg' : (presOpt.values?.[0] || ''));
 
-      const hasClientPref = exc?.preferred_options && (
-        exc.preferred_options[presOpt.name] || 
-        exc.preferred_options['Presentación'] || 
-        exc.preferred_options['Presentacion']
-      );
+      const existingPres = String(opts[presOpt.name] || '').toLowerCase();
+      const isFilteredWebPres = existingPres.includes('libra') || existingPres.includes('pound') || existingPres.includes('unidad web');
 
-      if (!opts[presOpt.name] || opts[presOpt.name] === '' || (!hasClientPref && !item.isConfirmed)) {
-        opts[presOpt.name] = hasClientPref ? (exc.preferred_options[presOpt.name] || exc.preferred_options['Presentación'] || exc.preferred_options['Presentacion']) : kgVal;
+      if (isKg && (itemIsAlreadyBillingUnit || isFilteredWebPres || !opts[presOpt.name])) {
+        opts[presOpt.name] = kgVal;
       }
     }
 
-    // Determine initial unit and factor from presentation options if selected or default
-    (freshProduct.options_config || []).forEach((opt: any) => {
-      if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
-        const optVal = opts[opt.name];
-        if (optVal) {
-          const clean = (optVal.includes('|') ? optVal.split('|')[0] : optVal).trim();
-          const cleanLower = clean.toLowerCase();
-          if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === 'kilogramo') {
-            unit = defaultUnit;
-            factor = 1;
-          } else if (cleanLower === defaultUnit.toLowerCase()) {
-            unit = defaultUnit;
-            factor = nominalBaseWeight;
-          } else {
-            unit = clean;
-            const pw = getParsedWeight(optVal);
-            if (pw !== null) factor = pw;
+    if (!itemIsAlreadyBillingUnit || hasExplicitDualCount) {
+      (freshProduct.options_config || []).forEach((opt: any) => {
+        if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
+          const optVal = opts[opt.name];
+          if (optVal) {
+            const clean = (optVal.includes('|') ? optVal.split('|')[0] : optVal).trim();
+            const cleanLower = clean.toLowerCase();
+            if (cleanLower === 'kg' || cleanLower === 'kilo' || cleanLower === 'kilogramo') {
+              unit = defaultUnit;
+              factor = 1;
+            } else if (cleanLower === defaultUnit.toLowerCase()) {
+              unit = defaultUnit;
+              factor = nominalBaseWeight;
+            } else {
+              unit = clean;
+              const pw = getParsedWeight(optVal);
+              if (pw !== null) factor = pw;
+            }
           }
         }
+      });
+    }
+
+    // SDD v1.9.177 / v1.9.305 (Escenario 324): 'Maduro'/'Madura' es la maduración implícita por defecto
+    Object.keys(opts).forEach(k => {
+      const cleanK = (String(opts[k]).includes('|') ? String(opts[k]).split('|')[0] : String(opts[k])).toLowerCase().trim();
+      if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
+        delete opts[k];
       }
     });
 
@@ -3438,10 +3482,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
     setCustomizingModalItem({
       rowIndex,
+      rowId: item.id,
       product: freshProduct,
       originalText: item.originalName || item.name || freshProduct.name,
       originalQuantity: item.originalQuantity !== undefined && item.originalQuantity !== null ? item.originalQuantity : (item.quantity || 0),
-      originalUnit: item.originalUnit || item.unit || 'Kg',
+      originalUnit: unit,
       options: opts,
       quantity: initialQtyStr,
       unit,
@@ -3480,7 +3525,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   const saveCustomizingModal = () => {
     if (!customizingModalItem) return;
-    const { rowIndex, product, options, quantity, unit, factor } = customizingModalItem;
+    const { rowIndex, rowId, product, options, quantity, unit, factor } = customizingModalItem;
     const evaluatedQty = evaluateMathExpression(quantity);
     const parsedQty = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(quantity).replace(',', '.')) || 1);
     const cleanQty = parseFloat(parsedQty.toFixed(3));
@@ -3505,51 +3550,71 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       product: product
     });
 
-    const finalOptions = dual ? {
-      ...options,
-      _original_qty: dual.originalQty,
-      _original_unit: dual.originalUnit,
-      _unit_weight_gr: dual.unitWeightGr,
-      _conversion_factor: dual.conversionFactor,
-      _physical_instruction: dual.physicalInstruction
-    } : options;
+    const billingUnit = product.unit_of_measure || 'Kg';
+    const isBillingKg = isKgUnitName(billingUnit);
+    const calculatedBillingQty = isBillingKg ? parseFloat((cleanQty * factor).toFixed(3)) : cleanQty;
 
-    const finalBillingQty = dual ? dual.billingQuantity : cleanQty;
-    const finalBillingUnit = dual ? dual.billingUnit : unit;
-    const finalFactor = dual ? dual.conversionFactor : factor;
+    const finalOptions: Record<string, any> = dual
+      ? {
+          ...options,
+          _original_qty: dual.originalQty,
+          _original_unit: dual.originalUnit,
+          _unit_weight_gr: dual.unitWeightGr,
+          _conversion_factor: dual.conversionFactor,
+          _physical_instruction: dual.physicalInstruction
+        }
+      : { ...options };
 
-    const optionValues = Object.values(options).filter(v => v && typeof v === 'string' && !v.startsWith('_'));
+    if (!dual) {
+      delete finalOptions._original_qty;
+      delete finalOptions._original_unit;
+      delete finalOptions._unit_weight_gr;
+      delete finalOptions._conversion_factor;
+      delete finalOptions._physical_instruction;
+    }
+
+    const finalBillingQty = dual ? dual.billingQuantity : calculatedBillingQty;
+    const finalBillingUnit = dual ? dual.billingUnit : billingUnit;
+
+    const optionValues = Object.entries(options)
+      .filter(([k, v]) => !k.startsWith('_') && k !== 'nota_alistamiento' && k !== 'Nota alistamiento' && k !== 'Nota de alistamiento' && v && typeof v === 'string')
+      .map(([, v]) => String(v));
     const variantLabel = dual?.physicalInstruction || optionValues.join(' - ');
 
-    const newEdits = [...editableItems];
-    newEdits[rowIndex] = {
-      ...newEdits[rowIndex],
-      matched_product_id: product.id,
-      name: product.name,
-      searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
-      skuQuery: product.sku || '',
-      quantity: finalBillingQty,
-      quantity_text: undefined,
-      originalQuantity: cleanQty,
-      unit: finalBillingUnit,
-      originalUnit: unit,
-      conversion_factor: finalFactor,
-      selected_options: finalOptions,
-      variant_label: variantLabel || newEdits[rowIndex].observations || undefined,
-      isConfirmed: true
-    };
-
-    setEditableItems(newEdits);
+    setEditableItems(prev => prev.map((it, idx) => {
+      const isTarget = rowId ? it.id === rowId : idx === rowIndex;
+      if (!isTarget) return it;
+      return {
+        ...it,
+        matched_product_id: product.id,
+        name: product.name,
+        searchQuery: `${product.name} (${getAccountingIdDisplay(product)})`,
+        skuQuery: product.sku || '',
+        quantity: finalBillingQty,
+        quantity_text: undefined,
+        originalQuantity: dual ? dual.originalQty : finalBillingQty,
+        unit: finalBillingUnit,
+        originalUnit: dual ? dual.originalUnit : finalBillingUnit,
+        conversion_factor: 1,
+        _conversionApplied: true,
+        isManuallyEditedQty: true,
+        selected_options: finalOptions,
+        variant_label: variantLabel || it.observations || undefined,
+        isConfirmed: true
+      };
+    }));
     setCustomizingModalItem(null);
     showToast(`Producto ${product.name} actualizado`, 'success');
 
     setTimeout(() => {
-      const nextIdx = rowIndex + 1;
-      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+      const allInputs = Array.from(document.querySelectorAll<HTMLInputElement>('.sku-search-input'));
+      const curPos = allInputs.findIndex(el => Number(el.dataset.origIdx) === rowIndex);
+      const nextInput = curPos >= 0 ? (allInputs[curPos + 1] || null) : null;
       if (nextInput) {
         nextInput.focus();
         nextInput.select();
-        scrollToDraftRow(nextIdx);
+        const nextOrig = Number(nextInput.dataset.origIdx);
+        if (!isNaN(nextOrig)) scrollToDraftRow(nextOrig);
       }
     }, 50);
   };
@@ -4035,7 +4100,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             productId: itm.matched_product_id,
             productName: mProd?.name || itm.searchQuery || itm.originalName,
             quantity: itm.quantity,
-            unit: itm.unit || mProd?.unit_of_measure || 'Kg',
+            unit: mProd?.unit_of_measure || itm.unit || 'Kg',
             unitPrice: resolvedPrice,
             observations: itm.observations || null,
             deliveryDate: itm.deliveryDate || null
@@ -4460,7 +4525,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         };
         const updatedExtractedItems = [
           updatedMetaItem,
-          ...editableItems
+          ...editableItems.map(serializeDraftItemForStorage)
         ];
 
         const { error } = await supabase
@@ -4498,15 +4563,17 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     setIsEditing(!isEditing);
   };
 
-  const handleDeleteSpecificRow = (index: number) => {
-    const itemToDelete = editableItems[index];
+  const handleDeleteSpecificRow = (index: number, rowId?: string) => {
+    const resolvedIdx = rowId ? editableItems.findIndex(it => it.id === rowId) : index;
+    const targetIdx = resolvedIdx >= 0 ? resolvedIdx : index;
+    const itemToDelete = editableItems[targetIdx];
     if (!itemToDelete) return;
     
     const prodName = itemToDelete.originalName || itemToDelete.name || 'Producto';
+    const idToDelete = rowId || itemToDelete.id;
     setRecentlyDeletedItems(prev => [...prev, prodName]);
-    const remainingItems = editableItems.filter((_, idx) => idx !== index);
-    setEditableItems(remainingItems);
-    setSelectedRowIndices(prev => prev.filter(idx => idx !== index).map(idx => idx > index ? idx - 1 : idx));
+    setEditableItems(prev => prev.filter((it, idx) => (idToDelete ? it.id !== idToDelete : idx !== targetIdx)));
+    setSelectedRowIndices(prev => prev.filter(idx => idx !== targetIdx).map(idx => idx > targetIdx ? idx - 1 : idx));
     showToast(`"${prodName}" eliminado de la orden`, 'info');
   };
 
@@ -4546,11 +4613,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           const metaItem = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
           const dbItems = [
             { ...metaItem, deliveryDate: deliveryDate },
-            ...remainingItems.map(itm => ({
-              originalName: itm.originalName || '',
-              quantity: itm.quantity,
-              matched_product_id: itm.matched_product_id
-            }))
+            ...remainingItems.map(serializeDraftItemForStorage)
           ];
 
           const res = await fetch('/api/orders/notify-deleted-item', {
@@ -4934,6 +4997,25 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
   useEffect(() => {
     if (selectedDraft) {
+      const hydrationScopeKey = `${selectedDraft.id}::${selectedAttachmentIndex}`;
+      const shouldHydrateForLoadedProducts = !lastHydratedHadProductsRef.current && products.length > 0;
+      const isForcedRehydrate = forceRehydrateRef.current;
+
+      // Idempotencia absoluta: si es el mismo borrador y mismo adjunto ya hidratado (por ejemplo tras
+      // handleApprove, handleToggleEdit, handleSelectClientProfile, handleBatchDelete o handleSendManualReceipt),
+      // NO reiniciar ni re-convertir editableItems para evitar saltos o borrado de ediciones manuales.
+      if (
+        lastHydratedScopeKeyRef.current === hydrationScopeKey &&
+        !shouldHydrateForLoadedProducts &&
+        !isForcedRehydrate
+      ) {
+        return;
+      }
+
+      lastHydratedScopeKeyRef.current = hydrationScopeKey;
+      lastHydratedHadProductsRef.current = products.length > 0;
+      forceRehydrateRef.current = false;
+
       const isNewDraft = lastDraftIdRef.current !== selectedDraft.id;
       lastDraftIdRef.current = selectedDraft.id;
       setIsEditing(true);
@@ -4998,138 +5080,61 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
         const prod = products.find(p => p.id === matchedId);
         const productConversions = prod ? conversions.filter(c => c.product_id === prod.id) : [];
-        const detectedUnit = prod ? detectUnitFromName(rawOriginalName, prod, productConversions) : null;
-        
-        const parsedUnit = (() => {
-          if (detectedUnit) return detectedUnit.unit;
-          
-          const origLower = rawOriginalName.toLowerCase();
-          
-          // Priorizar unidades explícitas en el nombre original del producto (por ejemplo "1000 G", "Lb", "Kilo", "500g")
-          // sobre lo que sea que haya detectado el parser IA por defecto, ya que a veces detecta "Unidad" para nombres que terminan en "1000 G".
-          if (origLower.includes('libra') || origLower.includes(' lb ')) return 'Lb';
-          if (origLower.includes('500 g') || origLower.includes('500g') || origLower.includes('500 gramos') || origLower.includes('500 gms') || origLower.includes('500 gr')) return 'Paquete 500 gramos';
-          if (origLower.includes('250 g') || origLower.includes('250g') || origLower.includes('250 gramos') || origLower.includes('250 gms') || origLower.includes('250 gr')) return 'Paquete 250 gramos';
-          if (origLower.includes('1000 g') || origLower.includes('1000g') || origLower.includes('1000 gramos') || origLower.includes('1000 gms') || origLower.includes('1000 gr') || origLower.includes('1000gms') || origLower.includes('1000gr')) return 'Kg';
-          if (origLower.includes('litro') || origLower.includes('litros') || origLower.includes(' l ') || origLower.includes(' lt')) return 'Litro';
-          if (origLower.includes('kg') || origLower.includes('kilo') || origLower.includes('kilos') || origLower.includes('kilogramo') || origLower.includes('kilogramos')) return 'Kg';
-
-          const u = (item.unit || '').toLowerCase().trim();
-          if (u === 'libra' || u === 'libras' || u === 'lb') return 'Lb';
-          if (u === 'litro' || u === 'litros' || u === 'l' || u === 'lt') return 'Litro';
-          if (u === 'unidad' || u === 'unidades' || u === 'ud' || u === 'und') return prod?.unit_of_measure || 'Unidad';
-          if (u.includes('500 g') || u.includes('500g') || u.includes('500 gramos')) return 'Paquete 500 gramos';
-          if (u.includes('250 g') || u.includes('250g') || u.includes('250 gramos')) return 'Paquete 250 gramos';
-          if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kilogramo' || u === 'kilogramos' || u === 'kl' || u === 'kls') return 'Kg';
-          if (u === 'g' || u === 'gr' || u === 'gramo' || u === 'gramos') {
-            const qty = Number(item.quantity || 1);
-            if (qty === 500) return 'Paquete 500 gramos';
-            if (qty === 250) return 'Paquete 250 gramos';
-            return 'Kg';
-          }
-          if (u === 'atado' || u === 'atados') return 'Atado';
-          if (u === 'bulto' || u === 'bultos') return 'Bulto';
-          if (u === 'canastilla' || u === 'canastillas') return 'Canastilla';
-          if (u === 'paquete' || u === 'paquetes') {
-            const qty = Number(item.quantity || 1);
-            if (qty === 500) return 'Paquete 500 gramos';
-            if (qty === 250) return 'Paquete 250 gramos';
-            return prod?.unit_of_measure || 'Kg';
-          }
-          
-          if (origLower.includes('paquete') || origLower.includes('atado') || origLower.includes('bulto') || origLower.includes('canastilla') || origLower.includes('cubeta') || origLower.includes('racimo')) {
-            return prod?.unit_of_measure || 'Kg';
-          }
-          
-          return prod ? getSmartFallbackUnit(prod.name, prod.unit_of_measure || 'Kg') : 'Unidad';
-        })();
 
         // Poka-Yoke Escenario 433 SDD: Erradicar fallback ciego item.quantity || 1
         const rawItemQty = item.quantity !== undefined && item.quantity !== null && item.quantity !== ''
           ? parseFloat(String(item.quantity).replace(',', '.'))
           : 0;
         const initialQty = isNaN(rawItemQty) ? 0 : rawItemQty;
-        let conversionFactor = detectedUnit ? detectedUnit.factor : 1;
-        let finalUnit = prod?.unit_of_measure || parsedUnit;
-        let foundDbConversion = detectedUnit ? true : false;
-
-        if (!foundDbConversion) {
-          if (prod && conversions && conversions.length > 0) {
-            const dbConv = conversions.find(c => 
-              c.product_id === prod.id &&
-              normalizeUnitName(c.from_unit) === normalizeUnitName(parsedUnit) &&
-              normalizeUnitName(c.to_unit) === normalizeUnitName(prod.unit_of_measure) &&
-              normalizeUnitName(c.from_unit) !== normalizeUnitName(c.to_unit)
-            );
-            if (dbConv) {
-              conversionFactor = parseFloat(dbConv.conversion_factor) || 1;
-              finalUnit = dbConv.to_unit || prod.unit_of_measure;
-              foundDbConversion = true;
-            }
-          }
-        }
-
-        if (!foundDbConversion) {
-          const normPUnit = normalizeUnitName(parsedUnit);
-          const isLibra = normPUnit === 'libra' || parsedUnit === 'Lb' || normPUnit === 'lb' || normPUnit === 'libras' || normPUnit.includes('500');
-          const isPack250 = normPUnit.includes('250 g') || normPUnit.includes('250g') || normPUnit.includes('250 gramos');
-          const isGram = normPUnit === 'gramo' || normPUnit === 'gramos' || normPUnit === 'gr' || normPUnit === 'g';
-          
-          if (isLibra && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
-            conversionFactor = 0.5;
-            finalUnit = prod?.unit_of_measure || 'Kg';
-          } else if (isPack250 && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
-            conversionFactor = 0.25;
-            finalUnit = prod?.unit_of_measure || 'Kg';
-          } else if (isGram && (!prod || prod.unit_of_measure?.toLowerCase() === 'kg' || prod.unit_of_measure?.toLowerCase() === 'kilo')) {
-            conversionFactor = 0.001;
-            finalUnit = prod?.unit_of_measure || 'Kg';
-          } else {
-            conversionFactor = item.conversion_factor || 1;
-            finalUnit = prod?.unit_of_measure || parsedUnit;
-          }
-        }
-
         const rawOrigQty = item.originalQuantity !== undefined && item.originalQuantity !== null && item.originalQuantity !== ''
           ? parseFloat(String(item.originalQuantity).replace(',', '.'))
           : null;
-        const baseQty = rawOrigQty !== null && !isNaN(rawOrigQty)
+
+        const isAlreadyNormalizedSameProduct = Boolean(
+          item._conversionApplied && prod && (!item.matched_product_id || matchedId === item.matched_product_id)
+        );
+        const baseQty = isAlreadyNormalizedSameProduct
+          ? initialQty
+          : (rawOrigQty !== null && !isNaN(rawOrigQty) ? rawOrigQty : initialQty);
+
+        const conv = resolveCanonicalConversion({
+          rawName: rawOriginalName,
+          rawDocumentUnit: item.rawDocumentUnit !== undefined ? item.rawDocumentUnit : (item.originalUnit ?? item.unit ?? null),
+          currentUnit: item.unit,
+          observations: item.initial_observations || item.observations || '',
+          quantity: baseQty,
+          product: prod,
+          productConversions,
+          alreadyNormalized: isAlreadyNormalizedSameProduct,
+          isManuallyEditedQty: Boolean(item.isManuallyEditedQty),
+        });
+
+        const baseQtyForBadge = isAlreadyNormalizedSameProduct && rawOrigQty !== null && !isNaN(rawOrigQty)
           ? rawOrigQty
-          : initialQty;
-
-        let finalQty = parseFloat((baseQty * conversionFactor).toFixed(3));
-
-        const minSaleKg = getProductMinSaleKg(prod);
-        let defaultDualPresVal: string | null = null;
-        // Poka-Yoke Escenario 433 SDD: Solo escalar por mínimo de venta si la cantidad es estrictamente > 0
-        if (prod && minSaleKg && minSaleKg >= 1.5 && finalQty > 0 && finalQty < minSaleKg) {
-          const presOpt = (prod.options_config || []).find((opt: any) => 
-            opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
-          );
-          if (presOpt && presOpt.values && presOpt.values.length > 0) {
-            defaultDualPresVal = presOpt.values[0];
-            const cleanPres = defaultDualPresVal.includes('|') ? defaultDualPresVal.split('|')[0] : defaultDualPresVal;
-            finalUnit = cleanPres;
-            conversionFactor = minSaleKg;
-            finalQty = minSaleKg;
-          }
-        }
+          : conv.originalQty;
+        const baseUnitForBadge = isAlreadyNormalizedSameProduct && item.originalUnit
+          ? item.originalUnit
+          : conv.originalUnit;
 
         return {
             ...item,
+            id: item.id || crypto.randomUUID(),
             deliveryDate: (item.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(item.deliveryDate) && item.deliveryDate >= minDeliveryDate) ? item.deliveryDate : null,
             originalName: cleanName,
-            originalQuantity: baseQty,
-            quantity: finalQty,
-            conversion_factor: conversionFactor,
-            originalUnit: item.originalUnit || parsedUnit,
+            rawDocumentUnit: conv.rawDocumentUnit,
+            originalQuantity: baseQtyForBadge,
+            quantity: conv.billingQty,
+            conversion_factor: 1,
+            originalUnit: baseUnitForBadge,
+            _conversionApplied: Boolean(prod),
+            isManuallyEditedQty: Boolean(item.isManuallyEditedQty),
             originalMatchedProductId: matchedId,
             matched_product_id: matchedId,
             isConfirmed: item.isConfirmed || Boolean(item.matched_product_id),
             name: prod ? prod.name : cleanName,
             searchQuery: prod ? `${prod.name} (${getAccountingIdDisplay(prod)})` : '',
             skuQuery: prod?.sku || '',
-            unit: finalUnit,
+            unit: conv.billingUnit,
             observations: (() => {
               let extraDescription = '';
               if (prod && prod.name) {
@@ -5140,7 +5145,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const extraWords = origWords.filter(w => !prodWords.includes(w) && !['de', 'para', 'con', 'el', 'la', 'los', 'las', 'un', 'una', 'en'].includes(w));
                 extraDescription = extraWords.join(' ');
               }
-              let finalObservations = [item.initial_observations || item.observations || '', extraDescription].filter(Boolean).join(' ').trim();
+              let baseObs = String(item.initial_observations || item.observations || '');
+              if (conv.sanitizedPoisonedLibra) {
+                baseObs = baseObs.replace(/Solicitado en Libras\.?/gi, '').trim();
+              }
+              let finalObservations = [baseObs, extraDescription].filter(Boolean).join(' ').trim();
               const distinctWords = Array.from(new Set(finalObservations.split(/\s+/).filter(Boolean)));
               finalObservations = distinctWords.join(' ');
 
@@ -5230,14 +5239,6 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   }
                 });
               }
-              if (defaultDualPresVal) {
-                const presOpt = (prod.options_config || []).find((opt: any) => 
-                  opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad'))
-                );
-                if (presOpt) {
-                  autoSelectedOptions[presOpt.name] = defaultDualPresVal;
-                }
-              }
               return autoSelectedOptions;
             })()
         };
@@ -5263,7 +5264,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               isOpen: true,
               product: duplicateProduct,
               rowIndex: i,
-              duplicateIndex: firstIdx
+              duplicateIndex: firstIdx,
+              rowId: it.id,
+              duplicateId: initialEdits[firstIdx]?.id
             });
             break;
           }
@@ -5344,6 +5347,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
       setDeliveryDate(initialDateStr);
     } else {
+      lastHydratedScopeKeyRef.current = null;
+      lastHydratedHadProductsRef.current = false;
+      forceRehydrateRef.current = false;
       setDraftCoordinates(null);
       setGeocoding(false);
       setEditableItems([]);
@@ -6132,24 +6138,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
                 const resolvedPrice = getResolvedPriceForDraft(selectedDraft, prod.id);
                 totalAmount += resolvedPrice * qtyNum;
-                const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
-                const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-                const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-                let w = 1.0;
-                if (isKgUnit) {
-                  w = 1.0;
-                } else if (isLibraUnit) {
-                  w = 0.5;
-                } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
-                  w = Number(prod.weight_kg);
-                }
-                totalWeight += qtyNum * w;
+                const billingUnit = prod.unit_of_measure || item.unit || 'Kg';
+                totalWeight += computeLineWeightKg({
+                  quantity: qtyNum,
+                  billingUnit,
+                  productUnitOfMeasure: prod.unit_of_measure,
+                  productWeightKg: prod.weight_kg
+                });
 
                 const enrichedOptions = { ...(item.selected_options || {}) };
                 if (!enrichedOptions._physical_instruction) {
                   const resolvedInst = resolvePhysicalInstruction({
                     quantity: qtyNum,
-                    unit: item.unit || prod.unit_of_measure || 'Kg',
+                    unit: billingUnit,
                     variant_label: item.observations || null,
                     nickname: item.originalName || null,
                     selected_options: enrichedOptions
@@ -6165,7 +6166,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   unit_price: resolvedPrice,
                   nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
                   variant_label: item.observations || null,
-                  unit: item.unit || prod.unit_of_measure || 'Kg',
+                  unit: billingUnit,
                   selected_options: enrichedOptions
                 });
               }
@@ -6250,17 +6251,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               orderId: order.id,
               deliveryDate: deliveryDate,
               deliverySlot: editableDeliverySlot || null,
-              items: editableItems.map(itm => ({
-                name: itm.name || itm.originalName,
-                originalName: itm.originalName,
-                quantity: itm.quantity,
-                unit: itm.unit,
-                matched_product_id: itm.matched_product_id,
-                observations: itm.observations,
-                selected_options: itm.selected_options,
-                isDeleted: itm.isDeleted,
-                deliveryDate: itm.deliveryDate || null
-              }))
+              items: editableItems.map(serializeDraftItemForStorage)
             };
 
             for (let i = 0; i < updatedAttachments.length; i++) {
@@ -6288,7 +6279,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           };
           const updatedExtractedItems = [
             updatedMetaItem,
-            ...editableItems
+            ...editableItems.map(serializeDraftItemForStorage)
           ];
 
           const genOrderNumber = getFriendlyOrderId(order);
@@ -6458,17 +6449,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       // 3. Update the draft's extracted_items to include our manual edits
       const metaItem = selectedDraft.extracted_items?.find((i: any) => i.isMetadata) || { isMetadata: true };
       
-      const formattedCurrentItems = editableItems.map(itm => ({
-        name: itm.name || itm.originalName,
-        originalName: itm.originalName,
-        quantity: itm.quantity,
-        unit: itm.unit,
-        matched_product_id: itm.matched_product_id,
-        observations: itm.observations,
-        selected_options: itm.selected_options,
-        isDeleted: itm.isDeleted,
-        deliveryDate: itm.deliveryDate || deliveryDate
-      }));
+      const formattedCurrentItems = editableItems.map(serializeDraftItemForStorage);
 
       let updatedAttachments = metaItem.attachments && Array.isArray(metaItem.attachments) ? [...metaItem.attachments] : [];
       if (updatedAttachments.length > 0 && updatedAttachments[selectedAttachmentIndex]) {
@@ -6653,25 +6634,21 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             }
             const qtyNum = parseFloat(item.quantity?.toString().replace(',', '.') || '0');
             totalAmount += resolvedPrice * qtyNum;
-            const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
-            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-            let w = 1.0;
-            if (isKgUnit) {
-              w = 1.0;
-            } else if (isLibraUnit) {
-              w = 0.5;
-            } else if (prod.weight_kg && Number(prod.weight_kg) > 0) {
-              w = Number(prod.weight_kg);
-            }
-            totalWeight += qtyNum * w;
+            const billingUnit = prod.unit_of_measure || item.unit || 'Kg';
+            const lineWeightKg = computeLineWeightKg({
+              quantity: qtyNum,
+              billingUnit,
+              productUnitOfMeasure: prod.unit_of_measure,
+              productWeightKg: prod.weight_kg
+            });
+            totalWeight += lineWeightKg;
 
             const enrichedOptions = { ...(item.selected_options || {}) };
             const effectiveVariantLabel = item.variant_label || item.observations || null;
             if (!enrichedOptions._physical_instruction) {
               const resolvedInst = resolvePhysicalInstruction({
                 quantity: qtyNum,
-                unit: item.unit || prod.unit_of_measure || 'Kg',
+                unit: billingUnit,
                 variant_label: effectiveVariantLabel,
                 nickname: item.originalName || null,
                 selected_options: enrichedOptions
@@ -6687,9 +6664,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               unit_price: resolvedPrice,
               nickname: item.observations ? `${item.originalName || prod.name} (${item.observations})` : (item.originalName || null),
               variant_label: effectiveVariantLabel,
-              unit: item.unit || prod.unit_of_measure || 'Kg',
+              unit: billingUnit,
               selected_options: enrichedOptions,
-              _weight_kg: qtyNum * w,
+              _weight_kg: lineWeightKg,
               _prod_name: prod.name
             });
           }
@@ -6857,16 +6834,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           orderId: order.id,
           deliveryDate: deliveryDate,
           deliverySlot: editableDeliverySlot || metadata?.deliverySlot || 'AM',
-          items: editableItems.map(itm => ({
-            name: itm.name || itm.originalName,
-            originalName: itm.originalName,
-            quantity: itm.quantity,
-            unit: itm.unit,
-            matched_product_id: itm.matched_product_id,
-            observations: itm.observations,
-            selected_options: itm.selected_options,
-            isDeleted: itm.isDeleted
-          }))
+          items: editableItems.map(serializeDraftItemForStorage)
         };
 
         for (let i = 0; i < updatedAttachments.length; i++) {
@@ -6879,15 +6847,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
       }
 
-      const updatedExtractedItems = selectedDraft.extracted_items.map((itm: any) => {
-        if (itm.isMetadata) {
-          return {
-            ...itm,
-            attachments: updatedAttachments
-          };
-        }
-        return itm;
-      });
+      const serializedDirectItems = editableItems.map(serializeDraftItemForStorage);
+      const existingMetaForConfirm = selectedDraft.extracted_items?.find((itm: any) => itm.isMetadata) || { isMetadata: true };
+      const updatedExtractedItems = [
+        {
+          ...existingMetaForConfirm,
+          attachments: updatedAttachments
+        },
+        ...serializedDirectItems
+      ];
 
       const nowIso = new Date().toISOString();
       const finalOrderNumber = getFriendlyOrderId(order);
@@ -7111,9 +7079,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           resolvedPrice = Number(item.unit_price);
         }
         estTotal += (resolvedPrice * (item.quantity || 0));
-        const unit = (matchedProd?.unit_of_measure || '').toLowerCase();
-        const weightFactor = (unit === 'kg' || unit === 'kilo' || unit === 'kilos') ? 1 : (matchedProd?.weight_kg || 0);
-        estWeight += (weightFactor * (item.quantity || 0));
+        estWeight += computeLineWeightKg({
+          quantity: item.quantity,
+          billingUnit: item.unit,
+          productUnitOfMeasure: matchedProd?.unit_of_measure,
+          productWeightKg: matchedProd?.weight_kg
+        });
       });
       map.set(draft.id, { total: estTotal, weight: estWeight, count: items.length });
     });
@@ -10203,10 +10174,16 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                                     setEditableItems(prev => [
                                                       ...prev,
                                                       {
+                                                        id: crypto.randomUUID(),
                                                         originalName: prodName,
                                                         name: prodName,
                                                         quantity: prodQty,
+                                                        originalQuantity: prodQty,
+                                                        rawDocumentUnit: r.unitVal ? r.unitVal : null,
+                                                        originalUnit: r.unitVal || '',
                                                         unit: prodUnit,
+                                                        conversion_factor: 1,
+                                                        _conversionApplied: false,
                                                         matched_product_id: null,
                                                         searchQuery: prodName,
                                                         skuQuery: '',
@@ -10612,33 +10589,40 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     </tr>
                   </thead>
                   <tbody>
-                    {(sortDraftAlpha
-                      ? [...editableItems].sort((a: any, b: any) =>
-                          (a.rawText || a.productName || a.raw_name || '').localeCompare(
-                            b.rawText || b.productName || b.raw_name || '', 'es', { sensitivity: 'base' }
-                          ))
-                      : editableItems
-                    ).map((item: any, i: number) => {
-                      if (item.isDeleted || item.isMetadata) return null;
-                      if (attachmentFilterIndex !== 'all') {
-                        const filterAtt = metadata.attachments?.[attachmentFilterIndex];
-                        const anyItemHasAttachmentTag = editableItems.some(it => it.attachment_index !== undefined || Boolean(it.source_attachment_name));
-                        if (anyItemHasAttachmentTag) {
-                          const belongs = item.attachment_index === attachmentFilterIndex || 
-                            (item.source_attachment_name && filterAtt && item.source_attachment_name.toLowerCase().includes(filterAtt.name.toLowerCase()));
-                          if (!belongs) return null;
-                        }
-                      }
+                    {(() => {
+                      const indexedRows = editableItems
+                        .map((item: any, origIdx: number) => ({ item, origIdx }))
+                        .filter(({ item }) => {
+                          if (!item || item.isDeleted || item.isMetadata) return false;
+                          if (attachmentFilterIndex !== 'all') {
+                            const filterAtt = metadata.attachments?.[attachmentFilterIndex];
+                            const anyItemHasAttachmentTag = editableItems.some(it => it.attachment_index !== undefined || Boolean(it.source_attachment_name));
+                            if (anyItemHasAttachmentTag) {
+                              const belongs = item.attachment_index === attachmentFilterIndex ||
+                                (item.source_attachment_name && filterAtt && item.source_attachment_name.toLowerCase().includes(filterAtt.name.toLowerCase()));
+                              if (!belongs) return false;
+                            }
+                          }
+                          return true;
+                        });
+                      const visibleRows = sortDraftAlpha
+                        ? [...indexedRows].sort((a, b) =>
+                            (a.item.originalName || a.item.name || '').localeCompare(
+                              b.item.originalName || b.item.name || '', 'es', { sensitivity: 'base' }
+                            )
+                          )
+                        : indexedRows;
 
+                      return visibleRows.map(({ item, origIdx }, visIdx: number) => {
                       const matchedProd = item.matched_product_id ? productByIdMap.get(item.matched_product_id) : undefined;
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
-                      const isActiveRow = activeDropdownRowIndex === i || focusedRowIndex === i;
+                      const isActiveRow = activeDropdownRowIndex === origIdx || focusedRowIndex === origIdx;
                       const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) : false;
 
                       return (
                         <tr 
-                          key={i} 
-                          id={`draft-row-${i}`}
+                          key={item.id || origIdx} 
+                          id={`draft-row-${origIdx}`}
                           style={{ 
                             borderBottom: '1px solid #F1F5F9',
                             backgroundColor: isActiveRow 
@@ -10655,7 +10639,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         >
                           <td style={{ padding: '0.45rem 0.85rem', width: '33%' }}>
                             <div 
-                              onClick={() => matchedProd && openCustomizingModal(matchedProd, i)}
+                              onClick={() => matchedProd && openCustomizingModal(matchedProd, origIdx)}
                               style={{ 
                                 fontSize: isActiveRow ? '0.90rem' : '0.82rem', 
                                 fontWeight: isActiveRow ? '800' : '700', 
@@ -10679,7 +10663,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                               )}
                               {matchedProd ? (
                                 <span 
-                                  onClick={() => openCustomizingModal(matchedProd, i)}
+                                  onClick={() => openCustomizingModal(matchedProd, origIdx)}
                                   style={{ 
                                     backgroundColor: item.isConfirmed ? '#DCFCE7' : '#F0FDF4', 
                                     color: '#15803D', 
@@ -10712,42 +10696,51 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           </td>
                           <td style={{ padding: '0.35rem 0.65rem', position: 'relative', width: '39%' }}>
                             <input 
-                              ref={el => { productInputRefs.current[i] = el; }}
+                              ref={el => { productInputRefs.current[origIdx] = el; }}
                               type="text"
                               placeholder="Buscar ID..."
                               autoComplete="off"
                               autoCorrect="off"
                               spellCheck={false}
                               data-lpignore="true"
+                              data-orig-idx={origIdx}
                               disabled={isApprovedDraft || item.isDeleted}
                               readOnly={isApprovedDraft}
-                              value={activeDropdownRowIndex === i && activeRowSearchQuery !== null ? activeRowSearchQuery : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : ''))}
+                              value={activeDropdownRowIndex === origIdx && activeRowSearchQuery !== null ? activeRowSearchQuery : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? `${matchedProd.name} (${getAccountingIdDisplay(matchedProd)})` : ''))}
                               onFocus={(e) => {
                                 if (isApprovedDraft) return;
                                 e.target.select();
-                                setActiveDropdownRowIndex(i);
+                                setActiveDropdownRowIndex(origIdx);
                                 setFocusedDropdownItemIndex(0);
                                 setActiveRowSearchQuery(null);
-                                scrollToDraftRow(i);
+                                scrollToDraftRow(origIdx);
                               }}
                               onBlur={(e) => {
+                                if (skipNextSkuBlurRef.current === origIdx) {
+                                  skipNextSkuBlurRef.current = null;
+                                  setActiveRowSearchQuery(null);
+                                  setTimeout(() => {
+                                    setActiveDropdownRowIndex(prev => prev === origIdx ? null : prev);
+                                  }, 250);
+                                  return;
+                                }
                                 const val = e.target.value;
                                 const eligiblePool = (!allowOffAgreementPurchases && agreementProductIds.size > 0)
                                   ? products.filter(p => agreementProductIds.has(p.id))
                                   : products;
                                 const exactProduct = eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val || prod.name.toLowerCase() === val.toLowerCase());
-                                if (exactProduct) {
-                                  selectProduct(exactProduct, i);
+                                if (exactProduct && exactProduct.id !== item.matched_product_id) {
+                                  selectProduct(exactProduct, origIdx, item.id);
                                 }
                                 setActiveRowSearchQuery(null);
                                 setTimeout(() => {
-                                  setActiveDropdownRowIndex(prev => prev === i ? null : prev);
+                                  setActiveDropdownRowIndex(prev => prev === origIdx ? null : prev);
                                 }, 250);
                               }}
                               className="sku-search-input"
-                              id={`sku-input-${i}`}
+                              id={`sku-input-${visIdx}`}
                               onKeyDown={(e) => {
-                                const currentQuery = activeDropdownRowIndex === i && activeRowSearchQuery !== null 
+                                const currentQuery = activeDropdownRowIndex === origIdx && activeRowSearchQuery !== null 
                                   ? activeRowSearchQuery 
                                   : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : ''));
                                 const scoredList = getScoredProductsForQuery(currentQuery);
@@ -10759,19 +10752,26 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   const val = e.currentTarget.value;
                                   const p = (scoredList && scoredList[focusedDropdownItemIndex]) || eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || matchedProd;
                                   if (p) {
-                                    e.preventDefault(); 
-                                    selectProduct(p, i);
+                                    e.preventDefault();
+                                    skipNextSkuBlurRef.current = origIdx;
+                                    const updatedRow = (p.id === item.matched_product_id && item._conversionApplied)
+                                      ? item
+                                      : selectProduct(p, origIdx, item.id);
+                                    if (p.id === item.matched_product_id && !item.isConfirmed) {
+                                      setEditableItems(prev => prev.map((it, k) => (item.id ? it.id === item.id : k === origIdx) ? { ...it, isConfirmed: true } : it));
+                                    }
                                     setActiveRowSearchQuery(null);
                                     setActiveDropdownRowIndex(null);
                                     if (p.options_config && p.options_config.length > 0) {
-                                      openCustomizingModal(p, i);
+                                      openCustomizingModal(p, origIdx, updatedRow || item);
                                     } else {
-                                      const nextIdx = i + 1;
-                                      const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                      const nextVisIdx = visIdx + 1;
+                                      const nextInput = document.getElementById(`sku-input-${nextVisIdx}`) as HTMLInputElement | null;
                                       if (nextInput) {
                                         nextInput.focus({ preventScroll: true });
                                         nextInput.select();
-                                        scrollToDraftRow(nextIdx);
+                                        const nextOrig = Number(nextInput.dataset.origIdx);
+                                        if (!isNaN(nextOrig)) scrollToDraftRow(nextOrig);
                                       } else {
                                         document.getElementById('btn-approve-draft')?.focus();
                                       }
@@ -10779,49 +10779,57 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   }
                                 } else if (e.key === 'Enter') {
                                   e.preventDefault();
+                                  skipNextSkuBlurRef.current = origIdx;
                                   const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || eligiblePool.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || matchedProd;
                                   if (selectedProd) {
-                                    selectProduct(selectedProd, i);
+                                    if (selectedProd.id !== item.matched_product_id || !item._conversionApplied) {
+                                      selectProduct(selectedProd, origIdx, item.id);
+                                    } else if (!item.isConfirmed) {
+                                      setEditableItems(prev => prev.map((it, k) => (item.id ? it.id === item.id : k === origIdx) ? { ...it, isConfirmed: true } : it));
+                                    }
                                   }
                                   setActiveRowSearchQuery(null);
                                   setActiveDropdownRowIndex(null);
-                                  const nextIdx = i + 1;
-                                  const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                  const nextVisIdx = visIdx + 1;
+                                  const nextInput = document.getElementById(`sku-input-${nextVisIdx}`) as HTMLInputElement | null;
                                   if (nextInput) {
                                     nextInput.focus({ preventScroll: true });
                                     nextInput.select();
-                                    scrollToDraftRow(nextIdx);
+                                    const nextOrig = Number(nextInput.dataset.origIdx);
+                                    if (!isNaN(nextOrig)) scrollToDraftRow(nextOrig);
                                   } else {
                                     document.getElementById('btn-approve-draft')?.focus();
                                   }
                                 } else if (e.key === 'ArrowDown') {
                                   e.preventDefault();
-                                  if (activeDropdownRowIndex !== i) {
-                                    setActiveDropdownRowIndex(i);
+                                  if (activeDropdownRowIndex !== origIdx) {
+                                    setActiveDropdownRowIndex(origIdx);
                                     setFocusedDropdownItemIndex(0);
                                   } else if (scoredList.length > 0) {
                                     setFocusedDropdownItemIndex(prev => Math.min(prev + 1, scoredList.length - 1));
                                   } else {
-                                    const nextIdx = i + 1;
-                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                    const nextVisIdx = visIdx + 1;
+                                    const nextInput = document.getElementById(`sku-input-${nextVisIdx}`) as HTMLInputElement | null;
                                     if (nextInput) {
                                       nextInput.focus({ preventScroll: true });
                                       nextInput.select();
-                                      scrollToDraftRow(nextIdx);
+                                      const nextOrig = Number(nextInput.dataset.origIdx);
+                                      if (!isNaN(nextOrig)) scrollToDraftRow(nextOrig);
                                     }
                                   }
                                 } else if (e.key === 'ArrowUp') {
                                   e.preventDefault();
-                                  if (activeDropdownRowIndex === i && focusedDropdownItemIndex > 0) {
+                                  if (activeDropdownRowIndex === origIdx && focusedDropdownItemIndex > 0) {
                                     setFocusedDropdownItemIndex(prev => Math.max(prev - 1, 0));
                                   } else {
-                                    const prevIdx = i - 1;
-                                    if (prevIdx >= 0) {
-                                      const prevInput = document.getElementById(`sku-input-${prevIdx}`) as HTMLInputElement | null;
+                                    const prevVisIdx = visIdx - 1;
+                                    if (prevVisIdx >= 0) {
+                                      const prevInput = document.getElementById(`sku-input-${prevVisIdx}`) as HTMLInputElement | null;
                                       if (prevInput) {
                                         prevInput.focus({ preventScroll: true });
                                         prevInput.select();
-                                        scrollToDraftRow(prevIdx);
+                                        const prevOrig = Number(prevInput.dataset.origIdx);
+                                        if (!isNaN(prevOrig)) scrollToDraftRow(prevOrig);
                                       }
                                     }
                                   }
@@ -10832,7 +10840,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                               }}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setActiveDropdownRowIndex(i);
+                                setActiveDropdownRowIndex(origIdx);
                                 setFocusedDropdownItemIndex(0);
                                 setActiveRowSearchQuery(val);
                               }}
@@ -10853,8 +10861,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                             />
 
                             {/* Custom Pareto Floating Dropdown (Exact Replica of Ingesta PDF - Imagen 2) */}
-                            {activeDropdownRowIndex === i && (() => {
-                              const currentQuery = (activeDropdownRowIndex === i && activeRowSearchQuery !== null)
+                            {activeDropdownRowIndex === origIdx && (() => {
+                              const currentQuery = (activeDropdownRowIndex === origIdx && activeRowSearchQuery !== null)
                                 ? activeRowSearchQuery 
                                 : (item.searchQuery !== undefined ? item.searchQuery : (matchedProd ? matchedProd.name : ''));
                               const scoredList = getScoredProductsForQuery(currentQuery);
@@ -10865,7 +10873,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
                               return (
                                 <div 
-                                  id={`dropdown-container-${i}`}
+                                  id={`dropdown-container-${origIdx}`}
                                   style={{
                                     position: 'absolute',
                                     top: '100%',
@@ -10893,17 +10901,23 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                     return (
                                       <div
                                         key={p.id}
-                                        id={`dropdown-item-${i}-${idx}`}
+                                        id={`dropdown-item-${origIdx}-${idx}`}
                                         onMouseDown={(e) => {
                                           e.preventDefault();
                                           if (isScarcityLocked) {
                                             showToast(`"${p.name}" no se puede agregar: Insumo bloqueado por escasez en el mercado.`, 'error');
                                             return;
                                           }
-                                          selectProduct(p, i);
+                                          skipNextSkuBlurRef.current = origIdx;
+                                          const updatedRow = (p.id === item.matched_product_id && item._conversionApplied)
+                                            ? item
+                                            : selectProduct(p, origIdx, item.id);
+                                          if (p.id === item.matched_product_id && !item.isConfirmed) {
+                                            setEditableItems(prev => prev.map((it, k) => (item.id ? it.id === item.id : k === origIdx) ? { ...it, isConfirmed: true } : it));
+                                          }
                                           setActiveDropdownRowIndex(null);
                                           if (p.options_config && p.options_config.length > 0) {
-                                            openCustomizingModal(p, i);
+                                            openCustomizingModal(p, origIdx, updatedRow || item);
                                           }
                                         }}
                                         onMouseEnter={() => {
@@ -11043,32 +11057,51 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           <td style={{ padding: '0.45rem 0.65rem', textAlign: 'center', width: '28%' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                               <input 
-                                ref={el => { quantityInputRefs.current[i] = el; }}
+                                ref={el => { quantityInputRefs.current[origIdx] = el; }}
                                 type="text"
-                                id={`draft-qty-input-${i}`}
+                                id={`draft-qty-input-${visIdx}`}
                                 disabled={isApprovedDraft || item.isDeleted}
                                 readOnly={isApprovedDraft}
-                                value={focusedRowIndex === i ? (item.quantity_text !== undefined ? item.quantity_text : (item.quantity !== undefined && item.quantity !== null ? Number(Number(item.quantity).toFixed(3)).toString().replace('.', ',') : '')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
+                                value={focusedRowIndex === origIdx ? (item.quantity_text !== undefined ? item.quantity_text : (item.quantity !== undefined && item.quantity !== null ? Number(Number(item.quantity).toFixed(3)).toString().replace('.', ',') : '')) : (item.quantity !== undefined && item.quantity !== null ? formatQuantity(item.quantity) : '')}
                                 onFocus={(e) => {
                                   if (isApprovedDraft) return;
-                                  setFocusedRowIndex(i);
+                                  setFocusedRowIndex(origIdx);
                                   e.target.select();
-                                  scrollToDraftRow(i);
+                                  scrollToDraftRow(origIdx);
                                 }}
                                 onBlur={() => {
+                                  const rowKey = item.id || origIdx;
                                   setFocusedRowIndex(null);
-                                  const newEdits = [...editableItems];
-                                  newEdits[i].quantity_text = undefined;
-                                  setEditableItems(newEdits);
+                                  if (skipNextQtyBlurRef.current === rowKey) {
+                                    skipNextQtyBlurRef.current = null;
+                                    return;
+                                  }
+                                  setEditableItems(prev => prev.map((it, k) =>
+                                    (item.id ? it.id === item.id : k === origIdx)
+                                      ? { ...it, quantity_text: undefined }
+                                      : it
+                                  ));
                                 }}
                                 onChange={(e) => {
                                   if (isApprovedDraft) return;
                                   const rawVal = e.target.value;
                                   const parsed = parseQuantity(rawVal);
-                                  const newEdits = [...editableItems];
-                                  newEdits[i].quantity_text = rawVal;
-                                  newEdits[i].quantity = parsed;
-                                  setEditableItems(newEdits);
+                                  const syncUnit = matchedProd?.unit_of_measure || item.unit || 'Kg';
+                                  setEditableItems(prev => prev.map((it, k) =>
+                                    (item.id ? it.id === item.id : k === origIdx)
+                                      ? {
+                                          ...it,
+                                          quantity_text: rawVal,
+                                          quantity: parsed,
+                                          originalQuantity: parsed,
+                                          originalUnit: syncUnit,
+                                          unit: syncUnit,
+                                          conversion_factor: 1,
+                                          _conversionApplied: true,
+                                          isManuallyEditedQty: true
+                                        }
+                                      : it
+                                  ));
                                 }}
                                 onKeyDown={(e) => {
                                   if (isApprovedDraft) return;
@@ -11081,29 +11114,55 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                     const newVal = val.substring(0, start) + ',' + val.substring(end);
                                     
                                     const parsed = parseQuantity(newVal);
-                                    const newEdits = [...editableItems];
-                                    newEdits[i].quantity_text = newVal;
-                                    newEdits[i].quantity = parsed;
-                                    setEditableItems(newEdits);
+                                    const syncUnit = matchedProd?.unit_of_measure || item.unit || 'Kg';
+                                    setEditableItems(prev => prev.map((it, k) =>
+                                      (item.id ? it.id === item.id : k === origIdx)
+                                        ? {
+                                            ...it,
+                                            quantity_text: newVal,
+                                            quantity: parsed,
+                                            originalQuantity: parsed,
+                                            originalUnit: syncUnit,
+                                            unit: syncUnit,
+                                            conversion_factor: 1,
+                                            _conversionApplied: true,
+                                            isManuallyEditedQty: true
+                                          }
+                                        : it
+                                    ));
                                     
                                     setTimeout(() => {
                                       input.setSelectionRange(start + 1, start + 1);
                                     }, 10);
                                   } else if (e.key === 'Enter') {
                                     e.preventDefault();
+                                    skipNextQtyBlurRef.current = item.id || origIdx;
                                     const rawVal = e.currentTarget.value;
                                     const parsed = parseQuantity(rawVal);
-                                    const newEdits = [...editableItems];
-                                    newEdits[i].quantity_text = undefined;
-                                    newEdits[i].quantity = parsed;
-                                    setEditableItems(newEdits);
+                                    const syncUnit = matchedProd?.unit_of_measure || item.unit || 'Kg';
+                                    setEditableItems(prev => prev.map((it, k) =>
+                                      (item.id ? it.id === item.id : k === origIdx)
+                                        ? {
+                                            ...it,
+                                            quantity_text: undefined,
+                                            quantity: parsed,
+                                            originalQuantity: parsed,
+                                            originalUnit: syncUnit,
+                                            unit: syncUnit,
+                                            conversion_factor: 1,
+                                            _conversionApplied: true,
+                                            isManuallyEditedQty: true
+                                          }
+                                        : it
+                                    ));
 
-                                    const nextIdx = i + 1;
-                                    const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
+                                    const nextVisIdx = visIdx + 1;
+                                    const nextInput = document.getElementById(`sku-input-${nextVisIdx}`) as HTMLInputElement | null;
                                     if (nextInput) {
                                       nextInput.focus();
                                       nextInput.select();
-                                      scrollToDraftRow(nextIdx);
+                                      const nextOrig = Number(nextInput.dataset.origIdx);
+                                      if (!isNaN(nextOrig)) scrollToDraftRow(nextOrig);
                                     } else {
                                       document.getElementById('btn-approve-draft')?.focus();
                                     }
@@ -11204,7 +11263,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                   tabIndex={-1}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteSpecificRow(i);
+                                    handleDeleteSpecificRow(origIdx, item.id);
                                   }}
                                   style={{
                                     background: 'transparent',
@@ -11237,7 +11296,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           </td>
                         </tr>
                       );
-                    })}
+                    });
+                    })()}
                     {editableItems.filter(it => !it.isDeleted).length === 0 && (
                       <tr>
                         <td colSpan={3} style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
@@ -13419,7 +13479,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
               </div>
 
               {/* Right side: Helper box with detected information */}
-              {selectedRowForVariant !== null && editableItems[selectedRowForVariant] && (
+              {(() => {
+                const variantRowItem = (selectedRowIdForVariant ? editableItems.find(it => it.id === selectedRowIdForVariant) : null)
+                  || (selectedRowForVariant !== null ? editableItems[selectedRowForVariant] : null);
+                if (!variantRowItem) return null;
+                return (
                 <div style={{
                   backgroundColor: '#F8FAFC',
                   border: '1px dashed #CBD5E1',
@@ -13435,14 +13499,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px' }}>
                     <span style={{ fontWeight: '800', color: '#1E293B' }}>Texto detectado:</span>
                     <span style={{ backgroundColor: '#FFFBEB', color: '#B45309', border: '1.5px solid #FBBF24', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: '6px', fontWeight: '900', fontSize: '0.75rem' }}>
-                      {formatDetectedUnit(editableItems[selectedRowForVariant].originalQuantity !== undefined ? editableItems[selectedRowForVariant].originalQuantity : editableItems[selectedRowForVariant].quantity, editableItems[selectedRowForVariant].originalUnit || 'uds')}
+                      {formatDetectedUnit(variantRowItem.originalQuantity !== undefined ? variantRowItem.originalQuantity : variantRowItem.quantity, variantRowItem.originalUnit || 'uds')}
                     </span>
                   </div>
-                  <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={editableItems[selectedRowForVariant].originalName}>
-                    &quot;{editableItems[selectedRowForVariant].originalName}&quot;
+                  <div style={{ fontStyle: 'italic', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={variantRowItem.originalName}>
+                    &quot;{variantRowItem.originalName}&quot;
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Client notes box */}
@@ -13747,7 +13812,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   </label>
                   {(() => {
                     const parsedQty = parseQuantity(variantQuantity) || 0;
-                    const isProdKg = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase().includes('kg');
+                    const isProdKg = isKgUnitName(selectedProductForVariant.unit_of_measure || 'Kg');
                     const nominalBaseWeight = !isProdKg && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
                         ? Number(selectedProductForVariant.weight_kg)
                         : 1;
@@ -13759,8 +13824,8 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       const mg = String(selectedGramajeVal).match(/(\d+)\s*(?:gr|g)?/i);
                       if (mg) pieceWeightGr = parseInt(mg[1], 10);
                     }
-                    const presVal = (selectedOptions['Presentación'] || selectedOptions['Presentacion'] || '').toLowerCase();
-                    const isPresKg = !presVal || presVal.includes('kg') || presVal.includes('kilo');
+                    const presVal = (selectedOptions['Presentación'] || selectedOptions['Presentacion'] || '').trim();
+                    const isPresKg = !presVal || isKgUnitName(presVal.includes('|') ? presVal.split('|')[0] : presVal);
                     const approxUnits = pieceWeightGr > 0 ? Math.round(calcTotalKg / (pieceWeightGr / 1000)) : 0;
 
                     if (parsedQty > 0 && factor > 0) {
@@ -14081,7 +14146,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
               const factor = qty2 / qty1;
               const toUnit = manageConversionsProduct.unit_of_measure || 'Kg';
-              if (normalizeUnitName(unit1) === normalizeUnitName(toUnit) && Math.abs(factor - 1) > 0.0001) {
+              if (normalizeCanonicalUnit(unit1) === normalizeCanonicalUnit(toUnit) && Math.abs(factor - 1) > 0.0001) {
                   alert(`No se puede crear una conversión de "${unit1}" a "${toUnit}" con factor ${factor}. Unidades idénticas siempre equivalen 1:1.`);
                   return;
               }
@@ -14796,14 +14861,14 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                 const isGram = opt.name.toLowerCase().includes('gramaje');
                 const baseUnitLower = (product.unit_of_measure || 'Kg').toLowerCase();
-                const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                const isKg = isKgUnitName(product.unit_of_measure || 'Kg');
                 const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
 
                 // Evaluar presentación actual para regla condicional de Gramaje (Escenario 51 SDD)
                 const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
                 const currentPresVal = presOpt ? (options[presOpt.name] !== undefined && options[presOpt.name] !== '' ? options[presOpt.name] : (isKg ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
                 const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
-                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+                const isPresKg = isKgUnitName(cleanPres) || cleanPres === baseUnitLower;
 
                 // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
                 if (isGram && !isPresKg) {
@@ -14812,7 +14877,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
                 const kgValInOpt = isPresentation ? ((opt.values || []).find((v: string) => {
                   const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-                  return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+                  return isKgUnitName(clean);
                 }) || (isKg ? 'Kg' : (opt.values?.[0] || ''))) : '';
 
                 const defaultVal = isPresentation ? kgValInOpt : (isGram ? 'Estándar' : '');
@@ -14836,8 +14901,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         if (isPresentation) {
                           const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                           const defaultUnit = product.unit_of_measure || 'Kg';
-                          const isMasterKg = defaultUnit.toLowerCase() === 'kg' || defaultUnit.toLowerCase() === 'kilo';
-                          const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
+                          const isKgSel = isKgUnitName(cleanUnit);
                           const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
 
                           if (!isKgSel && !isDefaultUnit) {

@@ -315,7 +315,6 @@ export function parseSpreadsheetWorkbook(
           rowName = rowName.replace(/\s+(kilo|kg|kls?|gramos?|gr|g|libras?|lbs?|unidades?|unds?|paquetes?|atados?)$/i, '').trim();
         }
       }
-      if (!rowUnit) rowUnit = 'Kg';
 
       const isMetaRowText = ['descripcion', 'descripción', 'fecha', 'plu', 'presentacion', 'presentación'].includes(rowName.toLowerCase());
 
@@ -378,7 +377,7 @@ export function parseSpreadsheetWorkbook(
         extractedItems.push({
           originalName: r.nameVal,
           quantity: r.qtyVal,
-          unit: r.unitVal || 'Kg',
+          unit: r.unitVal || '',
           observations: obsParts.join(' | '),
           plu: r.pluVal || undefined
         });

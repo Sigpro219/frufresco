@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { getFriendlyOrderId, resolvePhysicalInstruction, formatStructuredSpecification, buildDualUnitMetadata, getParsedWeight, cleanPhysicalInstruction, resolveProductCharacteristicsBadges, formatQuantity, getOrderReplacementInfo, getOrderProcurementReferences, isColsubsidioProfile } from '@/lib/orderUtils';
+import { computeLineWeightKg, isKgUnitName } from '@/lib/orders/unitConversionEngine';
 import { detectDuplicateOrders, DuplicateCollision } from '@/lib/orderDuplicates';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
@@ -1466,7 +1467,7 @@ function OrderLoadingContent() {
                 order_id: selectedOrder.id,
                 product_id: item.product_id || item.products?.id,
                 quantity: item.quantity,
-                unit: item.unit || item.products?.unit_of_measure || 'UND',
+                unit: item.products?.unit_of_measure || item.unit || 'Kg',
                 unit_price: 0,
                 nickname: item.nickname || item.products?.name || ''
             }));
@@ -1888,21 +1889,12 @@ useEffect(() => {
                         // Calculate total weight from order items
                         const items = order.order_items || [];
                         const calculatedWeight = items.reduce((sum: number, item: any) => {
-                            const unit = (item.unit || item.products?.unit_of_measure || '').toLowerCase().trim();
-                            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-                            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-                            
-                            let weightFactor = 1.0;
-                            if (isKgUnit) {
-                                weightFactor = 1.0;
-                            } else if (isLibraUnit) {
-                                weightFactor = 0.5;
-                            } else if (item.products?.weight_kg && Number(item.products.weight_kg) > 0) {
-                                weightFactor = Number(item.products.weight_kg);
-                            } else {
-                                weightFactor = 1.0;
-                            }
-                            return sum + (weightFactor * (parseFloat(item.quantity) || 0));
+                            return sum + computeLineWeightKg({
+                                quantity: item.quantity,
+                                billingUnit: item.unit,
+                                productUnitOfMeasure: item.products?.unit_of_measure,
+                                productWeightKg: item.products?.weight_kg
+                            });
                         }, 0);
 
                         const totalWeight = calculatedWeight > 0 ? calculatedWeight : (order.total_weight_kg || 0);
@@ -2070,9 +2062,12 @@ useEffect(() => {
                                 : (order.profiles.contact_name || order.profiles.company_name || order.customer_name || 'Cliente B2C'))
                             : (order.customer_name || 'Cliente');
                         const totalWeight = (order.order_items || []).reduce((sum: number, item: any) => {
-                            const unit = (item.unit || item.products?.unit_of_measure || '').toLowerCase().trim();
-                            const wf = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit) ? 0.5 : 1.0;
-                            return sum + wf * (parseFloat(item.quantity) || 0);
+                            return sum + computeLineWeightKg({
+                                quantity: item.quantity,
+                                billingUnit: item.unit,
+                                productUnitOfMeasure: item.products?.unit_of_measure,
+                                productWeightKg: item.products?.weight_kg
+                            });
                         }, 0) || order.total_weight_kg || 0;
                         const hasGPS = Boolean((order.latitude && order.longitude) || (order.profiles?.latitude && order.profiles?.longitude));
                         return {
@@ -2455,21 +2450,12 @@ useEffect(() => {
     }, 0);
     const currentSubtotal = currentTotal - currentTax;
     const currentWeight = orderItems.reduce((acc, item) => {
-        const unit = (item.products?.unit_of_measure || '').toLowerCase().trim();
-        const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-        const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-        
-        let weightFactor = 1.0;
-        if (isKgUnit) {
-            weightFactor = 1.0;
-        } else if (isLibraUnit) {
-            weightFactor = 0.5;
-        } else if (item.products?.weight_kg && Number(item.products.weight_kg) > 0) {
-            weightFactor = Number(item.products.weight_kg);
-        } else {
-            weightFactor = 1.0;
-        }
-        return acc + (weightFactor * item.quantity);
+        return acc + computeLineWeightKg({
+            quantity: item.quantity,
+            billingUnit: item.unit,
+            productUnitOfMeasure: item.products?.unit_of_measure,
+            productWeightKg: item.products?.weight_kg
+        });
     }, 0);
 
     const handleSearchProducts = (term: string) => {
@@ -2721,7 +2707,7 @@ useEffect(() => {
         setVariantQuantity(String(displayQty));
         
         const defaultUnit = product?.unit_of_measure || 'Kg';
-        const isKg = (defaultUnit || 'kg').toLowerCase() === 'kg' || (defaultUnit || 'kg').toLowerCase() === 'kilo';
+        const isKg = isKgUnitName(defaultUnit);
         const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         let initUnit = opts._original_unit || defaultUnit;
         let initFactor = opts._conversion_factor || nominalBaseWeight;
@@ -2731,7 +2717,7 @@ useEffect(() => {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
                 const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                if (isKgUnitName(clean)) {
                     initUnit = defaultUnit;
                     initFactor = 1;
                 } else if (clean === baseUnitLower) {
@@ -2778,7 +2764,7 @@ useEffect(() => {
         setSelectedProductForVariant(product);
 
         const defaultUnit = product.unit_of_measure || 'Kg';
-        const isKg = (defaultUnit || 'kg').toLowerCase() === 'kg' || (defaultUnit || 'kg').toLowerCase() === 'kilo';
+        const isKg = isKgUnitName(defaultUnit);
         const nominalBaseWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         let initUnit = defaultUnit;
         let initFactor = nominalBaseWeight;
@@ -2788,7 +2774,7 @@ useEffect(() => {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
                 const baseUnitLower = (defaultUnit || 'kg').toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                if (isKgUnitName(clean)) {
                     initUnit = defaultUnit;
                     initFactor = 1;
                 } else if (clean === baseUnitLower) {
@@ -2825,7 +2811,7 @@ useEffect(() => {
         const qtyVal = parseFloat(String(variantQuantity).replace(',', '.')) || 1;
         
         const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
-        const isMasterKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+        const isMasterKg = isKgUnitName(selectedProductForVariant.unit_of_measure || 'Kg');
         const nominalBaseWeight = !isMasterKg && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
             ? Number(selectedProductForVariant.weight_kg)
             : 1;
@@ -2837,7 +2823,7 @@ useEffect(() => {
             if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                if (isKgUnitName(clean)) {
                     resolvedUnit = selectedProductForVariant.unit_of_measure || 'Kg';
                     resolvedFactor = 1;
                 } else if (clean === baseUnitLower) {
@@ -2892,7 +2878,7 @@ useEffect(() => {
                 quantity: baseQty,
                 variant_label: variantLabel || null,
                 selected_options: enrichedOptions,
-                unit: resolvedUnit,
+                unit: selectedProductForVariant.unit_of_measure || 'Kg',
                 isModified: true
             };
             setOrderItems(newOrderItems);
@@ -2919,6 +2905,7 @@ useEffect(() => {
             newOrderItems[existsIndex] = {
                 ...newOrderItems[existsIndex],
                 quantity: newOrderItems[existsIndex].quantity + qty,
+                unit: product.unit_of_measure || newOrderItems[existsIndex].unit || 'Kg',
                 selected_options: optionsRaw || newOrderItems[existsIndex].selected_options,
                 isModified: true
             };
@@ -2937,7 +2924,7 @@ useEffect(() => {
                 variant_label: finalLabel || null,
                 selected_options: optionsRaw || {},
                 nickname: finalNickname || null,
-                unit: optionsRaw?._original_unit || product.unit_of_measure || 'Kg',
+                unit: product.unit_of_measure || 'Kg',
                 products: {
                     name: product.name,
                     sku: product.sku,
@@ -2956,7 +2943,24 @@ useEffect(() => {
     const updateItemQuantity = (idx: number, newQty: number) => {
         if (newQty < 0) return;
         const newOrderItems = [...orderItems];
-        newOrderItems[idx] = { ...newOrderItems[idx], quantity: newQty, isModified: true };
+        const currentItem = newOrderItems[idx];
+        const prevOpts = currentItem.selected_options && typeof currentItem.selected_options === 'object'
+            ? { ...currentItem.selected_options }
+            : undefined;
+        if (prevOpts) {
+            delete prevOpts._original_qty;
+            delete prevOpts._original_unit;
+            delete prevOpts._conversion_factor;
+            delete prevOpts._unit_weight_gr;
+            delete prevOpts._physical_instruction;
+        }
+        newOrderItems[idx] = {
+            ...currentItem,
+            quantity: newQty,
+            unit: currentItem.products?.unit_of_measure || currentItem.unit || 'Kg',
+            ...(prevOpts !== undefined ? { selected_options: prevOpts } : {}),
+            isModified: true
+        };
         setOrderItems(newOrderItems);
     };
 
@@ -3141,7 +3145,7 @@ useEffect(() => {
                     variant_label: item.variant_label,
                     selected_options: mergedSelectedOptions,
                     nickname: item.nickname || item.variant_label || null,
-                    unit: item.unit || item.products?.unit_of_measure || 'Kg'
+                    unit: item.products?.unit_of_measure || item.unit || 'Kg'
                 };
                 if (!item.isNew && item.id) {
                     baseItem.id = item.id;
@@ -7635,7 +7639,7 @@ useEffect(() => {
                     // Build options list for unit selection (strictly base units & operational conversions, excluding ecommerce units)
                     const optionsList: { unit: string; factor: number; label: string }[] = [];
                     const baseUnit = selectedProductForVariant.unit_of_measure || 'Kg';
-                    const isKgProd = baseUnit.toLowerCase() === 'kg' || baseUnit.toLowerCase() === 'kilo';
+                    const isKgProd = isKgUnitName(baseUnit);
                     const nominalBaseWeight = !isKgProd && selectedProductForVariant.weight_kg && Number(selectedProductForVariant.weight_kg) > 0
                         ? Number(selectedProductForVariant.weight_kg)
                         : 1;
@@ -7743,7 +7747,7 @@ useEffect(() => {
                             if (optVal) {
                                 const strVal = String(optVal);
                                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                                if (isKgUnitName(clean)) {
                                     dynamicUnitLabel = selectedProductForVariant.unit_of_measure || 'Kg';
                                     dynamicUnitFactor = 1;
                                 } else if (clean === baseUnitLower) {
@@ -7936,13 +7940,13 @@ useEffect(() => {
                                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                                     const isGram = opt.name.toLowerCase().includes('gramaje');
                                     const baseUnitLower = (selectedProductForVariant.unit_of_measure || 'Kg').toLowerCase();
-                                    const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                                    const isKgProduct = isKgUnitName(selectedProductForVariant.unit_of_measure || 'Kg');
 
                                     // Determinar si la presentación seleccionada es Kg
                                     const presOpt = normalizedLoadingOptions.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
                                     const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKgProduct ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
                                     const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
-                                    const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+                                    const isPresKg = isKgUnitName(cleanPres) || cleanPres === baseUnitLower;
 
                                     // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
                                     if (isGram && !isPresKg) {
@@ -7968,7 +7972,7 @@ useEffect(() => {
                                                         if (isPresentation) {
                                                             const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                             const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
-                                                            const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                            const isKgSel = isKgUnitName(cleanUnit) || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
                                                             if (!isKgSel) {
                                                                 Object.keys(next).forEach(k => {
                                                                     if (k.toLowerCase().includes('gramaje')) delete next[k];
@@ -7980,7 +7984,7 @@ useEffect(() => {
                                                     if (isPresentation) {
                                                         const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                         const defaultUnit = selectedProductForVariant.unit_of_measure || 'Kg';
-                                                        const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
+                                                        const isKgSel = isKgUnitName(cleanUnit);
                                                         const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
 
                                                         if (isKgSel) {
@@ -8105,9 +8109,9 @@ useEffect(() => {
                                                 }
 
                                                 const presOpt = normalizedLoadingOptions.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
-                                                const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (baseUnitLower === 'kg' ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
+                                                const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKgUnitName(selectedProductForVariant.unit_of_measure || 'Kg') ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
                                                 const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
-                                                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+                                                const isPresKg = isKgUnitName(cleanPres) || cleanPres === baseUnitLower;
 
                                                 const approxUnits = pieceWeightGr > 0 ? Math.round(calculatedTotalKg / (pieceWeightGr / 1000)) : 0;
 

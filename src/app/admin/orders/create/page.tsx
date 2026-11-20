@@ -10,6 +10,16 @@ import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils'
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
 import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction, getStructuredSpecKey, isColsubsidioProfile } from '@/lib/orderUtils';
+import {
+    resolveCanonicalConversion,
+    computeLineWeightKg,
+    getSafeProductMinSaleKg,
+    extractPackWeightKgFromText,
+    normalizeCanonicalUnit,
+    isKgUnitName,
+    hasExplicitLibraWord,
+    hasWholeWord
+} from '@/lib/orders/unitConversionEngine';
 import { Map as GoogleMapComponent, Marker } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
@@ -148,7 +158,7 @@ const formatDetectedUnit = (qty: number, unit: string) => {
     } else if (norm === 'Cubeta') {
         cleanUnit = qty === 1 ? 'cubeta' : 'cubetas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
-    } else if (norm === 'Libra') {
+    } else if (norm === 'Libra' || norm === 'Lb') {
         cleanUnit = qty === 1 ? 'libra' : 'libras';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (norm === 'g') {
@@ -162,6 +172,15 @@ const formatDetectedUnit = (qty: number, unit: string) => {
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (norm === 'Caja') {
         cleanUnit = qty === 1 ? 'caja' : 'cajas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Atado') {
+        cleanUnit = qty === 1 ? 'atado' : 'atados';
+        suffix = qty === 1 ? 'detectado' : 'detectados';
+    } else if (norm === 'Canasta') {
+        cleanUnit = qty === 1 ? 'canasta' : 'canastas';
+        suffix = qty === 1 ? 'detectada' : 'detectadas';
+    } else if (norm === 'Bandeja') {
+        cleanUnit = qty === 1 ? 'bandeja' : 'bandejas';
         suffix = qty === 1 ? 'detectada' : 'detectadas';
     } else if (norm === 'Litro') {
         cleanUnit = qty === 1 ? 'litro' : 'litros';
@@ -199,25 +218,7 @@ const getAccountingIdDisplay = (product: any) => {
 };
 
 const getParsedWeight = (text: string): number | null => {
-    if (!text) return null;
-    if (text.includes('|')) {
-        const parts = text.split('|');
-        const grams = parseFloat(parts[1]);
-        if (!isNaN(grams) && grams > 0) return grams / 1000;
-    }
-    const clean = text.replace(/\bplu\s*[:#\-]?\s*\d+\b/gi, ' ').toLowerCase();
-    const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)\b/);
-    if (kgMatch) {
-        const val = parseFloat(kgMatch[1]);
-        if (!isNaN(val) && val > 0) return val;
-    }
-    const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)\b/);
-    if (gMatch) {
-        const val = parseFloat(gMatch[1]);
-        if (!isNaN(val) && val > 0) return val / 1000;
-    }
-    if (clean.includes('libra') || clean.includes('lb')) return 0.5;
-    return null;
+    return extractPackWeightKgFromText(text);
 };
 
 export const formatWeightKg = (val: number | null | undefined): string => {
@@ -231,43 +232,7 @@ export const formatWeightKg = (val: number | null | undefined): string => {
 };
 
 const getProductMinSaleKg = (product: any): number | null => {
-    if (!product) return null;
-    const isWeightProd = (product.unit_of_measure || 'Kg').toLowerCase() === 'kg';
-    if (!isWeightProd) return null;
-
-    let minKg = product.weight_kg !== undefined && product.weight_kg !== null && Number(product.weight_kg) > 0
-        ? Number(product.weight_kg)
-        : 0.1;
-
-    const presentationWeights: number[] = [];
-
-    // Also check product name for discrete weight specification (e.g., "Arandano extra bandeja x125 gr" -> 0.125 kg)
-    const nameWeight = getParsedWeight(product.name);
-    if (nameWeight !== null && nameWeight > 0) {
-        presentationWeights.push(nameWeight);
-    }
-
-    if (Array.isArray(product.options_config)) {
-        product.options_config.forEach((opt: any) => {
-            if (opt.name && (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad') || opt.name.toLowerCase().includes('tamaño') || opt.name.toLowerCase().includes('gramaje'))) {
-                (opt.values || []).forEach((val: string) => {
-                    const pw = getParsedWeight(val);
-                    if (pw !== null && pw > 0) {
-                        presentationWeights.push(pw);
-                    }
-                });
-            }
-        });
-    }
-
-    if (presentationWeights.length > 0) {
-        const minVariantWeight = Math.min(...presentationWeights);
-        if (minVariantWeight > minKg) {
-            minKg = minVariantWeight;
-        }
-    }
-
-    return minKg;
+    return getSafeProductMinSaleKg(product);
 };
 
 function CreateOrderContent() {
@@ -870,6 +835,8 @@ function CreateOrderContent() {
     const [activeRowSearchQuery, setActiveRowSearchQuery] = useState<string | null>(null);
     const searchQueryCacheRef = useRef<Map<string, any[]>>(new Map());
     const stagedProductInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const skipNextStagedBlurRef = useRef(false);
+    const skipNextStagedQtyBlurRef = useRef<string | null>(null);
 
     const getScoredProductsForQuery = (query: string) => {
         let raw = (query || '').trim();
@@ -1221,6 +1188,7 @@ function CreateOrderContent() {
         stagedItemId: string;
         rowIndex: number;
         duplicateIndex: number;
+        duplicateId?: string;
         pendingOptions?: any;
         pendingQty?: number;
         pendingUnit?: string;
@@ -1917,7 +1885,7 @@ function CreateOrderContent() {
         let finalNickname = exc?.nickname || product.name;
         const resolvedSubstitutedFrom = substitutedFrom !== undefined ? (substitutedFrom || undefined) : (substitutedFromProduct || undefined);
 
-        const isProdKg = (product.unit_of_measure || 'Kg').toLowerCase().includes('kg');
+        const isProdKg = isKgUnitName(product.unit_of_measure || 'Kg');
         const nominalWeight = !isProdKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         const resolvedFactor = factor !== undefined && factor !== null ? factor : nominalWeight;
         const resolvedUnit = unit || product.unit_of_measure || 'Kg';
@@ -2234,7 +2202,7 @@ function CreateOrderContent() {
         const qtyNum = evaluatedQty > 0 ? evaluatedQty : (parseFloat(String(rawQtyVal).replace(',', '.')) || 1);
         
         const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
-        const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+        const isKgProduct = isKgUnitName(selectedProductForModal.unit_of_measure || 'Kg');
         const nominalWeight = !isKgProduct && selectedProductForModal.weight_kg && Number(selectedProductForModal.weight_kg) > 0
             ? Number(selectedProductForModal.weight_kg)
             : 1;
@@ -2246,7 +2214,10 @@ function CreateOrderContent() {
             if ((optName.toLowerCase().includes('presentaci') || optName.toLowerCase().includes('unidad')) && optVal) {
                 const strVal = String(optVal);
                 const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                if (clean.includes('libra') || clean.includes('pound') || clean.includes('unidad web')) {
+                    return;
+                }
+                if (isKgUnitName(clean)) {
                     resolvedUnit = selectedProductForModal.unit_of_measure || 'Kg';
                     resolvedFactor = 1;
                 } else if (clean === baseUnitLower) {
@@ -2266,7 +2237,7 @@ function CreateOrderContent() {
         });
 
         const baseQty = isKgProduct ? parseFloat((qtyNum * resolvedFactor).toFixed(3)) : qtyNum;
-        const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes((resolvedUnit || '').trim().toLowerCase());
+        const isDiscreteUnit = !isKgUnitName(resolvedUnit);
         if (isDiscreteUnit && (!Number.isInteger(qtyNum) || qtyNum < 1)) {
             showToast('Para esta presentación la cantidad debe ser un número entero (1, 2, 3...)', 'error');
             const qtyInput = document.getElementById('modal-qty-input');
@@ -2334,11 +2305,12 @@ function CreateOrderContent() {
                     stagedItemId: editingStagedItemId,
                     rowIndex: rowIdx,
                     duplicateIndex,
+                    duplicateId: stagedItems[duplicateIndex]?.id,
                     pendingOptions: enrichedOptions,
                     pendingQty: baseQty,
                     pendingVariantLabel: variantLabel,
-                    pendingUnit: resolvedUnit,
-                    pendingFactor: resolvedFactor,
+                    pendingUnit: selectedProductForModal.unit_of_measure || 'Kg',
+                    pendingFactor: 1,
                     pendingSubstitutedFrom: substitutedFromProduct || undefined
                 });
                 setSelectedProductForModal(null);
@@ -2358,9 +2330,11 @@ function CreateOrderContent() {
                         quantity: baseQty,
                         variant_label: variantLabel,
                         selected_options: enrichedOptions,
-                        originalQty: qtyNum,
-                        originalUnit: resolvedUnit,
-                        conversion_factor: resolvedFactor,
+                        originalQty: baseQty,
+                        originalUnit: selectedProductForModal.unit_of_measure || 'Kg',
+                        conversion_factor: 1,
+                        isManuallyEditedQty: true,
+                        _conversionApplied: true,
                         status: 'MATCH',
                         isConfirmed: true
                     };
@@ -2473,22 +2447,32 @@ function CreateOrderContent() {
         if (exc && exc.picking_note && exc.picking_note.trim() && mergedOptions.nota_alistamiento === undefined) {
             mergedOptions.nota_alistamiento = exc.picking_note.trim();
         }
+        const isKg = isKgUnitName(product.unit_of_measure || 'Kg');
+        const nominalWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
+
         // SDD v1.9.177 / v1.9.305: 'Maduro'/'Madura' es la maduración implícita por defecto; nunca se preselecciona ni se persiste como variante
+        // SDD v1.9.431: En staging, effectiveQty ya está convertido a Kg de facturación; limpiar presentaciones ocultas o con peso para evitar doble conversión
         Object.keys(mergedOptions).forEach(k => {
             const cleanK = (String(mergedOptions[k]).includes('|') ? String(mergedOptions[k]).split('|')[0] : String(mergedOptions[k])).toLowerCase().trim();
             if (k.toLowerCase().includes('madura') && (cleanK === 'maduro' || cleanK === 'madura')) {
                 delete mergedOptions[k];
+            } else if (k.toLowerCase().includes('presentaci') || k.toLowerCase().includes('unidad')) {
+                const lowerOptVal = String(mergedOptions[k] || '').toLowerCase();
+                if (lowerOptVal.includes('libra') || lowerOptVal.includes('pound') || lowerOptVal.includes('unidad web')) {
+                    if (isKg) mergedOptions[k] = 'Kg';
+                    else delete mergedOptions[k];
+                } else if (isKg && extractPackWeightKgFromText(String(mergedOptions[k])) !== null) {
+                    mergedOptions[k] = 'Kg';
+                }
             }
         });
         setSelectedOptions(mergedOptions);
         
-        const effectiveQty = stagedItem ? stagedItem.quantity : qty;
+        const effectiveQty = qty !== undefined && qty !== null ? qty : (stagedItem ? stagedItem.quantity : 1);
 
         setModalQuantity(effectiveQty);
-        const isKg = (product.unit_of_measure || 'Kg').toLowerCase().includes('kg');
-        const nominalWeight = !isKg && product.weight_kg && Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1;
         setModalUnit(product.unit_of_measure || 'Kg');
-        setModalFactor(factor || nominalWeight);
+        setModalFactor(isKg ? 1 : nominalWeight);
     };
 
     const closeProductModal = () => {
@@ -2541,8 +2525,8 @@ function CreateOrderContent() {
         const product = subProd || rawProduct;
 
         // Check if another active row in staged items already has this product
-        const duplicateIndex = stagedItems.findIndex((item, idx) =>
-            idx !== rowIdx && item.id !== stagedItemId && item.suggestedProduct?.id === product.id
+        const duplicateIndex = stagedItems.findIndex((item) =>
+            item.id !== stagedItemId && item.suggestedProduct?.id === product.id
         );
 
         if (duplicateIndex >= 0) {
@@ -2552,6 +2536,7 @@ function CreateOrderContent() {
                 stagedItemId,
                 rowIndex: rowIdx,
                 duplicateIndex,
+                duplicateId: stagedItems[duplicateIndex]?.id,
                 pendingOptions: options,
                 pendingQty: qty,
                 pendingUnit: unit,
@@ -2599,17 +2584,76 @@ function CreateOrderContent() {
             ? variantLabel
             : (resolvedPublicValues.length > 0 ? resolvedPublicValues.join(', ') : undefined);
 
-        setStagedItems(prev => prev.map((item, idx) => {
-            if (item.id === stagedItemId || idx === rowIdx) {
-                const resolvedUnit = unit || item.originalUnit || product.unit_of_measure || 'Kg';
-                const resolvedFactor = factor !== undefined ? factor : (item.conversion_factor || 1);
-                const resolvedQty = qty !== undefined ? qty : item.quantity;
+        const currentStagedItem = stagedItems.find(i => i.id === stagedItemId);
+        const resolvedBillingUnit = product.unit_of_measure || 'Kg';
+        let computedQtyForModal = qty !== undefined ? qty : (currentStagedItem?.quantity ?? 1);
+
+        if (currentStagedItem && qty === undefined && !currentStagedItem.isManuallyEditedQty) {
+            const productChanged = currentStagedItem.suggestedProduct?.id !== product.id;
+            const shouldSkipReconvert = !productChanged && Boolean(currentStagedItem._conversionApplied);
+            if (!shouldSkipReconvert) {
+                const rawDocUnitForItem = currentStagedItem.rawDocumentUnit !== undefined
+                    ? currentStagedItem.rawDocumentUnit
+                    : (currentStagedItem.originalUnitInFile || null);
+                const baseRawQty = Number(
+                    currentStagedItem.originalQtyInFile !== undefined && currentStagedItem.originalQtyInFile !== null
+                        ? currentStagedItem.originalQtyInFile
+                        : currentStagedItem.quantity
+                ) || 1;
+                const prodConvs = conversions.filter(c => c.product_id === product.id);
+                const conv = resolveCanonicalConversion({
+                    rawName: currentStagedItem.originalName || '',
+                    rawDocumentUnit: rawDocUnitForItem,
+                    currentUnit: currentStagedItem.originalUnit || currentStagedItem.unit,
+                    observations: currentStagedItem.observations || '',
+                    quantity: baseRawQty,
+                    product,
+                    productConversions: prodConvs,
+                    alreadyNormalized: false,
+                    isManuallyEditedQty: false
+                });
+                computedQtyForModal = conv.billingQty;
+            }
+        }
+
+        setStagedItems(prev => prev.map((item) => {
+            if (item.id === stagedItemId) {
+                let resolvedQty = qty !== undefined ? qty : item.quantity;
+                if (qty === undefined && !item.isManuallyEditedQty) {
+                    const productChanged = item.suggestedProduct?.id !== product.id;
+                    const shouldSkipReconvert = !productChanged && Boolean(item._conversionApplied);
+                    if (!shouldSkipReconvert) {
+                        const rawDocUnitForItem = item.rawDocumentUnit !== undefined
+                            ? item.rawDocumentUnit
+                            : (item.originalUnitInFile || null);
+                        const baseRawQty = Number(
+                            item.originalQtyInFile !== undefined && item.originalQtyInFile !== null
+                                ? item.originalQtyInFile
+                                : item.quantity
+                        ) || 1;
+                        const prodConvs = conversions.filter(c => c.product_id === product.id);
+                        const conv = resolveCanonicalConversion({
+                            rawName: item.originalName || '',
+                            rawDocumentUnit: rawDocUnitForItem,
+                            currentUnit: item.originalUnit || item.unit,
+                            observations: item.observations || '',
+                            quantity: baseRawQty,
+                            product,
+                            productConversions: prodConvs,
+                            alreadyNormalized: false,
+                            isManuallyEditedQty: false
+                        });
+                        resolvedQty = conv.billingQty;
+                    }
+                }
                 return {
                     ...item,
                     suggestedProduct: product,
                     substitutedFromProduct: substitutedFrom || undefined,
-                    originalUnit: resolvedUnit,
-                    conversion_factor: resolvedFactor,
+                    originalUnit: resolvedBillingUnit,
+                    originalQty: resolvedQty,
+                    conversion_factor: 1,
+                    _conversionApplied: true,
                     quantity: resolvedQty,
                     variant_label: resolvedVariantLabel,
                     selected_options: resolvedOptions,
@@ -2625,16 +2669,15 @@ function CreateOrderContent() {
         setActiveDropdownRowIndex(null);
 
         if (openModalAfter) {
-            const item = stagedItems.find(i => i.id === stagedItemId) || stagedItems[rowIdx];
             openModalForStagedItem(
                 stagedItemId,
                 product,
-                qty !== undefined ? qty : (item?.quantity || 1),
+                computedQtyForModal,
                 rowIdx,
                 resolvedOptions,
-                item?.originalQty,
-                item?.originalUnit,
-                item?.conversion_factor
+                computedQtyForModal,
+                resolvedBillingUnit,
+                1
             );
             setSubstitutedFromProduct(substitutedFrom || null);
         }
@@ -2642,24 +2685,62 @@ function CreateOrderContent() {
 
     const handleMergeStagedDuplicateMatch = () => {
         if (!duplicateStagedMatchConfirm) return;
-        const { stagedItemId, rowIndex, duplicateIndex, product } = duplicateStagedMatchConfirm;
+        const { stagedItemId, duplicateIndex, duplicateId, product, pendingQty } = duplicateStagedMatchConfirm;
 
         setStagedItems(prev => {
-            const currentItem = prev.find(i => i.id === stagedItemId) || prev[rowIndex];
-            const existingItem = prev[duplicateIndex];
+            const currentItem = prev.find(i => i.id === stagedItemId);
+            const existingItem = duplicateId ? prev.find(i => i.id === duplicateId) : prev[duplicateIndex];
             if (!existingItem || !currentItem) return prev;
+
+            const resolvedProduct = product || existingItem.suggestedProduct || currentItem.suggestedProduct;
+            const prodConvs = resolvedProduct ? conversions.filter(c => c.product_id === resolvedProduct.id) : [];
 
             const currentOrigQtyInFile = parseFloat(currentItem.originalQtyInFile || currentItem.originalQty || currentItem.quantity || '0');
             const existingOrigQtyInFile = parseFloat(existingItem.originalQtyInFile || existingItem.originalQty || existingItem.quantity || '0');
             const sumOrigQtyInFile = parseFloat((existingOrigQtyInFile + currentOrigQtyInFile).toFixed(3));
 
-            const currentQty = parseFloat(currentItem.quantity || '0');
-            const existingQty = parseFloat(existingItem.quantity || '0');
-            const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+            let currentQty = pendingQty !== undefined && pendingQty !== null
+                ? Number(pendingQty)
+                : (parseFloat(currentItem.quantity || '0') || 0);
+            if ((pendingQty === undefined || pendingQty === null) && resolvedProduct && (!currentItem._conversionApplied || currentItem.suggestedProduct?.id !== resolvedProduct.id) && !currentItem.isManuallyEditedQty) {
+                const rawDocUnitForCurrent = currentItem.rawDocumentUnit !== undefined
+                    ? currentItem.rawDocumentUnit
+                    : (currentItem.originalUnitInFile || null);
+                const rawQtyForCurrent = Number(currentItem.originalQtyInFile ?? currentItem.quantity) || 0;
+                currentQty = resolveCanonicalConversion({
+                    rawName: currentItem.originalName || '',
+                    rawDocumentUnit: rawDocUnitForCurrent,
+                    currentUnit: currentItem.originalUnit || currentItem.unit,
+                    observations: currentItem.observations || '',
+                    quantity: rawQtyForCurrent,
+                    product: resolvedProduct,
+                    productConversions: prodConvs,
+                    alreadyNormalized: false,
+                    isManuallyEditedQty: false
+                }).billingQty;
+            }
 
-            const currentOrigQty = parseFloat(currentItem.originalQty || '0');
-            const existingOrigQty = parseFloat(existingItem.originalQty || '0');
-            const sumOrigQty = parseFloat((existingOrigQty + currentOrigQty).toFixed(3));
+            let existingQty = parseFloat(existingItem.quantity || '0') || 0;
+            if (resolvedProduct && !existingItem._conversionApplied && !existingItem.isManuallyEditedQty) {
+                const rawDocUnitForExisting = existingItem.rawDocumentUnit !== undefined
+                    ? existingItem.rawDocumentUnit
+                    : (existingItem.originalUnitInFile || null);
+                const rawQtyForExisting = Number(existingItem.originalQtyInFile ?? existingItem.quantity) || 0;
+                existingQty = resolveCanonicalConversion({
+                    rawName: existingItem.originalName || '',
+                    rawDocumentUnit: rawDocUnitForExisting,
+                    currentUnit: existingItem.originalUnit || existingItem.unit,
+                    observations: existingItem.observations || '',
+                    quantity: rawQtyForExisting,
+                    product: resolvedProduct,
+                    productConversions: prodConvs,
+                    alreadyNormalized: false,
+                    isManuallyEditedQty: false
+                }).billingQty;
+            }
+
+            const sumQty = parseFloat((existingQty + currentQty).toFixed(3));
+            const canonicalUnit = resolvedProduct?.unit_of_measure || existingItem.originalUnit || 'Kg';
 
             const mergedObservations = [existingItem.observations, currentItem.observations]
                 .filter(Boolean)
@@ -2673,10 +2754,14 @@ function CreateOrderContent() {
 
             const updatedExisting = {
                 ...existingItem,
-                suggestedProduct: existingItem.suggestedProduct || product,
+                suggestedProduct: existingItem.suggestedProduct || resolvedProduct,
                 originalQtyInFile: sumOrigQtyInFile > 0 ? sumOrigQtyInFile : sumQty,
-                originalQty: sumOrigQty > 0 ? sumOrigQty : sumQty,
+                originalQty: sumQty,
+                originalUnit: canonicalUnit,
                 quantity: sumQty,
+                conversion_factor: 1,
+                _conversionApplied: true,
+                isManuallyEditedQty: true,
                 observations: mergedObservations,
                 selected_options: mergedOptions,
                 isConfirmed: true,
@@ -2684,7 +2769,7 @@ function CreateOrderContent() {
             };
 
             return prev
-                .map((item, idx) => idx === duplicateIndex ? updatedExisting : item)
+                .map(item => item.id === existingItem.id ? updatedExisting : item)
                 .filter(item => item.id !== stagedItemId && item.id !== currentItem.id);
         });
 
@@ -2855,21 +2940,12 @@ function CreateOrderContent() {
     const calculateTotalWeight = () => {
         return cart.reduce((acc, item) => {
             const qtyNum = parseFloat(item.qty.toString().replace(',', '.') || '0');
-            const unit = (item.originalUnit || item.product.unit_of_measure || '').toLowerCase().trim();
-            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-            
-            let weightFactor = 1.0;
-            if (isKgUnit) {
-                weightFactor = 1.0;
-            } else if (isLibraUnit) {
-                weightFactor = 0.5;
-            } else if (item.product.weight_kg && Number(item.product.weight_kg) > 0) {
-                weightFactor = Number(item.product.weight_kg);
-            } else {
-                weightFactor = 1.0;
-            }
-            return acc + (qtyNum * weightFactor);
+            return acc + computeLineWeightKg({
+                quantity: qtyNum,
+                billingUnit: item.product?.unit_of_measure || item.originalUnit,
+                productUnitOfMeasure: item.product?.unit_of_measure,
+                productWeightKg: item.product?.weight_kg
+            });
         }, 0);
     };
 
@@ -3292,22 +3368,15 @@ function CreateOrderContent() {
                                 const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                 if (!possibleUnits.some(u => u.unit.toLowerCase() === cleanUnit.toLowerCase())) {
                                     let factor = 1;
-                                    const defaultUnit = product.web_unit || product.unit_of_measure;
+                                    const defaultUnit = product.web_unit || product.unit_of_measure || 'Kg';
                                     if (cleanUnit.toLowerCase() === defaultUnit.toLowerCase()) {
                                         factor = parseFloat(product.web_conversion_factor) || 1;
+                                    } else if (val.includes('|')) {
+                                        const grams = parseFloat(val.split('|')[1]);
+                                        if (!isNaN(grams) && grams > 0) factor = grams / 1000;
                                     } else {
-                                        // Intentar calcular factor dinámico usando parseWeight
-                                        if (cleanUnit.includes('|')) {
-                                            const grams = parseFloat(cleanUnit.split('|')[1]);
-                                            if (!isNaN(grams) && grams > 0) factor = grams / 1000;
-                                        } else {
-                                            const clean = cleanUnit.toLowerCase();
-                                            const kgMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)/);
-                                            if (kgMatch) factor = parseFloat(kgMatch[1]);
-                                            const gMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:g|gr|grs|gramos|grams|gramo|gram)/);
-                                            if (gMatch) factor = parseFloat(gMatch[1]) / 1000;
-                                            if (clean.includes('libra') || clean.includes('lb')) factor = 0.5;
-                                        }
+                                        const parsedW = extractPackWeightKgFromText(cleanUnit);
+                                        if (parsedW !== null) factor = parsedW;
                                     }
                                     possibleUnits.push({ unit: cleanUnit, factor });
                                 }
@@ -3315,8 +3384,13 @@ function CreateOrderContent() {
                         }
                     });
                 }
-                
-                // 2. Coincidencia directa con la unidad normalizada del documento (ej. 'Kg', 'Unidad', 'Cubeta', 'Libra')
+
+                // 2. Si el documento pide explícitamente en Kg y el producto factura en Kg, prioridad absoluta (factor = 1)
+                if (isKgProduct && isKgUnitName(docUnitNorm)) {
+                    return { unit: product.unit_of_measure || 'Kg', factor: 1 };
+                }
+
+                // 3. Coincidencia directa con la unidad normalizada del documento (ej. 'Kg', 'Unidad', 'Cubeta', 'Libra')
                 if (docUnitNorm) {
                     for (const u of possibleUnits) {
                         const uNorm = normalizeDocUnit(u.unit);
@@ -3326,24 +3400,22 @@ function CreateOrderContent() {
                     }
                 }
 
-                // 3. Buscar en texto completo (nombre + observaciones) si se detectan Libras/500g para productos en Kg
-                if (docUnitNorm === 'Libra' || fullSearchText.includes('libra') || fullSearchText.includes(' lb') || fullSearchText.includes(' lbs') || fullSearchText.includes('500g') || fullSearchText.includes('500 gr')) {
+                // 4. Buscar en texto completo (con límites estrictos de palabra, jamás subcadenas en "Albahaca")
+                if (docUnitNorm === 'Libra' || (!isKgUnitName(docUnitNorm) && (hasExplicitLibraWord(fullSearchText) || /\b500\s*(?:grs?|gramos?|g)\b/i.test(fullSearchText)))) {
                     if (isKgProduct) {
                         return { unit: 'Libra', factor: 0.5 };
                     }
                 }
 
-                // 4. Buscar en texto completo (nombre + observaciones) qué unidad coincide mejor
+                // 5. Buscar en texto completo (nombre + observaciones) qué unidad coincide con palabra completa
                 for (const u of possibleUnits) {
                     const unitLower = u.unit.toLowerCase();
-                    if (unitLower.length > 2) {
-                        if (fullSearchText.includes(unitLower)) {
-                            return u;
-                        }
+                    if (unitLower.length > 2 && hasWholeWord(fullSearchText, u.unit)) {
+                        return u;
                     }
                 }
-                
-                // 5. Si el documento trajo una unidad normalizada, respetarla y aplicar factor
+
+                // 6. Si el documento trajo una unidad normalizada, respetarla y aplicar factor
                 if (docUnitNorm) {
                     let factor = 1;
                     if (docUnitNorm === 'Libra' && isKgProduct) factor = 0.5;
@@ -3560,28 +3632,36 @@ function CreateOrderContent() {
                     : matchResult.matchReason;
 
                 const productConversions = conversions.filter(c => c.product_id === (match?.id || ''));
-                const detectedUnit = match 
-                    ? detectUnitFromItem(item, match, productConversions) 
-                    : (item.unit ? { unit: item.unit, factor: 1 } : null);
-                
-                const factor = detectedUnit?.factor || 1;
-                const convertedQty = detectedUnit ? parseFloat((quantity * factor).toFixed(3)) : quantity;
-                const rawDocUnit = item.unit || item.presentation || '';
-                const docUnitNorm = normalizeDocUnit(rawDocUnit);
-                const originalUnitInFile = detectedUnit?.unit || docUnitNorm || rawDocUnit || (match?.unit_of_measure || 'Kg');
-
                 const rawObs = (item.observations || '').trim();
+                const rawDocUnit = (item.unit || item.presentation || '').trim();
+                const conv = match
+                    ? resolveCanonicalConversion({
+                        rawName: originalName,
+                        rawDocumentUnit: rawDocUnit || null,
+                        observations: rawObs,
+                        quantity,
+                        product: match,
+                        productConversions
+                    })
+                    : null;
+
+                const convertedQty = conv ? conv.billingQty : quantity;
+                const docUnitNorm = normalizeDocUnit(rawDocUnit);
+                const originalUnitInFile = rawDocUnit || docUnitNorm || conv?.originalUnit || '';
+
                 const schedule = detectDeliveryScheduleFromItem(item);
 
                 return {
                     id: crypto.randomUUID(),
                     originalName: originalName,
                     quantity: convertedQty,
+                    rawDocumentUnit: rawDocUnit || null,
                     originalQtyInFile: quantity,
                     originalUnitInFile: originalUnitInFile,
                     originalQty: convertedQty,
                     originalUnit: match?.unit_of_measure || 'Kg',
                     conversion_factor: 1,
+                    _conversionApplied: Boolean(match),
                     suggestedProduct: match || null,
                     substitutedFromProduct: (subProduct && rawMatch) ? rawMatch : undefined,
                     confidence: matchResult.confidence,
@@ -3604,15 +3684,27 @@ function CreateOrderContent() {
                             opts.nota_alistamiento = exc.picking_note.trim();
                         }
 
-                        // 2. Mapear unidad de presentación detectada si aplica
-                        if (detectedUnit && match?.options_config) {
+                        // 2. Mapear presentación solo si no genera doble conversión sobre quantity ya normalizada en Kg
+                        if (match?.options_config) {
+                            const billingIsKg = isKgUnitName(match?.unit_of_measure || 'Kg');
                             match.options_config.forEach((opt: any) => {
                                 if (opt.name.toLowerCase().includes('presentaci')) {
-                                    const matchedVal = opt.values?.find((v: string) => {
-                                        const clean = v.includes('|') ? v.split('|')[0] : v;
-                                        return clean.toLowerCase() === detectedUnit.unit.toLowerCase();
-                                    });
-                                    if (matchedVal) opts[opt.name] = matchedVal;
+                                    if (billingIsKg) {
+                                        const kgVal = opt.values?.find((v: string) => {
+                                            const clean = v.includes('|') ? v.split('|')[0] : v;
+                                            return isKgUnitName(clean);
+                                        });
+                                        if (kgVal) opts[opt.name] = kgVal;
+                                        else if (opts[opt.name] && (String(opts[opt.name]).toLowerCase().includes('libra') || extractPackWeightKgFromText(String(opts[opt.name])) !== null)) {
+                                            delete opts[opt.name];
+                                        }
+                                    } else if (conv?.originalUnit) {
+                                        const matchedVal = opt.values?.find((v: string) => {
+                                            const clean = v.includes('|') ? v.split('|')[0] : v;
+                                            return clean.toLowerCase() === conv.originalUnit.toLowerCase();
+                                        });
+                                        if (matchedVal) opts[opt.name] = matchedVal;
+                                    }
                                 }
                             });
                         }
@@ -3710,6 +3802,7 @@ function CreateOrderContent() {
                         stagedItemId: it.id,
                         rowIndex: i,
                         duplicateIndex: firstIdx,
+                        duplicateId: suggested[firstIdx]?.id,
                         pendingQty: it.quantity,
                         pendingUnit: it.originalUnit || it.suggestedProduct.unit_of_measure,
                         pendingFactor: it.conversion_factor || 1,
@@ -4046,16 +4139,12 @@ function CreateOrderContent() {
                 const itemTax = itemTotal * (ivaRate / (100 + ivaRate));
                 const itemSubtotal = itemTotal - itemTax;
 
-                const unit = (item.originalUnit || prod.unit_of_measure || '').toLowerCase().trim();
-                const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-                const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-                let weightFactor = 1.0;
-                if (isKgUnit) weightFactor = 1.0;
-                else if (isLibraUnit) weightFactor = 0.5;
-                else if (prod.weight_kg && Number(prod.weight_kg) > 0) weightFactor = Number(prod.weight_kg);
-                else weightFactor = 1.0;
-
-                const itemWeight = qtyNum * weightFactor;
+                const itemWeight = computeLineWeightKg({
+                    quantity: qtyNum,
+                    billingUnit: prod.unit_of_measure || item.originalUnit,
+                    productUnitOfMeasure: prod.unit_of_measure,
+                    productWeightKg: prod.weight_kg
+                });
                 if (isOffAgreementItem) {
                     offAgreementWeightKg += itemWeight;
                 } else {
@@ -4086,7 +4175,7 @@ function CreateOrderContent() {
                     unit_price: unitPrice,
                     nickname: validAlias,
                     variant_label: variantLabel || null,
-                    unit: item.originalUnit || prod.unit_of_measure || 'Kg',
+                    unit: prod.unit_of_measure || 'Kg',
                     selected_options: item.selected_options || {}
                 };
             });
@@ -4654,8 +4743,12 @@ function CreateOrderContent() {
                     const itemSubtotal = unitPrice * qty;
                     const ivaRate = item.suggestedProduct.iva_rate || 0;
                     const itemTax = itemSubtotal * (ivaRate / 100);
-                    const weightFactor = parseFloat(item.suggestedProduct.weight_kg) || 1;
-                    const itemWeight = (item.originalUnit === 'Kg' || item.originalUnit === 'kg') ? qty : (qty * weightFactor);
+                    const itemWeight = computeLineWeightKg({
+                        quantity: qty,
+                        billingUnit: item.suggestedProduct.unit_of_measure || item.originalUnit,
+                        productUnitOfMeasure: item.suggestedProduct.unit_of_measure,
+                        productWeightKg: item.suggestedProduct.weight_kg
+                    });
 
                     subtotal += itemSubtotal;
                     tax += itemTax;
@@ -4681,7 +4774,7 @@ function CreateOrderContent() {
                         unit_price: unitPrice,
                         nickname: validAlias,
                         variant_label: variantLabel || null,
-                        unit: item.originalUnit || item.suggestedProduct.unit_of_measure || 'Kg',
+                        unit: item.suggestedProduct.unit_of_measure || 'Kg',
                         selected_options: item.selected_options || {}
                     };
                 });
@@ -5215,7 +5308,12 @@ function CreateOrderContent() {
                     const lineIva = lineSub * ((item.product?.iva_rate || 0) / 100);
                     sub += lineSub;
                     tx += lineIva;
-                    wt += qtyNum * (item.product?.weight_kg || 1);
+                    wt += computeLineWeightKg({
+                        quantity: qtyNum,
+                        billingUnit: item.product?.unit_of_measure || item.originalUnit,
+                        productUnitOfMeasure: item.product?.unit_of_measure,
+                        productWeightKg: item.product?.weight_kg
+                    });
                 }
                 return { subtotal: sub, tax: tx, total: sub + tx, weight: wt };
             };
@@ -5338,7 +5436,7 @@ ${primaryAdminNotes}`.trim();
                     unit_price: unitPrice,
                     nickname: validAlias,
                     variant_label: item.variant_label || null,
-                    unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
+                    unit: item.product.unit_of_measure || 'Kg',
                     selected_options: item.selected_options || {}
                 };
             });
@@ -5464,7 +5562,7 @@ ${primaryAdminNotes}`.trim();
                             unit_price: 0,
                             nickname: validAlias,
                             variant_label: item.variant_label || null,
-                            unit: item.originalUnit || item.product.unit_of_measure || 'Kg',
+                            unit: item.product.unit_of_measure || 'Kg',
                             selected_options: item.selected_options || {}
                         };
                     });
@@ -8578,8 +8676,8 @@ ${primaryAdminNotes}`.trim();
                                                 <tbody>
                                                     {(sortStagedAlpha
                                                         ? [...stagedItems].sort((a, b) =>
-                                                            (a.rawText || a.productName || '').localeCompare(
-                                                                b.rawText || b.productName || '', 'es', { sensitivity: 'base' }
+                                                            (a.originalName || a.rawText || a.productName || a.suggestedProduct?.name || '').localeCompare(
+                                                                b.originalName || b.rawText || b.productName || b.suggestedProduct?.name || '', 'es', { sensitivity: 'base' }
                                                             ))
                                                         : stagedItems
                                                     ).map((item, idx) => {
@@ -8746,6 +8844,14 @@ ${primaryAdminNotes}`.trim();
                                                                             scrollToStagedRow(idx);
                                                                         }}
                                                                         onBlur={(e) => {
+                                                                            if (skipNextStagedBlurRef.current) {
+                                                                                skipNextStagedBlurRef.current = false;
+                                                                                setActiveRowSearchQuery(null);
+                                                                                setTimeout(() => {
+                                                                                    setActiveDropdownRowIndex(prev => prev === idx ? null : prev);
+                                                                                }, 250);
+                                                                                return;
+                                                                            }
                                                                             const val = e.target.value;
                                                                             const isStrict = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
                                                                             const pool = isStrict ? products.filter(p => agreementProductIds.has(p.id)) : products;
@@ -8770,7 +8876,8 @@ ${primaryAdminNotes}`.trim();
                                                                                 const val = e.currentTarget.value;
                                                                                 const p = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === val) || item.suggestedProduct;
                                                                                 if (p) {
-                                                                                    e.preventDefault(); 
+                                                                                    e.preventDefault();
+                                                                                    skipNextStagedBlurRef.current = true;
                                                                                     const hasModalOptions = Array.isArray(p.options_config) && p.options_config.length > 0;
                                                                                     selectStagedProduct(item.id, p, idx, undefined, undefined, hasModalOptions);
                                                                                     if (!hasModalOptions) {
@@ -8793,6 +8900,7 @@ ${primaryAdminNotes}`.trim();
                                                                                 }
                                                                             } else if (e.key === 'Enter') {
                                                                                 e.preventDefault();
+                                                                                skipNextStagedBlurRef.current = true;
                                                                                 const selectedProd = (scoredList && scoredList[focusedDropdownItemIndex]) || products.find(prod => `${prod.name} (${getAccountingIdDisplay(prod)})` === e.currentTarget.value) || item.suggestedProduct;
                                                                                 if (selectedProd) {
                                                                                     selectStagedProduct(item.id, selectedProd, idx);
@@ -8919,6 +9027,7 @@ ${primaryAdminNotes}`.trim();
                                                                                                     showToast(`"${p.name}" no se puede agregar: Insumo bloqueado por escasez.`, 'error');
                                                                                                     return;
                                                                                                 }
+                                                                                                skipNextStagedBlurRef.current = true;
                                                                                                 if (p.options_config?.length > 0) {
                                                                                                     selectStagedProduct(item.id, p, idx, undefined, undefined, true);
                                                                                                 } else {
@@ -9103,9 +9212,18 @@ ${primaryAdminNotes}`.trim();
                                                                             onKeyDown={(e) => {
                                                                                 if (e.key === 'Enter') {
                                                                                     e.preventDefault();
+                                                                                    skipNextStagedQtyBlurRef.current = item.id;
                                                                                     const val = evaluateMathExpression(e.currentTarget.value);
-                                                                                    updateStagedItem(item.id, 'quantity', val);
-                                                                                    updateStagedItem(item.id, 'originalQty', val);
+                                                                                    setStagedItems(prev => prev.map(row => row.id === item.id ? {
+                                                                                        ...row,
+                                                                                        quantity: val,
+                                                                                        originalQty: val,
+                                                                                        originalUnit: row.suggestedProduct?.unit_of_measure || 'Kg',
+                                                                                        conversion_factor: 1,
+                                                                                        isManuallyEditedQty: true,
+                                                                                        _conversionApplied: true,
+                                                                                        isConfirmed: true
+                                                                                    } : row));
                                                                                     const nextIdx = idx + 1;
                                                                                     const nextInput = document.getElementById(`sku-input-${nextIdx}`) as HTMLInputElement | null;
                                                                                     if (nextInput) {
@@ -9118,15 +9236,35 @@ ${primaryAdminNotes}`.trim();
                                                                                 }
                                                                             }}
                                                                             onBlur={(e) => {
+                                                                                if (skipNextStagedQtyBlurRef.current === item.id) {
+                                                                                    skipNextStagedQtyBlurRef.current = null;
+                                                                                    return;
+                                                                                }
                                                                                 const val = evaluateMathExpression(e.currentTarget.value);
-                                                                                updateStagedItem(item.id, 'quantity', val);
-                                                                                updateStagedItem(item.id, 'originalQty', val);
+                                                                                setStagedItems(prev => prev.map(row => row.id === item.id ? {
+                                                                                    ...row,
+                                                                                    quantity: val,
+                                                                                    originalQty: val,
+                                                                                    originalUnit: row.suggestedProduct?.unit_of_measure || 'Kg',
+                                                                                    conversion_factor: 1,
+                                                                                    isManuallyEditedQty: true,
+                                                                                    _conversionApplied: true,
+                                                                                    isConfirmed: true
+                                                                                } : row));
                                                                             }}
                                                                             onChange={(e) => {
                                                                                 const rawVal = e.target.value;
                                                                                 const val = evaluateMathExpression(rawVal);
-                                                                                updateStagedItem(item.id, 'quantity', rawVal);
-                                                                                updateStagedItem(item.id, 'originalQty', val);
+                                                                                setStagedItems(prev => prev.map(row => row.id === item.id ? {
+                                                                                    ...row,
+                                                                                    quantity: rawVal,
+                                                                                    originalQty: val,
+                                                                                    originalUnit: row.suggestedProduct?.unit_of_measure || 'Kg',
+                                                                                    conversion_factor: 1,
+                                                                                    isManuallyEditedQty: true,
+                                                                                    _conversionApplied: true,
+                                                                                    isConfirmed: true
+                                                                                } : row));
                                                                             }}
                                                                             style={{ 
                                                                                 width: '75px', 
@@ -11198,7 +11336,7 @@ ${primaryAdminNotes}`.trim();
                     const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                     const isGram = opt.name.toLowerCase().includes('gramaje');
                     const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
-                    const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                    const isKgProduct = isKgUnitName(selectedProductForModal.unit_of_measure || 'Kg');
 
                     if (isPresentation) {
                         values = values.filter((v: string) => {
@@ -11210,7 +11348,7 @@ ${primaryAdminNotes}`.trim();
                         if (isKgProduct) {
                             const hasKg = values.some(v => {
                                 const clean = (v.includes('|') ? v.split('|')[0] : v).trim().toLowerCase();
-                                return clean === 'kg' || clean === 'kilo' || clean === 'kilogramo';
+                                return isKgUnitName(clean);
                             });
                             if (!hasKg) {
                                 values = ['Kg', ...values];
@@ -11240,8 +11378,8 @@ ${primaryAdminNotes}`.trim();
                         const cleanA = (valA.includes('|') ? valA.split('|')[0] : valA).trim().toLowerCase();
                         const cleanB = (valB.includes('|') ? valB.split('|')[0] : valB).trim().toLowerCase();
                         
-                        const isKgA = cleanA === 'kg' || cleanA === 'kilo' || cleanA === 'kilogramo' || cleanA === baseUnitLower;
-                        const isKgB = cleanB === 'kg' || cleanB === 'kilo' || cleanB === 'kilogramo' || cleanB === baseUnitLower;
+                        const isKgA = isKgUnitName(cleanA) || cleanA === baseUnitLower;
+                        const isKgB = isKgUnitName(cleanB) || cleanB === baseUnitLower;
 
                         // 'Kg' o unidad base siempre al inicio
                         if (isKgA && !isKgB) return -1;
@@ -11264,7 +11402,7 @@ ${primaryAdminNotes}`.trim();
                 // Build options list for manual orders (strictly base units: Kg, Unidad, etc.)
                 const optionsList: { unit: string; factor: number; label: string }[] = [];
                 const baseUnit = selectedProductForModal.unit_of_measure || 'Kg';
-                const isKgProd = baseUnit.toLowerCase() === 'kg' || baseUnit.toLowerCase() === 'kilo' || baseUnit.toLowerCase() === 'kilogramo';
+                const isKgProd = isKgUnitName(baseUnit);
                 const nominalBaseFactor = !isKgProd && selectedProductForModal.weight_kg && Number(selectedProductForModal.weight_kg) > 0
                     ? Number(selectedProductForModal.weight_kg)
                     : 1;
@@ -11322,7 +11460,7 @@ ${primaryAdminNotes}`.trim();
                 };
 
                 const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
-                const isKgProduct = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                const isKgProduct = isKgUnitName(selectedProductForModal.unit_of_measure || 'Kg');
                 const nominalWeight = !isKgProduct && selectedProductForModal.weight_kg && Number(selectedProductForModal.weight_kg) > 0
                     ? Number(selectedProductForModal.weight_kg)
                     : 1;
@@ -11337,7 +11475,7 @@ ${primaryAdminNotes}`.trim();
                         if (optVal) {
                             const strVal = String(optVal);
                             const clean = (strVal.includes('|') ? strVal.split('|')[0] : strVal).trim().toLowerCase();
-                            if (clean === 'kg' || clean === 'kilo' || clean === 'kilogramo') {
+                            if (isKgUnitName(clean)) {
                                 dynamicUnitLabel = selectedProductForModal.unit_of_measure || 'Kg';
                                 dynamicUnitFactor = 1;
                             } else if (clean === baseUnitLower) {
@@ -11357,7 +11495,7 @@ ${primaryAdminNotes}`.trim();
                     }
                 });
 
-                const isDiscreteUnit = !['kg', 'kilo', 'kilos'].includes((dynamicUnitLabel || '').trim().toLowerCase());
+                const isDiscreteUnit = !isKgUnitName(dynamicUnitLabel);
                 const parsedModalQty = parseFloat(String(modalQuantity).replace(',', '.')) || 0;
                 const calculatedTotalKg = parsedModalQty * dynamicUnitFactor;
 
@@ -11729,13 +11867,13 @@ ${primaryAdminNotes}`.trim();
                                 const isPresentation = opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad');
                                 const isGram = opt.name.toLowerCase().includes('gramaje');
                                 const baseUnitLower = (selectedProductForModal.unit_of_measure || 'Kg').toLowerCase();
-                                const isKg = baseUnitLower === 'kg' || baseUnitLower === 'kilo' || baseUnitLower === 'kilogramo';
+                                const isKg = isKgUnitName(selectedProductForModal.unit_of_measure || 'Kg');
 
                                 // Evaluar presentación actual para regla condicional de Gramaje
                                 const presOpt = normalizedOptionsConfig.find((o: any) => o.name.toLowerCase().includes('presentaci') || o.name.toLowerCase().includes('unidad'));
                                 const currentPresVal = presOpt ? (selectedOptions[presOpt.name] !== undefined && selectedOptions[presOpt.name] !== '' ? selectedOptions[presOpt.name] : (isKg ? 'Kg' : (presOpt.values?.[0] || ''))) : '';
                                 const cleanPres = (currentPresVal.includes('|') ? currentPresVal.split('|')[0] : currentPresVal).trim().toLowerCase();
-                                const isPresKg = cleanPres === 'kg' || cleanPres === 'kilo' || cleanPres === 'kilogramo' || cleanPres === baseUnitLower;
+                                const isPresKg = isKgUnitName(cleanPres) || cleanPres === baseUnitLower;
 
                                 // POKA-YOKE CONDICIONAL: Si es Gramaje y la presentación NO es Kg (es por unidad/empaque discreto), ocultar Gramaje!
                                 if (isGram && !isPresKg) {
@@ -11762,7 +11900,7 @@ ${primaryAdminNotes}`.trim();
                                                 if (isPresentation) {
                                                     const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                     const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
-                                                    const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo' || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
+                                                    const isKgSel = isKgUnitName(cleanUnit) || cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
                                                     if (!isKgSel) {
                                                         Object.keys(next).forEach(k => {
                                                             if (k.toLowerCase().includes('gramaje')) delete next[k];
@@ -11775,7 +11913,7 @@ ${primaryAdminNotes}`.trim();
                                             if (opt.name.toLowerCase().includes('presentaci') || opt.name.toLowerCase().includes('unidad')) {
                                                 const cleanUnit = val.includes('|') ? val.split('|')[0] : val;
                                                 const defaultUnit = selectedProductForModal.unit_of_measure || 'Kg';
-                                                const isKgSel = cleanUnit.toLowerCase() === 'kg' || cleanUnit.toLowerCase() === 'kilo';
+                                                const isKgSel = isKgUnitName(cleanUnit);
                                                 const isDefaultUnit = cleanUnit.toLowerCase() === defaultUnit.toLowerCase();
 
                                                 if (isKgSel) {
@@ -12184,6 +12322,11 @@ ${primaryAdminNotes}`.trim();
                     }
 
                     const factor = qty2 / qty1;
+                    const toUnit = manageConversionsProduct.unit_of_measure || 'Kg';
+                    if (normalizeCanonicalUnit(unit1) === normalizeCanonicalUnit(toUnit) && Math.abs(factor - 1) > 0.0001) {
+                        alert(`Error: No puedes crear una conversión entre la misma unidad (${unit1} → ${toUnit}) con factor distinto a 1.`);
+                        return;
+                    }
 
                     const { data, error } = await supabase
                         .from('product_conversions')
