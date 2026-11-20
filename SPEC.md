@@ -12149,6 +12149,7 @@ Habiendo alcanzado la certificación plena de las 76 pantallas físicas de FruFr
   2. **Exposición Completa de `deductionAmount` en `parseRcaFromRecord()`:** `src/lib/rcaTaxonomy.ts` expone `deductionAmount?: number` en todas las rutas de retorno de `[RCA_METADATA:]`.
   3. **Informe Ejecutivo Redactado (100% Determinístico):** Presenta en pantalla y en el Acta PDF: (a) Narrativa ejecutiva automática de la jornada, (b) Productos y cantidades afectadas ordenados de mayor a menor impacto económico (`$ COP` con `#ID` contable), (c) Impacto por Causas (Área / Causa Raíz RCA con etiquetas legibles de `RESPONSIBLE_PARTIES` y `RCA_CATEGORIES_L1`), y (d) Relación por Usuarios en dos bloques (*Responsables Imputados & Auditores SAC* y *Clientes / Sedes Afectadas*).
   4. **Conmutador de Vista + Membrete Legal Canónico:** Permite alternar en 1 clic entre `Informe Ejecutivo` y `Tabla Operativa` (para auditoría directa), y el Acta PDF utiliza exclusivamente la razón social legal **Investments Cortés S.A.S. • NIT: 901.393.217-5** (§1.1 Frontera 2).
+  5. **Columnas de Responsabilidad e Imputación en Excel (`.xlsx`):** La exportación `handleExportExcel` de `PqrDailyShiftReport.tsx` incluye explícitamente las columnas dedicadas **`Responsable`**, **`Área del Responsable (Admin / Bodega)`** (`Bodega` vs `Administración` vs `Sin Clasificar`) e **`Imputación Económica ($ COP)`** (numérico sumable), además de `Detalle Imputados`, `Ajuste Cliente ($ COP)` y etiquetas legibles de `Área Técnica RCA` / `Causa Raíz RCA`.
 
 ---
 

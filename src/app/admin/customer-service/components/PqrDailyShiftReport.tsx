@@ -474,9 +474,26 @@ export default function PqrDailyShiftReport({
         try {
             const XLSX = await import('xlsx');
 
+            const resolveMacroArea = (areaCode: string, entities: any[]) => {
+                const effectiveCode = (areaCode && areaCode !== 'no_definido')
+                    ? areaCode
+                    : (entities[0]?.role || 'no_definido');
+                if (['bodega', 'picking', 'transporte', 'alistamiento', 'planta'].includes(effectiveCode)) {
+                    return 'Bodega';
+                }
+                if (['comercial', 'proveedor', 'cliente', 'administracion', 'admin', 'cartera', 'compras'].includes(effectiveCode)) {
+                    return 'Administración';
+                }
+                return 'Sin Clasificar';
+            };
+
             const excelRows = reportRows.map(r => {
                 const prodsStr = r.productsList.map(p => `${p.accountingId ? `[#${p.accountingId}] ` : ''}${p.name} (${p.qty} ${p.unit})`).join(', ');
                 const causalsStr = r.productsList.map(p => p.causal).join(', ');
+                const responsibleNames = r.imputedEntities.length > 0
+                    ? r.imputedEntities.map((e: any) => e.name).filter(Boolean).join(', ')
+                    : 'Sin asignar';
+                const responsibleMacroArea = resolveMacroArea(r.responsibleArea, r.imputedEntities);
                 const imputedStr = r.imputedEntities.map(e => `${e.name} (${e.role || 'Resp'} - ${Number(e.deductionAmount || 0).toLocaleString('es-CO')})`).join('; ') || 'Sin cobro imputado';
 
                 return {
@@ -488,11 +505,13 @@ export default function PqrDailyShiftReport({
                     'NIT': r.nit,
                     'Productos con Novedad': prodsStr,
                     'Causales Operativas': causalsStr,
-                    'Área Responsable': r.responsibleArea,
-                    'Causa Raíz RCA': `${r.categoryL1} / ${r.subtypeL2}`,
-                    'Responsables Imputados': imputedStr,
+                    'Área Técnica RCA': r.responsibleLabel,
+                    'Causa Raíz RCA': `${r.categoryLabel} / ${r.subtypeL2}`,
+                    'Responsable': responsibleNames,
+                    'Área del Responsable (Admin / Bodega)': responsibleMacroArea,
+                    'Imputación Económica ($ COP)': r.totalDeductions,
+                    'Detalle Imputados': imputedStr,
                     'Ajuste Cliente ($ COP)': r.clientDiscountAmount,
-                    'Imputado Responsables ($ COP)': r.totalDeductions,
                     'Solución Contable': r.solutionConcept,
                     'Estado': r.status === 'resolved' ? 'Resuelto' : 'Pendiente'
                 };
@@ -510,11 +529,13 @@ export default function PqrDailyShiftReport({
                 { wch: 14 }, // NIT
                 { wch: 40 }, // Productos con Novedad
                 { wch: 24 }, // Causales
-                { wch: 20 }, // Area
-                { wch: 30 }, // Causa Raiz
-                { wch: 35 }, // Imputados
+                { wch: 24 }, // Area Tecnica RCA
+                { wch: 32 }, // Causa Raiz
+                { wch: 30 }, // Responsable
+                { wch: 28 }, // Area del Responsable (Admin / Bodega)
+                { wch: 24 }, // Imputacion Economica ($ COP)
+                { wch: 35 }, // Detalle Imputados
                 { wch: 22 }, // Ajuste Cliente COP
-                { wch: 24 }, // Imputado Responsables COP
                 { wch: 28 }, // Solucion Contable
                 { wch: 12 }  // Estado
             ];
