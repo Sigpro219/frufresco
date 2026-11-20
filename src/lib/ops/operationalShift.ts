@@ -6,6 +6,19 @@
 export type OperationalShiftMode = 'manual_mirror' | 'digital_native';
 export type OperationalShiftStatus = 'open' | 'closed';
 
+const CLIENT_ROLES = new Set(['b2b_client', 'b2c_client', 'client']);
+
+/**
+ * Canonical staff gate (SPEC.md Escenario 477 §4 C2).
+ * Never trusts profile_type === 'employee' alone because B2B/B2C clients carry it in legacy profiles.
+ */
+export function isOperationalStaffProfile(
+    profile?: { role?: string | null } | null
+): boolean {
+    const role = (profile?.role || '').trim().toLowerCase();
+    return Boolean(role) && !CLIENT_ROLES.has(role);
+}
+
 export interface OperationalShiftState {
     id?: string;
     shift_date: string;

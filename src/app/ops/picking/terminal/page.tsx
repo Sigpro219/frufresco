@@ -4,19 +4,23 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { isAbortError } from '@/lib/errorUtils';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
-import { OPERATIONAL_CELLS, getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { OPERATIONAL_CELLS, getOperationalTargetDate, normalizeOperationalCell } from '@/lib/ops/operationalCells';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { CornerDownRight, CheckCircle2 } from 'lucide-react';
 
 // Types
 type PickingItem = {
     id: string; // OrderItem ID
     product_id: string;
+    parent_id?: string | null;
     product_name: string;
     quantity: number;
     picked_quantity: number;
     unit_of_measure: string;
     customer_name: string;
     zone_name: string;
+    space_label?: string | null;
+    available_stock?: number;
     physical_instruction?: string | null;
 };
 
@@ -31,10 +35,16 @@ interface SupabaseOrderItem {
     products: {
         id: string;
         name: string;
+        category?: string | null;
+        buying_team?: string | null;
+        parent_id?: string | null;
+        accounting_id?: string | number | null;
         unit_of_measure: string;
     };
     orders: {
         status: string;
+        warehouse_spaces?: number[] | null;
+        logistics_data?: Record<string, any> | null;
         profiles: {
             role: string;
             company_name: string | null;
@@ -66,13 +76,14 @@ export default function PickingTerminal() {
         setLoading(true);
         try {
             const targetDate = getOperationalTargetDate(20);
+            const normalizedTargetCell = normalizeOperationalCell(cell);
             const { data, error } = await supabase
                 .from('order_items')
                 .select(`
                     id, product_id, quantity, picked_quantity, variant_label, nickname, selected_options,
-                    products!inner (id, name, unit_of_measure, buying_team, accounting_id),
+                    products!inner (id, name, category, unit_of_measure, buying_team, accounting_id, parent_id),
                     orders!inner (
-                        status, delivery_date,
+                        status, delivery_date, warehouse_spaces, logistics_data,
                         profiles:profile_id (
                             role,
                             company_name,
@@ -80,9 +91,8 @@ export default function PickingTerminal() {
                         )
                     )
                 `)
-                .ilike('products.buying_team', cell)
                 .eq('orders.delivery_date', targetDate)
-                .in('orders.status', ['para_compra', 'approved', 'picking'])
+                .in('orders.status', ['para_compra', 'approved', 'picking', 'in_preparation'])
                 .abortSignal(signal as any);
 
             if (!isMounted.current) return;
@@ -91,8 +101,24 @@ export default function PickingTerminal() {
             if (data) {
                 const pendingItems = (data as unknown as SupabaseOrderItem[]).filter(item => {
                     const picked = item.picked_quantity || 0;
-                    return picked < item.quantity;
+                    if (picked >= item.quantity) return false;
+                    const resolvedCell = normalizeOperationalCell(item.products?.buying_team, item.products?.category);
+                    return resolvedCell === normalizedTargetCell;
                 });
+
+                const stockLookupIds = Array.from(new Set(
+                    pendingItems.flatMap(it => [it.product_id || it.products?.id, it.products?.parent_id]).filter(Boolean) as string[]
+                ));
+                const stockByProd: Record<string, number> = {};
+                if (stockLookupIds.length > 0) {
+                    const { data: stockRows } = await supabase
+                        .from('inventory_stocks')
+                        .select('product_id, quantity')
+                        .in('product_id', stockLookupIds);
+                    (stockRows || []).forEach((s: any) => {
+                        stockByProd[s.product_id] = (stockByProd[s.product_id] || 0) + Number(s.quantity || 0);
+                    });
+                }
                 
                 const mapped: PickingItem[] = pendingItems.map(item => {
                     const p = item.orders.profiles;
@@ -110,17 +136,26 @@ export default function PickingTerminal() {
                         selected_options: item.selected_options
                     });
                     const variant = item.variant_label || item.nickname || '';
-                    const dispName = variant ? `${item.products.name} (${variant})` : item.products.name;
+                    const baseLabel = item.products.accounting_id
+                        ? `#${item.products.accounting_id} ${item.products.name}`
+                        : item.products.name;
+                    const dispName = variant ? `${baseLabel} (${variant})` : baseLabel;
+                    const pid = item.product_id || item.products.id;
+                    const parentId = item.products?.parent_id || null;
+                    const availStock = stockByProd[pid] ?? (parentId ? stockByProd[parentId] : undefined) ?? 0;
 
                     return {
                         id: item.id,
-                        product_id: item.product_id || item.products.id,
+                        product_id: pid,
+                        parent_id: parentId,
                         product_name: dispName,
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || 0,
                         unit_of_measure: item.products.unit_of_measure,
                         customer_name: customerName,
                         zone_name: 'General',
+                        space_label: getOrderSpaceDisplayLabel(item.orders),
+                        available_stock: availStock,
                         physical_instruction: physicalInst
                     };
                 });
@@ -160,6 +195,14 @@ export default function PickingTerminal() {
 
     // Actions
     const handlePick = async (item: PickingItem) => {
+        // DT-17 Stock gate when stock is zero
+        if ((item.available_stock ?? 0) <= 0) {
+            const proceedZero = confirm(
+                `ALERTA DT-17 SIN STOCK: ${item.product_name} registra stock 0 en bodega.\n¿Confirmas que encontraste stock físico en piso para picar ${item.quantity} ${item.unit_of_measure}?`
+            );
+            if (!proceedZero) return;
+        }
+
         // Optimistic Remove
         setTasks(prev => prev.filter(t => t.id !== item.id));
         setLastAction(`Picado: ${item.product_name} (${item.quantity})`);
@@ -233,7 +276,7 @@ export default function PickingTerminal() {
 
                 {!loading && tasks.length === 0 && (
                     <div className="text-center p-20 flex flex-col items-center">
-                        <div className="text-6xl mb-4"></div>
+                        <CheckCircle2 className="w-14 h-14 text-green-400 mb-4" />
                         <h3 className="text-2xl font-bold text-green-400">¡Todo Listo!</h3>
                         <p className="text-gray-400">No hay pendientes en {selectedCell}</p>
                         <button onClick={() => setSelectedCell(null)} className="mt-8 text-blue-400 underline">Cambiar Célula</button>
@@ -243,7 +286,19 @@ export default function PickingTerminal() {
                 {tasks.map(item => (
                     <div key={item.id} className="bg-gray-800 rounded-lg p-4 shadow-lg border-l-4 border-yellow-500 flex justify-between items-center">
                         <div className="flex-1">
-                            <h3 className="text-lg font-bold text-white">{item.product_name}</h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-lg font-bold text-white">{item.product_name}</h3>
+                                {item.space_label && (
+                                    <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-xs font-black">
+                                        ESP {item.space_label}
+                                    </span>
+                                )}
+                                {(item.available_stock ?? 0) <= 0 && (
+                                    <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-bold">
+                                        SIN STOCK ({item.available_stock ?? 0})
+                                    </span>
+                                )}
+                            </div>
                             {item.physical_instruction && (
                                 <div className="text-emerald-400 text-xs font-bold mt-0.5 flex items-center gap-1">
                                     <CornerDownRight size={12} /> {item.physical_instruction}

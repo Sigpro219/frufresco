@@ -132,10 +132,12 @@ export async function POST(request: Request) {
         }
 
         // Poblar la timeline con los pedidos ya confirmados
+        const includedOrderIds = new Set<string>();
         if (activeStops && activeStops.length > 0) {
             activeStops.forEach(stop => {
                 const o = stop.order as any;
                 if (!o || !Array.isArray(o.warehouse_spaces)) return;
+                includedOrderIds.add(o.id);
                 
                 // Tratar de buscar la hora de salida de su ruta
                 let departureMin = timeToMinutes('04:30'); // Default
@@ -161,6 +163,27 @@ export async function POST(request: Request) {
                 o.warehouse_spaces.forEach((s: number) => {
                     if (s >= 1 && s <= 150) {
                         spacesTimeline[s].push({ start: startMin, end: endMin });
+                    }
+                });
+            });
+        }
+
+        // Proteger bahias 1-150 ya asignadas (ej. a las 8 PM) en pedidos sin route_stops todavia
+        const targetDeliveryDates = Array.from(new Set(allOrders.map((o: any) => o.delivery_date).filter(Boolean)));
+        if (targetDeliveryDates.length > 0) {
+            const { data: preAllocatedOrders, error: preErr } = await supabase
+                .from('orders')
+                .select('id, warehouse_spaces')
+                .in('delivery_date', targetDeliveryDates)
+                .neq('status', 'cancelled')
+                .not('warehouse_spaces', 'is', null);
+            if (preErr) throw preErr;
+
+            (preAllocatedOrders || []).forEach((po: any) => {
+                if (includedOrderIds.has(po.id) || !Array.isArray(po.warehouse_spaces)) return;
+                po.warehouse_spaces.forEach((s: number) => {
+                    if (s >= 1 && s <= 150) {
+                        spacesTimeline[s].push({ start: 0, end: 1440 });
                     }
                 });
             });
@@ -313,7 +336,7 @@ export async function POST(request: Request) {
             }
 
             // Concurrently update orders status, assigned_route_id and assigned spaces
-            await Promise.all(ordersToUpdate.map(u => 
+            const orderUpdateResults = await Promise.all(ordersToUpdate.map(u => 
                 supabase.from('orders').update({
                     status: 'picking',
                     assigned_route_id: route.id,
@@ -321,11 +344,15 @@ export async function POST(request: Request) {
                     warehouse_spaces: u.spacesAssigned
                 }).eq('id', u.id)
             ));
+            const failedOrderUpd = orderUpdateResults.find(r => r.error);
+            if (failedOrderUpd?.error) {
+                throw failedOrderUpd.error;
+            }
             
             routeConfirmations.push({
                 id: route.id,
                 vehicle_plate: route.vehicle_plate,
-                driver_name: vehicle?.driver_name || 'Sin Asignar',
+                driver_name: resolvedDriverName,
                 total_kilos: totalKilos,
                 stops_count: orderIds.length,
                 departure_time: departureTimeStr,

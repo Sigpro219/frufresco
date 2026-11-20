@@ -20,7 +20,11 @@ export async function GET(request: Request) {
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-        let query = supabase.from('orders').select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address_complement, logistics_data)').in('status', ['para_compra', 'approved', 'picking']);
+        let query = supabase
+            .from('orders')
+            .select('*, profiles:profiles(role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address_complement, logistics_data)')
+            .in('status', ['para_compra', 'approved', 'picking', 'in_preparation'])
+            .is('assigned_route_id', null);
 
 
         if (date) {

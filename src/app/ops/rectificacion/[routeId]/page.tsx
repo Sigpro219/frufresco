@@ -454,9 +454,8 @@ export default function RouteRectificationDetailPage() {
                             dedup_key: dedupKey
                         };
                         let { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
-                        if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
-                            const { source: _s, dedup_key: _d, ...legacyBr } = brPayload;
-                            await supabase.from('billing_returns').insert(legacyBr);
+                        if (brErr && brErr.code !== '23505') {
+                            throw brErr;
                         }
 
                         // b. Inserción en customer_service_pqrs con tag RCA estándar
@@ -466,7 +465,7 @@ export default function RouteRectificationDetailPage() {
                             responsible: 'proveedor',
                             notes: `Faltante en rectificación de muelle (${shortage.is_invoiced_fac_imp ? 'FAC-IMP inmutable -> NC ADJ' : 'Remisión ajustada'})`
                         });
-                        await supabase.from('customer_service_pqrs').insert({
+                        const { error: pqrsErr } = await supabase.from('customer_service_pqrs').insert({
                             client_id: shortage.client_id || null,
                             order_id: shortage.order_id,
                             type: 'reclamo',
@@ -476,35 +475,57 @@ export default function RouteRectificationDetailPage() {
                             description: `En la rectificación de cargue de la ruta ${vehiclePlate} (Parada #${shortage.stop_number} - ${shortage.customer_name}) se detectó faltante de ${shortage.missing_quantity} ${shortage.unit} de ${shortage.product_name}. Cantidad cargada: ${shortage.actual_quantity} ${shortage.unit}.\n\n${rcaTag}`,
                             status: 'pending'
                         });
+                        if (pqrsErr) throw pqrsErr;
 
                         // c. Protección Fiscal FAC-IMP & Split $0: solo mutar order_items si NO es FAC-IMP facturada en Corte PM y NO es Split $0
                         if (!shortage.is_invoiced_fac_imp && !shortage.is_off_agreement_split && shortage.item_id) {
-                            await supabase.from('order_items').update({
+                            const { error: itemUpdErr } = await supabase.from('order_items').update({
                                 picked_quantity: shortage.actual_quantity,
                                 quantity: shortage.actual_quantity
                             }).eq('id', shortage.item_id);
+                            if (itemUpdErr) throw itemUpdErr;
                             ordersToRecalc.add(shortage.order_id);
                         }
                     } catch (shortageErr) {
-                        console.warn('Aviso registrando novedad de escasez en muelle:', shortageErr);
+                        console.error('Error registrando novedad de escasez en muelle:', shortageErr);
+                        throw shortageErr;
                     }
                 }
 
-                // Recalcular subtotal/total en cabecera orders para Remisiones ajustadas
+                // Recalcular subtotal, tax y total en cabecera orders para Remisiones ajustadas (preservando IVA)
                 for (const ordId of Array.from(ordersToRecalc)) {
-                    const { data: ordItems } = await supabase
+                    const { data: ordItems, error: fetchItemsErr } = await supabase
                         .from('order_items')
-                        .select('quantity, unit_price')
+                        .select('quantity, unit_price, products(iva_rate)')
                         .eq('order_id', ordId);
+                    if (fetchItemsErr) throw fetchItemsErr;
                     if (ordItems && ordItems.length > 0) {
-                        const newTotal = ordItems.reduce((acc, it: any) => acc + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
-                        await supabase.from('orders').update({ subtotal: Math.round(newTotal), total: Math.round(newTotal) }).eq('id', ordId);
+                        let newSubtotal = 0;
+                        let newTax = 0;
+                        for (const it of ordItems as any[]) {
+                            const qty = Number(it.quantity) || 0;
+                            const price = Number(it.unit_price) || 0;
+                            const lineSub = qty * price;
+                            const prodObj = Array.isArray(it.products) ? it.products[0] : it.products;
+                            const ivaRate = Number(prodObj?.iva_rate || 0);
+                            newSubtotal += lineSub;
+                            if (ivaRate > 0) {
+                                newTax += lineSub * (ivaRate / 100);
+                            }
+                        }
+                        const roundedSub = Math.round(newSubtotal);
+                        const roundedTax = Math.round(newTax);
+                        const { error: ordRecalcErr } = await supabase
+                            .from('orders')
+                            .update({ subtotal: roundedSub, tax: roundedTax, total: roundedSub + roundedTax })
+                            .eq('id', ordId);
+                        if (ordRecalcErr) throw ordRecalcErr;
                     }
                 }
             }
 
             // 2. Actualizar la ruta en Supabase con auditoría, estado de rectificación y bandera de faltantes
-            await supabase
+            const { error: routeUpdErr } = await supabase
                 .from('routes')
                 .update({ 
                     status: 'rectified',
@@ -518,20 +539,28 @@ export default function RouteRectificationDetailPage() {
                     shortages_summary: allShortages.length > 0 ? allShortages : null
                 })
                 .eq('id', routeId);
+            if (routeUpdErr) throw routeUpdErr;
 
-            // 3. Actualizar sistemáticamente los pedidos de la ruta a 'ready_for_dispatch'
-            const { data: routeStops } = await supabase
-                .from('route_stops')
-                .select('order_id')
-                .eq('route_id', routeId);
+            // 3. Regla Anti-Contagio RED-16 (Escenario 477 §1):
+            // Nunca escribir 'ready_for_dispatch' en orders.status (ocultaría pedidos en planillas manuales).
+            // En manual_mirror NO mutamos orders.status; en digital_native solo promovemos 'para_compra' a 'picking'.
+            if (!isMirrorMode) {
+                const { data: routeStops, error: stopsFetchErr } = await supabase
+                    .from('route_stops')
+                    .select('order_id, orders:order_id(status)')
+                    .eq('route_id', routeId);
+                if (stopsFetchErr) throw stopsFetchErr;
 
-            if (routeStops && routeStops.length > 0) {
-                const orderIds = routeStops.map((s: any) => s.order_id).filter(Boolean);
-                if (orderIds.length > 0) {
-                    await supabase
+                const toPromoteIds = (routeStops || [])
+                    .filter((s: any) => s.order_id && s.orders?.status === 'para_compra')
+                    .map((s: any) => s.order_id);
+
+                if (toPromoteIds.length > 0) {
+                    const { error: ordStatErr } = await supabase
                         .from('orders')
-                        .update({ status: 'ready_for_dispatch' })
-                        .in('id', orderIds);
+                        .update({ status: 'picking' })
+                        .in('id', toPromoteIds);
+                    if (ordStatErr) throw ordStatErr;
                 }
             }
 
@@ -543,9 +572,9 @@ export default function RouteRectificationDetailPage() {
 
             alert(`¡CERTIFICACIÓN EXITOSA!\n\nLa ruta ${vehiclePlate} ha sido validada por ${checkerName || 'el usuario'} y liberada a Transporte.${shortageMsg}`);
             router.push('/ops/driver');
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error finalizando certificación de ruta:', e);
-            router.push('/ops/driver');
+            alert(`Error guardando la certificación en muelle:\n\n${e?.message || 'Error desconocido'}`);
         } finally {
             setSubmittingCertification(false);
         }

@@ -234,6 +234,9 @@ export default function ProcurementPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [targetDateLabel, setTargetDateLabel] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [quickPurchaseModalItem, setQuickPurchaseModalItem] = useState<ProcurementTask | null>(null);
+  const [quickPurchasePriceStr, setQuickPurchasePriceStr] = useState("");
+  const [isSubmittingQuickPurchase, setIsSubmittingQuickPurchase] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -1042,6 +1045,64 @@ export default function ProcurementPage() {
       (window as any).showToast?.("Error al declarar producto escaso: " + (err.message || err), 'error');
     } finally {
       setIsSubmittingShortage(false);
+    }
+  };
+
+  const handleConfirmQuickPurchase = async () => {
+    if (!quickPurchaseModalItem) return;
+    let provId = selectedProvider || localStorage.getItem('last_provider_id');
+    if (!provId && providers.length > 0) {
+      provId = providers[0].id;
+    }
+    if (!provId) {
+      alert("Por favor selecciona un proveedor primero en el modal de compras.");
+      return;
+    }
+    const qtyToBuy = (quickPurchaseModalItem.meta_neteo || 0) - quickPurchaseModalItem.total_purchased;
+    if (qtyToBuy <= 0) {
+      setQuickPurchaseModalItem(null);
+      return;
+    }
+
+    const realUnitPrice = parseFloat(quickPurchasePriceStr.replace(',', '.'));
+    if (isNaN(realUnitPrice) || realUnitPrice <= 0) {
+      alert('Precio inválido. Debe ingresar un precio unitario real mayor a $0.');
+      return;
+    }
+
+    setIsSubmittingQuickPurchase(true);
+    try {
+      const cost = qtyToBuy * realUnitPrice;
+      const { error: pErr } = await supabase.from("purchases").insert({
+        task_id: quickPurchaseModalItem.id,
+        product_id: quickPurchaseModalItem.product_id,
+        variant_label: quickPurchaseModalItem.variant_label,
+        provider_id: provId,
+        quantity: qtyToBuy,
+        unit_price: realUnitPrice,
+        total_cost: cost,
+        purchase_unit: quickPurchaseModalItem.unit || "Kg",
+        status: "pending_pickup",
+      });
+      if (pErr) throw pErr;
+
+      const { error: tErr } = await supabase
+        .from("procurement_tasks")
+        .update({
+          total_purchased: quickPurchaseModalItem.meta_neteo,
+          status: "completed"
+        })
+        .eq("id", quickPurchaseModalItem.id);
+      if (tErr) throw tErr;
+
+      setQuickPurchaseModalItem(null);
+      setQuickPurchasePriceStr("");
+      (window as any).showToast?.("Compra rápida registrada con éxito!", "success");
+      fetchTasks(undefined, filterCategory, selectedDate);
+    } catch (err: any) {
+      alert("Error en compra rápida: " + (err?.message || err));
+    } finally {
+      setIsSubmittingQuickPurchase(false);
     }
   };
 
@@ -2357,14 +2418,13 @@ export default function ProcurementPage() {
                                   <Flag size={14} />
                                 </button>
                               )}
-                              {/* Fast purchase action */}
+                              {/* Fast purchase action (Modal controlado, sin window.prompt) */}
                               {!itemDone && (
                                 <button
-                                  onClick={async () => {
-                                    // Check if we have a selected/sticky provider
+                                  onClick={() => {
                                     let provId = selectedProvider || localStorage.getItem('last_provider_id');
                                     if (!provId && providers.length > 0) {
-                                      provId = providers[0].id; // Fallback to first provider
+                                      provId = providers[0].id;
                                     }
                                     if (!provId) {
                                       alert("Por favor selecciona un proveedor primero en el modal de compras.");
@@ -2372,49 +2432,8 @@ export default function ProcurementPage() {
                                     }
                                     const qtyToBuy = (item.meta_neteo || 0) - item.total_purchased;
                                     if (qtyToBuy <= 0) return;
-                                    
-                                    // Compra rápida sin precio mock: exige costo unitario real > 0
-                                    const rawPriceStr = window.prompt(
-                                      `Compra rápida de ${qtyToBuy.toFixed(1)} ${item.unit} (${item.product_name}).\nIngresa el precio unitario real por ${item.unit} (COP):`,
-                                      ''
-                                    );
-                                    if (rawPriceStr === null) return;
-                                    const realUnitPrice = parseFloat(rawPriceStr.replace(',', '.'));
-                                    if (isNaN(realUnitPrice) || realUnitPrice <= 0) {
-                                      alert('Precio inválido. Debe ingresar un precio unitario real mayor a $0.');
-                                      return;
-                                    }
-                                    
-                                    try {
-                                      const cost = qtyToBuy * realUnitPrice;
-                                      
-                                      const { error: pErr } = await supabase.from("purchases").insert({
-                                        task_id: item.id,
-                                        product_id: item.product_id,
-                                        variant_label: item.variant_label,
-                                        provider_id: provId,
-                                        quantity: qtyToBuy,
-                                        unit_price: realUnitPrice,
-                                        total_cost: cost,
-                                        purchase_unit: item.unit || "Kg",
-                                        status: "pending_pickup",
-                                      });
-                                      if (pErr) throw pErr;
-
-                                      const { error: tErr } = await supabase
-                                        .from("procurement_tasks")
-                                        .update({
-                                          total_purchased: item.meta_neteo,
-                                          status: "completed"
-                                        })
-                                        .eq("id", item.id);
-                                      if (tErr) throw tErr;
-
-                                      alert("Compra rápida registrada con éxito!");
-                                      fetchTasks(undefined, filterCategory, selectedDate);
-                                    } catch (err: any) {
-                                      alert("Error en compra rápida: " + err.message);
-                                    }
+                                    setQuickPurchaseModalItem(item);
+                                    setQuickPurchasePriceStr("");
                                   }}
                                   title="Compra rápida"
                                   style={{
@@ -4097,6 +4116,119 @@ export default function ProcurementPage() {
                 }}
               >
                 {isSubmittingShortage ? "Registrando..." : "Confirmar Escasez"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Purchase Modal (reemplaza window.prompt) */}
+      {quickPurchaseModalItem && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.75)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--ops-surface)",
+              borderRadius: "16px",
+              padding: "1.5rem",
+              width: "100%",
+              maxWidth: "420px",
+              border: "1px solid var(--ops-border)",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)",
+              color: "var(--ops-text)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Zap size={20} color="var(--ops-primary)" />
+                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "800" }}>Compra Rápida</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickPurchaseModalItem(null)}
+                disabled={isSubmittingQuickPurchase}
+                style={{ background: "transparent", border: "none", color: "var(--ops-text-muted)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: "0.85rem", color: "var(--ops-text-muted)", marginBottom: "1rem" }}>
+              <strong style={{ color: "var(--ops-text)" }}>{quickPurchaseModalItem.product_name}</strong>
+              <div style={{ marginTop: "4px" }}>
+                Cantidad a comprar: <strong style={{ color: "var(--ops-primary)" }}>{((quickPurchaseModalItem.meta_neteo || 0) - quickPurchaseModalItem.total_purchased).toFixed(1)} {quickPurchaseModalItem.unit}</strong>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: "800", marginBottom: "0.4rem", textTransform: "uppercase" }}>
+                Precio unitario real por {quickPurchaseModalItem.unit} (COP)
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                placeholder="Ej: 4500"
+                value={quickPurchasePriceStr}
+                onChange={(e) => setQuickPurchasePriceStr(e.target.value.replace(/[^0-9.,]/g, ""))}
+                style={{
+                  width: "100%",
+                  padding: "0.8rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--ops-border)",
+                  backgroundColor: "var(--ops-bg)",
+                  color: "var(--ops-text)",
+                  fontWeight: "800",
+                  fontSize: "1.05rem",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setQuickPurchaseModalItem(null)}
+                disabled={isSubmittingQuickPurchase}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--ops-border)",
+                  backgroundColor: "transparent",
+                  color: "var(--ops-text-muted)",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQuickPurchase}
+                disabled={isSubmittingQuickPurchase}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "var(--ops-primary)",
+                  color: "white",
+                  fontWeight: "800",
+                  cursor: "pointer",
+                }}
+              >
+                {isSubmittingQuickPurchase ? "Guardando..." : "Registrar Compra"}
               </button>
             </div>
           </div>

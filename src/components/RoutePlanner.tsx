@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { 
     Calendar, 
     Scale, 
@@ -49,6 +51,8 @@ interface Order {
     slot_type?: 'manual' | 'profile' | 'b2c_slot' | 'flexible';
     payment_method?: string;
     payment_status?: string;
+    warehouse_spaces?: number[] | null;
+    logistics_data?: Record<string, any> | null;
 }
 
 interface Vehicle {
@@ -80,8 +84,13 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [debugInfo, setDebugInfo] = useState({ targetDate: '', count: 0, cutoff: false, driversFound: '' });
 
     const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string>(() => {
-        const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-        return now.toISOString().split('T')[0];
+        if (typeof window !== 'undefined') {
+            const urlDate = new URLSearchParams(window.location.search).get('date');
+            if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+                return urlDate;
+            }
+        }
+        return getOperationalTargetDate(20);
     });
     const [showAllDates, setShowAllDates] = useState<boolean>(false);
 
@@ -103,6 +112,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     });
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
     const [routeStartTimes, setRouteStartTimes] = useState<Record<string, string>>({});
+    const [stopEtas, setStopEtas] = useState<Record<string, string>>({});
     const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
     const [showPreConfirm, setShowPreConfirm] = useState(false);
 
@@ -327,8 +337,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     useEffect(() => {
         if (loading) return;
         try {
-            const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-            const targetDate = now.toISOString().split('T')[0];
+            const targetDate = selectedDeliveryDate || getOperationalTargetDate(20);
             
             const draftData = {
                 targetDate,
@@ -341,7 +350,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         } catch (e) {
             console.error("Error al guardar borrador en localStorage:", e);
         }
-    }, [assignments, isOptimized, theoreticalMetrics, aiReportText, loading]);
+    }, [assignments, isOptimized, theoreticalMetrics, aiReportText, loading, selectedDeliveryDate]);
 
     const handleAutoOptimize = async () => {
         if (readOnly) return;
@@ -370,6 +379,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 setIsOptimized(true);
                 if (result.route_start_times) {
                     setRouteStartTimes(result.route_start_times);
+                }
+                if (result.stop_etas) {
+                    setStopEtas(result.stop_etas);
                 }
                 if (result.theoretical_metrics) {
                     setTheoreticalMetrics(result.theoretical_metrics);
@@ -456,7 +468,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     isOptimized,
                     theoreticalMetrics,
                     params,
-                    routeStartTimes: dynamicStartTimes // Pasar las horas de salida estimadas dinámicas
+                    routeStartTimes: dynamicStartTimes, // Pasar las horas de salida estimadas dinámicas
+                    ...(Object.keys(stopEtas).length > 0 ? { stopEtas } : {})
                 })
             });
 
@@ -478,7 +491,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             total_weight_kg: localOrder?.total_weight_kg || 0,
                             crates: localOrder?.crates || 0,
                             address: localOrder?.address || 'Sin Dirección',
-                            warehouse_spaces: route.order_spaces?.[oid] || []
+                            warehouse_spaces: route.order_spaces?.[oid] || [],
+                            logistics_data: localOrder?.logistics_data || null
                         };
                     });
                     return {
@@ -492,6 +506,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             // Limpiar borrador del día al confirmar
             try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
             setAssignments({});
+            setStopEtas({});
             await fetchInitialData();
 
         } catch (err: any) {
@@ -970,6 +985,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     }}>
                                                         <Clock size={9} strokeWidth={2} /> {order.display_slot}
                                                     </div>
+                                                    {getOrderSpaceDisplayLabel(order) && (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            ESP {getOrderSpaceDisplayLabel(order)}
+                                                        </span>
+                                                    )}
                                                     {order.is_b2b ? (
                                                         <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF', border: '1px solid #DBEAFE', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                             <FileText size={8} strokeWidth={2} /> Acuerdo
@@ -2153,9 +2173,10 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                     backgroundColor: 'rgba(14, 165, 233, 0.08)', color: '#0284C7', 
                                                                     padding: '2px 6px', borderRadius: '4px' 
                                                                 }}>
-                                                                    {stop.warehouse_spaces && stop.warehouse_spaces.length > 0 
-                                                                        ? `ESP ${stop.warehouse_spaces.join(', ')}` 
-                                                                        : 'Sin Espacio'}
+                                                                    {(() => {
+                                                                        const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
+                                                                        return label ? `ESP ${label}` : (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin Espacio');
+                                                                    })()}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -2177,7 +2198,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${r.total_kilos.toLocaleString()} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
                                         if (r.stops && r.stops.length > 0) {
                                             r.stops.forEach((stop: any, sIdx: number) => {
-                                                text += `  ${sIdx+1}️⃣ *${stop.customer_name}* (${stop.total_weight_kg} kg) -> Espacios: ${stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A'}\n`;
+                                                const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
+                                                text += `  *${sIdx+1}.* *${stop.customer_name}* (${stop.total_weight_kg} kg) -> Espacios: ${label || (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A')}\n`;
                                             });
                                         } else {
                                             text += `  (No hay detalles de paradas)\n`;

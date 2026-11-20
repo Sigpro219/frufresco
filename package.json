@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
+    "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "dev:showcase": "npx dotenv -e .env.showcase -- next dev -p 3001",
+    "sandbox:sync-today": "node scripts/sync-sandbox-today.mjs",
+    "sandbox:seed-users": "node scripts/seed-sandbox-users.mjs",
+    "sandbox:sanitize-db": "node scripts/sanitize-sandbox-db.mjs",
     "dev:frufresco": "npx dotenv -e .env.tenant1_production -- next dev -p 3002",
     "build": "next build",
     "start": "next start",
@@ -35,7 +39,8 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^20",

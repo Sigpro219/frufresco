@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -28,6 +29,13 @@ function isAuthorized(request: Request): boolean {
 }
 
 async function handleSync(request: Request) {
+    if (isSandboxMode()) {
+        return NextResponse.json(
+            { success: true, skipped: true, sandbox: true, reason: 'Nocturnal pricing sync disabled in Sandbox mode' },
+            { status: 200 }
+        );
+    }
+
     if (!isAuthorized(request)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

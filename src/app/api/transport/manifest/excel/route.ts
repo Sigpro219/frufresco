@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { verifySessionAndPermission } from '@/lib/auth';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
+import { resolveCanonicalDocType } from '@/lib/commercial/billingOrderUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,8 +29,13 @@ function parseClientBranchInfo(clientName: string, razonSocial?: string): { bran
 
 export async function GET(request: Request) {
     try {
+        const auth = await verifySessionAndPermission(request, 'admin.transport.view');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
-        const tomorrowDefault = '2026-11-12';
+        const tomorrowDefault = getOperationalTargetDate(20);
         const date = searchParams.get('date') || tomorrowDefault;
 
         const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
@@ -38,10 +48,12 @@ export async function GET(request: Request) {
             .select(`
                 id,
                 sequence_id,
+                created_at,
                 purchase_order_number,
                 delivery_date,
                 status,
                 type,
+                origin_source,
                 total,
                 total_weight_kg,
                 crates_count,
@@ -65,11 +77,22 @@ export async function GET(request: Request) {
         const ordersList = orders || [];
         const profileIds = [...new Set(ordersList.map(o => o.profile_id).filter(Boolean))];
 
-        const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, company_name, contact_name, razon_social, nit, address, contact_phone, phone, needs_crates, crate_balance, document_type, role')
-            .in('id', profileIds);
+        const { data: profiles } = profileIds.length > 0
+            ? await supabase
+                .from('profiles')
+                .select('id, company_name, contact_name, razon_social, nit, address, contact_phone, phone, needs_crates, crate_balance, document_type, role, parent_id, is_corporate_parent, remission_with_prices')
+                .in('id', profileIds)
+            : { data: [] };
         const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+        const parentIds = [...new Set((profiles || []).map((p: any) => p.parent_id).filter(Boolean))];
+        const { data: parentProfiles } = parentIds.length > 0
+            ? await supabase
+                .from('profiles')
+                .select('id, role, company_name, razon_social, document_type, print_invoice, remission_with_prices, logistics_data')
+                .in('id', parentIds)
+            : { data: [] };
+        const parentsMap = new Map((parentProfiles || []).map((p: any) => [p.id, p]));
 
         const { data: routes } = await supabase.from('routes').select('*');
         const routeMap = new Map((routes || []).map(r => [r.id, r]));
@@ -85,9 +108,15 @@ export async function GET(request: Request) {
             const kg = Number(o.total_weight_kg || 0);
             const crates = (o.crates_count && o.crates_count > 1) ? o.crates_count : (Math.ceil(kg / AVG_KG_PER_CRATE) || 1);
 
-            const isB2B = p.role === 'b2b_client' || p.role === 'corporate' || o.type === 'b2b' || (p.nit && p.nit.length > 5);
-            const clientType = isB2B ? 'B2B Institucional' : 'B2C Hogar';
-            const docType = p.document_type === 'invoice' ? 'Factura' : 'Remisión';
+            const canonicalDoc = resolveCanonicalDocType({ ...o, profiles: p }, parentsMap);
+            const clientType = canonicalDoc.isB2B ? 'B2B Institucional' : 'B2C Hogar';
+            const docType = canonicalDoc.rawDocType === 'invoice'
+                ? 'Factura'
+                : canonicalDoc.rawDocType === 'gift_remission'
+                    ? 'Remisión Obsequio'
+                    : (o.origin_source === 'customer_service' || o.logistics_data?.is_replacement)
+                        ? 'Reposición'
+                        : 'Remisión';
             const phone = p.contact_phone || p.phone || 'Sin registrar';
             const address = o.shipping_address || p.address || 'Entrega en sede';
             const zone = o.logistics_data?.zone_name || (address.split(',')[1] ? address.split(',')[1].trim() : 'Bogotá Principal');
@@ -95,15 +124,14 @@ export async function GET(request: Request) {
             const routeInfo = o.assigned_route_id ? routeMap.get(o.assigned_route_id) : null;
             const routeStr = routeInfo 
                 ? `${routeInfo.vehicle_plate || 'S/P'} - ${routeInfo.driver_name || 'Conductor'}` 
-                : 'Ruta 1 (Despacho Principal)';
+                : 'Sin asignar';
 
-            const spacesStr = Array.isArray(o.warehouse_spaces) && o.warehouse_spaces.length > 0 
-                ? o.warehouse_spaces.join(', ') 
-                : `E-${String(idx + 1).padStart(2, '0')}`;
+            const spacesStr = getOrderSpaceDisplayLabel(o) || 'Sin bahía';
+            const friendlyConsec = getFriendlyOrderId({ id: o.id, sequence_id: o.sequence_id, created_at: o.created_at });
 
             return {
                 'No.': idx + 1,
-                'Consecutivo': `1111_${o.sequence_id}`,
+                'Consecutivo': friendlyConsec,
                 'ID Pedido': o.id.slice(0, 8),
                 'Cliente / Matriz': parentName || rawClient,
                 'Sucursal Receptora': branchName,

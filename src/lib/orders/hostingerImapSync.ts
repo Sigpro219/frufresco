@@ -13,6 +13,7 @@
 import * as tls from 'tls';
 import { createClient } from '@supabase/supabase-js';
 import { POST as emailIngestPost } from '@/app/api/orders/email-ingest/route';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 
 export interface HostingerSyncState {
   account: string;
@@ -632,9 +633,20 @@ export async function syncHostingerChannel3Orders(options?: { force?: boolean })
   hasMoreInMailbox?: boolean;
   remainingUids?: number;
 }> {
+  const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
+  if (isSandboxMode()) {
+    return {
+      success: true,
+      skipped: true,
+      reason: 'IMAP sync disabled in Sandbox mode',
+      ingestedCount: 0,
+      lastSyncedUid: 0,
+      transitionEpochAt: defaultEpoch,
+    };
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
   const { host, port, user, pass } = await resolveHostingerImapCredentials(supabaseAdmin);
-  const defaultEpoch = process.env.NEXT_PUBLIC_CHANNEL_3_EPOCH || '2026-11-09T00:00:00-05:00';
 
   if (!pass) {
     return {

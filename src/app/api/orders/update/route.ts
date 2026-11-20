@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText, OrderEmailItem } from '@/lib/emailTemplates';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { isSandboxMode, isSandboxEmailAllowed } from '@/lib/sandboxGuard';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -252,27 +253,31 @@ export async function POST(req: Request) {
         const emailHtml = generateOrderConfirmationHtml(emailData);
         const emailText = generateOrderConfirmationText(emailData);
 
-        // Cancelar correos pendientes previos de esta misma orden para no enviar duplicados obsoletos
-        await supabaseAdmin
-          .from('mail')
-          .update({ status: 'cancelled', error_message: 'Reemplazado por versión corregida' })
-          .eq('to_email', targetEmail)
-          .eq('status', 'pending');
+        if (isSandboxMode() && !isSandboxEmailAllowed(targetEmail)) {
+          console.log(`[Order Update API][SANDBOX] Correo suprimido hacia ${targetEmail} (dominio no @sandbox.frufresco.co).`);
+        } else {
+          // Cancelar correos pendientes previos de esta misma orden para no enviar duplicados obsoletos
+          await supabaseAdmin
+            .from('mail')
+            .update({ status: 'cancelled', error_message: 'Reemplazado por versión corregida' })
+            .eq('to_email', targetEmail)
+            .eq('status', 'pending');
 
-        // Encolar con buffer de gracia de 2 minutos
-        const graceBufferIso = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-        await supabaseAdmin
-          .from('mail')
-          .insert([{
-            to_email: targetEmail,
-            subject: `[PEDIDO CORREGIDO] Remisión Nº #${friendlyOrderNumber} - FruFresco`,
-            message: { html: emailHtml, text: emailText },
-            template: { name: 'order_correction', data: emailData },
-            status: 'pending',
-            next_retry_at: graceBufferIso
-          }]);
-          
-        console.log(`[Order Update API] Remisión corregida encolada exitosamente para ${targetEmail} con buffer de 2 min.`);
+          // Encolar con buffer de gracia de 2 minutos
+          const graceBufferIso = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+          await supabaseAdmin
+            .from('mail')
+            .insert([{
+              to_email: targetEmail,
+              subject: `[PEDIDO CORREGIDO] Remisión Nº #${friendlyOrderNumber} - FruFresco`,
+              message: { html: emailHtml, text: emailText },
+              template: { name: 'order_correction', data: emailData },
+              status: 'pending',
+              next_retry_at: graceBufferIso
+            }]);
+            
+          console.log(`[Order Update API] Remisión corregida encolada exitosamente para ${targetEmail} con buffer de 2 min.`);
+        }
       }
     } catch (mailNotifyErr: any) {
       console.warn('[Order Update API] Advertencia al generar remisión de rectificación:', mailNotifyErr.message);

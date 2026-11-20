@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import { runHostingerImapWatchdog } from '@/lib/orders/hostingerImapWatchdog';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export async function POST(req: Request) {
+  if (isSandboxMode()) {
+    return NextResponse.json(
+      { skipped: true, sandbox: true, missingCount: 0, recoveredCount: 0, missingSamples: [], reason: 'IMAP watchdog disabled in Sandbox mode' },
+      { status: 200 }
+    );
+  }
   try {
     const { searchParams } = new URL(req.url);
     const force = searchParams.get('force') === 'true';

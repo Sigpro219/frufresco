@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { isOperationalStaffProfile } from '@/lib/ops/operationalShift';
 import { 
   ShoppingBag, 
   ShoppingCart, 
@@ -73,9 +74,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
             if (!profile) {
                 router.push('/');
             } else {
-                const isStaff = (profile as any).profile_type === 'employee' || 
-                                (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
-                                (profile.custom_permissions && profile.custom_permissions.length > 0);
+                const isStaff = isOperationalStaffProfile(profile);
                 if (!isStaff) {
                     if (profile.role === 'b2b_client') {
                         router.push('/b2b/dashboard');
@@ -138,9 +137,7 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
     }
 
     // Check if user is staff before rendering operations content
-    const isStaff = (profile as any).profile_type === 'employee' || 
-                    (profile.role && profile.role !== 'b2b_client' && profile.role !== 'b2c_client' && profile.role !== 'client') ||
-                    (profile.custom_permissions && profile.custom_permissions.length > 0);
+    const isStaff = isOperationalStaffProfile(profile);
     if (!isStaff) {
         return null;
     }
@@ -347,9 +344,9 @@ export default function OpsLayout({ children }: { children: ReactNode }) {
                 {hasPermission('ops.recepcion') && <NavItem href="/ops/recepcion" icon={Scale} label="RECEPCIÓN" />}
                 {hasPermission('ops.picking.terminal') && <NavItem href="/ops/picking" icon={Package} label="ALISTAR" />}
                 {hasPermission('ops.picking.dashboard') && <NavItem href="/ops/picking/dashboard" icon={Monitor} label="TABLERO" />}
-                <NavItem href="/ops/procesados" icon={Layers} label="PROCESADOS" />
-                <NavItem href="/ops/devoluciones" icon={RotateCcw} label="RETORNOS" />
-                <NavItem href="/ops/rectificacion" icon={ClipboardCheck} label="RECTIFICAR" />
+                {(hasPermission('ops.recepcion') || hasPermission('ops.picking') || hasPermission('admin.orders')) && <NavItem href="/ops/procesados" icon={Layers} label="PROCESADOS" />}
+                {(hasPermission('ops.recepcion') || hasPermission('ops.picking') || hasPermission('admin.orders') || hasPermission('admin.transport.edit')) && <NavItem href="/ops/devoluciones" icon={RotateCcw} label="RETORNOS" />}
+                {(hasPermission('ops.recepcion') || hasPermission('ops.picking') || hasPermission('ops.picking.terminal') || hasPermission('admin.orders') || hasPermission('admin.transport.edit')) && <NavItem href="/ops/rectificacion" icon={ClipboardCheck} label="RECTIFICAR" />}
                 {hasPermission('ops.driver') && <NavItem href="/ops/driver" icon={Truck} label="TRANSPORTE" />}
                 <NavItem href="/ops" icon={Home} label="INICIO" />
             </nav>

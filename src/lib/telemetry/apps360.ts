@@ -4,6 +4,8 @@
  * Estandarizado bajo especialista-api (SPEC.md Dominio 6 - TMS)
  */
 
+import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
+
 export interface NormalizedTelemetry {
     plate: string;
     imei?: string;
@@ -226,8 +228,12 @@ let cachedUserApiHash: { hash: string; expiresAt: number } | null = null;
  * Autentica contra la API REST moderna de Apps-360 (GPSWOX Engine) y obtiene el user_api_hash
  */
 export async function loginApps360(email?: string, password?: string, baseUrl?: string): Promise<string | null> {
+    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+        return null;
+    }
+
     const userEmail = email || process.env.APPS360_EMAIL;
-    const userPass = password || process.env.APPS360_PASSWORD || 'Gps123456';
+    const userPass = password || process.env.APPS360_PASSWORD;
     const host = baseUrl || process.env.APPS360_BASE_URL || 'https://plataforma.apps-360.online';
 
     if (!userEmail || !userPass) {
@@ -276,6 +282,10 @@ export async function loginApps360(email?: string, password?: string, baseUrl?: 
  * Consulta la API REST oficial de apps-360.online y obtiene el estado en vivo de todos los vehículos
  */
 export async function fetchApps360Fleet(userHashOrKey?: string, baseUrl?: string): Promise<NormalizedTelemetry[]> {
+    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+        return [];
+    }
+
     const host = baseUrl || process.env.APPS360_BASE_URL || 'https://plataforma.apps-360.online';
     
     let apiHash = userHashOrKey || process.env.APPS360_USER_API_HASH || process.env.APPS360_API_KEY || process.env.NEXT_PUBLIC_APPS360_API_KEY;

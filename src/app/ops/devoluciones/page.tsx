@@ -20,6 +20,7 @@ import {
     Layers
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
 
 const INVENTORY_MOVEMENT_SUBTYPES = {
     ROUTE_RETURN: 'route_return',
@@ -150,9 +151,9 @@ export default function OpsDevolucionesPage() {
             });
             setPendingReturns(formattedPending);
 
-            // 2. Fetch reconciled return movements for the selected balanceDate
-            const startIso = `${balanceDate}T00:00:00.000Z`;
-            const endIso = `${balanceDate}T23:59:59.999Z`;
+            // 2. Fetch reconciled return movements for the selected balanceDate (Bogotá UTC-5)
+            const startIso = `${balanceDate}T00:00:00-05:00`;
+            const endIso = `${balanceDate}T23:59:59-05:00`;
             const { data: movsData } = await supabase
                 .from('inventory_movements')
                 .select('id, product_id, quantity, reference_type, notes, created_at')
@@ -256,15 +257,25 @@ export default function OpsDevolucionesPage() {
 
         setSaving(true);
         try {
-            const timestampIso = `${balanceDate}T12:00:00.000Z`;
+            const activeShift = await fetchActiveShiftClient();
+            if (activeShift?.mode === 'manual_mirror') {
+                setFeedbackBanner({
+                    type: 'error',
+                    message: 'Turno en Modo Espejo Manual (manual_mirror): Col O y retornos se concilian en Planilla de Contingencia para evitar doble asiento.'
+                });
+                return;
+            }
+
+            const timestampIso = `${balanceDate}T12:00:00-05:00`;
             const selectedProd = products.find(p => p.id === selectedProductId);
+            const cratesNum = parseInt(cratesReturned, 10) || 0;
             const metaPayload = {
                 reported_return_qty: numReported,
                 received_in_warehouse_qty: numReceived,
                 missing_return_qty: numShortageColO2,
                 approved_reentry_qty: numApprovedNetReentry,
                 waste_damage_qty: numWaste,
-                crates_returned: parseInt(cratesReturned, 10) || 0,
+                crates_returned: cratesNum,
                 order_ref: orderReferenceText || 'Retorno de Ruta'
             };
 
@@ -317,15 +328,30 @@ export default function OpsDevolucionesPage() {
             if (movErr) throw movErr;
             // Nota: trigger_inventory_movement actualiza inventory_stocks automáticamente al insertar en inventory_movements.
 
+            // 4. Registro físico de canastillas devueltas en asset_movements
+            if (cratesNum > 0) {
+                const { error: assetErr } = await supabase.from('asset_movements').insert({
+                    order_id: selectedOrderId || null,
+                    type: 'pickup',
+                    movement_type: 'warehouse_return',
+                    delivered_qty: 0,
+                    received_qty: cratesNum,
+                    quantity: -cratesNum,
+                    notes: `Retorno de ${cratesNum} canastilla(s) en muelle (${orderReferenceText || 'Ruta'})`
+                });
+                if (assetErr) throw assetErr;
+            }
+
             // 5. Si venía de un billing_returns pendiente, marcar su nota como conciliada en muelle
             if (selectedReturnId) {
                 const targetRet = pendingReturns.find(r => r.id === selectedReturnId);
-                await supabase
+                const { error: brNoteErr } = await supabase
                     .from('billing_returns')
                     .update({
                         notes: `${targetRet?.reason || ''} [CONCILIADO_D1_MUELLE: ${balanceDate} | Col O: +${numReported}, Col O2: -${numShortageColO2}, Col Q: -${numWaste}, Neto: +${numApprovedNetReentry}]`
                     })
                     .eq('id', selectedReturnId);
+                if (brNoteErr) throw brNoteErr;
             }
 
             setFeedbackBanner({

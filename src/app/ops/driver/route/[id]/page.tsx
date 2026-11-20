@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
+import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
+import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
 import { ArrowLeft, Package, Check, Navigation, Info, Lock, Zap, ShieldAlert } from 'lucide-react';
 
 interface RouteStop {
@@ -15,6 +17,7 @@ interface RouteStop {
         customer_name: string;
         shipping_address: string;
         warehouse_spaces: number[] | null;
+        logistics_data?: Record<string, any> | null;
         crates_count?: number | null;
         order_items: {
             id: string;
@@ -82,19 +85,21 @@ export default function LoadVerificationPage() {
                 setIsCertified(Boolean(routeInfo.is_certified_complete || routeInfo.status === 'rectified'));
             }
 
-            // 2. Check Sandbox / Dev Bypass permissions
-            const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            // 2. Check Sandbox Bypass permissions (Strictly disabled in Production)
+            const isSandboxEnv = process.env.NEXT_PUBLIC_SANDBOX_MODE === 'true';
             let isAdmin = false;
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user?.id) {
-                    const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-                    if (prof?.role === 'admin' || prof?.role === 'sys_admin' || prof?.role === 'logistic_admin') {
-                        isAdmin = true;
+            if (isSandboxEnv) {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user?.id) {
+                        const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+                        if (prof?.role === 'admin' || prof?.role === 'sys_admin' || prof?.role === 'logistic_admin') {
+                            isAdmin = true;
+                        }
                     }
-                }
-            } catch (_) {}
-            setCanBypass(isAdmin || isDev);
+                } catch (_) {}
+            }
+            setCanBypass(isSandboxEnv && isAdmin);
 
             // 3. Fetch Route Stops
             const { data, error } = await supabase
@@ -102,7 +107,7 @@ export default function LoadVerificationPage() {
                 .select(`
                     id, sequence_number, status,
                     orders:order_id (
-                        id, shipping_address, warehouse_spaces, crates_count,
+                        id, shipping_address, warehouse_spaces, logistics_data, crates_count,
                         profiles:profile_id (
                             id, company_name, contact_name, role
                         ),
@@ -193,22 +198,28 @@ export default function LoadVerificationPage() {
                 try {
                     await supabase.from('audit_logs').insert([{
                         action: 'TEST_MODE_BYPASS_RECTIFICATION',
-                        table_name: 'routes',
-                        record_id: String(id),
-                        notes: 'Inicio de ruta forzado por bypass en modo de pruebas / sandbox'
+                        module: 'TRANSPORT',
+                        collaborator_name: 'Sandbox Admin',
+                        details: {
+                            route_id: String(id),
+                            notes: 'Inicio de ruta forzado por bypass en modo sandbox'
+                        }
                     }]);
                 } catch (_) {}
             }
 
-            // Sincronización oficial de Pedidos a 'in_transit'
+            // Regla Anti-Contagio RED-16 (Escenario 477 §1):
+            // Solo en digital_native actualizamos orders.status -> 'shipped' (seguro para planillas manuales; nunca 'in_transit').
+            const activeShift = await fetchActiveShiftClient();
+            const isMirrorMode = activeShift?.mode === 'manual_mirror';
             const orderIds = stops.map(s => s.orders?.id).filter(Boolean);
-            if (orderIds.length > 0) {
+            if (!isMirrorMode && orderIds.length > 0) {
                 const { error: ordersErr } = await supabase
                     .from('orders')
-                    .update({ status: 'in_transit' })
+                    .update({ status: 'shipped' })
                     .in('id', orderIds);
                 if (ordersErr) {
-                    console.error('Error updating orders to in_transit:', ordersErr);
+                    throw ordersErr;
                 }
             }
 
@@ -352,7 +363,7 @@ export default function LoadVerificationPage() {
                                                 padding: '2px 8px', 
                                                 borderRadius: '6px'
                                             }}>
-                                                UBICACIÓN: ESP {stop.orders.warehouse_spaces.join(', ')}
+                                                UBICACIÓN: ESP {getOrderSpaceDisplayLabel(stop.orders) || stop.orders.warehouse_spaces.join(', ')}
                                             </div>
                                         )}
                                         {stop.orders?.crates_count !== undefined && stop.orders.crates_count !== null && (

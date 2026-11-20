@@ -7,6 +7,7 @@
 import * as tls from 'tls';
 import { createClient } from '@supabase/supabase-js';
 import { POST as emailIngestPost } from '@/app/api/orders/email-ingest/route';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 import {
   formatImapDate,
   isGenuineChannel3CoEmail,
@@ -319,6 +320,19 @@ export async function runHostingerImapWatchdog(options?: {
   force?: boolean;
   autoRecover?: boolean;
 }): Promise<HostingerWatchdogStatus & { skipped?: boolean }> {
+  if (isSandboxMode()) {
+    return {
+      lastCheckedAt: new Date().toISOString(),
+      mailboxCount7d: 0,
+      matchedCount: 0,
+      missingCount: 0,
+      recoveredCount: 0,
+      missingSamples: [],
+      error: null,
+      skipped: true,
+    };
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
   const force = Boolean(options?.force);
   const autoRecover = options?.autoRecover !== false;

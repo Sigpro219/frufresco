@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionAndPermission, verifySessionAndRole } from '@/lib/auth';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
-import type { OperationalShiftMode, OperationalShiftState } from '@/lib/ops/operationalShift';
+import { isOperationalStaffProfile, type OperationalShiftMode, type OperationalShiftState } from '@/lib/ops/operationalShift';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,10 +109,7 @@ export async function GET(req: NextRequest) {
             .eq('id', auth.user.id)
             .maybeSingle();
 
-        const isStaff =
-            callerProfile?.profile_type === 'employee' ||
-            (callerProfile?.role && !['b2b_client', 'b2c_client', 'client'].includes(callerProfile.role));
-        if (!isStaff) {
+        if (!isOperationalStaffProfile(callerProfile)) {
             return NextResponse.json({ success: false, error: 'Acceso restringido a personal operativo' }, { status: 403 });
         }
 
@@ -199,23 +196,40 @@ export async function POST(req: NextRequest) {
 
         if (ordErr) throw ordErr;
 
-        const billedOrPastIds: string[] = [];
+        const openOrderIds = (openOrders || []).map((o: any) => o.id).filter(Boolean);
+        const deliveredStopOrderIds = new Set<string>();
+        if (openOrderIds.length > 0) {
+            for (let i = 0; i < openOrderIds.length; i += 200) {
+                const slice = openOrderIds.slice(i, i + 200);
+                const { data: delStops, error: delStopsErr } = await supabase
+                    .from('route_stops')
+                    .select('order_id')
+                    .in('order_id', slice)
+                    .eq('status', 'delivered');
+                if (delStopsErr) throw delStopsErr;
+                for (const s of delStops || []) {
+                    if (s.order_id) deliveredStopOrderIds.add(s.order_id);
+                }
+            }
+        }
+
+        const verifiedOrderIds: string[] = [];
         const unbilledSameDayOrders: Array<{ id: string; sequence_id: number | null; status: string }> = [];
 
         (openOrders || []).forEach((o: any) => {
-            const isPastDate = o.delivery_date < targetDate;
             const isBilled = Boolean(o.billing_cut_id || o.invoice_id);
-            if (isPastDate || isBilled || close_unbilled_pending) {
-                billedOrPastIds.push(o.id);
+            const isDeliveredStop = deliveredStopOrderIds.has(o.id);
+            if (isBilled || isDeliveredStop || close_unbilled_pending) {
+                verifiedOrderIds.push(o.id);
             } else {
                 unbilledSameDayOrders.push({ id: o.id, sequence_id: o.sequence_id, status: o.status });
             }
         });
 
         let closedOrdersCount = 0;
-        if (billedOrPastIds.length > 0) {
-            for (let i = 0; i < billedOrPastIds.length; i += 100) {
-                const batch = billedOrPastIds.slice(i, i + 100);
+        if (verifiedOrderIds.length > 0) {
+            for (let i = 0; i < verifiedOrderIds.length; i += 100) {
+                const batch = verifiedOrderIds.slice(i, i + 100);
                 const { error: updErr } = await supabase
                     .from('orders')
                     .update({ status: 'delivered' })
@@ -266,6 +280,7 @@ export async function POST(req: NextRequest) {
             shift: saved,
             closed_orders_count: closedOrdersCount,
             closed_routes_count: closedRoutesCount,
+            pending_reconciliation_count: unbilledSameDayOrders.length,
             remaining_unbilled_orders: unbilledSameDayOrders
         });
     } catch (err: any) {

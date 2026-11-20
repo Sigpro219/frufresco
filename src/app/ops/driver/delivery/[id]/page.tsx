@@ -10,6 +10,7 @@ import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
 import { useMobileGpsTracker } from '@/components/telemetry/MobileGpsTracker';
+import { STOREFRONT_CRATE_PRODUCT_ID } from '@/lib/storefront/storefrontContracts';
 
 interface DeliverableItem {
     id: string;
@@ -76,7 +77,7 @@ export default function DeliveryConfirmationPage() {
                     id, route_id, status,
                     routes:route_id ( vehicle_plate ),
                     orders:order_id (
-                        id, sequence_id, shipping_address, payment_method, payment_status, total, origin_source, admin_notes, billing_cut_id,
+                        id, profile_id, sequence_id, shipping_address, payment_method, payment_status, total, origin_source, admin_notes, billing_cut_id,
                         profiles:profile_id (
                             id, company_name, contact_name, role, needs_crates, crate_balance
                         ),
@@ -281,12 +282,13 @@ export default function DeliveryConfirmationPage() {
                 ? collectedMethod 
                 : 'none';
 
-            await supabase.from('route_stops').update({
+            const { error: stopUpdErr } = await supabase.from('route_stops').update({
                 status: isTotalCancellation ? 'failed' : 'delivered',
                 completion_time: new Date().toISOString(),
                 collected_amount: finalCollectedAmount,
                 collected_method: finalCollectedMethod
             }).eq('id', id);
+            if (stopUpdErr) throw stopUpdErr;
 
             // En Modo Espejo (manual_mirror), no mutamos orders.status ni duplicamos novedades/Kardex sobre lo que ya procesa el flujo manual
             if (!isMirrorMode && stop?.orders?.id) {
@@ -295,23 +297,23 @@ export default function DeliveryConfirmationPage() {
                     .from('orders')
                     .update({ status: 'delivered' })
                     .eq('id', stop.orders.id);
-                if (orderStatusErr) {
-                    console.error('Error updating order status on delivery:', orderStatusErr);
-                }
+                if (orderStatusErr) throw orderStatusErr;
             }
 
             // Check if this was the last pending stop on this route to complete the route
-            const { data: remainingStops } = await supabase
+            const { data: remainingStops, error: remStopsErr } = await supabase
                 .from('route_stops')
                 .select('id, status')
                 .eq('route_id', stop.route_id);
+            if (remStopsErr) throw remStopsErr;
 
             const hasPending = remainingStops?.some(s => s.id !== id && (s.status === 'pending' || s.status === 'arrived'));
             if (!hasPending) {
-                await supabase
+                const { error: routeDoneErr } = await supabase
                     .from('routes')
                     .update({ status: 'completed' })
                     .eq('id', stop.route_id);
+                if (routeDoneErr) throw routeDoneErr;
             }
 
             if (isMirrorMode) {
@@ -322,13 +324,14 @@ export default function DeliveryConfirmationPage() {
 
             // 2. Record Events (Modo Digital Nativo; Col O se registra una sola vez en /ops/devoluciones al descargar en muelle)
             if (isTotalCancellation) {
-                await supabase.from('delivery_events').insert({
+                const { error: cancelEvErr } = await supabase.from('delivery_events').insert({
                     stop_id: id,
                     order_id: stop.orders.id,
                     event_type: 'cancellation',
                     description: novedadReason,
                     evidence_url: evidenceUrl
                 });
+                if (cancelEvErr) throw cancelEvErr;
 
                 if (items && items.length > 0) {
                     for (const item of items) {
@@ -345,15 +348,14 @@ export default function DeliveryConfirmationPage() {
                             dedup_key: `driver_${stop.orders.id}_${item.product_id}`
                         };
                         const { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
-                        if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
-                            const { source: _s, dedup_key: _d, ...legacy } = brPayload;
-                            await supabase.from('billing_returns').insert(legacy);
+                        if (brErr && brErr.code !== '23505') {
+                            throw brErr;
                         }
                     }
                 }
 
                 // Automatic insertion into customer_service_pqrs
-                const clientId = stop.orders?.profiles?.id;
+                const clientId = stop.orders?.profiles?.id || (stop.orders as any)?.profile_id;
                 const isReplacement = stop.orders?.origin_source === 'customer_service' || (stop.orders?.admin_notes || '').includes('REPOSICIÓN');
                 if (clientId) {
                     const rcaTag = buildRcaMetadataTag({
@@ -372,7 +374,7 @@ export default function DeliveryConfirmationPage() {
                         ? `[ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente canceló la entrega. NO volver a reprogramar despacho; compensar mediante Nota Crédito.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                         : `El conductor reportó cancelación total de la entrega en sitio.\n\nMotivo del conductor: ${novedadReason}\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
-                    await supabase.from('customer_service_pqrs').insert({
+                    const { error: pqrCancelErr } = await supabase.from('customer_service_pqrs').insert({
                         client_id: clientId,
                         order_id: stop.orders.id,
                         type: 'reclamo',
@@ -383,18 +385,20 @@ export default function DeliveryConfirmationPage() {
                         primary_photo_url: evidenceUrl,
                         status: 'pending'
                     });
+                    if (pqrCancelErr) throw pqrCancelErr;
                 }
             } else if (hasNovedad) {
                 const isReplacement = stop.orders?.origin_source === 'customer_service' || (stop.orders?.admin_notes || '').includes('REPOSICIÓN');
                 const partialReturns = items.filter(i => i.returned_qty > 0);
                 for (const item of partialReturns) {
-                    await supabase.from('delivery_events').insert({
+                    const { error: partEvErr } = await supabase.from('delivery_events').insert({
                         stop_id: id,
                         order_id: stop.orders.id,
                         event_type: 'partial_rejection',
                         description: `PRODUCTO: ${item.product_name} | MOTIVO: ${item.return_reason || 'No especificado'} | CANT: ${item.returned_qty}`,
                         evidence_url: item.return_evidence_url || evidenceUrl
                     });
+                    if (partEvErr) throw partEvErr;
 
                     const brPayload: Record<string, any> = {
                         order_id: stop.orders.id,
@@ -407,14 +411,13 @@ export default function DeliveryConfirmationPage() {
                         dedup_key: `driver_${stop.orders.id}_${item.product_id}`
                     };
                     const { error: brErr } = await supabase.from('billing_returns').insert(brPayload);
-                    if (brErr && /dedup_key|source/i.test(brErr.message || '')) {
-                        const { source: _s, dedup_key: _d, ...legacy } = brPayload;
-                        await supabase.from('billing_returns').insert(legacy);
+                    if (brErr && brErr.code !== '23505') {
+                        throw brErr;
                     }
                 }
 
                 if (partialReturns.length > 0) {
-                    const clientId = stop.orders?.profiles?.id;
+                    const clientId = stop.orders?.profiles?.id || (stop.orders as any)?.profile_id;
                     if (clientId) {
                         const itemsSummary = partialReturns.map(i => `• ${i.product_name}: ${i.returned_qty} ${i.unit} devueltos (Motivo: ${i.return_reason || 'No especificado'})`).join('\n');
                         const firstPhoto = partialReturns.find(i => i.return_evidence_url)?.return_evidence_url || evidenceUrl;
@@ -438,7 +441,7 @@ export default function DeliveryConfirmationPage() {
                             ? `[ALERTA CORTE DE BUCLE]: Este pedido era una REPOSICIÓN previa. El cliente devolvió parcialmente los productos. NO volver a reprogramar; liquidar los kilos rechazados como Nota Crédito.\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`
                             : `El conductor registró devolución de producto(s) en sitio:\n\n${itemsSummary}\n\nCliente: ${stop.orders.customer_name}\nDirección: ${stop.orders.shipping_address}\n\n${rcaTag}`;
 
-                        await supabase.from('customer_service_pqrs').insert({
+                        const { error: pqrPartErr } = await supabase.from('customer_service_pqrs').insert({
                             client_id: clientId,
                             order_id: stop.orders.id,
                             type: 'reclamo',
@@ -450,61 +453,66 @@ export default function DeliveryConfirmationPage() {
                             additional_photos: additionalPhotos.length > 0 ? additionalPhotos : null,
                             status: 'pending'
                         });
+                        if (pqrPartErr) throw pqrPartErr;
                     }
                 }
             }
 
             // 3. Inventory Integration (Returns ya registrados canónicamente arriba como 'route_return' hacia Columna O)
             
-            // 4. Record Canastillas movement & atomic balance update
-            if (canastillasDelivered > 0 || canastillasReceived > 0) {
-                const targetProfileId = (stop?.orders as any)?.profiles?.id;
+            // 4. Record Canastillas movement & atomic balance update (excluyendo canastillas compradas B2C Escenario 459)
+            const purchasedStorefrontCratesQty = items
+                .filter(i => i.product_id === STOREFRONT_CRATE_PRODUCT_ID)
+                .reduce((acc, i) => acc + Math.max(0, Number(i.picked_quantity ?? i.quantity) || 0), 0);
+            const loanableCratesDelivered = Math.max(0, canastillasDelivered - purchasedStorefrontCratesQty);
+
+            if (loanableCratesDelivered > 0 || canastillasReceived > 0) {
+                const targetProfileId = (stop?.orders as any)?.profile_id || (stop?.orders as any)?.profiles?.id;
                 const targetOrderId = stop?.orders?.id;
-                const netChange = canastillasDelivered - canastillasReceived;
+                const netChange = loanableCratesDelivered - canastillasReceived;
 
                 let newBalance: number | null = null;
                 if (targetProfileId) {
-                    try {
-                        const { data: profData } = await supabase
-                            .from('profiles')
-                            .select('crate_balance')
-                            .eq('id', targetProfileId)
-                            .single();
-                        
-                        const currentBal = Number(profData?.crate_balance || 0);
-                        newBalance = Math.max(0, currentBal + netChange);
+                    const { data: profData, error: profFetchErr } = await supabase
+                        .from('profiles')
+                        .select('crate_balance')
+                        .eq('id', targetProfileId)
+                        .single();
+                    if (profFetchErr) throw profFetchErr;
+                    
+                    const currentBal = Number(profData?.crate_balance || 0);
+                    newBalance = Math.max(0, currentBal + netChange);
 
-                        await supabase
-                            .from('profiles')
-                            .update({ crate_balance: newBalance })
-                            .eq('id', targetProfileId);
-                    } catch (profErr) {
-                        console.error('Error actualizando crate_balance en profile:', profErr);
-                    }
+                    const { error: profUpdErr } = await supabase
+                        .from('profiles')
+                        .update({ crate_balance: newBalance })
+                        .eq('id', targetProfileId);
+                    if (profUpdErr) throw profUpdErr;
                 }
 
-                await supabase.from('asset_movements').insert({
+                const { error: assetErr } = await supabase.from('asset_movements').insert({
                     route_id: stop.route_id,
                     order_id: targetOrderId || null,
                     profile_id: targetProfileId || null,
                     type: netChange >= 0 ? 'delivery' : 'pickup',
-                    movement_type: canastillasDelivered > 0 && canastillasReceived > 0 
+                    movement_type: loanableCratesDelivered > 0 && canastillasReceived > 0 
                         ? 'exchange' 
-                        : (canastillasDelivered > 0 ? 'delivery_loan' : 'driver_pickup'),
-                    delivered_qty: canastillasDelivered,
+                        : (loanableCratesDelivered > 0 ? 'delivery_loan' : 'driver_pickup'),
+                    delivered_qty: loanableCratesDelivered,
                     received_qty: canastillasReceived,
                     quantity: netChange,
                     balance_after: newBalance,
-                    notes: `Despacho Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'}: ${canastillasDelivered} ent. / ${canastillasReceived} rec. (${stop.orders?.customer_name || 'Cliente'})`,
+                    notes: `Despacho Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'}: ${loanableCratesDelivered} prest. (${purchasedStorefrontCratesQty} compradas B2C) / ${canastillasReceived} rec. (${stop.orders?.customer_name || 'Cliente'})`,
                     evidence_url: evidenceUrl || null
                 });
+                if (assetErr) throw assetErr;
             }
 
             if (crateDamageEvidenceUrl) {
-                await supabase.from('asset_movements').insert({
+                const { error: dmgErr } = await supabase.from('asset_movements').insert({
                     route_id: stop.route_id,
                     order_id: stop.order_id || (stop.orders as any)?.id || null,
-                    profile_id: (stop.orders as any)?.profile_id || null,
+                    profile_id: (stop.orders as any)?.profile_id || (stop.orders as any)?.profiles?.id || null,
                     type: 'damage',
                     movement_type: 'crate_damage',
                     delivered_qty: 0,
@@ -513,6 +521,7 @@ export default function DeliveryConfirmationPage() {
                     notes: `Evidencia daño/pérdida de canastilla en Remisión #${(stop?.orders as any)?.sequence_id || 'S/N'} (${stop.orders?.customer_name || 'Cliente'})`,
                     evidence_url: crateDamageEvidenceUrl
                 });
+                if (dmgErr) throw dmgErr;
             }
 
             (window as any).showToast?.('Entrega finalizada e inventario sincronizado', 'success');

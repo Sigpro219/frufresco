@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { fetchApps360Fleet } from '@/lib/telemetry/apps360';
+import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
 
 // 1. Esquema Zod de Parámetros de Consulta (Mandamiento 1)
 const SyncQuerySchema = z.object({
@@ -21,6 +22,24 @@ function getSupabaseAdmin() {
 export async function GET(req: NextRequest) {
     const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
     const startTime = Date.now();
+
+    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+        return NextResponse.json(
+            {
+                success: true,
+                skipped: true,
+                sandbox: true,
+                data: {
+                    total_fetched: 0,
+                    synced_count: 0,
+                    synced_plates: [],
+                    message: 'Apps-360 GPS polling disabled in Sandbox mode',
+                },
+                requestId,
+            },
+            { status: 200 }
+        );
+    }
 
     try {
         // 2. Validación de entrada con Zod

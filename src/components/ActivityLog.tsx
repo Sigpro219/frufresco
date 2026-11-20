@@ -2,21 +2,32 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+    Play,
+    Fuel,
+    Wrench,
+    Utensils,
+    Coffee,
+    ParkingSquare,
+    Navigation,
+    Radio,
+    type LucideIcon
+} from 'lucide-react';
 
 interface ActivityType {
     id: string;
     label: string;
-    icon: string;
+    Icon: LucideIcon;
     color: string;
 }
 
 const ACTIVITIES: ActivityType[] = [
-    { id: 'operation', label: 'Operación', icon: '', color: '#10B981' },
-    { id: 'refuel', label: 'Tanqueo', icon: '', color: '#F59E0B' },
-    { id: 'workshop', label: 'Taller', icon: '', color: '#6366F1' },
-    { id: 'lunch', label: 'Almuerzo', icon: '', color: '#10B981' },
-    { id: 'break', label: 'Receso', icon: '️', color: '#94A3B8' },
-    { id: 'park', label: 'Parquear', icon: '🅿️', color: '#1F2937' }
+    { id: 'operation', label: 'Operación', Icon: Play, color: '#10B981' },
+    { id: 'refuel', label: 'Tanqueo', Icon: Fuel, color: '#F59E0B' },
+    { id: 'workshop', label: 'Taller', Icon: Wrench, color: '#6366F1' },
+    { id: 'lunch', label: 'Almuerzo', Icon: Utensils, color: '#10B981' },
+    { id: 'break', label: 'Receso', Icon: Coffee, color: '#94A3B8' },
+    { id: 'park', label: 'Parquear', Icon: ParkingSquare, color: '#1F2937' }
 ];
 
 const ROAD_ADJUSTMENT_FACTOR = 1.25; // Estimate road distance from straight-line GPS
@@ -60,15 +71,11 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
         } else {
             // PRODUCTION: Fetch current odo from fleet_vehicles if no local session
             const fetchVehicleOdo = async () => {
-                if (plate.startsWith('mock')) {
-                    setTheoreticalOdo(45000); // Sample odo for mock
-                    return;
-                }
                 const { data } = await supabase
                     .from('fleet_vehicles')
                     .select('current_odometer')
                     .eq('plate', plate)
-                    .single();
+                    .maybeSingle();
                 if (data?.current_odometer) {
                     setTheoreticalOdo(data.current_odometer);
                 }
@@ -103,74 +110,67 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
             const currLon = pos.coords.longitude;
 
             // 1. Log previous activity distance
-            if (activeActivity) {
-                const diffTime = now - activeActivity.startTime;
-                const hours = Math.floor(diffTime / 3600000).toString().padStart(2, '0');
-                const minutes = Math.floor((diffTime % 3600000) / 60000).toString().padStart(2, '0');
-                const seconds = Math.floor((diffTime % 60000) / 1000).toString().padStart(2, '0');
-                const durationTxt = `${hours}:${minutes}:${seconds}`;
+                if (activeActivity) {
+                    const diffTime = now - activeActivity.startTime;
+                    const hours = Math.floor(diffTime / 3600000).toString().padStart(2, '0');
+                    const minutes = Math.floor((diffTime % 3600000) / 60000).toString().padStart(2, '0');
+                    const seconds = Math.floor((diffTime % 60000) / 1000).toString().padStart(2, '0');
+                    const durationTxt = `${hours}:${minutes}:${seconds}`;
 
-                const dist = calculateDistance(
-                    activeActivity.startLat, 
-                    activeActivity.startLon, 
-                    currLat, 
-                    currLon
-                );
+                    const dist = calculateDistance(
+                        activeActivity.startLat, 
+                        activeActivity.startLon, 
+                        currLat, 
+                        currLon
+                    );
 
-                // Add Validation Check to avoid odometer jumps from 0, 0 or huge coordinates jumps
-                const isValidCoord = (lat: number, lon: number) => lat !== 0 && lon !== 0 && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
-                let finalDist = dist;
+                    // Add Validation Check to avoid odometer jumps from 0, 0 or huge coordinates jumps
+                    const isValidCoord = (lat: number, lon: number) => lat !== 0 && lon !== 0 && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+                    let finalDist = dist;
 
-                if (!isValidCoord(activeActivity.startLat, activeActivity.startLon) || !isValidCoord(currLat, currLon)) {
-                    console.warn("Invalid GPS coordinates detected. Skipping odometer calculation.");
-                    finalDist = 0;
-                } else if (dist > 200) { // Limit to 200 KM max per activity switch
-                    console.warn(`Anomalous distance calculation: ${dist.toFixed(2)} KM. Capping to 0.`);
-                    finalDist = 0;
-                }
+                    if (!isValidCoord(activeActivity.startLat, activeActivity.startLon) || !isValidCoord(currLat, currLon)) {
+                        console.warn("Invalid GPS coordinates detected. Skipping odometer calculation.");
+                        finalDist = 0;
+                    } else if (dist > 200) { // Limit to 200 KM max per activity switch
+                        console.warn(`Anomalous distance calculation: ${dist.toFixed(2)} KM. Capping to 0.`);
+                        finalDist = 0;
+                    }
 
-                const description = `GPS AUDIT | PLACA: ${plate} | ESTADO: ${activeActivity.type.toUpperCase()} | DURACIÓN: ${durationTxt} | KM ESTIMADOS: ${finalDist.toFixed(2)} (bruto: ${dist.toFixed(2)}) | COORDS: [${activeActivity.startLat.toFixed(4)},${activeActivity.startLon.toFixed(4)}] -> [${currLat.toFixed(4)},${currLon.toFixed(4)}]`;
-                
-                if (!plate.startsWith('mock')) {
+                    const description = `GPS AUDIT | PLACA: ${plate} | ESTADO: ${activeActivity.type.toUpperCase()} | DURACIÓN: ${durationTxt} | KM ESTIMADOS: ${finalDist.toFixed(2)} (bruto: ${dist.toFixed(2)}) | COORDS: [${activeActivity.startLat.toFixed(4)},${activeActivity.startLon.toFixed(4)}] -> [${currLat.toFixed(4)},${currLon.toFixed(4)}]`;
+                    
                     await supabase.from('delivery_events').insert({
                         event_type: `activity_${activeActivity.type}`,
                         description,
                         created_at: new Date(activeActivity.startTime).toISOString()
                     });
-                } else {
-                    console.log('Bitácora Silenciosa:', description);
-                }
 
-                // Update theoretical odo locally for visual feedback
-                const newOdo = theoreticalOdo + finalDist;
-                setTheoreticalOdo(newOdo);
+                    // Update theoretical odo locally for visual feedback
+                    const newOdo = theoreticalOdo + finalDist;
+                    setTheoreticalOdo(newOdo);
 
-                // PRODUCTION UPDATE: Save new odo to fleet_vehicles
-                if (!plate.startsWith('mock')) {
+                    // PRODUCTION UPDATE: Save new odo to fleet_vehicles
                     await supabase.from('fleet_vehicles')
                         .update({ 
                             current_odometer: Math.round(newOdo),
                             last_odometer_update: new Date().toISOString()
                         })
                         .eq('plate', plate);
+
+                    if (onOdometerUpdate) onOdometerUpdate(Math.round(newOdo));
                 }
 
-                if (onOdometerUpdate) onOdometerUpdate(Math.round(newOdo));
-            }
-
-            // 2. Set New State
-            const nextActivity = { 
-                type: newType, 
-                startTime: now, 
-                startLat: currLat, 
-                startLon: currLon 
-            };
-            setActiveActivity(nextActivity);
-            localStorage.setItem(`active_activity_${plate}`, JSON.stringify(nextActivity));
-            setGpsActive(true);
-            
-            if (window.showToast) window.showToast(`Estado: ${newType.toUpperCase()}`, 'success');
-            if (window.showToast) window.showToast(`Estado: ${newType.toUpperCase()}`, 'success');
+                // 2. Set New State
+                const nextActivity = { 
+                    type: newType, 
+                    startTime: now, 
+                    startLat: currLat, 
+                    startLon: currLon 
+                };
+                setActiveActivity(nextActivity);
+                localStorage.setItem(`active_activity_${plate}`, JSON.stringify(nextActivity));
+                setGpsActive(true);
+                
+                if (window.showToast) window.showToast(`Estado: ${newType.toUpperCase()}`, 'success');
         } catch (err: unknown) {
             const geoErr = err as GeolocationPositionError;
             console.error(`GPS Error Audit - Code: ${geoErr?.code || 'unknown'}, Message: ${geoErr?.message || 'No msg'}`);
@@ -186,13 +186,11 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
             if (activeActivity) {
                 const description = `GPS ERROR | ESTADO: ${activeActivity.type.toUpperCase()} | ERROR: ${errorMessage} | KM ESTIMADOS: 0.00`;
                 
-                if (!plate.startsWith('mock')) {
-                    await supabase.from('delivery_events').insert({
-                        event_type: `activity_error_${activeActivity.type}`,
-                        description,
-                        created_at: new Date(activeActivity.startTime).toISOString()
-                    });
-                }
+                await supabase.from('delivery_events').insert({
+                    event_type: `activity_error_${activeActivity.type}`,
+                    description,
+                    created_at: new Date(activeActivity.startTime).toISOString()
+                });
             }
 
             const nextActivity = { 
@@ -222,7 +220,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
                         fontWeight: '900', border: `1px solid ${gpsActive ? '#3B82F640' : '#EF444440'}`,
                         display: 'flex', alignItems: 'center', gap: '4px'
                     }}>
-                        {gpsActive ? '️ GPS ACTIVO' : 'GPS OFF'}
+                        {gpsActive ? <><Navigation size={12} /> GPS ACTIVO</> : <><Radio size={12} /> GPS OFF</>}
                     </div>
                     <div style={{ 
                         fontSize: '0.65rem', padding: '4px 12px', borderRadius: '20px', 
@@ -236,6 +234,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem' }}>
                 {ACTIVITIES.map(act => {
                     const isActive = activeActivity?.type === act.id;
+                    const IconComponent = act.Icon;
                     return (
                         <button
                             key={act.id}
@@ -252,7 +251,7 @@ export default function ActivityLog({ plate, onOdometerUpdate }: ActivityLogProp
                                 opacity: loading ? 0.5 : 1
                             }}
                         >
-                            <span style={{ fontSize: '1.2rem' }}>{act.icon}</span>
+                            <IconComponent size={18} />
                             <span>{act.label}</span>
                         </button>
                     );

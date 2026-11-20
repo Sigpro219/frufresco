@@ -4,6 +4,7 @@ import { Suspense, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import FloatingCartBar from '@/components/FloatingCartBar';
+import SandboxModeBadge from '@/components/SandboxModeBadge';
 import StorefrontHeader from '@/components/storefront/StorefrontHeader';
 import { Providers } from '@/app/providers';
 import { useCart } from '@/lib/cartContext';
@@ -41,6 +42,7 @@ export default function ClientLayout({ children, initialStorefrontConfig }: Clie
 
   return (
     <Providers>
+      {!isPrintPage && <SandboxModeBadge />}
       {usePublicStorefront && <StorefrontCartGuard frioganMode={storefrontConfig.frioganMode} />}
       {usePublicStorefront ? (
         <Suspense fallback={<div style={{ height: '124px', backgroundColor: '#FAF9F6' }} />}>

@@ -5,12 +5,13 @@ import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import ActivityLog from '@/components/ActivityLog';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { Gauge, AlertTriangle, AlertOctagon, MapPin, Key, ChevronRight } from 'lucide-react';
 
 interface Route {
     id: string;
     vehicle_plate: string;
-    status: 'planning' | 'loading' | 'in_transit' | 'completed';
+    status: 'planning' | 'loading' | 'rectified' | 'in_transit' | 'completed';
     start_time: string;
     total_orders: number;
     total_kilos: number;
@@ -109,17 +110,31 @@ export default function DriverDashboard() {
                 setMaintenanceAlert(null);
             }
 
-            // 2. Fetch Routes for this plate
+            // 2. Fetch active routes for this plate within the operational window (last 3 days or active shift date)
+            const opTargetDate = getOperationalTargetDate(20);
+            const cutoffCreatedIso = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
             const { data: routeData, error: routeError } = await supabase
                 .from('routes')
-                .select('*')
+                .select('*, route_stops(orders:order_id(delivery_date))')
                 .eq('vehicle_plate', plate)
                 .neq('status', 'completed') 
                 .order('created_at', { ascending: false });
             
             if (routeError) throw routeError;
 
-            if (isMounted.current) setRoutes(routeData || []);
+            const yesterdayDate = new Date(new Date(`${opTargetDate}T00:00:00Z`).getTime() - 24 * 60 * 60 * 1000)
+                .toISOString()
+                .slice(0, 10);
+
+            const filteredRoutes = (routeData || []).filter((r: any) => {
+                const stops = Array.isArray(r.route_stops) ? r.route_stops : [];
+                if (stops.length > 0) {
+                    return stops.some((s: any) => !s?.orders?.delivery_date || s.orders.delivery_date >= yesterdayDate);
+                }
+                return !r.created_at || r.created_at >= cutoffCreatedIso;
+            });
+
+            if (isMounted.current) setRoutes(filteredRoutes);
 
         } catch (err: unknown) {
             if (isAbortError(err)) return;
@@ -384,7 +399,7 @@ export default function DriverDashboard() {
                             {routes.map(route => (
                                 <Link 
                                     key={route.id} 
-                                    href={route.status === 'planning' || route.status === 'loading' 
+                                    href={route.status === 'planning' || route.status === 'loading' || route.status === 'rectified' 
                                         ? `/ops/driver/route/${route.id}` 
                                         : `/ops/driver/route-map/${route.id}`} 
                                     style={{ textDecoration: 'none' }}

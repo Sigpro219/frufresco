@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { verifySessionAndPermission } from '@/lib/auth';
+import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
 
 const OptimizeRequestSchema = z.object({
     orders: z.array(z.any()).min(1, 'Se requiere al menos un pedido para optimizar rutas'),
@@ -374,11 +375,12 @@ export async function POST(request: Request) {
         };
 
         // 3. Real Integration Check
-        const gcpProjectId = process.env.GCP_PROJECT_ID;
-        const gcpApiKey = process.env.GCP_OPTIMIZATION_KEY;
+        const allowExternalGcp = !isSandboxMode() || areSandboxExternalApisAllowed();
+        const gcpProjectId = allowExternalGcp ? process.env.GCP_PROJECT_ID : undefined;
+        const gcpApiKey = allowExternalGcp ? process.env.GCP_OPTIMIZATION_KEY : undefined;
 
         let serviceAccountData: any = null;
-        if (process.env.GCP_SERVICE_ACCOUNT_KEY) {
+        if (allowExternalGcp && process.env.GCP_SERVICE_ACCOUNT_KEY) {
             try {
                 const rawKey = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
                 if (rawKey.startsWith('{')) {
@@ -392,7 +394,7 @@ export async function POST(request: Request) {
             }
         }
 
-        if (!serviceAccountData) {
+        if (allowExternalGcp && !serviceAccountData) {
             const serviceAccountPath = path.join(process.cwd(), 'gcp-service-account.json');
             try {
                 if (fs.existsSync(serviceAccountPath)) {
@@ -401,9 +403,9 @@ export async function POST(request: Request) {
             } catch (_) {}
         }
 
-        const hasServiceAccount = !!serviceAccountData;
+        const hasServiceAccount = allowExternalGcp && !!serviceAccountData;
 
-        if (hasServiceAccount || (gcpProjectId && gcpApiKey)) {
+        if (allowExternalGcp && (hasServiceAccount || (gcpProjectId && gcpApiKey))) {
             let accessToken: string | null = null;
             let projectId = gcpProjectId || serviceAccountData?.project_id || 'frufresco';
 

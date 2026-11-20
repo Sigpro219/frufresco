@@ -8553,22 +8553,38 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     </div>
 
                     <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.74rem' }}>
-                      {/* Fecha y Hora */}
-                      <span style={{ 
-                        fontWeight: '700', 
-                        color: '#475569', 
-                        backgroundColor: '#F1F5F9', 
-                        padding: '2px 7px', 
-                        borderRadius: '6px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        <Clock size={11} strokeWidth={2.2} style={{ color: '#64748B' }} />
-                        <span>{formattedDate}</span>
-                        <span style={{ color: '#94A3B8' }}>•</span>
-                        <span>{formattedTime}</span>
-                      </span>
+                      {/* Fecha y Hora (resaltado sutil si llegó en día anterior) */}
+                      {(() => {
+                        const todayBogota = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                        const draftBogota = draft.created_at ? new Date(draft.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) : todayBogota;
+                        const isPrevDay = draftBogota < todayBogota;
+                        return (
+                          <span
+                            title={isPrevDay ? `Correo recibido en fecha anterior (${draftBogota})` : 'Correo recibido hoy'}
+                            style={{
+                              fontWeight: '700',
+                              color: isPrevDay ? '#92400E' : '#475569',
+                              backgroundColor: isPrevDay ? '#FFFBEB' : '#F1F5F9',
+                              border: isPrevDay ? '1px solid #FDE68A' : '1px solid transparent',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Clock size={11} strokeWidth={2.2} style={{ color: isPrevDay ? '#D97706' : '#64748B' }} />
+                            <span>{formattedDate}</span>
+                            <span style={{ color: isPrevDay ? '#F59E0B' : '#94A3B8' }}>•</span>
+                            <span>{formattedTime}</span>
+                            {isPrevDay && (
+                              <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#B45309', marginLeft: '2px', textTransform: 'uppercase' }}>
+                                · Día ant.
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
 
                       {/* Email de Origen */}
                       <span style={{ 

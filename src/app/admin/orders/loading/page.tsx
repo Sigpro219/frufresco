@@ -5703,6 +5703,13 @@ useEffect(() => {
                                         setLastLaunchedOrderIds(ids);
                                         setShowLockWarningModal(false);
                                         await handleBulkAction('para_compra', true, true);
+                                        const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
+                                        fetch('/api/ops/shifts', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            credentials: 'include',
+                                            body: JSON.stringify({ action: 'set_mode', mode: 'digital_native', shift_date: targetShiftDate })
+                                        }).catch(() => {});
                                         setShowPostLaunchModal(true);
                                     }}
                                     style={{
@@ -6046,6 +6053,98 @@ useEffect(() => {
                                         gap: '5px'
                                     }}>
                                         <span>Imprimir Rótulos</span>
+                                        <ExternalLink size={12} />
+                                    </div>
+                                </a>
+
+                                {/* Enrutar Flota en Transporte (Modo Digital) */}
+                                <a
+                                    href={`/admin/transport?date=${(selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr()}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #2563EB',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1D4ED8', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <Truck size={16} /> Transporte &amp; Ruteo
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Asigna vehículos, optimiza paradas y confirma manifiestos del turno lanzado.
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        padding: '7px 10px',
+                                        backgroundColor: '#2563EB',
+                                        color: '#FFFFFF',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        textAlign: 'center',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                    }}>
+                                        <span>Enrutar Flota en Transporte</span>
+                                        <ExternalLink size={12} />
+                                    </div>
+                                </a>
+
+                                {/* Tablero de Picking OPS (Modo Digital) */}
+                                <a
+                                    href={`/ops/picking/dashboard?date=${(selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr()}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        backgroundColor: '#F8FAFC',
+                                        border: '1.5px solid #0F766E',
+                                        borderRadius: '12px',
+                                        padding: '1rem',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDFA'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0F766E', fontWeight: '900', fontSize: '0.85rem' }}>
+                                            <Layers size={16} /> Tablero Picking OPS
+                                        </div>
+                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                            Monitorea el avance en tiempo real de las 12 células de alistamiento en bodega.
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        padding: '7px 10px',
+                                        backgroundColor: '#0F766E',
+                                        color: '#FFFFFF',
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        textAlign: 'center',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '5px'
+                                    }}>
+                                        <span>Tablero de Picking OPS</span>
                                         <ExternalLink size={12} />
                                     </div>
                                 </a>

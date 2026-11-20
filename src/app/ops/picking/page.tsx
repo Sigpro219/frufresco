@@ -98,10 +98,10 @@ export default function PickingExecutionPage() {
                     profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
                     order_items (
                         id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
-                        products (name, category, unit_of_measure, buying_team, accounting_id)
+                        products (name, category, unit_of_measure, buying_team, accounting_id, parent_id)
                     )
                 `)
-                .in('status', ['para_compra', 'approved', 'picking']);
+                .in('status', ['para_compra', 'approved', 'picking', 'in_preparation']);
 
             // Check Global Cutoff Switch
             const { data: settings } = await supabase
@@ -183,9 +183,8 @@ export default function PickingExecutionPage() {
                     });
                     if (stockRes.ok) {
                         const allStocks = await stockRes.json();
-                        productIds.forEach(pId => {
-                            const pIdStr = pId as string;
-                            stockMap[pIdStr] = allStocks[pIdStr] || 0;
+                        Object.entries(allStocks || {}).forEach(([pIdStr, qty]) => {
+                            stockMap[pIdStr] = Number(qty || 0);
                         });
                     }
                 } catch (err) {
@@ -265,32 +264,37 @@ export default function PickingExecutionPage() {
                                customPerms.includes(`+ops.picking.category:${cat}`);
                     };
 
+                    const normalizedSelectedCategory = selectedCategory === 'TODAS' ? 'TODAS' : normalizeOperationalCell(selectedCategory);
+
                     const itemsInCategory = items
                         .filter(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
-                            if (!product?.buying_team) return false;
+                            const resolvedCell = normalizeOperationalCell(product?.buying_team, product?.category);
 
                             const isCatAllowed = (() => {
                                 if (customPerms.includes('*') || customPerms.includes('+*') || profile?.role === 'admin' || profile?.role === 'sys_admin') {
                                     return true;
                                 }
-                                if (isDenied(product.buying_team)) {
+                                if (isDenied(resolvedCell)) {
                                     return false;
                                 }
                                 if (hasExplicitAllows) {
-                                    return isAllowedExplicitly(product.buying_team);
+                                    return isAllowedExplicitly(resolvedCell);
                                 }
                                 return true;
                             })();
 
                             if (!isCatAllowed) return false;
 
-                            return selectedCategory === 'TODAS' || product?.buying_team === selectedCategory;
+                            return normalizedSelectedCategory === 'TODAS' || resolvedCell === normalizedSelectedCategory;
                         })
                         .map(item => {
                             const product = Array.isArray(item.products) ? item.products[0] : item.products;
+                            const resolvedCell = normalizeOperationalCell(product?.buying_team, product?.category);
                             const variant = item.variant_label || item.nickname || '';
-                            const dispName = variant ? `${product?.name} (${variant})` : (product?.name || 'Producto Desconocido');
+                            const baseName = product?.accounting_id ? `#${product.accounting_id} ${product?.name || 'Producto'}` : (product?.name || 'Producto Desconocido');
+                            const dispName = variant ? `${baseName} (${variant})` : baseName;
+                            const resolvedStock = stockMap[item.product_id] ?? (product?.parent_id ? stockMap[product.parent_id] : undefined) ?? 0;
                             return {
                                 id: item.id,
                                 product_id: item.product_id,
@@ -300,8 +304,8 @@ export default function PickingExecutionPage() {
                                 quality_status: item.quality_status,
                                 quality_notes: item.quality_notes,
                                 unit: product?.unit_of_measure || 'un',
-                                category: product?.buying_team || 'SIN CATEGORÍA',
-                                available_stock: stockMap[item.product_id] || 0
+                                category: resolvedCell,
+                                available_stock: resolvedStock
                             };
                         });
 

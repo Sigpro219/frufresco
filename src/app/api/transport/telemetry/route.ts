@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionAndRole } from '@/lib/auth';
+import { isOperationalStaffProfile } from '@/lib/ops/operationalShift';
 
 // 1. Validación Zod Estricta (Mandamiento 1)
 const PingItemSchema = z.object({
@@ -34,6 +36,28 @@ export async function POST(req: NextRequest) {
     const startTime = Date.now();
 
     try {
+        const auth = await verifySessionAndRole(req);
+        if (!auth.authorized || !auth.user) {
+            return NextResponse.json(
+                { success: false, error: { code: 'UNAUTHORIZED', message: auth.error || 'Sesión requerida' }, requestId },
+                { status: 401, headers: { 'x-request-id': requestId } }
+            );
+        }
+
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: callerProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('role')
+            .eq('id', auth.user.id)
+            .maybeSingle();
+
+        if (!isOperationalStaffProfile(callerProfile)) {
+            return NextResponse.json(
+                { success: false, error: { code: 'FORBIDDEN', message: 'Telemetría restringida a personal operativo' }, requestId },
+                { status: 403, headers: { 'x-request-id': requestId } }
+            );
+        }
+
         const rawBody = await req.json().catch(() => null);
         const parsed = TelemetryPayloadSchema.safeParse(rawBody);
 
@@ -53,14 +77,39 @@ export async function POST(req: NextRequest) {
         }
 
         const pings = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
-        const supabaseAdmin = getSupabaseAdmin();
 
-        // 2. Procesamiento paralelo concurrente (Promise.allSettled)
+        // 2. Procesamiento paralelo concurrente con prioridad estricta hardware_gps y cero placas inventadas
         const updatePromises = pings.map(async (ping) => {
             const plate = ping.plate.trim().toUpperCase();
             const now = ping.timestamp ? new Date(ping.timestamp).toISOString() : new Date().toISOString();
 
-            const { data: updatedVehicles, error: updateErr } = await supabaseAdmin
+            const { data: existingVehicle, error: fetchVehErr } = await supabaseAdmin
+                .from('fleet_vehicles')
+                .select('id, plate, tracking_source, last_gps_sync, gps_imei')
+                .ilike('plate', plate)
+                .maybeSingle();
+
+            if (fetchVehErr) {
+                console.warn(`[Telemetry API][${requestId}] Error consultando placa ${plate}:`, fetchVehErr.message);
+                throw fetchVehErr;
+            }
+
+            if (!existingVehicle) {
+                return { plate, status: 'ignored_unregistered' as const };
+            }
+
+            const hardwareRecent = Boolean(
+                existingVehicle.gps_imei &&
+                existingVehicle.tracking_source === 'hardware_gps' &&
+                existingVehicle.last_gps_sync &&
+                Date.now() - new Date(existingVehicle.last_gps_sync).getTime() < 5 * 60 * 1000
+            );
+
+            if (ping.tracking_source === 'mobile_app' && hardwareRecent) {
+                return { plate: existingVehicle.plate, status: 'skipped_hardware_gps_priority' as const };
+            }
+
+            const { error: updateErr } = await supabaseAdmin
                 .from('fleet_vehicles')
                 .update({
                     last_latitude: ping.latitude,
@@ -71,65 +120,41 @@ export async function POST(req: NextRequest) {
                     last_gps_sync: now,
                     tracking_source: ping.tracking_source
                 })
-                .ilike('plate', plate)
-                .select('id, plate');
+                .eq('id', existingVehicle.id);
 
             if (updateErr) {
                 console.warn(`[Telemetry API][${requestId}] Error actualizando placa ${plate}:`, updateErr.message);
                 throw updateErr;
             }
 
-            let targetVehicleId: string | null = (updatedVehicles && updatedVehicles.length > 0) ? updatedVehicles[0].id : null;
-
-            // Auto-aprovisionamiento para camión alquilado o tercerizado
-            if (!targetVehicleId) {
-                const { data: insertedVehicle, error: insErr } = await supabaseAdmin
-                    .from('fleet_vehicles')
-                    .insert({
-                        plate,
-                        brand: 'Tercerizado / Alquilado',
-                        vehicle_type: 'Alquilado',
-                        status: 'on_route',
-                        last_latitude: ping.latitude,
-                        last_longitude: ping.longitude,
-                        speed: ping.speed,
-                        heading: ping.heading,
-                        ignition_status: ping.ignition_status,
-                        last_gps_sync: now,
-                        tracking_source: ping.tracking_source
-                    })
-                    .select('id, plate')
-                    .maybeSingle();
-
-                if (!insErr && insertedVehicle) {
-                    targetVehicleId = insertedVehicle.id;
-                }
-            }
-
             // Historial miga de pan no-bloqueante
-            if (targetVehicleId) {
-                supabaseAdmin.from('vehicle_gps_logs').insert({
-                    vehicle_id: targetVehicleId,
-                    plate,
-                    latitude: ping.latitude,
-                    longitude: ping.longitude,
-                    speed: ping.speed,
-                    heading: ping.heading,
-                    accuracy: ping.accuracy,
-                    battery_level: ping.battery_level,
-                    ignition_status: ping.ignition_status,
-                    tracking_source: ping.tracking_source,
-                    created_at: now
-                }).then(null, () => {});
-            }
+            supabaseAdmin.from('vehicle_gps_logs').insert({
+                vehicle_id: existingVehicle.id,
+                plate: existingVehicle.plate,
+                latitude: ping.latitude,
+                longitude: ping.longitude,
+                speed: ping.speed,
+                heading: ping.heading,
+                accuracy: ping.accuracy,
+                battery_level: ping.battery_level,
+                ignition_status: ping.ignition_status,
+                tracking_source: ping.tracking_source,
+                created_at: now
+            }).then(null, () => {});
 
-            return plate;
+            return { plate: existingVehicle.plate, status: 'updated' as const };
         });
 
         const settled = await Promise.allSettled(updatePromises);
-        const processedPlates = settled
-            .filter((s): s is PromiseFulfilledResult<string> => s.status === 'fulfilled')
-            .map(s => s.value);
+        const pingResults: Array<{ plate: string; status: 'ignored_unregistered' | 'skipped_hardware_gps_priority' | 'updated' }> = [];
+        for (const s of settled) {
+            if (s.status === 'fulfilled') {
+                pingResults.push({ plate: String(s.value.plate), status: s.value.status });
+            }
+        }
+        const processedPlates = pingResults
+            .filter(r => r.status === 'updated')
+            .map(r => r.plate);
 
         const durationMs = Date.now() - startTime;
 
@@ -138,6 +163,7 @@ export async function POST(req: NextRequest) {
             data: {
                 processed_count: processedPlates.length,
                 processed_plates: processedPlates,
+                results: pingResults,
                 total_received: pings.length
             },
             meta: {

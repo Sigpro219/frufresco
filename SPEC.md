@@ -2,12 +2,12 @@
 ## Contrato Canónico de Arquitectura de Software & Especificación de Negocio (SDD)
 ### Tenant Insignia: Ecosistema Agro-Logístico FruFresco (Investments Cortés S.A.S.)
 
-> **Versión:** 1.9.419 (Fase I: Escenarios 1..397 | Extensiones Gemba Certificadas: Escenarios 398..464)  
-> **Fecha:** 17 de Noviembre, 2026  
-> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431 a 464 Certificados | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
+> **Versión:** 1.9.432 (Fase I: Escenarios 1..397 | Extensiones Gemba & Blindaje Digital/Sandbox: Escenarios 398..477)  
+> **Fecha:** 20 de Noviembre, 2026  
+> **Estado:** 🟢 Fase I (`v1.9.x`) Aprobada & 100% Certificada (76/76 Pantallas) | Escenarios 431..476 Certificados | 🛡️ Escenario 477 (Sandbox Permanente Vercel + Enmienda Digital/Transporte/OPS bajo Veto Manual READ-ONLY) En Compuerta Pre-Código | 🚀 Fase II (`onFRU v2.0`) En Backlog Comercial Facturable Independiente  
 > **Área:** Dirección General, Operaciones Agro-Logísticas (WMS/TMS), Mesa Comercial & B2B, Calidad & SAC, Facturación & Cartera, Finanzas y Tecnología (IT)  
 > **Metodología:** Spec-Driven Development (SDD) & Cuádruple Certificación Militar (Reglas de Negocio, Pipeline de Datos, Lógica Poka-Yoke, Diseño Industrial Suizo)  
-> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..464 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
+> **Cobertura Canónica:** Fase I: 10 Dominios, 76 Pantallas Físicas, 44 Capítulos Arquitectónicos (Escenarios 1..397) | Extensiones Gemba: Escenarios 398..477 | Fase II (`onFRU v2.0`): Capítulos 45, 46 y 47 (Escenarios 400..409)
 
 ---
 
@@ -28,7 +28,7 @@
 | **D9** | **Calidad Operativa, Servicio al Cliente (SAC) & RCA** | 4 | Capítulos 20, 20.9, 35 | Escenarios 146 a 149, 210 a 215, 235, 236, 239, 241, 242, 244, 246, 247, 248, 255, 258, 267 (§7.7.D, §35.1 - §35.2) | 🟢 100% |
 | **D10** | **Gobernanza Central, Command Center y RRHH** | 7 | Capítulos 5, 6, 10, 12, 22, 23, 24, 28, 29, 32, 33, 42 | Escenarios 197 a 203, 224, 228, 229, 236, 238, 239, 240, 241, 242, 243, 244, 245, 246, 248, 249, 250, 251, 252, 253, 254, 255, 258, 430, 462 (§42.1 - §42.7) | 🟢 100% |
 | **DEBT** | **Apéndice de Deuda Técnica y Escalabilidad** | — | Capítulo 43 (`TECHNICAL_DEBT.md`) | Escenario 239 (Grupo A Mitigado) | 🟢 100% |
-| **TOTAL ONFRU** | **onFRU SCOS v1.9.419 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **464 Escenarios Canónicos (1..464)** | **🟢 100%** |
+| **TOTAL ONFRU** | **onFRU SCOS v1.9.432 (TENANT FRUFRESCO) FULL-STACK** | **76** | **44 Capítulos** | **477 Escenarios Canónicos (1..477)** | **🟢 100%** |
 | **FASE II (`v2.0`)** | **onFRU 2.0: WFM/RTLS Indoor, Planta Procesados (MES) & Alianza Carnes `FruFresco × Friogan`** | **+6 (Nuevas)** | **Capítulos 45, 46 y 47 (Anexo Comercial Fase II)** | **Escenarios Serie 400+ (400 a 408)** | **🚀 Fase II (Cotización Independiente)** |
 
 ---
@@ -17454,7 +17454,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - Eliminación de etiquetas `"Código (SKU)"` y `"SKUs"` en UI y reportes XLSX (`translateDetailsKey`, `formatDetailsSummary`, `formatDetailsSummaryText`), priorizando `ID Contable: #accounting_id` y `Ref:` para referencias históricas.
      - Tabla reconstruida con `borderCollapse: 'separate', borderSpacing: 0` y encabezados `<th>` congelados (`position: 'sticky'`, `top: ${85 + toolbarHeight - 2}px`, fondo `#F1F5F9`, borde `2px solid #CBD5E1`, texto `#0F172A`, columna `Ver` fijada a la derecha con `zIndex: 45`).
 
-### Escenario 462: Blindaje Cero Pérdida de Emails en Ingesta IMAP & Bandeja `order_drafts` (SDD v1.9.417)
+### Escenario 462-B: Blindaje Cero Pérdida de Emails en Ingesta IMAP & Bandeja `order_drafts` (SDD v1.9.417)
 - **Alcance Contractual:** Eliminación definitiva de pérdida u ocultamiento de pedidos por correo en [`src/lib/orders/hostingerImapSync.ts`](file:///c:/Projects/frufresco/src/lib/orders/hostingerImapSync.ts), [`src/app/api/orders/email-ingest/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/email-ingest/route.ts), [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx) y [`vercel.json`](file:///c:/Projects/frufresco/vercel.json).
 - **Reglas de Negocio & Comportamiento:**
   1. **Ingesta IMAP Incremental Sin Ventana Ciega (`hostingerImapSync.ts`):**
@@ -17525,7 +17525,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - `exportToWorldOffice`, `handleExportPendingToWorldOffice` y `handleExportPreviewToWorldOffice` comparten un único constructor (`buildWorldOfficeExportRows` + `resolveExportParentsMap`), incluyendo `iva_responsible`, `billing_weight_unit`, deducción de `billing_returns` aprobados y exclusión de remisiones de obsequio/reposición `$0`.
      - `resolveWorldOfficeNote` limpia prefijos `OC` y `SOLPED:`, descarta ruido de direcciones o palabras sueltas y emite la sucursal canónica cuando no existe OC válida.
 
-### Escenario 464: Protección de Selección Manual de Cliente & Eliminación de Falso Match por `split(' ')[0]` (SDD v1.9.419)
+### Escenario 464-B: Protección de Selección Manual de Cliente & Eliminación de Falso Match por `split(' ')[0]` (SDD v1.9.419)
 - **Alcance Contractual:** Corrección de sobreescritura involuntaria de cliente y falsos positivos por palabras genéricas/mojibake en [`src/app/admin/orders/create/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/create/page.tsx) y [`src/lib/orders/order-parser-engine.ts`](file:///c:/Projects/frufresco/src/lib/orders/order-parser-engine.ts).
 - **Reglas de Negocio & Comportamiento:**
   1. **Respeto Absoluto a Selección Manual del Operador (`create/page.tsx`):**
@@ -17564,7 +17564,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
 
 ---
 
-### Escenario 466: Rediseño Ergonómico de Planilla de Llegada (`ID | Producto | KG` +12% Altura) & Preservación de `accountingId` en IA (SDD v1.9.421)
+### Escenario 466-B: Rediseño Ergonómico de Planilla de Llegada (`ID | Producto | KG` +12% Altura) & Preservación de `accountingId` en IA (SDD v1.9.421)
 - **Given** la planilla física de recepción en muelle ([`src/app/admin/procurement/receiving-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/procurement/receiving-print/page.tsx)) y su extractor OCR/IA ([`src/app/api/commercial/inventory/extract-physical-sheet/route.ts`](file:///c:/Projects/frufresco/src/app/api/commercial/inventory/extract-physical-sheet/route.ts)):
 - **When** se imprime la planilla para diligenciamiento manual y posteriormente se digitaliza mediante foto/PDF en el modal de carga física (`sheetType === 'entrada'`):
 - **Then** rigen de forma obligatoria:
@@ -17576,7 +17576,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - `GeminiExtractionItemSchema` en `extract-physical-sheet/route.ts` declara explícitamente `accountingId: z.union([z.string(), z.number()]).optional().nullable()` para evitar que `safeParse` elimine el ID contable leído por Gemini antes de llegar a `normalizeGeminiItems`.
      - El prompt de `sheetType === 'entrada'` instruye el nuevo orden de 6 columnas (`ID | Producto | KG | Nombre Proveedor | Hora Llegada | Calidad`), tomando `accountingId` de la columna 1 y `quantityKg` de la columna `KG` inmediatamente a la derecha de `Producto`.
 
-### Escenario 465: Casa Matriz `Matriz Obsequios`, Modelo Corporativo (Costo Base) & Remisión `$0` Sin Consecutivo `FV-` (SDD v1.9.420)
+### Escenario 465-B: Casa Matriz `Matriz Obsequios`, Modelo Corporativo (Costo Base) & Remisión `$0` Sin Consecutivo `FV-` (SDD v1.9.420)
 - **Alcance Contractual:** Reagrupación contable de sucursales de cortesía bajo la casa matriz **`MATRIZ OBSEQUIOS`** con herencia obligatoria de `document_type = 'gift_remission'` y tarifa **`Modelo Corporativo` (`UTILIDAD 0%` / `A Costo Base`)** en [`src/lib/commercial/billingOrderUtils.ts`](file:///c:/Projects/frufresco/src/lib/commercial/billingOrderUtils.ts) y [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx).
 - **Reglas de Negocio & Comportamiento:**
   1. **Casa Matriz `MATRIZ OBSEQUIOS`:**
@@ -17590,7 +17590,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
 
 ---
 
-### Escenario 467: Corte de Concepto Pre-Despliegue Simultáneo (`Transporte + Despachos + /ops/*`) — Regla Espejo 1:1 del Modo Manual & Dictamen Goldfish en Frío (`SDD v1.9.422`)
+### Escenario 467-B: Corte de Concepto Pre-Despliegue Simultáneo (`Transporte + Despachos + /ops/*`) — Regla Espejo 1:1 del Modo Manual & Dictamen Goldfish en Frío (`SDD v1.9.422`)
 - **Estado del Contrato:** `🔴 VETO PREVENTIVO GOLDFISH` (en definición de los 6 candados contractuales antes de iniciar ejecución en código).
 - **Premisa Rectora ("Modo Manual como Fuente Única de Verdad 1:1"):**
   - La operación estandarizada vigente en Modo Manual (`purchases-print`, `receiving-print`, `alistamiento-print`, `contingency-print`, bahías `1–150` / `10A-10B`, Sábana de 24 Columnas `Col E..X` y Facturación en 2 Cortes `FAC-IMP PM` / `Remisión AM` → `.xls` BIFF8 44 cols) constituye el contrato canónico inmutable.
@@ -17602,19 +17602,19 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   3. **Estados, Bahías & `FAC-IMP` (`RED-16`, `RED-17`, `RED-18`):** `OPERATIONAL_STATUSES` omite `'in_preparation'`, `'ready_for_dispatch'` e `'in_transit'`; `/api/transport/confirm` sobrescribe bahías `1–150` asignadas a las 8 PM y omite `assigned_route_id`; `/api/transport/optimize` puede separar `10A` y `10B`; `/ops/rectificacion/[routeId]` muta `order_items.quantity` sin proteger `FAC-IMP` (`billing_cut_id IS NOT NULL`), guarda Base64 en BD e inserta columnas inexistentes; `driver/route/[id]` se bloquea si se alistó en papel (`picked_quantity = 0`); `driver/delivery/[id]` tiene bug falsy `picked_quantity || quantity`.
   4. **Células, Tablero & Fecha Nocturna (`RED-20`):** Divergencia entre 12 células `KNOWN_CELLS` (`buying_team`) vs `work_cells_governance` vs `terminal` (`category` texto vs código); ceguera entre 8:00 PM y 11:59 PM en `/ops/picking`; error `401` en `/api/inventory/stocks` que activa bloqueo `DT-17`; `picking/dashboard` sin filtro de fecha y con `handleCellClick` (`window.prompt` mutando `items[0]`).
   5. **Canastillas, Telemetría & Reglas `AGENTS.md` (`RED-22`, `RED-23`):** `asset_movements` sin 7 columnas en PostgreSQL; `4` furgones propios sin IMEI Apps-360; baliza PWA sobreescribiendo GPS satelital en los `3` con IMEI y apagándose al entrar a `delivery/[id]`; mocks visibles y exposición residual de `SKU` / `\uFE0F`.
-- **Estado del Contrato:** `🟢 CERRADO Y APROBADO EN ESCENARIO 468` (levantado el `🔴 VETO PREVENTIVO GOLDFISH` tras formalizar `operational_shifts`, Cierre de Jornada, Modo Espejo, Cero Mocks y Skin 1 Responsive/Mobile-First).
-- **Compuertas Cerradas en Escenario 468:**
-  - `[x]` **C1:** Fuente única oficial de las 12 células (`src/lib/ops/operationalCells.ts` alineada a `buying_team`) y regla `parent_id` Padre-Hijo en Picking/Recepción.
-  - `[x]` **C2:** Modelo de autenticación/RLS para `collaborators` + join en `/api/transport/confirm`.
-  - `[x]` **C3:** Preservación de `warehouse_spaces` (`1–150`) y co-asignación obligatoria `10A` / `10B` en `optimize` y `confirm`.
-  - `[x]` **C4:** Contrato `FAC-IMP` (`billing_cut_id IS NOT NULL` inmutable -> Nota Crédito `Corte ADJ`) vs Remisión (`billing_cut_id IS NULL` -> ajuste neto + reimpresión).
-  - `[x]` **C5:** Regla de `picking/dashboard` (Torre de Observación/Coordinación sin `window.prompt` destructivo) y helper compartido de Fecha Operativa Nocturna (corte 8:00 PM).
-  - `[x]` **C6:** Idempotencia en `billing_returns` (`(order_id, product_id, source)`), autoridad única `Col O`/`Col H`/`Col G`/`Col K`, reparación de `asset_movements` y eliminación de `picked_quantity || quantity`.
+- **Estado del Contrato:** `🟡 ENMENDADO Y SUPEDITADO AL ESCENARIO 477 (SDD v1.9.432)` — Brechas `C1-parent_id`, `C2-isStaff/provisión`, `C3-confirm/RoutePlanner`, `C4-rectificación-IVA/deadlock` y `C6-devoluciones/delivery/DDL` cerradas contractualmente en Escenario 477; ejecución pendiente de verificación en Sandbox.
+- **Compuertas de Trazabilidad (`C1`–`C6`):**
+  - `[~]` **C1:** *(Parcial en disco — remediación completa especificada en Escenario 477 §4)* Fuente única oficial de las 12 células (`src/lib/ops/operationalCells.ts` alineada a `buying_team`) y regla `parent_id` Padre-Hijo en Picking/Recepción.
+  - `[~]` **C2:** *(Parcial en disco — remediación completa especificada en Escenario 477 §4)* Corrección `isOperationalStaffProfile`, modelo de autenticación/RLS para `collaborators` + join en `/api/transport/confirm`.
+  - `[~]` **C3:** *(Parcial en disco — remediación completa especificada en Escenario 477 §5)* Preservación de `warehouse_spaces` (`1–150`) y co-asignación obligatoria `10A` / `10B` en `optimize`, `RoutePlanner` y `confirm`.
+  - `[~]` **C4:** *(Parcial en disco — remediación completa especificada en Escenario 477 §1 y §5)* Contrato `FAC-IMP` (`billing_cut_id IS NOT NULL` inmutable -> Nota Crédito `Corte ADJ`) vs Remisión (`billing_cut_id IS NULL` -> ajuste neto sin pérdida de `tax`), guarda `manual_mirror` y cierre del deadlock `rectified`.
+  - `[~]` **C5:** *(Parcial en disco — falta integración en `RoutePlanner` y `picking`)* Regla de `picking/dashboard` (Torre de Observación/Coordinación sin `window.prompt` destructivo) y helper compartido de Fecha Operativa Nocturna (corte 8:00 PM).
+  - `[~]` **C6:** *(Parcial en disco — remediación completa especificada en Escenario 477 §4 y §5)* Idempotencia en `billing_returns` (`dedup_key` + índice único), migración `20261120_ops_digital_hardening.sql`, autoridad única `Col O`/`Col H`/`Col G`/`Col K`, reparación de `asset_movements` y eliminación de `picked_quantity || quantity`.
 
 ---
 
 ### Escenario 468: Arquitectura Unificada Pre-Despliegue Simultáneo (`Transporte + Despachos + /ops/*`) — Ciclo de Vida Diario, Modo Espejo vs Digital, Google/Cercanía Paso 1, Cero Mocks & Skin 1 Mobile-First (`SDD v1.9.423`)
-- **Estado del Contrato:** `🟢 APROBADO PARA EJECUCIÓN` (Compuertas `C1`–`C6` cerradas).
+- **Estado del Contrato:** `🟡 ENMENDADO POR ESCENARIO 477 (SDD v1.9.432)` — §3 derogada parcialmente por el Candado `READ-ONLY` sobre el Modo Manual; ver contrato vinculante actualizado en Escenario 477.
 - **Reglas Contractuales Vinculantes:**
   1. **Ciclo de Vida Diario (`public.operational_shifts` / fallback `app_settings`) & Cierre de la Operación del Día:**
      - Entidad `operational_shifts (id, shift_date, mode: 'manual_mirror' | 'digital_native', status: 'open' | 'closed', opened_by, closed_by, closed_at, notes)`.
@@ -17625,6 +17625,7 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
      - El botón del Paso 1 (`ManualDispatchWizardModal`) ofrece: (a) **Optimizar con Google (`optimizeTours`)** pre-impresión para sellar camiones, orden LIFO y bahías `1–150` contiguas antes de imprimir remisiones; y (b) **Motor Determinista de Cercanía Espacio-Temporal (`GPS lat/lng + ventana horaria`)** en [`stagingSpaceAllocator.ts`](file:///c:/Projects/frufresco/src/lib/stagingSpaceAllocator.ts) como respaldo en Modo Manual puro.
      - [`/api/transport/confirm`](file:///c:/Projects/frufresco/src/app/api/transport/confirm/route.ts) **preserva** `orders.warehouse_spaces` si ya fueron asignados, estampa `orders.assigned_route_id`, resuelve `driver_id`/`driver_name` contra `collaborators` y persiste `estimated_arrival` en `route_stops`.
      - [`/api/transport/optimize`](file:///c:/Projects/frufresco/src/app/api/transport/optimize/route.ts) lee `manual_delivery_time ± manual_delivery_margin` y mantiene juntas las parejas `10A` / `10B` (`is_off_agreement_split`).
+     - *(Enmienda Escenario 477 §1: `ManualDispatchWizardModal.tsx`, `stagingSpaceAllocator.ts` e `InventoryDailyBalanceTab.tsx` quedan congelados bajo Candado `READ-ONLY` del Modo Manual; no se realizan ediciones adicionales sobre ellos durante la Fase Digital/Sandbox).*
   4. **Células Únicas (`12` Células `buying_team`), Fecha Nocturna (8 PM) & Conservación de Masa:**
      - Fuente compartida [`src/lib/ops/operationalCells.ts`](file:///c:/Projects/frufresco/src/lib/ops/operationalCells.ts) alineada 1:1 con `alistamiento-print`.
      - `OPERATIONAL_STATUSES` incluye `'in_preparation'`, `'ready_for_dispatch'` e `'in_transit'`.
@@ -17710,3 +17711,107 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   6. **Paridad de Cubicaje (`computeLineWeightKg`) y Persistencia Canónica de `order_items.unit`:** Todo cálculo de `total_weight_kg` (borradores de correo, creación manual/Excel/IA, split A/B y Torre de Control `loading`) delega en `computeLineWeightKg`: si la unidad de facturación del producto (`product.unit_of_measure`) o de la línea es `Kg`, el peso físico es `1:1` igual a `quantity` (impidiendo multiplicar `Kg × weight_kg`); si la unidad de facturación es `Lb` aplica `0.5`; y solo multiplica por `products.weight_kg` para unidades discretas. Al insertar o editar en `order_items`, `unit` persiste la unidad canónica de facturación del producto (`product.unit_of_measure`), viajando la presentación física original exclusivamente en `selected_options` (`_original_unit`, `_original_qty`, `_physical_instruction`).
   7. **Regresión Obligatoria (`scripts/test-unit-conversion-golden.ts`):** Suite Golden Dataset de 16 escenarios (`TC-1` a `TC-16`) ejecutada localmente contra `unitConversionEngine.ts` con `16/16` aciertos obligatorios.
 
+---
+
+### Escenario 477: Aislamiento Sandbox Permanente en Vercel (`frufresco-sandbox`), Veto `READ-ONLY` del Modo Manual, Remediación Forense Digital ↔ Transporte ↔ OPS y Compuerta de Apagado Permanente (`SDD v1.9.432`)
+- **Estado del Contrato:** `🟡 FASE 1 Y FASE 2 IMPLEMENTADAS Y VERIFICADAS EN LOCAL (0 errores tsc, kill-switches y auth 401 verificados, Candado READ-ONLY Modo Manual respetado) | PENDIENTE DE AUDITORÍA /goldfish MODO 2 Y QA DE PISO EN SANDBOX`
+- **Alcance Contractual:**
+  - Infraestructura y Guardas Sandbox: [`src/lib/sandboxGuard.ts`](file:///c:/Projects/frufresco/src/lib/sandboxGuard.ts), [`src/components/SandboxModeBadge.tsx`](file:///c:/Projects/frufresco/src/components/SandboxModeBadge.tsx), [`src/components/ClientLayout.tsx`](file:///c:/Projects/frufresco/src/components/ClientLayout.tsx), [`package.json`](file:///c:/Projects/frufresco/package.json), [`vercel.json`](file:///c:/Projects/frufresco/vercel.json), [`scripts/dev-sandbox.mjs`](file:///c:/Projects/frufresco/scripts/dev-sandbox.mjs), [`scripts/sync-sandbox-today.mjs`](file:///c:/Projects/frufresco/scripts/sync-sandbox-today.mjs), [`scripts/seed-sandbox-users.mjs`](file:///c:/Projects/frufresco/scripts/seed-sandbox-users.mjs), [`src/app/api/orders/sync-hostinger/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/sync-hostinger/route.ts), [`src/app/api/orders/imap-watchdog/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/imap-watchdog/route.ts), [`src/app/api/products/sync-prices/route.ts`](file:///c:/Projects/frufresco/src/app/api/products/sync-prices/route.ts), [`src/app/api/transport/sync-gps/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/sync-gps/route.ts), [`src/lib/telemetry/apps360.ts`](file:///c:/Projects/frufresco/src/lib/telemetry/apps360.ts), [`src/app/api/transport/optimize/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/optimize/route.ts), [`src/app/api/orders/update/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/update/route.ts).
+  - Migración DDL y Seguridad Digital/Transporte/OPS: `supabase/migrations/20261120_ops_digital_hardening.sql`, [`src/lib/authContext.tsx`](file:///c:/Projects/frufresco/src/lib/authContext.tsx), [`src/app/ops/layout.tsx`](file:///c:/Projects/frufresco/src/app/ops/layout.tsx), [`src/app/api/ops/shifts/route.ts`](file:///c:/Projects/frufresco/src/app/api/ops/shifts/route.ts), [`src/app/ops/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/page.tsx), [`src/app/admin/orders/loading/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/loading/page.tsx) *(únicamente Opción A Digital)*, [`src/components/RoutePlanner.tsx`](file:///c:/Projects/frufresco/src/components/RoutePlanner.tsx), [`src/app/api/transport/orders/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/orders/route.ts), [`src/app/api/transport/confirm/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/confirm/route.ts), [`src/app/api/transport/manifest/excel/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/manifest/excel/route.ts), [`src/app/api/transport/telemetry/route.ts`](file:///c:/Projects/frufresco/src/app/api/transport/telemetry/route.ts), [`src/app/admin/transport/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/transport/page.tsx), [`src/components/ActivityLog.tsx`](file:///c:/Projects/frufresco/src/components/ActivityLog.tsx), [`src/app/ops/picking/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/picking/page.tsx), [`src/app/ops/picking/terminal/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/picking/terminal/page.tsx), [`src/app/ops/rectificacion/[routeId]/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/rectificacion/%5BrouteId%5D/page.tsx), [`src/app/ops/driver/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/driver/page.tsx), [`src/app/ops/driver/route/[id]/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/driver/route/%5Bid%5D/page.tsx), [`src/app/ops/driver/delivery/[id]/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/driver/delivery/%5Bid%5D/page.tsx), [`src/app/ops/devoluciones/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/devoluciones/page.tsx), [`src/app/ops/compras/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/compras/page.tsx).
+
+#### §1. Candado `READ-ONLY` Innegociable sobre el Flujo de Pedidos en Modo Manual
+1. **Lista Cerrada de Archivos Congelados (`READ-ONLY LOCK` — Cero Ediciones Permitidas):**
+   - [`src/app/admin/orders/create/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/create/page.tsx)
+   - [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx)
+   - [`src/components/ManualDispatchWizardModal.tsx`](file:///c:/Projects/frufresco/src/components/ManualDispatchWizardModal.tsx) *(deuda latente previa documentada por `/goldfish`: `.reverse()` en `L338` puede separar parejas `10A/10B` al usar el optimizador Paso 1 — queda anotada sin editar bajo Veto Manual)*
+   - [`src/lib/stagingSpaceAllocator.ts`](file:///c:/Projects/frufresco/src/lib/stagingSpaceAllocator.ts) *(deuda latente previa documentada por `/goldfish`: orden `ChildB` antes de `ParentA` en `L331-375` — queda anotada sin editar bajo Veto Manual)*
+   - Planillas e impresión manual: [`src/app/admin/procurement/purchases-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/procurement/purchases-print/page.tsx), [`src/app/admin/procurement/receiving-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/procurement/receiving-print/page.tsx), [`src/app/admin/orders/alistamiento-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/alistamiento-print/page.tsx), [`src/app/admin/orders/contingency-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/contingency-print/page.tsx), `physical-count-print`, [`src/app/admin/orders/contingency-reconciliation/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/contingency-reconciliation/page.tsx)
+   - Inventarios, Facturación y Torre Manual: [`src/components/InventoryDailyBalanceTab.tsx`](file:///c:/Projects/frufresco/src/components/InventoryDailyBalanceTab.tsx), [`src/app/admin/commercial/billing/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/billing/page.tsx), [`src/lib/commercial/billingOrderUtils.ts`](file:///c:/Projects/frufresco/src/lib/commercial/billingOrderUtils.ts), y todo lo correspondiente a **Opción B**, tabla principal y edición inline en [`src/app/admin/orders/loading/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/loading/page.tsx).
+2. **Regla Anti-Contagio por Base de Datos (`RED-16` sin editar planillas manuales):**
+   - Porque `alistamiento-print/page.tsx:436` y `contingency-print/page.tsx:708` filtran `OPERATIONAL_STATUSES` locales sin `'ready_for_dispatch'` ni `'in_transit'`:
+     - Cuando `shift.mode === 'manual_mirror'`, queda **terminantemente prohibido** mutar `orders.status`, `order_items.quantity`, `orders.total`, `inventory_movements` (`Col O`) o `billing_returns` desde `/ops/rectificacion`, `/ops/driver/*` u `/ops/devoluciones`.
+     - Cuando `shift.mode === 'digital_native'`, el ciclo logístico fino vive exclusivamente en `routes.status` (`'planning' | 'loading' | 'rectified' | 'in_transit' | 'completed'`) y `route_stops.status` (`'pending' | 'arrived' | 'delivered' | 'failed'`), manteniendo `orders.status` estrictamente dentro del subconjunto seguro del Modo Manual: `'para_compra' | 'picking' | 'shipped' | 'delivered'`. Queda **prohibido** escribir `'ready_for_dispatch'` o `'in_transit'` en `orders.status`.
+
+#### §2. Aislamiento Sandbox Permanente (`frufresco-sandbox` en Vercel + `FruFrescoSandbox` en Supabase) & Kill-Switches Reales
+1. **Topología Física Hermética:**
+   - **Producción:** Vercel Producción (`liard`) → Supabase `FruFrescoMainBD` (`csqurhdykbalvlnpowcz.supabase.co`).
+   - **Sandbox:** Vercel `frufresco-sandbox` (`main`) → Supabase `FruFrescoSandbox` (`xqhjlfhjnnrmwvklppsh.supabase.co`) con `SANDBOX_MODE=true` y `NEXT_PUBLIC_SANDBOX_MODE=true`.
+2. **Contrato Único de Guarda (`src/lib/sandboxGuard.ts`):**
+   - `export function isSandboxMode(): boolean` → retorna `true` únicamente si `process.env.SANDBOX_MODE === 'true' || process.env.NEXT_PUBLIC_SANDBOX_MODE === 'true'`.
+   - `export function areSandboxExternalApisAllowed(): boolean` → retorna `true` únicamente si `process.env.ENABLE_SANDBOX_EXTERNAL_APIS === 'true'`.
+3. **Prohibición de Centinelas Falsos (`"DISABLED_IN_SANDBOX"`) & Kill-Switches Obligatorios:**
+   - Queda prohibido depender de strings como `"DISABLED_IN_SANDBOX"` frente a guardas `if (!pass)`. Todo endpoint con efecto externo debe cortocircuitar al inicio usando `isSandboxMode()`:
+     - `/api/orders/sync-hostinger` + `hostingerImapSync.ts` *(inerte cuando `SANDBOX_MODE !== 'true'`; su edición de 3 líneas requiere confirmación explícita del usuario al tocar periferia IMAP)*: `if (isSandboxMode()) return { success: true, skipped: true, sandbox: true, reason: 'IMAP sync disabled in Sandbox' }`.
+     - `/api/orders/imap-watchdog` + `hostingerImapWatchdog.ts` *(requiere misma confirmación explícita del usuario)*: mismo retorno `{ skipped: true, sandbox: true }` en `isSandboxMode()`.
+     - `/api/products/sync-prices`: `if (isSandboxMode()) return NextResponse.json({ skipped: true, sandbox: true, reason: 'Nocturnal pricing cron disabled in Sandbox' }, { status: 200 })`, evitando la mutación de `pricing_model_prices` y `audit_logs` a las `0 5 * * *` (`vercel.json`).
+     - `/api/transport/sync-gps` + `src/lib/telemetry/apps360.ts`: si `isSandboxMode() && !areSandboxExternalApisAllowed()`, retorna `{ skipped: true, sandbox: true }` bloqueando el polling cada 25s hacia Apps-360; eliminar además el password por defecto hardcodeado `'Gps123456'` en `apps360.ts`.
+     - `/api/transport/optimize`: si `isSandboxMode() && !areSandboxExternalApisAllowed()`, prohíbe leer `gcp-service-account.json` del disco o llamar a Google Route Optimization API, delegando al motor determinista local.
+     - Encolador `public.mail` en `src/app/api/orders/update/route.ts`: si `isSandboxMode()`, prohíbe insertar correos hacia destinatarios cuyo dominio no sea `@sandbox.frufresco.co` (loguea supresión segura).
+4. **Auditoría Pre-Deploy en Supabase `FruFrescoSandbox` (`xqhjlfhjnnrmwvklppsh`):**
+   - Eliminar `app_settings.key = 'hostinger_imap_credentials'` (y cualquier credencial SMTP) **exclusivamente** en `FruFrescoSandbox`.
+   - Verificar en el proyecto Sandbox `0` Database Webhooks activos, `0` jobs `pg_cron` activos, `0` Edge Functions externas activas, y configurar Auth `Site URL` y `Redirect URLs` apuntando a `https://frufresco-sandbox.vercel.app/**`.
+5. **Sellado de Variables, Dependencias Vercel & Badge Móvil:**
+   - Tanto `.env.sandbox` local como las Environment Variables del proyecto Vercel `frufresco-sandbox` declaran explícitamente vacío `""` para `HOSTINGER_IMAP_HOST`, `HOSTINGER_IMAP_PORT`, `HOSTINGER_IMAP_USER`, `HOSTINGER_IMAP_PASS`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `APPS360_EMAIL`, `APPS360_PASSWORD`, `APPS360_BASE_URL`, `GCP_SERVICE_ACCOUNT_KEY`, `WEBHOOK_SECRET`, `CRON_SECRET`, evitando cualquier herencia de `.env.local`, más `SANDBOX_MODE=true` y `NEXT_PUBLIC_SANDBOX_MODE=true`.
+   - Agregar `zod` explícitamente en `package.json -> dependencies` y validar compatibilidad del plan Vercel de `frufresco-sandbox` frente al cron `*/5 * * * *` de `vercel.json`.
+   - [`src/components/SandboxModeBadge.tsx`](file:///c:/Projects/frufresco/src/components/SandboxModeBadge.tsx): agregar `print:hidden` y posicionamiento no intrusivo en esquina móvil (`bottom-16 right-3 sm:top-1.5 sm:bottom-auto sm:left-1/2 sm:-translate-x-1/2 sm:right-auto`) para no solapar encabezados centrados de `/ops/*` en tablets/celulares ni imprimirse en PDFs (icono `FlaskConical` de `lucide-react`, cero emojis).
+   - [`scripts/sync-sandbox-today.mjs`](file:///c:/Projects/frufresco/scripts/sync-sandbox-today.mjs): aserción dura `prodUrl !== sandboxUrl`; advertencia explícita no silenciosa si algún pedido de hoy se omite por falta de `profile_id` en Sandbox; y en modo `--refresh`, depurar previamente `order_items` huérfanos de los pedidos refrescados que hayan sido eliminados en Producción.
+
+#### §3. Gobernanza Git Temporal (`main` vs `liard`) & Protocolo de Hotfix en Producción
+1. **Topología Estricta de 2 Ramas (`GEMINI.md §1`):** Queda prohibido crear ramas adicionales. Durante la ventana Sandbox: `main` despliega únicamente en **`frufresco-sandbox` (Vercel Sandbox)** y `liard` queda congelada desplegando en **Producción (`FruFrescoMainBD`)**.
+2. **Veto Temporal a `npm run publish` (`main:liard`):** Mientras exista `Escenario 477` en curso en Sandbox, queda **terminantemente prohibido** ejecutar `npm run publish` o empujar `origin main:liard`. Todo commit hacia Sandbox se realiza con `git add <archivo_exacto>` archivo por archivo (jamás `git add .` ni tocar cambios no autorizados del Modo Manual) y push únicamente a `origin main` bajo orden explícita del usuario.
+3. **Protocolo de Hotfix de Producción (`liard`):** Si surge una urgencia real en Producción durante pruebas de Sandbox, se aplica el fix atómico en un commit aislado sobre `liard` (verificado con `npx.cmd tsc --noEmit` en `0` errores), se empuja únicamente a `origin liard:liard` tras orden del usuario, y se replica inmediatamente con `git cherry-pick` sobre `main` para mantener convergencia sin arrastrar WIP de Sandbox a Producción.
+4. **Promoción Final:** `origin main:liard` solo se autoriza tras QA en piso aprobado en `frufresco-sandbox.vercel.app`, dictamen `/goldfish` Modo 2 `🟢 CERTIFICADO` y orden explícita del usuario.
+
+#### §4. Cierre Contractual Tipado de `C1`, `C2` y `C6` (Tipos + DDL SQL Versionado)
+1. **C1 (`operationalCells.ts` + Regla Padre-Hijo `products.parent_id`):**
+   - Toda consulta y agrupación de picking y compras normaliza `buying_team` contra [`src/lib/ops/operationalCells.ts`](file:///c:/Projects/frufresco/src/lib/ops/operationalCells.ts) (`normalizeOperationalCell`).
+   - En `/ops/picking` y `/ops/picking/terminal`, si un ítem apunta a un SKU hijo (`products.parent_id IS NOT NULL`), el terminal muestra `#accounting_id`, cantidad y unidad exacta pedida del hijo y valida disponibilidad física contra `COALESCE(child.stock, parent.stock)`. En `/ops/recepcion`, toda entrada recibida en SKU hijo consolida su masa en kilogramos (`normalizeToKg`) sobre el SKU raíz `parent_id` preservando la trazabilidad de la compra origen.
+2. **C2 (`isOperationalStaffProfile` & Provisión `collaborators ↔ auth.users/profiles`):**
+   - Contrato único compartido en [`src/lib/authContext.tsx`](file:///c:/Projects/frufresco/src/lib/authContext.tsx), [`src/app/ops/layout.tsx`](file:///c:/Projects/frufresco/src/app/ops/layout.tsx) y [`src/app/api/ops/shifts/route.ts`](file:///c:/Projects/frufresco/src/app/api/ops/shifts/route.ts):
+     ```ts
+     const CLIENT_ROLES = new Set(['b2b_client', 'b2c_client', 'client']);
+     export function isOperationalStaffProfile(profile?: { role?: string | null } | null): boolean {
+       const role = (profile?.role || '').trim().toLowerCase();
+       return Boolean(role) && !CLIENT_ROLES.has(role);
+     }
+     ```
+     *(Deroga explícitamente la evaluación `(profile as any).profile_type === 'employee'` porque `628` clientes B2B/B2C en producción portan `profile_type = 'employee'` y burlaban la compuerta `/ops/*`)*.
+   - **Provisión de cuentas operativas:** En Sandbox operan las 3 cuentas de prueba creadas (`conductor@sandbox.frufresco.co`, `alistador@sandbox.frufresco.co`, `comprador@sandbox.frufresco.co`); previo a salida a producción en Modo Digital, se provee el script idempotente `scripts/provision-ops-collaborators.mjs` que vincula `profiles.collaborator_id = collaborators.id` y asigna permisos explícitos (`ops.driver`, `ops.picking.*`, `ops.compras`, `ops.recepcion`) para los 55 colaboradores activos.
+   - En [`src/app/ops/layout.tsx`](file:///c:/Projects/frufresco/src/app/ops/layout.tsx#L350-L352), los botones `PROCESADOS`, `RETORNOS` y `RECTIFICAR` exigen `hasPermission(...)` en barra de navegación para que un conductor no vea módulos bloqueados por RBAC.
+3. **C6 (DDL SQL Versionado `20261120_ops_digital_hardening.sql` & Zero Silent Failures):**
+   - Partiendo de [`supabase/migrations/20261117_unified_transport_ops_deploy.sql`](file:///c:/Projects/frufresco/supabase/migrations/20261117_unified_transport_ops_deploy.sql) (verificada aplicada en BD), la Fase 2 agrega la migración versionada obligatoria `supabase/migrations/20261120_ops_digital_hardening.sql`:
+     - `ALTER TABLE public.provider_novelties ADD COLUMN IF NOT EXISTS notes TEXT;`
+     - `ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS total_crates INTEGER NOT NULL DEFAULT 0;`
+     - `CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_returns_dedup_key_unique ON public.billing_returns(dedup_key) WHERE dedup_key IS NOT NULL;`
+   - Toda mutación Supabase (`insert`/`update`/`upsert`) en `/ops/*` y `/api/transport/*` evalúa explícitamente `if (error) throw error` sin silenciar fallos de esquema o permisos.
+
+#### §5. Remediación Completa del Circuito `Digital → Transporte → OPS` (Fase 2, `0` Ediciones en Modo Manual)
+1. **Torre de Control Opción A (`src/app/admin/orders/loading/page.tsx`, bloque Opción A únicamente):**
+   - Al lanzar en **Opción A (Digital)**, consulta/activa el turno en `/api/ops/shifts` (`mode: 'digital_native'`) y el modal post-lanzamiento enlaza directamente a `/admin/transport?date=YYYY-MM-DD` y `/ops/picking/dashboard?date=YYYY-MM-DD`.
+2. **Turnos & Cierre de Jornada (`src/app/api/ops/shifts/route.ts` ↔ `src/app/ops/page.tsx`):**
+   - Alinear nombres de propiedades entre backend y UI: `ops/page.tsx:78` lee `closed_orders_count` y `closed_routes_count`.
+   - **`close_day` seguro:** En `/api/ops/shifts`, cerrar jornada solo transiciona a `'delivered'` pedidos cuyo cumplimiento esté verificado (`route_stops.status = 'delivered'` o `billing_cut_id IS NOT NULL`), devolviendo `pending_reconciliation_count` para órdenes sin entrega ni facturación confirmada (prohibido marcarlas `'delivered'` a ciegas).
+3. **Transporte (`RoutePlanner.tsx`, `/api/transport/*`, `admin/transport`, `ActivityLog.tsx`):**
+   - [`src/components/RoutePlanner.tsx`](file:///c:/Projects/frufresco/src/components/RoutePlanner.tsx): inicializa con `getOperationalTargetDate(20)` (corte 8:00 PM) y parámetro `?date=`, muestra rótulo `10A/10B` (`getOrderSpaceDisplayLabel`), envía `stopEtas` a `confirm` y ofrece acceso directo al manifiesto del turno.
+   - [`/api/transport/orders`](file:///c:/Projects/frufresco/src/app/api/transport/orders/route.ts): incluye `'in_preparation'` y excluye órdenes ya asignadas (`assigned_route_id IS NULL`) evitando colisiones `409`.
+   - [`/api/transport/confirm`](file:///c:/Projects/frufresco/src/app/api/transport/confirm/route.ts): consulta todas las bahías ya ocupadas en `orders` para esa `delivery_date` antes de calcular espacios nuevos, verifica `{ error }` en `orders.update`, y responde `resolvedDriverName` en lugar de `vehicle.driver_name`.
+   - [`/api/transport/manifest/excel`](file:///c:/Projects/frufresco/src/app/api/transport/manifest/excel/route.ts): exige sesión autenticada de staff (`401/403`), elimina fecha quemada `'2026-11-12'`, prefijo `'1111_'` y `'Ruta 1 (Despacho Principal)'`, y usa fecha operativa actual + `getFriendlyOrderId` + `getOrderSpaceDisplayLabel` + `resolveCanonicalDocType`.
+   - [`/api/transport/telemetry`](file:///c:/Projects/frufresco/src/app/api/transport/telemetry/route.ts): exige sesión autenticada de staff/conductor (`401/403`), prohíbe auto-insertar placas arbitrarias en `fleet_vehicles`, y respeta prioridad `hardware_gps` reciente (`< 5 min`).
+   - [`src/app/admin/transport/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/transport/page.tsx): calcula `"EN TRÁNSITO HOY"` desde canastillas reales (`routes.total_crates` / suma de `orders.crates_count`) y reemplaza `<input type="number">` en `L1471` por input `5B`.
+   - [`src/components/ActivityLog.tsx`](file:///c:/Projects/frufresco/src/components/ActivityLog.tsx): elimina emojis (`'️'`, `'🅿️'`) por Lucide Icons, elimina lógica `plate.startsWith('mock')` y elimina el doble `showToast`.
+4. **Piso Bodega & Conductores (`/ops/picking*`, `/ops/rectificacion`, `/ops/driver/*`, `/ops/devoluciones`, `/ops/compras`):**
+   - `/ops/picking` y `/ops/picking/terminal`: agregan `'in_preparation'`, usan `getOperationalTargetDate(20)`, normalizan células con `normalizeOperationalCell`, muestran bahía `10A/10B`, y pasan token/validación de stock `DT-17`.
+   - `/ops/rectificacion/[routeId]`: en `manual_mirror` actúa en modo solo lectura contable; en `digital_native` preserva `orders.status = 'picking'` al sellar `routes.status = 'rectified'`, protege `FAC-IMP` (`billing_cut_id IS NOT NULL`), recalcula `total = subtotal + tax` sin perder IVA, sube fotos a Storage (no Base64 en BD) y verifica `{ error }` en todas las escrituras.
+   - `/ops/driver/page.tsx`: corrige deadlock en `L387` abriendo `/ops/driver/route/[id]` para `'planning' | 'loading' | 'rectified'` y filtra rutas activas por fecha del turno en curso.
+   - `/ops/driver/route/[id]/page.tsx`: muestra bahías `10A/10B`, deshabilita el botón `"BYPASS MODO PRUEBAS"` salvo `NEXT_PUBLIC_SANDBOX_MODE === 'true'`, corrige columnas de `audit_logs`, y al despachar pasa `routes.status = 'in_transit'` y `orders.status = 'shipped'` (nunca `'in_transit'` en `orders.status`).
+   - `/ops/driver/delivery/[id]/page.tsx`: incluye `profile_id`, `origin_source` y `admin_notes` en el `SELECT` de `orders`, mantiene `useMobileGpsTracker` encendido en los 4 furgones sin IMEI durante la pantalla de entrega, excluye `STOREFRONT_CRATE_PRODUCT_ID` en canastillas B2C, corrige `picked_quantity ?? quantity`, persiste `dedup_key` en `billing_returns`, evita `cancelled` destructivo sobre `Col H` en devoluciones totales, y verifica `{ error }`.
+   - `/ops/devoluciones/page.tsx`: usa ventana horaria `America/Bogota`, persiste retorno real de canastillas en `asset_movements`, y respeta guarda `manual_mirror` bloqueando doble escritura en `Col O`.
+   - `/ops/compras/page.tsx`: corrige inserción en `customer_service_pqrs` con columnas válidas de esquema y reemplaza `window.prompt()` en `L2377` por modal controlado.
+
+#### §6. Compuerta Obligatoria de Apagado Permanente del Sandbox (`SANDBOX DECOMMISSIONING GATE`)
+Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fase Digital/OPS mientras cualquiera de las siguientes 5 verificaciones permanezca abierta:
+- `[ ] DG-1 — Eliminar Proyecto Vercel Sandbox:` Eliminar por completo el proyecto `frufresco-sandbox` en Vercel (apaga URL pública, builds automáticos y crons).
+- `[ ] DG-2 — Pausar y Eliminar Supabase Sandbox:` Pausar y eliminar definitivamente el proyecto `FruFrescoSandbox` (`xqhjlfhjnnrmwvklppsh`) en Supabase (detiene la facturación horaria de `USD $0.01344/h` y purga la copia de datos de producción).
+- `[ ] DG-3 — Limpieza Local de Entorno:` Detener cualquier proceso local `dev:sandbox` y eliminar `.env.sandbox` de la estación de trabajo.
+- `[ ] DG-4 — Convergencia Final Git & Bandera Limpia:` Sincronizar `origin main:main` y `origin main:liard`, confirmar que `NEXT_PUBLIC_SANDBOX_MODE` y `SANDBOX_MODE` **no existen** en el proyecto Vercel de Producción y habilitar nuevamente `npm run publish` (`GEMINI.md §1`).
+- `[ ] DG-5 — Certificación Final Pre-Cierre:` Ejecutar `npx.cmd tsc --noEmit` (`EXIT 0` obligatorio) y obtener dictamen `/goldfish` Modo 2 `🟢 CERTIFICADO CONFORME AL SPEC` sobre el circuito completo en Producción.

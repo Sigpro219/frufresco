@@ -75,7 +75,7 @@ export default function OpsHome() {
                 setShift(json.shift);
                 setShiftFeedback(
                     payload.action === 'close_day'
-                        ? `Cierre ejecutado: ${json.closed_orders ?? 0} pedidos cerrados y ${json.closed_routes ?? 0} rutas completadas.`
+                        ? `Cierre ejecutado: ${json.closed_orders_count ?? 0} pedidos cerrados y ${json.closed_routes_count ?? 0} rutas completadas${Number(json.pending_reconciliation_count || 0) > 0 ? ` (${json.pending_reconciliation_count} pendientes de conciliación)` : ''}.`
                         : payload.action === 'reopen_day'
                         ? 'Turno reabierto correctamente.'
                         : `Modo actualizado a ${json.shift?.mode === 'digital_native' ? 'Digital Nativo' : 'Espejo Manual'}.`

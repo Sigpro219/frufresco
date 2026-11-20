@@ -116,8 +116,10 @@ interface ActiveRoute {
             latitude: number;
             longitude: number;
             customer_name: string;
+            crates_count?: number | null;
         };
     }[];
+    total_crates?: number;
     driver?: {
         contact_name: string;
     };
@@ -140,6 +142,8 @@ export default function TransportControlTower() {
                 const tab = params.get('tab') as TransportTab;
                 if (tab && VALID_TABS.includes(tab)) {
                     setActiveTab(tab);
+                } else if (params.get('date')) {
+                    setActiveTab('planner');
                 }
             }
         };
@@ -295,7 +299,7 @@ export default function TransportControlTower() {
             if (routeIds.length > 0) {
                 const { data: stopsData, error: sErr } = await supabase
                     .from('route_stops')
-                    .select('*, order:orders(latitude, longitude, shipping_address, profiles(company_name, contact_name))')
+                    .select('*, order:orders(latitude, longitude, shipping_address, crates_count, profiles(company_name, contact_name))')
                     .in('route_id', routeIds)
                     .order('sequence_number', { ascending: true })
                     .abortSignal(signal as AbortSignal);
@@ -325,7 +329,7 @@ export default function TransportControlTower() {
 
             setActiveRoutes(formatted);
 
-            const active = formatted.filter(r => r.status === 'in_transit' || r.status === 'loading').length;
+            const active = formatted.filter(r => r.status === 'in_transit' || r.status === 'loading' || r.status === 'rectified').length;
             const completed = formatted.filter(r => r.status === 'completed').length;
             const weight = formatted.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
             
@@ -1293,8 +1297,16 @@ export default function TransportControlTower() {
                                 const activeCrateProfiles = crateProfiles.filter(p => p.needs_crates || (p.crate_balance || 0) > 0);
                                 const totalInCalle = activeCrateProfiles.reduce((acc, p) => acc + Number(p.crate_balance || 0), 0);
                                 const inTransitCrates = activeRoutes
-                                    .filter(r => r.status === 'in_transit' || r.status === 'loading')
-                                    .reduce((acc, r) => acc + Number((r as { total_crates?: number }).total_crates || 0), 0);
+                                    .filter(r => r.status === 'in_transit' || r.status === 'loading' || r.status === 'rectified')
+                                    .reduce((acc, r) => {
+                                        const explicitCrates = Number((r as { total_crates?: number }).total_crates || 0);
+                                        if (explicitCrates > 0) return acc + explicitCrates;
+                                        const stopCrates = (r.route_stops || []).reduce(
+                                            (sAcc, st) => sAcc + Number(st?.order?.crates_count || 0),
+                                            0
+                                        );
+                                        return acc + stopCrates;
+                                    }, 0);
                                 const alertCount = activeCrateProfiles.filter(p => Number(p.crate_balance || 0) > 40).length;
                                 const totalSystemCrates = totalInCalle + patioStock + inTransitCrates;
                                 const callePct = totalSystemCrates > 0 ? ((totalInCalle / totalSystemCrates) * 100).toFixed(1) : '0';
@@ -1468,9 +1480,14 @@ export default function TransportControlTower() {
                                     {patioModalType === 'initial' ? 'Inventario Total en Patio (unidades)' : 'Cantidad de Canastillas'}
                                 </label>
                                 <input 
-                                    type="number"
-                                    value={patioModalQty}
-                                    onChange={(e) => setPatioModalQty(parseInt(e.target.value) || 0)}
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    value={patioModalQty === 0 ? '' : String(patioModalQty)}
+                                    onChange={(e) => {
+                                        const clean = e.target.value.replace(/[^0-9]/g, '');
+                                        setPatioModalQty(clean ? parseInt(clean, 10) : 0);
+                                    }}
                                     style={{ width: '100%', padding: '0.65rem 0.8rem', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.borderActive}`, outline: 'none', fontWeight: '900', fontSize: '1.1rem', color: THEME.colors.textMain, backgroundColor: 'white', boxSizing: 'border-box' }}
                                 />
                             </div>
