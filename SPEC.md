@@ -17679,3 +17679,12 @@ export const STOREFRONT_CRATE_PRODUCT_ID = 'c13cfedc-c803-495b-9b9d-71a54d472aa3
   1. **Homologación en Todos los Canales de Carga de Pedidos:** En el modal de producto de Creación Manual/Excel/IA (`orders/create`), Bandeja de Correos (`EmailDraftsModule`) y Torre de Control (`orders/loading`), el operador dispone del campo **`Nota de Alistamiento (Excepcional)`** (`selected_options.nota_alistamiento`).
   2. **Solo Para Ese Pedido (Disciplina Maestra):** Si el cliente ya posee una nota fija en `product_nicknames.picking_note`, el campo viene pre-llenado y puede editarse o suprimirse **por una sola vez para ese pedido puntual**. Si el cliente no posee nota para ese SKU, el operador puede crearla únicamente para ese pedido. Las reglas permanentes solo se crean o modifican desde la Ficha del Cliente (`ClientsModule` / *Consulta de Excepciones Logísticas*).
   3. **Inmunidad ante Borrado Explícito en Sábana de Alistamiento (`alistamiento-print`):** Si `order_items.selected_options` contiene explícitamente la clave `nota_alistamiento` (incluso vacía `""` tras haberla borrado el operador), `alistamiento-print` respeta la decisión puntual del pedido y **no** re-inyecta `product_nicknames.picking_note`.
+
+### Escenario 475: Poda SpaceX en `/admin/dashboard` (Eliminación de KPIs Obsoletos y Cero Queries Pesadas) (SDD v1.9.430)
+- **Alcance Contractual:** [`src/app/admin/dashboard/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/dashboard/page.tsx).
+- **Reglas de Negocio:**
+  1. **Eliminación de Grasa Histórica y Esquemas Muertos:** Se eliminan de raíz `Top Variantes con Mayor Margen` (dependiente de `product_variants.price_adjustment_percent` en desuso), `Distribución de Presentación` (mezclaba `Kg + Lb` bajo etiqueta falsa `lb` y descargaba miles de `order_items` del mes en chunks de 100), `Despacho Logístico (Camión 300kg)` (capacidad ficticia reemplazada por `/admin/transport`), `Leads Nuevos` histórico y `Ticket Promedio` de 90 días mezclado.
+  2. **3 Indicadores Operativos del Turno (Hora Bogotá, `status != 'cancelled'`):**
+     - **Despacho Hoy (`delivery_date = hoy Bogotá`):** Total `$ COP`, `# pedidos` y `Kg totales`.
+     - **Por Aprobar (Turno):** Conteo de `orders` con `status IN ('draft', 'pending_approval')` y `delivery_date >= hoy Bogotá`.
+     - **Bloqueos Activos:** `# Pedidos en $0` pendientes de tarifa (`logistics_data->>off_agreement_priced = 'false'`, `delivery_date >= hoy Bogotá`) y `# PQRS pendientes` (`status = 'pending'`).
