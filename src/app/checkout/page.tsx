@@ -9,7 +9,7 @@ import { Map } from '@vis.gl/react-google-maps';
 import { Polygon } from '@/components/admin/GeofencingManager';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
-import { DEFAULT_CUTOFF_HOUR } from '../../lib/constants';
+import { DEFAULT_CUTOFF_HOUR, GOOGLE_MAPS_MAP_ID } from '../../lib/constants';
 import { translations, Locale } from '../../lib/translations';
  import { useSearchParams } from 'next/navigation';
 import { 
@@ -3465,7 +3465,7 @@ export default function CheckoutPage() {
                             <Map
                                 defaultCenter={{ lat: latitude || 4.67, lng: longitude || -74.06 }} // Uses geocoded address or Bogota
                                 defaultZoom={14}
-                                mapId="DEMO_MAP_ID"
+                                mapId={GOOGLE_MAPS_MAP_ID}
                                 gestureHandling={'greedy'}
                                 onCameraChanged={(ev) => {
                                     if (ev.detail?.center) {

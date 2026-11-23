@@ -7,8 +7,6 @@ import {
     getGeminiApiKey,
 } from '@/lib/ai/aiModelConfig';
 
-const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
 export async function POST(req: Request) {
     try {
         const { zone_key, poly } = await req.json();
@@ -22,10 +20,17 @@ export async function POST(req: Request) {
         // 1. Obtener nombre del municipio usando Reverse Geocoding (Esto funciona perfecto siempre)
         const refPoint = poly[0];
         let municipality = "Zona de Cobertura";
+        const mapsKey = (process.env.GOOGLE_MAPS_SERVER_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim();
 
-        try {
-            const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${refPoint.lat},${refPoint.lng}&key=${MAPS_KEY}&language=es`);
-            const geoData = await geoRes.json();
+        if (mapsKey) {
+            const geoController = new AbortController();
+            const geoTimeout = setTimeout(() => geoController.abort(), 8000);
+            try {
+                const geoRes = await fetch(
+                    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${refPoint.lat},${refPoint.lng}&key=${mapsKey}&language=es`,
+                    { signal: geoController.signal }
+                );
+                const geoData = await geoRes.json();
             if (geoData.status === 'OK' && geoData.results.length > 0) {
                 const components = geoData.results[0].address_components;
                 
@@ -47,8 +52,11 @@ export async function POST(req: Request) {
                     municipality = `${municipality}, ${city.long_name}`;
                 }
             }
-        } catch (err) {
-            console.warn('[SEO Engine] Geocoding Fallback:', err);
+            } catch (err) {
+                console.warn('[SEO Engine] Geocoding Fallback:', err);
+            } finally {
+                clearTimeout(geoTimeout);
+            }
         }
 
         // 2. Definir Estrategia Base (Modelo Híbrido / Fallback)

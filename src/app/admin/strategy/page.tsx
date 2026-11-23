@@ -6,7 +6,6 @@ import Toast from '@/components/Toast';
 import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import StrategyControlTower from '@/components/admin/StrategyControlTower';
-import { APIProvider } from '@vis.gl/react-google-maps';
 import { 
     MapPin, 
     TrendingUp, 
@@ -141,8 +140,6 @@ export default function AdminStrategyPage() {
             setGeneratingSEO(false);
         }
     };
-
-    const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
     const handleITModalSubmit = async (data: any) => {
         await handleITRequest(itModal.type, data);
@@ -279,9 +276,7 @@ export default function AdminStrategyPage() {
                 <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.25rem', minHeight: '620px', boxShadow: THEME.shadow.sm }}>
                     {activeTab === 'control_tower' && <StrategyControlTower />}
                     {activeTab === 'geofencing' && (
-                        <APIProvider apiKey={MAPS_KEY}>
-                            <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
-                        </APIProvider>
+                        <GeofencingManager settings={settings} onSave={handleSaveGeofence} saving={saving} canEdit={profile?.role === 'sys_admin'} />
                     )}
                     {activeTab === 'seo' && <SEOView strategies={seoStrategies} onGenerate={handleGenerateSEO} loading={generatingSEO} settings={settings} />}
                     {activeTab === 'hierarchy' && <HierarchyView products={products} onFix={fetchData} />}

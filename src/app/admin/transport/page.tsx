@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
-import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { GOOGLE_MAPS_MAP_ID } from '@/lib/constants';
 import { 
     Truck, 
     CheckCircle2, 
@@ -42,7 +43,8 @@ import {
     Radio,
     Smartphone,
     QrCode,
-    Copy
+    Copy,
+    LocateFixed
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -129,7 +131,43 @@ interface ActiveRoute {
     };
 }
 
-const MAP_ID = 'bf725916f72f2fd';
+const BODEGA_COORDS = { lat: 4.633653, lng: -74.160647 };
+
+function LiveFleetMapControls({
+    showTraffic,
+    fitTrigger,
+    points,
+}: {
+    showTraffic: boolean;
+    fitTrigger: number;
+    points: Array<{ lat: number; lng: number }>;
+}) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (!map || !showTraffic || typeof window === 'undefined' || !(window as any).google?.maps) return;
+        const layer = new (window as any).google.maps.TrafficLayer();
+        layer.setMap(map);
+        return () => {
+            layer.setMap(null);
+        };
+    }, [map, showTraffic]);
+
+    useEffect(() => {
+        if (!map || fitTrigger === 0 || typeof window === 'undefined' || !(window as any).google?.maps) return;
+        if (points.length === 0) {
+            map.panTo(BODEGA_COORDS);
+            map.setZoom(13);
+            return;
+        }
+        const bounds = new (window as any).google.maps.LatLngBounds();
+        bounds.extend(BODEGA_COORDS);
+        points.forEach(p => bounds.extend(p));
+        map.fitBounds(bounds, 60);
+    }, [map, fitTrigger, points]);
+
+    return null;
+}
 
 type TransportTab = 'map' | 'planner' | 'staging' | 'fleet' | 'maintenance' | 'drivers_panel' | 'kpis' | 'crates';
 const VALID_TABS: TransportTab[] = ['map', 'planner', 'staging', 'fleet', 'maintenance', 'drivers_panel', 'kpis', 'crates'];
@@ -182,6 +220,8 @@ export default function TransportControlTower() {
     const [qrBeaconModal, setQrBeaconModal] = useState<{ plate: string; url: string; expiresAt: string; driverName?: string; driverPhone?: string } | null>(null);
     const [qrLoadingRouteId, setQrLoadingRouteId] = useState<string | null>(null);
     const [qrCopied, setQrCopied] = useState(false);
+    const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(false);
+    const [fitTrigger, setFitTrigger] = useState<number>(0);
 
     const handleOpenQrBeacon = async (route: ActiveRoute) => {
         setQrLoadingRouteId(route.id);
@@ -906,9 +946,14 @@ export default function TransportControlTower() {
                             <div style={{ borderRadius: THEME.radius.xl, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative', minHeight: '520px', height: '100%' }}>
                                 {apiKey ? (
                                     <>
-                                        <Map defaultCenter={{ lat: 4.633653, lng: -74.160647 }} defaultZoom={13} mapId={MAP_ID} style={{ width: '100%', height: '100%' }}>
+                                        <Map defaultCenter={BODEGA_COORDS} defaultZoom={13} mapId={GOOGLE_MAPS_MAP_ID} style={{ width: '100%', height: '100%' }}>
+                                            <LiveFleetMapControls
+                                                showTraffic={showTrafficLayer}
+                                                fitTrigger={fitTrigger}
+                                                points={vehiclesWithRealGps.map((v: any) => ({ lat: Number(v.last_latitude), lng: Number(v.last_longitude) }))}
+                                            />
                                             {/* Bodega Central Marker */}
-                                            <AdvancedMarker position={{ lat: 4.633653, lng: -74.160647 }}>
+                                            <AdvancedMarker position={BODEGA_COORDS}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                                     <div style={{ backgroundColor: THEME.colors.primary, color: 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 2px 6px rgba(13,122,87,0.35)' }}>
                                                         BODEGA CENTRAL
@@ -1290,6 +1335,59 @@ export default function TransportControlTower() {
                                                 );
                                             })}
                                         </Map>
+
+                                        {/* Top-Right Map Quick Controls */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '14px',
+                                            right: '14px',
+                                            display: 'flex',
+                                            gap: '8px',
+                                            zIndex: 10
+                                        }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowTrafficLayer(prev => !prev)}
+                                                style={{
+                                                    padding: '7px 12px',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: showTrafficLayer ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
+                                                    backgroundColor: showTrafficLayer ? '#ECFDF5' : 'rgba(255,255,255,0.95)',
+                                                    color: showTrafficLayer ? '#065F46' : THEME.colors.textMain,
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    boxShadow: THEME.shadow.sm,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}
+                                            >
+                                                <Activity size={13} />
+                                                <span>{showTrafficLayer ? 'Tráfico: ON' : 'Tráfico'}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFitTrigger(n => n + 1)}
+                                                style={{
+                                                    padding: '7px 12px',
+                                                    borderRadius: THEME.radius.md,
+                                                    border: `1px solid ${THEME.colors.border}`,
+                                                    backgroundColor: 'rgba(255,255,255,0.95)',
+                                                    color: THEME.colors.textMain,
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    boxShadow: THEME.shadow.sm,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}
+                                            >
+                                                <LocateFixed size={13} color={THEME.colors.primary} />
+                                                <span>Centrar Flota</span>
+                                            </button>
+                                        </div>
 
                                         {/* Floating Map Legend HUD */}
                                         <div style={{

@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/authContext';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Activity, Settings, HelpCircle, ShieldCheck, ArrowLeft, MapPin, History, Download, Search, Calendar, User, Loader2, Eye, AlertTriangle } from 'lucide-react';
 import GeofencingManager from '@/components/admin/GeofencingManager';
-import { APIProvider } from '@vis.gl/react-google-maps';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
 import ManageAttributesModal from '@/components/ManageAttributesModal';
 import { THEME } from '@/lib/adminTheme';

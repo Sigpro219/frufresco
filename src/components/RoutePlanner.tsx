@@ -115,6 +115,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [stopEtas, setStopEtas] = useState<Record<string, string>>({});
     const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
     const [showPreConfirm, setShowPreConfirm] = useState(false);
+    const [optimizationSource, setOptimizationSource] = useState<'google' | 'simulation' | null>(null);
 
     const isMounted = useRef(true);
 
@@ -376,15 +377,19 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             
             if (result.routes) {
                 setAssignments(result.routes);
-                setIsOptimized(true);
+                const isSim = Boolean(result.simulation);
+                setOptimizationSource(isSim ? 'simulation' : 'google');
+                setIsOptimized(!isSim);
                 if (result.route_start_times) {
                     setRouteStartTimes(result.route_start_times);
                 }
                 if (result.stop_etas) {
                     setStopEtas(result.stop_etas);
                 }
-                if (result.theoretical_metrics) {
+                if (!isSim && result.theoretical_metrics) {
                     setTheoreticalMetrics(result.theoretical_metrics);
+                } else {
+                    setTheoreticalMetrics(null);
                 }
             }
 
@@ -534,6 +539,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const toggleAssignment = (orderId: string, vehicleId: string) => {
         if (readOnly) return;
         setIsOptimized(false); // If manual change happens, reset optimized flag
+        setOptimizationSource(null);
         const currentOrders = assignments[vehicleId] || [];
         if (currentOrders.includes(orderId)) {
             setAssignments({ ...assignments, [vehicleId]: currentOrders.filter(id => id !== orderId) });
@@ -588,6 +594,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             return cleaned;
         });
         setIsOptimized(false);
+        setOptimizationSource(null);
     };
 
     const handleSidebarDrop = (e: React.DragEvent) => {
@@ -603,6 +610,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 return cleaned;
             });
             setIsOptimized(false);
+            setOptimizationSource(null);
         }
     };
 
@@ -1102,6 +1110,19 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         >
                             {optimizing ? 'Optimizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} strokeWidth={1.5} /> Auto-Asignar</span>}
                         </button>
+                        {optimizationSource && (
+                            <span style={{
+                                padding: '0.32rem 0.65rem',
+                                borderRadius: '8px',
+                                fontSize: '0.68rem',
+                                fontWeight: '800',
+                                backgroundColor: optimizationSource === 'google' ? '#ECFDF5' : '#FFFBEB',
+                                color: optimizationSource === 'google' ? '#065F46' : '#92400E',
+                                border: optimizationSource === 'google' ? '1px solid #A7F3D0' : '1px solid #FDE68A'
+                            }}>
+                                {optimizationSource === 'google' ? 'Google Tráfico Real' : 'Motor Local (Simulación)'}
+                            </span>
+                        )}
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button 
                                 onClick={() => setShowPreConfirm(true)}
@@ -1139,6 +1160,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
                                         setAssignments({});
                                         setIsOptimized(false);
+                                        setOptimizationSource(null);
                                         setTheoreticalMetrics(null);
                                     }
                                 }}

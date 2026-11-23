@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+
+export const maxDuration = 60;
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
@@ -264,7 +266,7 @@ export async function POST(request: Request) {
         const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
 
         const gcpRequest = {
-            timeout: "6s",
+            timeout: "15s",
             model: {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
@@ -498,7 +500,7 @@ export async function POST(request: Request) {
             }
 
             const gcpController = new AbortController();
-            const gcpTimeout = setTimeout(() => gcpController.abort(), 8000);
+            const gcpTimeout = setTimeout(() => gcpController.abort(), 18000);
             let gcpResponse: Response | null = null;
             let gcpFetchError: any = null;
 
@@ -597,10 +599,16 @@ export async function POST(request: Request) {
                     routes: finalAssignments,
                     route_start_times: routeStartTimes,
                     stop_etas: stopEtas,
-                    theoretical_metrics: {
-                        distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
-                        duration_min: Math.round((gcpData.metrics?.totalDuration?.seconds || 0) / 60)
-                    },
+                    theoretical_metrics: (() => {
+                        const rawDur = gcpData.metrics?.totalDuration;
+                        const durSeconds = typeof rawDur === 'string'
+                            ? (parseInt(rawDur.replace(/s$/i, ''), 10) || 0)
+                            : (Number(rawDur?.seconds) || 0);
+                        return {
+                            distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
+                            duration_min: Math.round(durSeconds / 60)
+                        };
+                    })(),
                     skipped_orders: skippedOrders,
                     geocoding_warnings: geocodingWarnings,
                     gcp_raw: gcpData,
@@ -823,7 +831,7 @@ Menciona explícitamente y al inicio del informe que NO se pudieron programar to
                     apiKey,
                     moduleName: 'transport_logistics',
                     operationName: 'route_optimization_explanation',
-                    timeoutMs: 30000,
+                    timeoutMs: 12000,
                 }
             );
 

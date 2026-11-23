@@ -1,4 +1,6 @@
 
+export const GOOGLE_MAPS_MAP_ID = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'bf725916f72f2fd').trim();
+
 export const CATEGORY_MAP: Record<string, string> = {
     'FR': 'Frutas',
     'VE': 'Verduras',
