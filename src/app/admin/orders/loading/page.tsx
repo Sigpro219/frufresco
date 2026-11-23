@@ -458,6 +458,7 @@ function OrderLoadingContent() {
     const [dispatchMode, setDispatchMode] = useState<'digital' | 'contingency'>('digital');
     const [showLockWarningModal, setShowLockWarningModal] = useState(false);
     const [showPostLaunchModal, setShowPostLaunchModal] = useState(false);
+    const [postLaunchPrintConfirmed, setPostLaunchPrintConfirmed] = useState(false);
     const [lastLaunchedOrderIds, setLastLaunchedOrderIds] = useState<string[]>([]);
     const [isExportingRelacion, setIsExportingRelacion] = useState(false);
 
@@ -5700,6 +5701,7 @@ useEffect(() => {
                                         } catch (shiftErr) {
                                             console.warn('[Opción A] Error activando turno digital_native:', shiftErr);
                                         }
+                                        setPostLaunchPrintConfirmed(false);
                                         setShowPostLaunchModal(true);
                                     }}
                                     style={{
@@ -5885,6 +5887,7 @@ useEffect(() => {
                                                         } catch (shiftErr) {
                                                             console.warn('[Opción A Override] Error activando turno digital_native:', shiftErr);
                                                         }
+                                                        setPostLaunchPrintConfirmed(false);
                                                         setShowPostLaunchModal(true);
                                                     } catch (ovErr: any) {
                                                         alert('Error registrando autorización de emergencia: ' + (ovErr?.message || ovErr));
@@ -5933,7 +5936,7 @@ useEffect(() => {
                         backgroundColor: 'rgba(15, 23, 42, 0.75)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 2200, backdropFilter: 'blur(8px)', padding: '1rem'
-                    }} onClick={() => setShowPostLaunchModal(false)}>
+                    }} onClick={() => { if (postLaunchPrintConfirmed) setShowPostLaunchModal(false); }}>
                         <div style={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: '20px',
@@ -5964,7 +5967,7 @@ useEffect(() => {
                             </div>
 
                             <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
-                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora la <strong>documentación física de despacho</strong> requerida para transportadores y canastillas, o accede directo a los tableros digitales:
+                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora los <strong>2 documentos físicos obligatorios</strong> (Remisiones y Rótulos Térmicos):
                             </div>
 
                             {/* Document Cards */}
@@ -6060,113 +6063,46 @@ useEffect(() => {
                                         <ExternalLink size={12} />
                                     </div>
                                 </a>
-
-                                {/* Enrutar Flota en Transporte (Modo Digital) */}
-                                <a
-                                    href={`/admin/transport?date=${(selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr()}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                        backgroundColor: '#F8FAFC',
-                                        border: '1.5px solid #2563EB',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        textDecoration: 'none',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between',
-                                        gap: '8px',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                >
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1D4ED8', fontWeight: '900', fontSize: '0.85rem' }}>
-                                            <Truck size={16} /> Transporte &amp; Ruteo
-                                        </div>
-                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                            Asigna vehículos, optimiza paradas y confirma manifiestos del turno lanzado.
-                                        </div>
-                                    </div>
-                                    <div style={{
-                                        padding: '7px 10px',
-                                        backgroundColor: '#2563EB',
-                                        color: '#FFFFFF',
-                                        borderRadius: '8px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '800',
-                                        textAlign: 'center',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '5px'
-                                    }}>
-                                        <span>Enrutar Flota en Transporte</span>
-                                        <ExternalLink size={12} />
-                                    </div>
-                                </a>
-
-                                {/* Tablero de Picking OPS (Modo Digital) */}
-                                <a
-                                    href={`/ops/picking/dashboard?date=${(selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr()}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                        backgroundColor: '#F8FAFC',
-                                        border: '1.5px solid #0F766E',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        textDecoration: 'none',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between',
-                                        gap: '8px',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0FDFA'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                >
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0F766E', fontWeight: '900', fontSize: '0.85rem' }}>
-                                            <Layers size={16} /> Tablero Picking OPS
-                                        </div>
-                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                            Monitorea el avance en tiempo real de las 12 células de alistamiento en bodega.
-                                        </div>
-                                    </div>
-                                    <div style={{
-                                        padding: '7px 10px',
-                                        backgroundColor: '#0F766E',
-                                        color: '#FFFFFF',
-                                        borderRadius: '8px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '800',
-                                        textAlign: 'center',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '5px'
-                                    }}>
-                                        <span>Tablero de Picking OPS</span>
-                                        <ExternalLink size={12} />
-                                    </div>
-                                </a>
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
+                                <label style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: '700',
+                                    color: postLaunchPrintConfirmed ? '#0D7A57' : '#334155',
+                                    cursor: 'pointer',
+                                    userSelect: 'none'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={postLaunchPrintConfirmed}
+                                        onChange={(e) => setPostLaunchPrintConfirmed(e.target.checked)}
+                                        style={{
+                                            width: '16px',
+                                            height: '16px',
+                                            accentColor: '#0D7A57',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <span>Confirmo que ya imprimí Remisiones y Rótulos Térmicos</span>
+                                </label>
                                 <button
                                     type="button"
+                                    disabled={!postLaunchPrintConfirmed}
                                     onClick={() => setShowPostLaunchModal(false)}
                                     style={{
                                         padding: '8px 18px',
-                                        backgroundColor: '#0F172A',
-                                        color: '#FFFFFF',
+                                        backgroundColor: postLaunchPrintConfirmed ? '#0F172A' : '#CBD5E1',
+                                        color: postLaunchPrintConfirmed ? '#FFFFFF' : '#64748B',
                                         borderRadius: '9px',
                                         fontSize: '0.80rem',
                                         fontWeight: '800',
                                         border: 'none',
-                                        cursor: 'pointer'
+                                        cursor: postLaunchPrintConfirmed ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.15s ease'
                                     }}
                                 >
                                     Ir a Monitoreo de Pedidos
