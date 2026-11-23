@@ -35,6 +35,7 @@ function StorefrontCartGuard({ frioganMode }: { frioganMode: FrioganStorefrontMo
 export default function ClientLayout({ children, initialStorefrontConfig }: ClientLayoutProps) {
   const pathname = usePathname();
   const isOpsOrAdmin = pathname?.startsWith('/ops') || pathname?.startsWith('/admin');
+  const isTrackPage = pathname?.startsWith('/track');
   const isPrintPage = pathname?.includes('/print') || pathname?.includes('-print');
   const isB2BDashboard = pathname === '/b2b/dashboard';
   const usePublicStorefront = isPublicStorefrontRoute(pathname);
@@ -50,12 +51,12 @@ export default function ClientLayout({ children, initialStorefrontConfig }: Clie
         </Suspense>
       ) : (
         <>
-          {!isOpsOrAdmin && !isPrintPage && (
+          {!isOpsOrAdmin && !isTrackPage && !isPrintPage && (
             <Suspense fallback={null}>
               <GlobalBanner />
             </Suspense>
           )}
-          {!pathname?.startsWith('/ops') && !isPrintPage && (
+          {!pathname?.startsWith('/ops') && !isTrackPage && !isPrintPage && (
             <Suspense fallback={<div style={{ height: '85px', backgroundColor: 'white' }} />}>
               <Navbar />
             </Suspense>
@@ -73,7 +74,7 @@ export default function ClientLayout({ children, initialStorefrontConfig }: Clie
         {children}
       </Suspense>
 
-      {!isOpsOrAdmin && !isPrintPage && (
+      {!isOpsOrAdmin && !isTrackPage && !isPrintPage && (
         <Suspense fallback={null}>
           <FloatingCartBar frioganMode={usePublicStorefront ? storefrontConfig.frioganMode : 'LIVE'} />
         </Suspense>
@@ -85,7 +86,7 @@ export default function ClientLayout({ children, initialStorefrontConfig }: Clie
         </Suspense>
       )}
 
-      {!isOpsOrAdmin && !isB2BDashboard && !isPrintPage && (
+      {!isOpsOrAdmin && !isTrackPage && !isB2BDashboard && !isPrintPage && (
         <Suspense fallback={null}>
           <Footer initialConfig={usePublicStorefront ? storefrontConfig : undefined} />
         </Suspense>

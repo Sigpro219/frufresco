@@ -6,6 +6,7 @@ import { isAbortError } from '@/lib/errorUtils';
 import { useParams, useRouter } from 'next/navigation';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { fetchActiveShiftClient } from '@/lib/ops/operationalShift';
+import { useMobileGpsTracker } from '@/components/telemetry/MobileGpsTracker';
 import { ArrowLeft, Package, Check, Navigation, Info, Lock, Zap, ShieldAlert } from 'lucide-react';
 
 interface RouteStop {
@@ -39,9 +40,16 @@ export default function LoadVerificationPage() {
     const [saving, setSaving] = useState(false);
     const [loadedStops, setLoadedStops] = useState<Set<string>>(new Set());
     const [routeStatus, setRouteStatus] = useState<string>('loading');
+    const [routePlate, setRoutePlate] = useState<string>('');
+    const [hasHardwareGps, setHasHardwareGps] = useState<boolean>(true);
     const [isCertified, setIsCertified] = useState<boolean>(false);
     const [canBypass, setCanBypass] = useState<boolean>(false);
     const isMounted = useRef(true);
+
+    useMobileGpsTracker({
+        plate: routePlate,
+        enabled: Boolean(routePlate) && !hasHardwareGps && routeStatus !== 'completed'
+    });
 
     const toggleStop = (id: string) => {
         const stop = stops.find(s => s.id === id);
@@ -79,13 +87,22 @@ export default function LoadVerificationPage() {
             // 1. Fetch Route Header Info
             const { data: routeInfo } = await supabase
                 .from('routes')
-                .select('id, status, is_certified_complete')
+                .select('id, status, is_certified_complete, vehicle_plate')
                 .eq('id', id)
                 .maybeSingle();
 
             if (routeInfo) {
                 setRouteStatus(routeInfo.status || 'loading');
                 setIsCertified(Boolean(routeInfo.is_certified_complete || routeInfo.status === 'rectified'));
+                if (routeInfo.vehicle_plate) {
+                    setRoutePlate(routeInfo.vehicle_plate);
+                    const { data: fv } = await supabase
+                        .from('fleet_vehicles')
+                        .select('gps_imei')
+                        .ilike('plate', routeInfo.vehicle_plate)
+                        .maybeSingle();
+                    setHasHardwareGps(Boolean(fv?.gps_imei));
+                }
             }
 
             // 2. Check Sandbox Bypass permissions (Strictly disabled in Production)

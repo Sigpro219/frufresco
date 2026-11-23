@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionAndRole } from '@/lib/auth';
 import { isOperationalStaffProfile } from '@/lib/ops/operationalShift';
+import { isActiveBeaconRouteStatus, verifyBeaconToken } from '@/lib/telemetry/beaconToken';
 
 // 1. Validación Zod Estricta (Mandamiento 1)
 const PingItemSchema = z.object({
@@ -22,7 +23,7 @@ const PingItemSchema = z.object({
 
 const TelemetryPayloadSchema = z.union([
     PingItemSchema,
-    z.array(PingItemSchema).min(1, 'Debe incluir al menos un reporte telemático')
+    z.array(PingItemSchema).min(1, 'Debe incluir al menos un reporte telemático').max(50, 'Máximo 50 reportes por lote')
 ]);
 
 function getSupabaseAdmin() {
@@ -38,26 +39,52 @@ export async function POST(req: NextRequest) {
     const startTime = Date.now();
 
     try {
-        const auth = await verifySessionAndRole(req);
-        if (!auth.authorized || !auth.user) {
-            return NextResponse.json(
-                { success: false, error: { code: 'UNAUTHORIZED', message: auth.error || 'Sesión requerida' }, requestId },
-                { status: 401, headers: { 'x-request-id': requestId } }
-            );
-        }
-
         const supabaseAdmin = getSupabaseAdmin();
-        const { data: callerProfile } = await supabaseAdmin
-            .from('profiles')
-            .select('role')
-            .eq('id', auth.user.id)
-            .maybeSingle();
+        const beaconHeader = req.headers.get('x-gps-beacon-token');
+        let beaconPayload: { route_id: string; plate: string } | null = null;
 
-        if (!isOperationalStaffProfile(callerProfile)) {
-            return NextResponse.json(
-                { success: false, error: { code: 'FORBIDDEN', message: 'Telemetría restringida a personal operativo' }, requestId },
-                { status: 403, headers: { 'x-request-id': requestId } }
-            );
+        if (beaconHeader) {
+            const check = verifyBeaconToken(beaconHeader);
+            if (!check.valid || !check.payload) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'UNAUTHORIZED', message: check.reason === 'expired' ? 'Baliza expirada' : 'Baliza inválida' }, requestId },
+                    { status: 401, headers: { 'x-request-id': requestId } }
+                );
+            }
+            const { data: activeRoute, error: routeErr } = await supabaseAdmin
+                .from('routes')
+                .select('id, vehicle_plate, status')
+                .eq('id', check.payload.route_id)
+                .maybeSingle();
+            if (routeErr) throw routeErr;
+            if (!activeRoute || !isActiveBeaconRouteStatus(activeRoute.status) || (activeRoute.vehicle_plate || '').trim().toUpperCase() !== check.payload.plate) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'BEACON_REVOKED', message: 'La ruta cerró o cambió de vehículo' }, requestId },
+                    { status: 410, headers: { 'x-request-id': requestId } }
+                );
+            }
+            beaconPayload = { route_id: check.payload.route_id, plate: check.payload.plate };
+        } else {
+            const auth = await verifySessionAndRole(req);
+            if (!auth.authorized || !auth.user) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'UNAUTHORIZED', message: auth.error || 'Sesión requerida' }, requestId },
+                    { status: 401, headers: { 'x-request-id': requestId } }
+                );
+            }
+
+            const { data: callerProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('role')
+                .eq('id', auth.user.id)
+                .maybeSingle();
+
+            if (!isOperationalStaffProfile(callerProfile)) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'FORBIDDEN', message: 'Telemetría restringida a personal operativo' }, requestId },
+                    { status: 403, headers: { 'x-request-id': requestId } }
+                );
+            }
         }
 
         const rawBody = await req.json().catch(() => null);
@@ -78,7 +105,19 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        const pings = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
+        const rawPings = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
+        if (beaconPayload) {
+            const mismatch = rawPings.some(p => p.plate.trim().toUpperCase() !== beaconPayload!.plate);
+            if (mismatch) {
+                return NextResponse.json(
+                    { success: false, error: { code: 'FORBIDDEN', message: 'La placa no coincide con la baliza autorizada' }, requestId },
+                    { status: 403, headers: { 'x-request-id': requestId } }
+                );
+            }
+        }
+        const pings = beaconPayload
+            ? rawPings.map(p => ({ ...p, plate: beaconPayload!.plate, tracking_source: 'mobile_app' as const }))
+            : rawPings;
 
         // 2. Procesamiento paralelo concurrente con prioridad estricta hardware_gps y cero placas inventadas
         const updatePromises = pings.map(async (ping) => {

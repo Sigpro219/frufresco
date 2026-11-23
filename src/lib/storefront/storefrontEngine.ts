@@ -14,7 +14,7 @@ import type {
   StorefrontRuntimeConfig,
 } from './storefrontContracts';
 
-const FRIOGAN_EXCLUDED_PREFIXES = ['/admin', '/ops', '/login', '/auth', '/b2b/dashboard', '/register', '/checkout'];
+const FRIOGAN_EXCLUDED_PREFIXES = ['/admin', '/ops', '/login', '/auth', '/b2b/dashboard', '/register', '/checkout', '/track'];
 
 /** Determines whether the current route uses the new Catalog-First public storefront shell. */
 export function isPublicStorefrontRoute(pathname: string | null): boolean {

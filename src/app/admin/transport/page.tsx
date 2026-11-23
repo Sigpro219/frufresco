@@ -40,8 +40,11 @@ import {
     ExternalLink,
     Clock,
     Radio,
-    Smartphone
+    Smartphone,
+    QrCode,
+    Copy
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 function SubtabSkeleton({ title }: { title: string }) {
     return (
@@ -122,6 +125,7 @@ interface ActiveRoute {
     total_crates?: number;
     driver?: {
         contact_name: string;
+        phone?: string;
     };
 }
 
@@ -175,6 +179,40 @@ export default function TransportControlTower() {
     const [selectedClientForKardex, setSelectedClientForKardex] = useState<any | null>(null);
     const [clientKardexMovements, setClientKardexMovements] = useState<any[]>([]);
     const [isLoadingClientKardex, setIsLoadingClientKardex] = useState(false);
+    const [qrBeaconModal, setQrBeaconModal] = useState<{ plate: string; url: string; expiresAt: string; driverName?: string; driverPhone?: string } | null>(null);
+    const [qrLoadingRouteId, setQrLoadingRouteId] = useState<string | null>(null);
+    const [qrCopied, setQrCopied] = useState(false);
+
+    const handleOpenQrBeacon = async (route: ActiveRoute) => {
+        setQrLoadingRouteId(route.id);
+        setQrCopied(false);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+            const res = await fetch('/api/transport/beacon/token', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ route_id: route.id })
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.track_path) {
+                throw new Error(data?.error || 'No se pudo generar la baliza QR');
+            }
+            const fullUrl = `${window.location.origin}${data.track_path}`;
+            setQrBeaconModal({
+                plate: data.plate,
+                url: fullUrl,
+                expiresAt: data.expires_at,
+                driverName: route.driver?.contact_name,
+                driverPhone: route.driver?.phone
+            });
+        } catch (err: any) {
+            (window as any).showToast?.(err?.message || 'Error generando QR', 'error');
+        } finally {
+            setQrLoadingRouteId(null);
+        }
+    };
 
     const handleOpenClientKardex = async (client: any) => {
         setSelectedClientForKardex(client);
@@ -323,7 +361,7 @@ export default function TransportControlTower() {
                 return {
                     ...r,
                     route_stops: allStops.filter(s => s.route_id === r.id),
-                    driver: driver ? { contact_name: driver.contact_name } : undefined
+                    driver: driver ? { contact_name: driver.contact_name, phone: driver.phone } : undefined
                 };
             }) || [];
 
@@ -831,6 +869,32 @@ export default function TransportControlTower() {
                                                             {Math.round(progress)}% &bull; {formatNumber(route.total_kilos || 0)} kg
                                                         </span>
                                                     </div>
+                                                    {canEdit && ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(route.status) && !fleetData.find((v: any) => v.plate === route.vehicle_plate)?.gps_imei && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenQrBeacon(route)}
+                                                            disabled={qrLoadingRouteId === route.id}
+                                                            style={{
+                                                                marginTop: '8px',
+                                                                width: '100%',
+                                                                padding: '6px 10px',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #CBD5E1',
+                                                                backgroundColor: '#F8FAFC',
+                                                                color: '#0F172A',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: '800',
+                                                                cursor: qrLoadingRouteId === route.id ? 'wait' : 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '6px'
+                                                            }}
+                                                        >
+                                                            <QrCode size={13} color={THEME.colors.primary} />
+                                                            <span>{qrLoadingRouteId === route.id ? 'Generando QR...' : 'QR / WhatsApp GPS'}</span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1680,6 +1744,69 @@ export default function TransportControlTower() {
                             >
                                 Cerrar
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {qrBeaconModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2400, padding: '1rem'
+                }} onClick={() => setQrBeaconModal(null)}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF', borderRadius: '20px', maxWidth: '400px', width: '100%',
+                        padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)', textAlign: 'center',
+                        color: THEME.colors.textMain
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '900', fontSize: '0.98rem' }}>
+                                <QrCode size={18} color={THEME.colors.primary} />
+                                <span>Baliza GPS · {qrBeaconModal.plate}</span>
+                            </div>
+                            <button type="button" onClick={() => setQrBeaconModal(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748B' }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p style={{ margin: '0 0 1rem', fontSize: '0.76rem', color: THEME.colors.textSecondary, lineHeight: 1.4 }}>
+                            Escanea con el celular del conductor{qrBeaconModal.driverName ? ` (${qrBeaconModal.driverName})` : ''} o envíale el enlace por WhatsApp. Expira en 16h o al cerrar la ruta.
+                        </p>
+                        <div style={{ display: 'inline-flex', padding: '14px', backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', marginBottom: '1rem' }}>
+                            <QRCodeSVG value={qrBeaconModal.url} size={200} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    await navigator.clipboard?.writeText(qrBeaconModal.url);
+                                    setQrCopied(true);
+                                }}
+                                style={{
+                                    flex: 1, padding: '9px 12px', borderRadius: '10px', border: '1px solid #CBD5E1',
+                                    backgroundColor: '#F8FAFC', color: '#0F172A', fontWeight: '800', fontSize: '0.76rem',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                }}
+                            >
+                                <Copy size={14} />
+                                {qrCopied ? 'Copiado' : 'Copiar Link'}
+                            </button>
+                            <a
+                                href={(() => {
+                                    const cleanPhone = (qrBeaconModal.driverPhone || '').replace(/\D/g, '');
+                                    const text = encodeURIComponent(`Hola${qrBeaconModal.driverName ? ` ${qrBeaconModal.driverName}` : ''}, abre este enlace en tu celular para activar el GPS en ruta del vehículo ${qrBeaconModal.plate}: ${qrBeaconModal.url}`);
+                                    return cleanPhone ? `https://wa.me/57${cleanPhone}?text=${text}` : `https://wa.me/?text=${text}`;
+                                })()}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                    flex: 1, padding: '9px 12px', borderRadius: '10px', border: 'none',
+                                    backgroundColor: '#16A34A', color: '#FFFFFF', fontWeight: '800', fontSize: '0.76rem',
+                                    textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                }}
+                            >
+                                <MessageCircle size={14} />
+                                WhatsApp
+                            </a>
                         </div>
                     </div>
                 </div>
