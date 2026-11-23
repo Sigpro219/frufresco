@@ -5005,8 +5005,8 @@ function CreateOrderContent() {
 
         if (cart.length === 0) return showToast('El pedido debe tener al menos un producto');
 
-        // SDD Escenario 312 / 332: Permitir guardado a $0 COP en Clientes B2B (Tarifa Pendiente / Remisión Fuera de Acuerdo) y Reposiciones/Obsequios
-        const hasActiveAgreementSplit = clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired;
+        // SDD Escenario 312 / 332 / 479: Permitir guardado a $0 COP en Clientes B2B (Tarifa Pendiente / Remisión Fuera de Acuerdo) y Reposiciones/Obsequios
+        const hasActiveAgreementSplit = clientType === 'B2B' && agreementProductIds.size > 0;
         const zeroPriceItem = cart.find(item => {
             if (orderNature === 'replacement' || isGiftRemissionClient) return false; // SDD §7.5.8 / §21.3: Reposición u Obsequio exonerado a $0 COP
             if (clientType === 'B2B') return false; // SDD Escenario 312: Ítems institucionales sin tarifa viajan a $0 COP (Tarifa Pendiente para Facturación)
@@ -10246,7 +10246,7 @@ ${primaryAdminNotes}`.trim();
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#FFFBEB' : '#F1F5F9') : '#FFF7ED', color: (clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? '#B45309' : '#475569') : '#C2410C', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: `1px solid ${isContractExpired ? '#FDE68A' : '#E2E8F0'}`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                     {(clientType === 'B2B' || Boolean(selectedClient)) ? (isContractExpired ? <><AlertTriangle size={11} strokeWidth={2} /> General Institucional (Acuerdo Vencido)</> : <><Building2 size={11} strokeWidth={2} /> General Institucional</>) : <><Tag size={11} strokeWidth={2} /> Tarifa B2C</>}
                                                                 </span>
-                                                            ) : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
+                                                            ) : (clientType === 'B2B' && agreementProductIds.size > 0 && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
                                                                 <span style={{ fontSize: '0.75rem', backgroundColor: '#FFFBEB', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '3px', border: '1px solid #FDE68A' }}>
                                                                     <AlertTriangle size={11} strokeWidth={2} /> Fuera de Acuerdo • Remisión $0
                                                                 </span>
@@ -10425,7 +10425,7 @@ ${primaryAdminNotes}`.trim();
                                                         <div style={{ 
                                                             fontWeight: '800', 
                                                             fontSize: '0.95rem', 
-                                                            color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? '#D97706' : isZeroPrice ? '#DC2626' : '#1E293B',
+                                                            color: (orderNature === 'replacement' || isGiftRemissionClient) ? '#6D28D9' : (clientType === 'B2B' && agreementProductIds.size > 0 && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? '#D97706' : isZeroPrice ? '#DC2626' : '#1E293B',
                                                             fontVariantNumeric: 'tabular-nums'
                                                         }}>
                                                             {formatMoney(orderNature === 'replacement' ? 0 : unitPrice)}
@@ -10438,7 +10438,7 @@ ${primaryAdminNotes}`.trim();
                                                             <span style={{ fontSize: '0.65rem', color: '#6D28D9', fontWeight: 'bold', backgroundColor: '#FAF5FF', border: '1px solid #D8B4FE', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }} title="Registra precio interno real pero imprime $0 en la remisión de entrega">
                                                                 <Gift size={10} color="#6D28D9" /> Remisión Obsequio ($0 en puerta)
                                                             </span>
-                                                        ) : (clientType === 'B2B' && agreementProductIds.size > 0 && !isContractExpired && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
+                                                        ) : (clientType === 'B2B' && agreementProductIds.size > 0 && allowOffAgreementPurchases && !agreementProductIds.has(item.product.id)) ? (
                                                             <span style={{ fontSize: '0.65rem', color: '#B45309', fontWeight: 'bold', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                                                 <FileText size={10} color="#B45309" /> Remisión $0
                                                             </span>
@@ -11097,7 +11097,7 @@ ${primaryAdminNotes}`.trim();
                                         </span>
                                     </div>
                                     {(() => {
-                                        if (clientType !== 'B2B' || agreementProductIds.size === 0 || isContractExpired || !allowOffAgreementPurchases || orderNature === 'replacement' || isGiftRemissionClient) return null;
+                                        if (clientType !== 'B2B' || agreementProductIds.size === 0 || !allowOffAgreementPurchases || orderNature === 'replacement' || isGiftRemissionClient) return null;
                                         const inAgCount = cart.filter(i => agreementProductIds.has(i.product.id)).length;
                                         const offAgCount = cart.filter(i => !agreementProductIds.has(i.product.id)).length;
                                         if (offAgCount === 0) return null;

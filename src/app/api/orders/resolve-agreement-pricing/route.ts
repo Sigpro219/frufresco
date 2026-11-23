@@ -227,14 +227,22 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             return ag;
         };
 
-        const isAgreementExpired = (ag: any) => {
-            if (!ag) return true;
+        type AgreementLifecycle = 'active' | 'grace_30d' | 'expired_over_30d' | 'future';
+        const getAgreementLifecycle = (ag: any): { isExpired: boolean; daysExpired: number; lifecycle: AgreementLifecycle } => {
+            if (!ag) return { isExpired: true, daysExpired: 0, lifecycle: 'future' };
             const start = ag.start_date?.split('T')[0];
             const end = ag.valid_until?.split('T')[0];
-            if (start && start > checkDate) return true;
-            if (end && end < checkDate) return true;
-            return false;
+            if (start && start > checkDate) return { isExpired: true, daysExpired: 0, lifecycle: 'future' };
+            if (end && end < checkDate) {
+                const daysExpired = Math.max(0, Math.floor((Date.parse(`${checkDate}T00:00:00Z`) - Date.parse(`${end}T00:00:00Z`)) / 86400000));
+                if (daysExpired > 30) {
+                    return { isExpired: true, daysExpired, lifecycle: 'expired_over_30d' };
+                }
+                return { isExpired: true, daysExpired, lifecycle: 'grace_30d' };
+            }
+            return { isExpired: false, daysExpired: 0, lifecycle: 'active' };
         };
+        const isAgreementExpired = (ag: any) => getAgreementLifecycle(ag).isExpired;
 
         // Candado 3: Cortocircuito Jerárquico Estricto (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra)
         // SPEC.md §7.5.6 & Escenario 301 (SDD v1.9.279): Si un nivel tiene acuerdo, se suprime por completo
@@ -244,7 +252,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         // Level 1: Branch assigned agreement (Cortocircuito Estricto)
         if (branchId) {
-            const { data: bAg } = await supabase
+            let { data: bAg } = await supabase
                 .from('quotes')
                 .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', branchId)
@@ -252,6 +260,18 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
+            if (!bAg) {
+                const { data: bExp } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
+                    .eq('client_id', branchId)
+                    .eq('status', 'expired')
+                    .order('valid_until', { ascending: false, nullsFirst: false })
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                bAg = bExp;
+            }
             if (bAg) {
                 const ag = enrichAgreementDates(bAg);
                 if (ag) {
@@ -263,7 +283,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         // Level 2: Matrix parent assigned agreement (Solo si Nivel 1 no existe)
         if (!candidateAgreement && parentId) {
-            const { data: mAg } = await supabase
+            let { data: mAg } = await supabase
                 .from('quotes')
                 .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
                 .eq('client_id', parentId)
@@ -271,6 +291,18 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
+            if (!mAg) {
+                const { data: mExp } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
+                    .eq('client_id', parentId)
+                    .eq('status', 'expired')
+                    .order('valid_until', { ascending: false, nullsFirst: false })
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                mAg = mExp;
+            }
             if (mAg) {
                 const ag = enrichAgreementDates(mAg);
                 if (ag) {
@@ -353,7 +385,11 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             }
         }
 
-        // 4. Validity check against delivery date
+        // 4. Validity check against order date (Escenario 479: Gracia 30 días vs > 30 días Remisión $0)
+        const candidateLifecycle = candidateAgreement ? getAgreementLifecycle(candidateAgreement) : null;
+        const agreementLifecycle: 'active' | 'grace_30d' | 'expired_over_30d' | 'future' | 'none' = candidateLifecycle ? candidateLifecycle.lifecycle : 'none';
+        const daysExpired = candidateLifecycle ? candidateLifecycle.daysExpired : 0;
+        const isExpiredOver30Days = agreementLifecycle === 'expired_over_30d';
         let expired = candidateAgreement ? isCandidateExpired : false;
         const activeAgreement = (candidateAgreement && !expired) ? candidateAgreement : null;
 
@@ -371,15 +407,20 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 valid_until: activeAgreement.valid_until
             };
         } else if (candidateAgreement) {
-            // SDD Escenario 312: Preservar acuerdo asignado si esta fuera de ventana estricta o en transicion
+            // SDD Escenario 312 & 479: Preservar precios en gracia <= 30d; > 30d pasa a Remisión $0
+            const baseAgName = candidateAgreement.model_snapshot_name || `Acuerdo ${candidateAgreement.quote_number}`;
             resolvedModel = {
                 id: candidateAgreement.id,
-                name: candidateAgreement.model_snapshot_name || `Acuerdo ${candidateAgreement.quote_number} (En transición/Renovación)`,
+                name: isExpiredOver30Days
+                    ? `${baseAgName} (Vencido > 30d · Remisión $0)`
+                    : (agreementLifecycle === 'grace_30d' ? `${baseAgName} (Gracia ${daysExpired}/30d)` : `${baseAgName} (En transición/Renovación)`),
                 is_agreement: true,
                 quote_number: candidateAgreement.quote_number,
                 start_date: candidateAgreement.start_date,
                 valid_until: candidateAgreement.valid_until,
-                is_expired: isCandidateExpired
+                is_expired: isCandidateExpired,
+                days_expired: daysExpired,
+                agreement_lifecycle: agreementLifecycle
             };
         } else {
             let modelId = currentProfile?.pricing_model_id || parentProfile?.pricing_model_id || null;
@@ -462,14 +503,16 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
 
         const [specificRes, genPricesMap, campTargetsRes] = await Promise.all(parallelQueries);
 
-        // Process specific agreement or model prices (Escenario 312)
+        // Process specific agreement or model prices (Escenario 312 & 479)
         if (targetAgreement && specificRes.data) {
             (specificRes.data || []).forEach((qi: any) => {
                 if (qi.product_id) {
-                    const price = Number(qi.unit_price) || 0;
-                    priceMap[qi.product_id] = price;
                     agreementProductIds.push(qi.product_id);
-                    customPriceIds.push(qi.product_id);
+                    if (!isExpiredOver30Days) {
+                        const price = Number(qi.unit_price) || 0;
+                        priceMap[qi.product_id] = price;
+                        customPriceIds.push(qi.product_id);
+                    }
                 }
             });
         } else if (resolvedModel && !resolvedModel.is_agreement && specificRes.data) {
@@ -504,7 +547,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         // 7. Resolve Campaigns
         const campMap: Record<string, { value: number; type: string; name: string }> = {};
         const targetCampaigns = campTargetsRes?.data || [];
-        if (targetCampaigns.length > 0 && !activeAgreement) {
+        if (targetCampaigns.length > 0 && !hasAssignedAgreement) {
             const campIds = targetCampaigns.map((tc: any) => tc.campaign_id);
             const nowIso = new Date().toISOString();
             const { data: activeCamps } = await supabase
@@ -567,6 +610,9 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                 model_snapshot_name: candidateAgreement.model_snapshot_name
             } : null,
             isExpired: expired,
+            agreementLifecycle,
+            daysExpired,
+            isExpiredOver30Days,
             isB2CDefault: b2cFallback,
             allowOffAgreementPurchases: allowOff,
             contractPrices: priceMap,

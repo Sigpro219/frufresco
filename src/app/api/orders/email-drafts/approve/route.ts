@@ -79,17 +79,25 @@ export async function POST(req: Request) {
     const isGiftRemission = profile.document_type === 'gift_remission';
     const isB2C = profile.role === 'b2c_client' || clientType === 'b2c_client' || clientType === 'b2c';
 
-    // Escenario 437 SDD: Resolver tarifas del Acuerdo Comercial oficial del cliente
+    // Escenario 437 & 479 SDD: Resolver tarifas del Acuerdo Comercial oficial del cliente
     let contractPrices: Record<string, number> = {};
+    let hasAssignedAgreement = false;
+    let isExpiredOver30Days = false;
+    let agreementProductIdsSet = new Set<string>();
     try {
+      const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
       const pricingUrl = new URL('/api/orders/resolve-agreement-pricing', req.url);
       pricingUrl.searchParams.set('client_id', clientId);
+      pricingUrl.searchParams.set('order_date', todayBogota);
       if (deliveryDate) pricingUrl.searchParams.set('delivery_date', deliveryDate);
       pricingUrl.searchParams.set('client_type', isB2C ? 'B2C' : 'B2B');
       const pricingRes = await fetch(pricingUrl.toString());
       if (pricingRes.ok) {
         const pData = await pricingRes.json();
         contractPrices = pData.contractPrices || {};
+        hasAssignedAgreement = Boolean(pData.activeAgreement || pData.candidateAgreement);
+        isExpiredOver30Days = Boolean(pData.isExpiredOver30Days);
+        agreementProductIdsSet = new Set<string>(Array.isArray(pData.agreementProductIds) ? pData.agreementProductIds : []);
       }
     } catch (e) {
       console.warn('Error resolviendo precios de acuerdo en approve route:', e);
@@ -104,14 +112,22 @@ export async function POST(req: Request) {
       const pId = item.productId || item.product_id || item.id;
       const dbProd = productsMap.get(pId);
       
-      // Escenario 437 SDD: Prevalencia incondicional del Acuerdo Comercial oficial sobre OCR/texto de correo
+      // Escenario 437 & 479 SDD: Prevalencia incondicional del Acuerdo Comercial oficial y $0 fuera de convenio / > 30d
       let unitPrice = 0;
       if (isGiftRemission) {
         unitPrice = 0;
+      } else if (hasAssignedAgreement) {
+        if (isExpiredOver30Days) {
+          unitPrice = 0;
+        } else if (agreementProductIdsSet.size > 0 && !agreementProductIdsSet.has(pId)) {
+          unitPrice = 0;
+        } else if (contractPrices[pId] !== undefined && contractPrices[pId] !== null) {
+          unitPrice = Number(contractPrices[pId]);
+        } else {
+          unitPrice = 0;
+        }
       } else if (contractPrices[pId] !== undefined && contractPrices[pId] !== null && Number(contractPrices[pId]) > 0) {
         unitPrice = Number(contractPrices[pId]);
-      } else if (dbProd?.base_price && Number(dbProd.base_price) > 0) {
-        unitPrice = Number(dbProd.base_price);
       } else {
         unitPrice = Number(item.unitPrice || item.price || 0);
       }
