@@ -28,6 +28,7 @@ import {
     ShoppingBag,
     CheckCircle2,
     Coins,
+    Star,
     Printer,
     MessageSquare,
     Navigation
@@ -72,6 +73,39 @@ interface Vehicle {
 
 export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean }) {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [priorityOrderIds, setPriorityOrderIds] = useState<string[]>([]);
+
+    useEffect(() => {
+        const validIds = new Set(orders.map(o => String(o.id)));
+        setPriorityOrderIds(prev => {
+            const filtered = prev.filter(id => validIds.has(id));
+            return filtered.length === prev.length ? prev : filtered;
+        });
+    }, [orders]);
+
+    const togglePriorityOrder = (orderId: string) => {
+        if (readOnly) return;
+        const targetId = String(orderId);
+        const clicked = orders.find(o => String(o.id) === targetId);
+        const parentId = clicked?.logistics_data?.is_off_agreement_split && clicked?.logistics_data?.parent_order_id
+            ? String(clicked.logistics_data.parent_order_id)
+            : targetId;
+        const familyIds = new Set<string>([parentId]);
+        orders.forEach(o => {
+            if (o?.logistics_data?.is_off_agreement_split && String(o?.logistics_data?.parent_order_id || '') === parentId) {
+                familyIds.add(String(o.id));
+            }
+        });
+        setPriorityOrderIds(prev => {
+            const isCurrentlyPriority = Array.from(familyIds).some(id => prev.includes(id));
+            if (isCurrentlyPriority) {
+                return prev.filter(id => !familyIds.has(id));
+            }
+            const next = new Set(prev);
+            familyIds.forEach(id => next.add(id));
+            return Array.from(next);
+        });
+    };
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
     const [optimizing, setOptimizing] = useState(false);
@@ -364,7 +398,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 body: JSON.stringify({
                     orders,
                     vehicles,
-                    parameters: params
+                    parameters: params,
+                    priorityOrderIds
                 })
             });
 
@@ -513,6 +548,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
             setAssignments({});
             setStopEtas({});
+            setPriorityOrderIds([]);
             await fetchInitialData();
 
         } catch (err: any) {
@@ -901,16 +937,24 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 })()}
                             </div>
                         </div>
-                        <span style={{ fontSize: '0.62rem', backgroundColor: '#EDE9FE', color: '#6D28D9', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #DDD6FE' }}>
-                            {orders.length} pedidos disponibles
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {priorityOrderIds.length > 0 && (
+                                <span style={{ fontSize: '0.62rem', backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <Star size={11} fill="#F59E0B" stroke="#B45309" strokeWidth={2} />
+                                    {priorityOrderIds.length} prioritario{priorityOrderIds.length > 1 ? 's' : ''}
+                                </span>
+                            )}
+                            <span style={{ fontSize: '0.62rem', backgroundColor: '#EDE9FE', color: '#6D28D9', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #DDD6FE' }}>
+                                {orders.length} pedidos disponibles
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '0', scrollbarWidth: 'thin' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
                         <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', color: '#475569', fontWeight: '800', textAlign: 'left', zIndex: 10, borderBottom: '1px solid #E2E8F0' }}>
                             <tr>
-                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', width: '20px' }}>TIPO</th>
+                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', width: '56px' }}>TIPO</th>
                                 <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB' }}>CLIENTE</th>
                                 <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right' }}>CANT.</th>
                                 <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>CONDICIÓN</th>
@@ -923,34 +967,73 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     const bAssigned = Object.values(assignments).some(ids => ids.includes(b.id));
                                     if (aAssigned && !bAssigned) return 1;
                                     if (!aAssigned && bAssigned) return -1;
+                                    const aPrio = priorityOrderIds.includes(String(a.id)) ? 1 : 0;
+                                    const bPrio = priorityOrderIds.includes(String(b.id)) ? 1 : 0;
+                                    if (aPrio !== bPrio) return bPrio - aPrio;
                                     return 0;
                                 })
                                 .map(order => {
                                     const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
+                                    const isPriority = priorityOrderIds.includes(String(order.id));
+                                    const rowBg = isAssigned ? '#F0FDFA' : (isPriority ? '#FFFBEB' : 'white');
+                                    const rowHoverBg = isAssigned ? '#CCFBF1' : (isPriority ? '#FEF3C7' : '#F9FAFB');
                                     return (
                                     <tr 
                                         key={order.id} 
                                         draggable={!readOnly}
                                         onDragStart={(e) => handleDragStart(e, order.id)}
                                         style={{ 
-                                            backgroundColor: isAssigned ? '#F0FDFA' : 'white',
+                                            backgroundColor: rowBg,
                                             borderBottom: '1px solid #F3F4F6',
                                             transition: 'all 0.2s',
                                             cursor: readOnly ? 'default' : 'grab',
                                             opacity: isAssigned ? 0.6 : 1
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#CCFBF1' : '#F9FAFB'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isAssigned ? '#F0FDFA' : 'white'}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = rowHoverBg}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                     >
                                         <td style={{ padding: '0.6rem 0.8rem' }}>
-                                            <div style={{ 
-                                                width: '24px', height: '24px', borderRadius: '6px', 
-                                                backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', 
-                                                color: order.is_b2b ? '#0369A1' : '#6D28D9', 
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontWeight: '900', fontSize: '0.6rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#DDD6FE'}` 
-                                            }}>
-                                                {order.is_b2b ? 'B2B' : 'B2C'}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <button
+                                                    type="button"
+                                                    disabled={readOnly}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        togglePriorityOrder(String(order.id));
+                                                    }}
+                                                    title={isPriority ? 'Quitar prioridad de salida temprana' : 'Marcar como pedido prioritario (1-2 por camión)'}
+                                                    aria-label={isPriority ? 'Quitar prioridad' : 'Marcar como prioritario'}
+                                                    style={{
+                                                        width: '22px',
+                                                        height: '22px',
+                                                        borderRadius: '6px',
+                                                        border: `1px solid ${isPriority ? '#F59E0B' : '#E2E8F0'}`,
+                                                        backgroundColor: isPriority ? '#FEF3C7' : '#FFFFFF',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        cursor: readOnly ? 'default' : 'pointer',
+                                                        flexShrink: 0,
+                                                        padding: 0
+                                                    }}
+                                                >
+                                                    <Star
+                                                        size={12}
+                                                        fill={isPriority ? '#F59E0B' : 'none'}
+                                                        stroke={isPriority ? '#B45309' : '#94A3B8'}
+                                                        strokeWidth={2}
+                                                    />
+                                                </button>
+                                                <div style={{ 
+                                                    width: '24px', height: '24px', borderRadius: '6px', 
+                                                    backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', 
+                                                    color: order.is_b2b ? '#0369A1' : '#6D28D9', 
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontWeight: '900', fontSize: '0.6rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#DDD6FE'}`,
+                                                    flexShrink: 0
+                                                }}>
+                                                    {order.is_b2b ? 'B2B' : 'B2C'}
+                                                </div>
                                             </div>
                                         </td>
                                         <td style={{ padding: '0.6rem 0.5rem', maxWidth: '190px' }}>
@@ -975,6 +1058,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         <td style={{ padding: '0.6rem 0.8rem', textAlign: 'left', maxWidth: '160px' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                                    {isPriority && (
+                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', color: '#B45309', backgroundColor: '#FEF3C7', border: '1px solid #F59E0B', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                            <Star size={8} fill="#F59E0B" stroke="#B45309" strokeWidth={2} /> PRIORITARIO
+                                                        </span>
+                                                    )}
                                                     <div style={{ 
                                                         fontSize: '0.58rem', 
                                                         fontWeight: '800', 
@@ -1159,6 +1247,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     if (confirm('¿Seguro que quieres limpiar todas las asignaciones? Los pedidos volverán al tablero sin asignar.')) {
                                         try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
                                         setAssignments({});
+                                        setPriorityOrderIds([]);
                                         setIsOptimized(false);
                                         setOptimizationSource(null);
                                         setTheoreticalMetrics(null);

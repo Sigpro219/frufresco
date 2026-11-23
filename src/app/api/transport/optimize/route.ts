@@ -19,7 +19,8 @@ import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard
 const OptimizeRequestSchema = z.object({
     orders: z.array(z.any()).min(1, 'Se requiere al menos un pedido para optimizar rutas'),
     vehicles: z.array(z.any()).min(1, 'Se requiere al menos un vehículo en la flota'),
-    parameters: z.record(z.string(), z.any()).optional()
+    parameters: z.record(z.string(), z.any()).optional(),
+    priorityOrderIds: z.array(z.string()).optional().default([])
 });
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
             }, { status: 400, headers: { 'x-request-id': requestId } });
         }
 
-        const { orders, vehicles, parameters } = parsed.data;
+        const { orders, vehicles, parameters, priorityOrderIds = [] } = parsed.data;
 
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -221,12 +222,14 @@ export async function POST(request: Request) {
 
         // Co-asignación obligatoria de parejas 10A/10B (is_off_agreement_split) en el mismo camión
         const splitChildrenByParent = new Map<string, any[]>();
+        const splitParentByChild = new Map<string, string>();
         const splitChildIds = new Set<string>();
         const orderByIdMap = new Map<string, any>(orders.map((o: any) => [String(o.id), o]));
         orders.forEach((o: any) => {
             const pId = o?.logistics_data?.is_off_agreement_split ? o?.logistics_data?.parent_order_id : null;
             if (pId && orderByIdMap.has(String(pId))) {
                 splitChildIds.add(String(o.id));
+                splitParentByChild.set(String(o.id), String(pId));
                 const list = splitChildrenByParent.get(String(pId)) || [];
                 list.push(o);
                 splitChildrenByParent.set(String(pId), list);
@@ -244,6 +247,16 @@ export async function POST(request: Request) {
                 crates: o.crates ? Number(o.crates) + extraCrates : undefined
             };
         });
+
+        const routingOrderIds = new Set<string>(routingOrders.map((o: any) => String(o.id)));
+        const effectivePriorityIds = new Set<string>();
+        priorityOrderIds.forEach((rawId: string) => {
+            const normalized = splitParentByChild.get(String(rawId)) || String(rawId);
+            if (routingOrderIds.has(normalized)) {
+                effectivePriorityIds.add(normalized);
+            }
+        });
+        const hasPriorityOrders = effectivePriorityIds.size > 0;
 
         const expandSplitAssignments = (rawAssign: Record<string, string[]>, etas: Record<string, string>) => {
             const out: Record<string, string[]> = {};
@@ -288,6 +301,31 @@ export async function POST(request: Request) {
                     
                     const timeWindow = getOrderTimeWindow(o, targetDate);
                     const isRefrigerated = refrigeratedOrderIds.has(o.id);
+                    const isPriority = effectivePriorityIds.has(String(o.id));
+
+                    let shipmentTimeWindow: Record<string, any> = timeWindow;
+                    if (isPriority) {
+                        const startMs = new Date(timeWindow.startTime).getTime();
+                        const endMs = new Date(timeWindow.endTime).getTime();
+                        const fleetStartMs = new Date(`${targetDate}T${fleet_start}:00-05:00`).getTime();
+                        const targetSoftMs = Math.min(
+                            endMs,
+                            Math.max(
+                                startMs,
+                                Math.min(
+                                    fleetStartMs + 180 * 60000,
+                                    startMs + Math.round((endMs - startMs) * 0.35)
+                                )
+                            )
+                        );
+                        if (Number.isFinite(startMs) && Number.isFinite(endMs) && targetSoftMs >= startMs && targetSoftMs < endMs) {
+                            shipmentTimeWindow = {
+                                ...timeWindow,
+                                softEndTime: new Date(targetSoftMs).toISOString(),
+                                costPerHourAfterSoftEndTime: 250
+                            };
+                        }
+                    }
 
                     // 2. Poka-Yoke Sanitization for Coordinates (Bogotá & Sabana bounding box)
                     let rawLat = parseFloat(o.latitude || o.profiles?.latitude);
@@ -311,6 +349,9 @@ export async function POST(request: Request) {
                     if (hasRefrigeratedFleet) {
                         demands["refrigerated"] = { "amount": isRefrigerated ? "1" : "0" };
                     }
+                    if (isPriority) {
+                        demands["priority_slots"] = { "amount": "1" };
+                    }
 
                     // Delivery-only task: Cargo is assumed loaded at vehicle.startLocation (Depot)
                     return {
@@ -320,13 +361,13 @@ export async function POST(request: Request) {
                                     latitude: rawLat, 
                                     longitude: rawLng 
                                 },
-                                timeWindows: [timeWindow],
+                                timeWindows: [shipmentTimeWindow],
                                 duration: `${unloadingTime * 60}s`
                             }
                         ],
                         loadDemands: demands,
-                        // Strategic Pareto Priority: High penalty for B2B accounts, standard for B2C
-                        penaltyCost: isB2B ? 500000 : 1000,
+                        // Strategic Pareto Priority: Urgent Priority > B2B accounts > B2C
+                        penaltyCost: isPriority ? 2000000 : (isB2B ? 500000 : 1000),
                         label: String(o.id)
                     };
                 }),
@@ -336,12 +377,21 @@ export async function POST(request: Request) {
                     const effectiveBreakMins = shiftDurationMins < 240 ? 0 : driver_break_mins;
                     const breakRule = getVehicleBreakRule(targetDate, fleet_start, effectiveBreakMins);
 
-                    const limits: Record<string, { maxLoad: string }> = {
+                    const limits: Record<string, { maxLoad?: string; softMaxLoad?: string; costPerUnitAboveSoftMax?: number }> = {
                         "weight": { "maxLoad": String(v.capacity_kg) },
                         "crates": { "maxLoad": String(v.max_crates_capacity || 483) }
                     };
                     if (hasRefrigeratedFleet) {
                         limits["refrigerated"] = { "maxLoad": v.is_refrigerated ? String(v.max_crates_capacity || 483) : "0" };
+                    }
+                    if (hasPriorityOrders) {
+                        const prioritySoftCost = vehicleFixedCost > 0
+                            ? Math.min(50000, Math.max(800, Math.round(vehicleFixedCost * 0.4)))
+                            : 1500;
+                        limits["priority_slots"] = {
+                            softMaxLoad: "1",
+                            costPerUnitAboveSoftMax: prioritySoftCost
+                        };
                     }
 
                     const vehicleObj: any = {
@@ -624,7 +674,18 @@ export async function POST(request: Request) {
         // --- SIMULATION MODE --- (Fallback)
         // Since we are in development/draft, we return the structured request 
         // and a simulated local assignment until the API Key is ready.
-        const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(routingOrders, vehicles, fleet_start, fleet_end);
+        const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(
+            routingOrders,
+            vehicles,
+            fleet_start,
+            fleet_end,
+            {
+                priorityIds: effectivePriorityIds,
+                refrigeratedOrderIds,
+                hasRefrigeratedFleet,
+                avgKgPerCrate: avg_kg_per_crate
+            }
+        );
         const finalSimAssignments = expandSplitAssignments(simulatedAssignments, simEtas);
         const assignedSimIds = new Set(Object.values(finalSimAssignments).flat());
         const unassignedSimOrders = orders.filter(o => !assignedSimIds.has(String(o.id)));
@@ -665,15 +726,43 @@ export async function POST(request: Request) {
 }
 
 
-function calculateSimulationAssignments(orders: any[], vehicles: any[], fleetStart = '04:30', fleetEnd = '19:00') {
+function calculateSimulationAssignments(
+    orders: any[],
+    vehicles: any[],
+    fleetStart = '04:30',
+    fleetEnd = '19:00',
+    options?: {
+        priorityIds?: Set<string>;
+        refrigeratedOrderIds?: Set<any>;
+        hasRefrigeratedFleet?: boolean;
+        avgKgPerCrate?: number;
+    }
+) {
     const newAssignments: Record<string, string[]> = {};
     const simStartTimes: Record<string, string> = {};
     const simEtas: Record<string, string> = {};
+    const priorityIds = options?.priorityIds || new Set<string>();
+    const refrigeratedOrderIds = options?.refrigeratedOrderIds || new Set<any>();
+    const hasRefrigeratedFleet = Boolean(options?.hasRefrigeratedFleet);
+    const avgKgPerCrate = options?.avgKgPerCrate || 12.5;
+
+    const usedWeight: Record<string, number> = {};
+    const usedCrates: Record<string, number> = {};
+    const usedPriorityCount: Record<string, number> = {};
+
     vehicles.forEach(v => {
         newAssignments[v.id] = [];
         simStartTimes[v.id] = fleetStart;
+        usedWeight[v.id] = 0;
+        usedCrates[v.id] = 0;
+        usedPriorityCount[v.id] = 0;
     });
-    
+
+    const getOrderCrates = (o: any) => {
+        const w = Math.max(1, Math.ceil(parseFloat(o.total_weight_kg) || 1));
+        return Number(o.crates) || Math.max(1, Math.ceil(w / avgKgPerCrate));
+    };
+
     // Group orders by location (latitude/longitude and customer name) to keep same-location orders together
     const grouped: Record<string, typeof orders> = {};
     orders.forEach(o => {
@@ -682,40 +771,60 @@ function calculateSimulationAssignments(orders: any[], vehicles: any[], fleetSta
         grouped[key].push(o);
     });
 
-    // Sort groups by total weight descending
+    // Sort groups: priority groups first (so they get earliest stops/ETAs), then total weight descending
     const groups = Object.values(grouped).sort((a, b) => {
-        const weightA = a.reduce((sum, o) => sum + o.total_weight_kg, 0);
-        const weightB = b.reduce((sum, o) => sum + o.total_weight_kg, 0);
+        const aPrio = a.some(o => priorityIds.has(String(o.id))) ? 1 : 0;
+        const bPrio = b.some(o => priorityIds.has(String(o.id))) ? 1 : 0;
+        if (aPrio !== bPrio) return bPrio - aPrio;
+        const weightA = a.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
+        const weightB = b.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
         return weightB - weightA;
     });
 
-    // Assign groups to vehicles using a greedy capacity-aware approach
-    groups.forEach(group => {
-        const groupWeight = group.reduce((sum, o) => sum + o.total_weight_kg, 0);
-        
-        let bestVehicle = vehicles[0];
+    const pickEligibleVehicle = (groupWeight: number, groupCrates: number, needsRefrig: boolean, maxPriorityCap: number | null) => {
+        let bestVehicle: any = null;
         let minWeight = Infinity;
-        
-        vehicles.forEach(v => {
-            const currentWeight = newAssignments[v.id].reduce((sum, id) => {
-                const o = orders.find(ord => ord.id === id);
-                return sum + (o?.total_weight_kg || 0);
-            }, 0);
-            
-            if (currentWeight + groupWeight <= v.capacity_kg && currentWeight < minWeight) {
-                minWeight = currentWeight;
+        for (const v of vehicles) {
+            const maxCapKg = Number(v.capacity_kg) || 0;
+            const maxCapCrates = Number(v.max_crates_capacity) || 483;
+            const vRefrig = v.is_refrigerated === true || v.refrigerated === true;
+            if (hasRefrigeratedFleet && needsRefrig && !vRefrig) continue;
+            if (usedWeight[v.id] + groupWeight > maxCapKg) continue;
+            if (usedCrates[v.id] + groupCrates > maxCapCrates) continue;
+            if (maxPriorityCap !== null && usedPriorityCount[v.id] >= maxPriorityCap) continue;
+            if (usedWeight[v.id] < minWeight) {
+                minWeight = usedWeight[v.id];
                 bestVehicle = v;
             }
-        });
+        }
+        return bestVehicle;
+    };
 
-        // Assign to best vehicle only if capacity limit is respected
-        if (minWeight !== Infinity && bestVehicle) {
+    // Assign groups to vehicles using a capacity- and priority-aware approach (1-2 priority orders per truck)
+    groups.forEach(group => {
+        const groupWeight = group.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
+        const groupCrates = group.reduce((sum, o) => sum + getOrderCrates(o), 0);
+        const groupPrioCount = group.filter(o => priorityIds.has(String(o.id))).length;
+        const needsRefrig = group.some(o => refrigeratedOrderIds.has(o.id));
+
+        let bestVehicle: any = null;
+        if (groupPrioCount > 0) {
+            bestVehicle =
+                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, 1) ||
+                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, 2) ||
+                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, null);
+        } else {
+            bestVehicle = pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, null);
+        }
+
+        if (bestVehicle) {
             group.forEach(order => {
                 newAssignments[bestVehicle.id].push(order.id);
             });
+            usedWeight[bestVehicle.id] += groupWeight;
+            usedCrates[bestVehicle.id] += groupCrates;
+            usedPriorityCount[bestVehicle.id] += groupPrioCount;
         }
-        // If minWeight === Infinity, group does not fit in any vehicle without violating capacity_kg.
-        // It remains unassigned and is cleanly reported in skipped_orders.
     });
 
     // Calculate dynamic departure times for each vehicle based on earliest delivery window
