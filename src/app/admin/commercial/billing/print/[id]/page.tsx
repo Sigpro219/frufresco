@@ -22,6 +22,14 @@ import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow } from '@/components/print';
+import {
+    pickPrimaryFvInvoice,
+    recalculateOrderTotalsFromItems,
+    recalculateCreditNoteTotalsFromItems,
+    extractAgreementDiscountPct,
+    type BillingReturnLike,
+    type OrderItemLike,
+} from '@/lib/commercial/pqrAdjustmentEngine';
 
 interface BillingCut {
     id: string;
@@ -83,27 +91,64 @@ export default function BillingPrintPage() {
                 }
                 setCut(cutData);
 
-                // 2. Fetch Orders and Items associated with this cut
-                const { data: ordersData, error: ordersErr } = await supabase
-                    .from('orders')
-                    .select(`
-                        id, sequence_id, created_at, delivery_date, total, subtotal, tax, type, payment_method, special_notes, admin_notes, logistics_data,
-                        billing_invoices!billing_invoices_order_id_fkey(invoice_number),
-                        profiles:profile_id (
-                            id, company_name, razon_social, contact_name, contact_phone, phone, address, role, document_type, remission_with_prices, nit, payment_days, parent:parent_id (id, document_type, remission_with_prices)
-                        ),
-                        order_items (
-                            id, quantity, unit_price, nickname, variant_label, selected_options,
-                            products (id, accounting_id, name, unit_of_measure, iva_rate)
-                        )
-                    `)
-                    .eq('billing_cut_id', id)
-                    .order('sequence_id', { ascending: true });
+                // 2. Fetch Orders and Items associated with this cut (supports both FV cuts and ADJ Credit Note cuts)
+                const isAdjCut = cutData.cut_slot === 'ADJ';
+                let ordersData: any[] = [];
+                const ncInvByOrder = new Map<string, string>();
 
-                if (ordersErr) throw ordersErr;
+                const orderSelectStr = `
+                    id, sequence_id, created_at, delivery_date, total, subtotal, tax, type, payment_method, special_notes, admin_notes, logistics_data,
+                    billing_invoices!billing_invoices_order_id_fkey(id, invoice_number, is_credit_note),
+                    profiles:profile_id (
+                        id, company_name, razon_social, contact_name, contact_phone, phone, address, role, document_type, remission_with_prices, nit, payment_days, parent:parent_id (id, document_type, remission_with_prices)
+                    ),
+                    order_items (
+                        id, product_id, quantity, picked_quantity, unit, unit_price, nickname, variant_label, selected_options,
+                        products (id, accounting_id, name, unit_of_measure, iva_rate)
+                    ),
+                    billing_returns (
+                        id, product_id, quantity_returned, calculated_amount, status, source, credit_note_number, reason,
+                        products:product_id (id, name, accounting_id, iva_rate)
+                    )
+                `;
+
+                if (isAdjCut) {
+                    const { data: ncInvoices, error: ncErr } = await supabase
+                        .from('billing_invoices')
+                        .select('order_id, invoice_number')
+                        .eq('cut_id', id);
+                    if (ncErr) throw ncErr;
+                    (ncInvoices || []).forEach((inv: any) => {
+                        if (inv.order_id && inv.invoice_number) {
+                            ncInvByOrder.set(inv.order_id, inv.invoice_number);
+                        }
+                    });
+                    const adjOrderIds = Array.from(ncInvByOrder.keys());
+                    if (adjOrderIds.length > 0) {
+                        const { data: adjOrders, error: adjErr } = await supabase
+                            .from('orders')
+                            .select(orderSelectStr)
+                            .in('id', adjOrderIds)
+                            .order('sequence_id', { ascending: true });
+                        if (adjErr) throw adjErr;
+                        ordersData = (adjOrders || []).map((o: any) => ({
+                            ...o,
+                            _ncInvoiceNumber: ncInvByOrder.get(o.id) || null
+                        }));
+                    }
+                } else {
+                    const { data: fvOrders, error: ordersErr } = await supabase
+                        .from('orders')
+                        .select(orderSelectStr)
+                        .eq('billing_cut_id', id)
+                        .order('sequence_id', { ascending: true });
+                    if (ordersErr) throw ordersErr;
+                    ordersData = fvOrders || [];
+                }
+
                 const sortedPrintOrders = [...(ordersData || [])].sort((a: any, b: any) => {
-                    const invA = Array.isArray(a.billing_invoices) ? a.billing_invoices[0]?.invoice_number : a.billing_invoices?.invoice_number;
-                    const invB = Array.isArray(b.billing_invoices) ? b.billing_invoices[0]?.invoice_number : b.billing_invoices?.invoice_number;
+                    const invA = isAdjCut ? a._ncInvoiceNumber : pickPrimaryFvInvoice(a.billing_invoices)?.invoice_number;
+                    const invB = isAdjCut ? b._ncInvoiceNumber : pickPrimaryFvInvoice(b.billing_invoices)?.invoice_number;
                     const numA = parseInt(String(invA || '').replace(/\D/g, ''), 10);
                     const numB = parseInt(String(invB || '').replace(/\D/g, ''), 10);
                     if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
@@ -422,27 +467,32 @@ export default function BillingPrintPage() {
                         const b2cRecipientName = (order.logistics_data?.recipient_name || (recMatch ? recMatch[1].trim() : '') || 'Destinatario Especial').trim();
                         const b2cRecipientPhone = (order.logistics_data?.recipient_phone || (recMatch && recMatch[2] ? recMatch[2].trim() : '') || '').trim();
 
-                        const bi = Array.isArray(order.billing_invoices) ? order.billing_invoices[0] : order.billing_invoices;
-                        const officialInvoiceNumber = bi?.invoice_number || null;
+                        const isAdjCut = cut?.cut_slot === 'ADJ';
+                        const bi = pickPrimaryFvInvoice(order.billing_invoices);
+                        const officialInvoiceNumber = isAdjCut
+                            ? (order._ncInvoiceNumber || null)
+                            : (bi?.invoice_number || null);
                         const isB2B = String(order.type || '').startsWith('b2b') || profile.role === 'b2b_client' || Boolean(profile.parent);
                         const baseDocType = !isB2B
                             ? 'remission'
                             : (order.logistics_data?.document_type_override || profile.document_type || profile.parent?.document_type || 'remission');
                         const docType = isB2CGift ? 'gift_remission' : baseDocType;
                         const isObsequio = isB2CGift || docType === 'gift_remission' || Boolean(order.logistics_data?.is_gift_remission) || (order.admin_notes || '').toUpperCase().includes('REMISIÓN DE OBSEQUIO');
-                        const isInvoice = !isObsequio && (Boolean(officialInvoiceNumber) || docType === 'invoice');
+                        const isInvoice = !isAdjCut && !isObsequio && (Boolean(officialInvoiceNumber) || docType === 'invoice');
                         
                         // Respetar política de precios o forzado global (En Obsequio se muestran siempre las columnas en $0)
-                        const showPrices = forcePrices || isObsequio
+                        const showPrices = isAdjCut || forcePrices || isObsequio
                             ? true 
                             : (isInvoice ? true : (order.logistics_data?.remission_with_prices_override ?? profile.remission_with_prices ?? profile.parent?.remission_with_prices ?? true));
 
-                        const titleText = isInvoice
-                            ? 'FACTURA ELECTRÓNICA DE VENTA'
-                            : isObsequio
-                                ? 'REMISIÓN OFICIAL DE OBSEQUIO'
-                                : 'REMISIÓN OFICIAL DE ENTREGA';
-                        const footerSender = isInvoice 
+                        const titleText = isAdjCut
+                            ? 'NOTA CRÉDITO'
+                            : isInvoice
+                                ? 'FACTURA ELECTRÓNICA DE VENTA'
+                                : isObsequio
+                                    ? 'REMISIÓN OFICIAL DE OBSEQUIO'
+                                    : 'REMISIÓN OFICIAL DE ENTREGA';
+                        const footerSender = (isInvoice || isAdjCut)
                             ? 'Investments Cortés S.A.S. • Facturación & Cartera' 
                             : 'Investments Cortés S.A.S. • Despachos & Logística';
                         
@@ -450,9 +500,39 @@ export default function BillingPrintPage() {
                             ? new Date(order.delivery_date).toLocaleDateString()
                             : new Date(order.created_at).toLocaleDateString();
 
-                        const taxOrder = isObsequio ? 0 : Number(order.tax || 0);
-                        const totalOrder = isObsequio ? 0 : Number(order.total || order.subtotal || 0);
-                        const subtotalOrder = isObsequio ? 0 : Number(order.subtotal || Math.max(0, totalOrder - taxOrder));
+                        const mappedItems: OrderItemLike[] = (order.order_items || []).map((oi: any) => ({
+                            ...oi,
+                            quantity: (oi.selected_options?._charge_overweight === true && Number(oi.picked_quantity) > Number(oi.quantity))
+                                ? Number(oi.picked_quantity)
+                                : Number(oi.quantity || 0),
+                            products: oi.products
+                        }));
+                        const mappedReturns: BillingReturnLike[] = (order.billing_returns || []).map((r: any) => ({
+                            ...r,
+                            quantity: r.quantity_returned,
+                            products: r.products
+                        }));
+                        const agreementDiscountPct = extractAgreementDiscountPct(order.logistics_data, order.profiles, order.profiles?.parent);
+
+                        const ncSummary = isAdjCut
+                            ? recalculateCreditNoteTotalsFromItems(
+                                mappedItems,
+                                officialInvoiceNumber
+                                    ? mappedReturns.filter((r) => r.credit_note_number === officialInvoiceNumber)
+                                    : mappedReturns,
+                                { creditNoteNumber: officialInvoiceNumber, agreementDiscountPct }
+                            )
+                            : null;
+                        const fvSummary = !isAdjCut
+                            ? recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                                isOffAgreementSplit: Boolean(order?.logistics_data?.is_off_agreement_split),
+                                agreementDiscountPct
+                            })
+                            : null;
+
+                        const taxOrder = isObsequio ? 0 : (isAdjCut ? (ncSummary?.tax || 0) : (fvSummary?.tax ?? Number(order.tax || 0)));
+                        const totalOrder = isObsequio ? 0 : (isAdjCut ? (ncSummary?.total || 0) : (fvSummary?.total ?? Number(order.total || order.subtotal || 0)));
+                        const subtotalOrder = isObsequio ? 0 : (isAdjCut ? (ncSummary?.subtotal || 0) : (fvSummary?.subtotal ?? Number(order.subtotal || Math.max(0, totalOrder - taxOrder))));
 
                         return (
                             <Letterhead 
@@ -463,8 +543,8 @@ export default function BillingPrintPage() {
                                     : `${profile.company_name || 'Cliente B2B'} • NIT: ${profile.nit || '222222222222'}`}
                                 date={deliveryDateFormatted}
                                 reference={officialInvoiceNumber ? `${officialInvoiceNumber} · Ped #${order.sequence_id || getFriendlyOrderId(order)}` : `#${getFriendlyOrderId(order)}`}
-                                badge={isInvoice ? 'DIAN VÁLIDA' : isObsequio ? 'CORTESÍA / OBSEQUIO' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
-                                badgeVariant={isInvoice ? 'dark' : (showPrices ? 'emerald' : 'light')}
+                                badge={isAdjCut ? 'NOTA CRÉDITO' : isInvoice ? 'DIAN VÁLIDA' : isObsequio ? 'CORTESÍA / OBSEQUIO' : (showPrices ? 'VALORIZADA' : 'A CIEGAS')}
+                                badgeVariant={(isInvoice || isAdjCut) ? 'dark' : (showPrices ? 'emerald' : 'light')}
                                 className="page-break"
                             >
                                 <div style={{ padding: '0.25rem 0' }}>
@@ -590,42 +670,79 @@ export default function BillingPrintPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {order.order_items?.map((item: any, i: number) => {
-                                                const unitPrice = isObsequio ? 0 : (item.unit_price || 0);
-                                                const lineTotal = item.quantity * unitPrice;
-
-                                                return (
-                                                    <tr key={item.id || i}>
+                                            {isAdjCut && ncSummary ? (
+                                                ncSummary.lines.map((ncLine, i) => (
+                                                    <tr key={`${ncLine.productId || 'global'}-${i}`}>
                                                         <td style={{ textAlign: 'center', color: '#94A3B8', fontSize: '0.62rem' }}>
                                                             {i + 1}
                                                         </td>
                                                         <td style={{ fontFamily: 'monospace', color: '#475569', fontWeight: 600 }}>
-                                                            {item.products?.accounting_id ? `#${item.products.accounting_id}` : '---'}
+                                                            {ncLine.isManualGlobal ? '#NC-GLOBAL' : (ncLine.accountingId ? `#${ncLine.accountingId}` : '---')}
                                                         </td>
                                                         <td>
                                                             <strong style={{ color: '#0F172A' }}>
-                                                                {item.products?.name || item.nickname || 'Producto'}
+                                                                {ncLine.productName}
                                                             </strong>
                                                         </td>
                                                         <td className="text-right" style={{ fontWeight: 800 }}>
-                                                            {item.quantity}{' '}
+                                                            {ncLine.quantity}{' '}
                                                             <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: 600 }}>
-                                                                {item.products?.unit_of_measure || 'Kg'}
+                                                                {ncLine.isManualGlobal ? 'Und' : 'Kg'}
                                                             </span>
                                                         </td>
                                                         {showPrices && (
                                                             <td className="text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                                                ${unitPrice.toLocaleString('es-CO')}
+                                                                ${ncLine.unitPriceGross.toLocaleString('es-CO')}
                                                             </td>
                                                         )}
                                                         {showPrices && (
                                                             <td className="text-right" style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
-                                                                ${lineTotal.toLocaleString('es-CO')}
+                                                                ${ncLine.grossTotal.toLocaleString('es-CO')}
                                                             </td>
                                                         )}
                                                     </tr>
-                                                );
-                                            })}
+                                                ))
+                                            ) : (
+                                                (fvSummary?.lines || [])
+                                                    .filter((line) => line.netQuantity > 0)
+                                                    .map((line, i: number) => {
+                                                        const item: any = line.item;
+                                                        const unitPrice = isObsequio ? 0 : line.unitPriceGross;
+                                                        const lineTotal = isObsequio ? 0 : line.netGrossTotal;
+
+                                                        return (
+                                                            <tr key={item.id || i}>
+                                                                <td style={{ textAlign: 'center', color: '#94A3B8', fontSize: '0.62rem' }}>
+                                                                    {i + 1}
+                                                                </td>
+                                                                <td style={{ fontFamily: 'monospace', color: '#475569', fontWeight: 600 }}>
+                                                                    {item.products?.accounting_id ? `#${item.products.accounting_id}` : '---'}
+                                                                </td>
+                                                                <td>
+                                                                    <strong style={{ color: '#0F172A' }}>
+                                                                        {item.products?.name || item.nickname || 'Producto'}
+                                                                    </strong>
+                                                                </td>
+                                                                <td className="text-right" style={{ fontWeight: 800 }}>
+                                                                    {line.netQuantity}{' '}
+                                                                    <span style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: 600 }}>
+                                                                        {item.products?.unit_of_measure || 'Kg'}
+                                                                    </span>
+                                                                </td>
+                                                                {showPrices && (
+                                                                    <td className="text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                                        ${unitPrice.toLocaleString('es-CO')}
+                                                                    </td>
+                                                                )}
+                                                                {showPrices && (
+                                                                    <td className="text-right" style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#0F172A' }}>
+                                                                        ${lineTotal.toLocaleString('es-CO')}
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        );
+                                                    })
+                                            )}
                                         </tbody>
                                         {showPrices && (
                                             <tfoot>

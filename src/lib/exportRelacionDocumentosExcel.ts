@@ -174,8 +174,9 @@ export function buildRelacionDocumentosSheet(
 
         // 2. Columna Documento
         let documento = '';
-        const biRecord = (o as { billing_invoices?: { invoice_number?: string | null } | Array<{ invoice_number?: string | null }> | null }).billing_invoices;
-        const joinedInv = Array.isArray(biRecord) ? biRecord[0]?.invoice_number : biRecord?.invoice_number;
+        const biRecord = (o as { billing_invoices?: { invoice_number?: string | null; is_credit_note?: boolean | null } | Array<{ invoice_number?: string | null; is_credit_note?: boolean | null }> | null }).billing_invoices;
+        const biList = Array.isArray(biRecord) ? biRecord : biRecord ? [biRecord] : [];
+        const joinedInv = biList.find((inv) => inv && inv.is_credit_note !== true && inv.invoice_number)?.invoice_number;
         const rawInv = o.invoice_number || joinedInv || o.projected_invoice_number;
         if (isReplacement) {
             documento = `REP ${o.sequence_id || '---'}`;
@@ -384,7 +385,7 @@ export async function exportRelacionDocumentosWithPicker(options: {
                 warehouse_spaces,
                 admin_notes,
                 logistics_data,
-                billing_invoices!billing_invoices_order_id_fkey(invoice_number),
+                billing_invoices!billing_invoices_order_id_fkey(invoice_number, is_credit_note),
                 profiles:profile_id (
                     id,
                     company_name,
@@ -426,8 +427,9 @@ export async function exportRelacionDocumentosWithPicker(options: {
         finalOrders = ((data as any[]) || []).map(o => {
             const prof = o.profiles || {};
             const parent = prof.parent_id ? fallbackParentsMap.get(prof.parent_id) : null;
-            const bi = o.billing_invoices;
-            const resolvedInv = Array.isArray(bi) ? bi[0]?.invoice_number : bi?.invoice_number;
+            const bi = o.billing_invoices as { invoice_number?: string | null; is_credit_note?: boolean | null } | Array<{ invoice_number?: string | null; is_credit_note?: boolean | null }> | null;
+            const biList = Array.isArray(bi) ? bi : bi ? [bi] : [];
+            const resolvedInv = biList.find((inv) => inv && inv.is_credit_note !== true && inv.invoice_number)?.invoice_number;
             return {
                 ...o,
                 invoice_number: resolvedInv || null,

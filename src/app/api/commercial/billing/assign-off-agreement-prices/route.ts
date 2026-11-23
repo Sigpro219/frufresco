@@ -1,6 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import {
+    allocateReturnsAcrossOrderItems,
+    recalculateOrderTotalsFromItems,
+    extractAgreementDiscountPct,
+    type BillingReturnLike,
+    type OrderItemLike,
+} from '@/lib/commercial/pqrAdjustmentEngine';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +60,8 @@ export async function GET(req: NextRequest) {
                     order_id,
                     product_id,
                     quantity,
+                    picked_quantity,
+                    selected_options,
                     unit_price,
                     unit,
                     variant_label,
@@ -70,8 +79,12 @@ export async function GET(req: NextRequest) {
                     id,
                     product_id,
                     quantity_returned,
+                    calculated_amount,
                     status,
-                    reason
+                    source,
+                    credit_note_number,
+                    reason,
+                    notes
                 )
             `)
             .is('billing_cut_id', null)
@@ -136,13 +149,25 @@ export async function GET(req: NextRequest) {
         });
 
         const formattedOrders = targetOrders.map((o: any) => {
-            const activeReturns = (o.billing_returns || []).filter((r: any) => r.status === 'approved');
-            const items = (o.order_items || []).map((it: any) => {
+            const rawItems = (o.order_items || []) as any[];
+            const rawReturns = (o.billing_returns || []) as any[];
+            const mappedItems: OrderItemLike[] = rawItems.map((it: any) => ({
+                ...it,
+                product_name: it.products?.name || it.nickname,
+                products: it.products
+            }));
+            const mappedReturns: BillingReturnLike[] = rawReturns.map((r: any) => ({
+                ...r,
+                quantity: r.quantity_returned
+            }));
+            const allocatedLines = allocateReturnsAcrossOrderItems(mappedItems, mappedReturns, {
+                isOffAgreementSplit: true
+            });
+
+            const items = allocatedLines.map((line) => {
+                const it = line.item as any;
                 const prod = it.products || {};
                 const prodId = it.product_id || prod.id;
-                const matchedReturnQty = activeReturns
-                    .filter((r: any) => r.product_id === prodId)
-                    .reduce((sum: number, r: any) => sum + (Number(r.quantity_returned) || 0), 0);
 
                 return {
                     id: it.id,
@@ -153,11 +178,11 @@ export async function GET(req: NextRequest) {
                     product_name: prod.name || it.nickname || 'Producto',
                     unit: it.unit || prod.unit_of_measure || 'Kg',
                     variant_label: it.variant_label || null,
-                    quantity: Number(it.quantity) || 0,
-                    returned_quantity: matchedReturnQty,
-                    billable_quantity: Math.max(0, (Number(it.quantity) || 0) - matchedReturnQty),
-                    unit_price: Number(it.unit_price) || 0,
-                    iva_rate: Number(prod.iva_rate) || 0,
+                    quantity: line.originalQuantity,
+                    returned_quantity: line.deductedQuantity,
+                    billable_quantity: line.netQuantity,
+                    unit_price: line.unitPriceGross,
+                    iva_rate: line.ivaRatePct,
                     reference_cost: costMap[prodId] || 0,
                     reference_general_price: genPricesMap[prodId] || 0
                 };
@@ -245,7 +270,8 @@ export async function POST(req: NextRequest) {
                     .eq('id', assign.orderItemId)
                     .select('id, order_id');
 
-                if (!upErr && updatedRows) {
+                if (upErr) throw upErr;
+                if (updatedRows) {
                     updatedRows.forEach((r: any) => {
                         affectedOrderIds.add(r.order_id);
                         updatedItemsCount++;
@@ -265,7 +291,8 @@ export async function POST(req: NextRequest) {
                     ordersQuery = ordersQuery.eq('delivery_date', deliveryDate);
                 }
 
-                const { data: candidateOrders } = await ordersQuery;
+                const { data: candidateOrders, error: candErr } = await ordersQuery;
+                if (candErr) throw candErr;
                 const targetOrderIds = (candidateOrders || [])
                     .filter((o: any) => {
                         const notes = (o.admin_notes || '').toUpperCase();
@@ -287,7 +314,8 @@ export async function POST(req: NextRequest) {
                         .eq('unit_price', 0)
                         .select('id, order_id');
 
-                    if (!upErr && updatedRows) {
+                    if (upErr) throw upErr;
+                    if (updatedRows) {
                         updatedRows.forEach((r: any) => {
                             affectedOrderIds.add(r.order_id);
                             updatedItemsCount++;
@@ -317,14 +345,21 @@ export async function POST(req: NextRequest) {
                     admin_notes,
                     logistics_data,
                     profiles (
-                        iva_responsible
+                        iva_responsible,
+                        logistics_data,
+                        parent:parent_id (
+                            logistics_data
+                        )
                     ),
                     order_items (
                         id,
                         product_id,
                         quantity,
+                        picked_quantity,
+                        selected_options,
                         unit_price,
                         products (
+                            id,
                             name,
                             iva_rate
                         )
@@ -333,8 +368,12 @@ export async function POST(req: NextRequest) {
                         id,
                         product_id,
                         quantity_returned,
+                        calculated_amount,
                         status,
-                        reason
+                        source,
+                        credit_note_number,
+                        reason,
+                        notes
                     )
                 `)
                 .eq('id', ordId)
@@ -342,49 +381,47 @@ export async function POST(req: NextRequest) {
 
             if (ordErr || !orderData) continue;
 
-            const isIvaResponsible = Boolean((orderData.profiles as any)?.iva_responsible);
             const items = (orderData.order_items || []) as any[];
-            const approvedReturns = ((orderData.billing_returns || []) as any[]).filter(r => r.status === 'approved');
+            const mappedItems: OrderItemLike[] = items.map((it: any) => ({
+                id: it.id,
+                product_id: it.product_id,
+                product_name: it.products?.name,
+                quantity: it.quantity,
+                unit_price: it.unit_price,
+                products: it.products
+            }));
+            const mappedReturns: BillingReturnLike[] = ((orderData.billing_returns || []) as any[]).map((r: any) => ({
+                id: r.id,
+                product_id: r.product_id,
+                quantity: r.quantity_returned,
+                calculated_amount: r.calculated_amount,
+                status: r.status,
+                source: r.source,
+                credit_note_number: r.credit_note_number,
+                reason: r.reason
+            }));
 
-            let grossSubtotal = 0;
-            let grossTax = 0;
-            let deductionTotal = 0;
             let stillHasZeroPrice = false;
             const remainingZeroNames: string[] = [];
-
             for (const it of items) {
-                const price = Number(it.unit_price) || 0;
-                const qty = Number(it.quantity) || 0;
-                const prod = it.products || {};
-                const ivaRate = isIvaResponsible ? (Number(prod.iva_rate) || 0) : 0;
-
-                if (price <= 0) {
+                if ((Number(it.unit_price) || 0) <= 0) {
                     stillHasZeroPrice = true;
-                    remainingZeroNames.push(prod.name || 'Producto');
-                }
-
-                // Verificar si hubo devolución aprobada en recepción para este SKU
-                const returnedQty = approvedReturns
-                    .filter(r => r.product_id === it.product_id)
-                    .reduce((sum, r) => sum + (Number(r.quantity_returned) || 0), 0);
-
-                const billableQty = Math.max(0, qty - returnedQty);
-                const lineNetSubtotal = price * billableQty;
-                const lineNetTax = lineNetSubtotal * (ivaRate / 100);
-
-                grossSubtotal += lineNetSubtotal;
-                grossTax += lineNetTax;
-
-                if (returnedQty > 0 && price > 0) {
-                    const retSub = price * returnedQty;
-                    const retTax = retSub * (ivaRate / 100);
-                    deductionTotal += retSub + retTax;
+                    remainingZeroNames.push(it.products?.name || 'Producto');
                 }
             }
 
-            const finalSubtotal = Math.round(grossSubtotal);
-            const finalTax = Math.round(grossTax);
-            const finalTotal = finalSubtotal + finalTax;
+            const summary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                isOffAgreementSplit: true,
+                agreementDiscountPct: extractAgreementDiscountPct(orderData.logistics_data)
+            });
+
+            const deductionTotal = summary.lines.reduce(
+                (acc, line) => acc + line.deductedQuantity * line.unitPriceGross,
+                0
+            );
+            const finalSubtotal = summary.subtotal;
+            const finalTax = summary.tax;
+            const finalTotal = summary.total;
 
             let updatedNotes = orderData.admin_notes || '';
             if (!stillHasZeroPrice) {
@@ -409,7 +446,7 @@ export async function POST(req: NextRequest) {
             // Si hubo deducción de calidad calculada con el nuevo precio, actualizar tag de ajuste en factura
             if (deductionTotal > 0) {
                 updatedNotes = updatedNotes.replace(/\[AJUSTE FACTURA:[^\]]*\]/gi, '').trim();
-                updatedNotes = `${updatedNotes} | [AJUSTE FACTURA: -$${Math.round(deductionTotal).toLocaleString('en-US')}]`.trim();
+                updatedNotes = `${updatedNotes} | [AJUSTE FACTURA: -$${Math.round(deductionTotal).toLocaleString('es-CO')}]`.trim();
             }
 
             const baseLogisticsData: Record<string, unknown> = { ...(orderData.logistics_data || {}) };
@@ -424,7 +461,7 @@ export async function POST(req: NextRequest) {
                 off_agreement_priced_by: !stillHasZeroPrice ? assignedBy : null
             };
 
-            await supabaseAdmin
+            const { error: ordUpdErr } = await supabaseAdmin
                 .from('orders')
                 .update({
                     subtotal: finalSubtotal,
@@ -434,16 +471,18 @@ export async function POST(req: NextRequest) {
                     logistics_data: updatedLogisticsData
                 })
                 .eq('id', ordId);
+            if (ordUpdErr) throw ordUpdErr;
 
             updatedOrdersCount++;
 
             // 3. Si ya no tiene ítems en $0, cerrar las tareas urgentes asociadas en admin_tasks
             if (!stillHasZeroPrice) {
                 const seqStr = orderData.sequence_id ? `#${orderData.sequence_id}` : ordId.slice(0, 8);
-                const { data: openTasks } = await supabaseAdmin
+                const { data: openTasks, error: tasksFetchErr } = await supabaseAdmin
                     .from('admin_tasks')
                     .select('id, title, description')
                     .neq('status', 'completed');
+                if (tasksFetchErr) throw tasksFetchErr;
 
                 const matchingTaskIds = (openTasks || [])
                     .filter((t: any) => {
@@ -453,10 +492,11 @@ export async function POST(req: NextRequest) {
                     .map((t: any) => t.id);
 
                 if (matchingTaskIds.length > 0) {
-                    await supabaseAdmin
+                    const { error: taskErr } = await supabaseAdmin
                         .from('admin_tasks')
                         .update({ status: 'completed' })
                         .in('id', matchingTaskIds);
+                    if (taskErr) throw taskErr;
                 }
             }
         }

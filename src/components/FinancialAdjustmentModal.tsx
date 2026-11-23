@@ -15,6 +15,15 @@ import {
     buildRcaMetadataTag,
     parseRcaFromRecord
 } from '@/lib/rcaTaxonomy';
+import {
+    pickPrimaryFvInvoice,
+    recalculateOrderTotalsFromItems,
+    computeManualCreditNoteTaxSplit,
+    extractAgreementDiscountPct,
+    round2,
+    type BillingReturnLike,
+    type OrderItemLike,
+} from '@/lib/commercial/pqrAdjustmentEngine';
 
 export interface FinancialAdjustmentItem {
     id: string;
@@ -23,6 +32,7 @@ export interface FinancialAdjustmentItem {
     unit_of_measure: string;
     original_quantity: number;
     unit_price: number;
+    iva_rate?: number;
     affected_quantity: number;
     affected_quantity_input?: string;
     requested_return_quantity?: number;
@@ -80,8 +90,10 @@ export default function FinancialAdjustmentModal({
     const [priorCapAndSanitaryNotes, setPriorCapAndSanitaryNotes] = useState('');
     const [technicalInspectionNotes, setTechnicalInspectionNotes] = useState('');
     const [referenceInvoiceNumber, setReferenceInvoiceNumber] = useState('');
-    const [creditNoteNumber, setCreditNoteNumber] = useState('');
-    const [isIvaResponsible, setIsIvaResponsible] = useState(false);
+    const [creditNoteNumber, setCreditNoteNumber] = useState('Pendiente Corte ADJ');
+    const [isOrderInvoicedLocked, setIsOrderInvoicedLocked] = useState(false);
+    const [orderAgreementDiscountPct, setOrderAgreementDiscountPct] = useState(0);
+    const [isOffAgreementSplit, setIsOffAgreementSplit] = useState(false);
     const [rcaCategoryL1, setRcaCategoryL1] = useState(defaultRcaCategory);
     const [rcaSubtypeL2, setRcaSubtypeL2] = useState(defaultRcaSubtype);
     const [rcaResponsible, setRcaResponsible] = useState<string>(defaultRcaResponsible);
@@ -140,10 +152,8 @@ export default function FinancialAdjustmentModal({
         setTechnicalInspectionNotes(preservedTechNotes);
 
         const shortId = pqr.id.substring(0, 8);
-        const seqPart = pqr.orders?.sequence_id || shortId.toUpperCase();
-        const now = new Date();
-        const ddmm = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}`;
-        setCreditNoteNumber(`NC-${seqPart}-${ddmm}`);
+        setCreditNoteNumber('Pendiente Corte ADJ');
+        setIsOrderInvoicedLocked(false);
         setReferenceInvoiceNumber(pqr.orders?.sequence_id ? `FV-${pqr.orders.sequence_id}` : `FV-${shortId.toUpperCase()}`);
 
         // Pre-fill accounting observation note
@@ -157,44 +167,56 @@ export default function FinancialAdjustmentModal({
                 let effectiveOrderItems = orderItems && orderItems.length > 0 ? orderItems : [];
                 let existingReturns: any[] = [];
 
+                let localIsOffAgreementSplit = false;
                 if (pqr.order_id) {
                     const [itemsRes, returnsRes, invoiceRes, orderProfRes] = await Promise.all([
-                        effectiveOrderItems.length === 0
-                            ? supabase
-                                .from('order_items')
-                                .select('*, products(name, sku, unit_of_measure)')
-                                .eq('order_id', pqr.order_id)
-                            : Promise.resolve({ data: effectiveOrderItems }),
+                        supabase
+                            .from('order_items')
+                            .select('id, product_id, quantity, picked_quantity, unit_price, selected_options, nickname, products(name, accounting_id, unit_of_measure, iva_rate)')
+                            .eq('order_id', pqr.order_id),
                         supabase
                             .from('billing_returns')
-                            .select('id, product_id, quantity_returned, status, reason, notes')
+                            .select('id, product_id, quantity_returned, status, reason, notes, source, credit_note_number, calculated_amount')
                             .eq('order_id', pqr.order_id),
                         supabase
                             .from('billing_invoices')
-                            .select('id, invoice_number, total_base, total_tax, total_final')
+                            .select('id, invoice_number, is_credit_note, worldoffice_sync_status')
                             .eq('order_id', pqr.order_id)
-                            .maybeSingle(),
+                            .or('is_credit_note.is.null,is_credit_note.eq.false')
+                            .order('created_at', { ascending: false })
+                            .limit(1),
                         supabase
                             .from('orders')
-                            .select('sequence_id, profiles:profile_id(iva_responsible)')
+                            .select('sequence_id, billing_cut_id, invoice_id, subtotal, tax, total, admin_notes, logistics_data, profiles:profile_id(iva_responsible, logistics_data, parent:parent_id(logistics_data))')
                             .eq('id', pqr.order_id)
                             .maybeSingle()
                     ]);
 
-                    effectiveOrderItems = itemsRes.data || [];
+                    if (itemsRes.data && itemsRes.data.length > 0) {
+                        effectiveOrderItems = itemsRes.data;
+                    }
                     existingReturns = returnsRes.data || [];
+                    const primaryFv = pickPrimaryFvInvoice(invoiceRes.data || []);
 
                     if (!cancelled) {
-                        if (invoiceRes.data?.invoice_number) {
-                            setReferenceInvoiceNumber(invoiceRes.data.invoice_number);
+                        if (primaryFv?.invoice_number) {
+                            setReferenceInvoiceNumber(primaryFv.invoice_number);
                         } else if (orderProfRes.data?.sequence_id) {
                             setReferenceInvoiceNumber(`FV-${orderProfRes.data.sequence_id}`);
                         }
-                        if (orderProfRes.data?.sequence_id) {
-                            setCreditNoteNumber(`NC-${orderProfRes.data.sequence_id}-${ddmm}`);
-                        }
-                        const profIva = Boolean((orderProfRes.data as any)?.profiles?.iva_responsible);
-                        setIsIvaResponsible(profIva);
+                        setCreditNoteNumber('Pendiente Corte ADJ');
+                        const hasLockedInvoice = Boolean(
+                            primaryFv?.invoice_number ||
+                            orderProfRes.data?.billing_cut_id ||
+                            orderProfRes.data?.invoice_id
+                        );
+                        setIsOrderInvoicedLocked(hasLockedInvoice);
+                        const profData = (orderProfRes.data as any)?.profiles;
+                        setOrderAgreementDiscountPct(
+                            extractAgreementDiscountPct(orderProfRes.data, profData, profData?.parent)
+                        );
+                        localIsOffAgreementSplit = Boolean(orderProfRes.data?.logistics_data?.is_off_agreement_split);
+                        setIsOffAgreementSplit(localIsOffAgreementSplit);
                     }
                 }
 
@@ -208,27 +230,58 @@ export default function FinancialAdjustmentModal({
                     const qtyMatch = combined.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kilos?|kls?|und|unidades?|libras?)/i);
                     const extractedQty = qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : 0;
 
+                    // Consumo FIFO únicamente de devoluciones pending_review o del mismo PQR #shortId
+                    const prefillPool = existingReturns.filter(
+                        (r) =>
+                            r.status === 'pending_review' ||
+                            (r.reason && r.reason.includes(`PQR #${shortId}`))
+                    );
+                    const remainingReturnQty = prefillPool.map((r) => Math.max(0, Number(r.quantity_returned) || 0));
+
                     const mapped: FinancialAdjustmentItem[] = effectiveOrderItems.map((item, idx) => {
-                        const origQty = Number(item.quantity) || 0;
+                        const baseQty =
+                            item.selected_options?._charge_overweight === true &&
+                            Number(item.picked_quantity) > Number(item.quantity)
+                                ? Number(item.picked_quantity)
+                                : Number(item.quantity) || 0;
                         const price = Number(item.unit_price) || 0;
+                        const ivaRate = Number(item.products?.iva_rate) || 0;
                         const name = item.products?.name || item.nickname || `Producto #${idx + 1}`;
                         const uom = item.products?.unit_of_measure || 'Kg';
 
-                        // 1. Priority: Match against existing billing_returns for this order_id + product_id
-                        const matchedReturn = existingReturns.find(r => r.product_id === item.product_id);
+                        let fifoAllocated = 0;
+                        let matchedReturn: any = null;
+                        for (let rIdx = 0; rIdx < prefillPool.length; rIdx++) {
+                            const ret = prefillPool[rIdx];
+                            if (ret.product_id === item.product_id && remainingReturnQty[rIdx] > 0) {
+                                const take = Math.min(baseQty - fifoAllocated, remainingReturnQty[rIdx]);
+                                if (take > 0) {
+                                    fifoAllocated += take;
+                                    remainingReturnQty[rIdx] -= take;
+                                    if (!matchedReturn) matchedReturn = ret;
+                                }
+                                if (fifoAllocated >= baseQty) break;
+                            }
+                        }
+
+                        const isPendingMuelle =
+                            mode === 'invoice_adjustment' &&
+                            matchedReturn?.source === 'rectificacion_muelle' &&
+                            !localIsOffAgreementSplit;
+                        const origQty = isPendingMuelle ? baseQty + fifoAllocated : baseQty;
 
                         // 2. Fallback: Check if this item is mentioned in PQR subject or description
                         const cleanSubject = (pqr.subject || '').toLowerCase();
                         const cleanItemName = name.toLowerCase();
-                        const isMentioned = cleanItemName.split(' ').some((word: string) => word.length > 3 && cleanSubject.includes(word));
+                        const isMentioned = cleanItemName.length > 3 && cleanSubject.includes(cleanItemName);
 
                         let initialAffQty = 0;
                         let initialSelected = false;
 
-                        if (matchedReturn && Number(matchedReturn.quantity_returned) > 0) {
+                        if (fifoAllocated > 0) {
                             initialSelected = true;
-                            initialAffQty = Math.min(origQty, Number(matchedReturn.quantity_returned));
-                        } else if (existingReturns.length === 0 && (effectiveOrderItems.length === 1 || isMentioned)) {
+                            initialAffQty = fifoAllocated;
+                        } else if (prefillPool.length === 0 && (effectiveOrderItems.length === 1 || isMentioned)) {
                             initialSelected = true;
                             initialAffQty = extractedQty > 0 && extractedQty <= origQty ? extractedQty : Math.min(origQty, 1);
                         }
@@ -240,18 +293,19 @@ export default function FinancialAdjustmentModal({
                             unit_of_measure: uom,
                             original_quantity: origQty,
                             unit_price: price,
+                            iva_rate: ivaRate,
                             affected_quantity: initialAffQty,
                             novelty_type: 'averia',
                             selected: initialSelected,
                             notes: matchedReturn?.reason || '',
-                            requested_return_quantity: matchedReturn ? (Number(matchedReturn.quantity_returned) || 0) : 0
+                            requested_return_quantity: fifoAllocated
                         };
                     });
 
                     // Sort so selected (returned) items appear at the very top of the breakdown list
                     mapped.sort((a, b) => (b.selected ? 1 : 0) - (a.selected ? 1 : 0));
 
-                    if (!mapped.some(m => m.selected) && mapped.length > 0) {
+                    if (mode === 'invoice_adjustment' && !mapped.some(m => m.selected) && mapped.length > 0) {
                         mapped[0].selected = true;
                         mapped[0].affected_quantity = Math.min(mapped[0].original_quantity, 1);
                     }
@@ -291,6 +345,26 @@ export default function FinancialAdjustmentModal({
     const resultingOrderTotal = useMemo(() => {
         return Math.max(0, originalOrderTotal - calculatedCreditAmount);
     }, [originalOrderTotal, calculatedCreditAmount]);
+
+    const creditTaxBreakdown = useMemo(() => {
+        if (useManualGlobal) {
+            return computeManualCreditNoteTaxSplit(calculatedCreditAmount, 0);
+        }
+        let baseTotal = 0;
+        let taxTotal = 0;
+        let grossTotal = 0;
+        for (const item of items) {
+            if (!item.selected || item.affected_quantity <= 0) continue;
+            const split = computeManualCreditNoteTaxSplit(
+                item.affected_quantity * item.unit_price,
+                item.iva_rate || 0
+            );
+            baseTotal = round2(baseTotal + split.baseTotal);
+            taxTotal = round2(taxTotal + split.taxTotal);
+            grossTotal = round2(grossTotal + split.grossTotal);
+        }
+        return { grossTotal, baseTotal, taxTotal };
+    }, [items, useManualGlobal, calculatedCreditAmount]);
 
     const selectedCategoryL1Obj = useMemo(() => {
         return activeTaxonomy.find(c => c.code === rcaCategoryL1) || activeTaxonomy[0];
@@ -352,6 +426,11 @@ export default function FinancialAdjustmentModal({
     const handleSubmit = async () => {
         setErrorMsg(null);
 
+        if (mode === 'invoice_adjustment' && isOrderInvoicedLocked) {
+            setErrorMsg('Este pedido ya cuenta con Factura o Corte generado (FAC-IMP). Debes emitir Opción 3 (Nota Crédito) en lugar de Ajuste de Factura.');
+            return;
+        }
+
         if (calculatedCreditAmount <= 0) {
             setErrorMsg('El valor total a descontar o acreditar debe ser mayor a $0.');
             return;
@@ -403,17 +482,30 @@ export default function FinancialAdjustmentModal({
             });
 
             const upsertApprovedReturn = async (item: FinancialAdjustmentItem, prefixTag: string) => {
-                const { data: existingRow } = await supabase
+                const { data: candidateRows, error: fetchRetErr } = await supabase
                     .from('billing_returns')
-                    .select('id, notes')
+                    .select('id, notes, source, status, reason')
                     .eq('order_id', orderId)
-                    .eq('product_id', item.product_id)
-                    .maybeSingle();
+                    .eq('product_id', item.product_id);
+                if (fetchRetErr) throw fetchRetErr;
+
+                const existingRow = (candidateRows || []).find(
+                    (r: any) =>
+                        r.status === 'pending_review' ||
+                        (r.reason && String(r.reason).includes(`PQR #${shortPqrId}`))
+                ) || null;
 
                 const custodyMatch = String(existingRow?.notes || '').match(/\[RETORNO_FISICO:\s*(SI|NO)\]/i);
                 const custodyTag = custodyMatch ? `[RETORNO_FISICO: ${custodyMatch[1].toUpperCase()}]` : '[RETORNO_FISICO: NO]';
                 const reasonText = `[${prefixTag} PQR #${shortPqrId}] ${item.novelty_type.toUpperCase()}: ${notes || pqr.subject}`;
-                const notesText = `${custodyTag} | RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}${mode === 'credit_note' && creditNoteNumber ? ` | NC: ${creditNoteNumber} (Ref: ${referenceInvoiceNumber})` : ''}`;
+                const notesText = `${custodyTag} | RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible}${mode === 'credit_note' ? ` | NC: Pendiente Corte ADJ (Ref: ${referenceInvoiceNumber})` : ''}`;
+                const resolvedSource =
+                    mode === 'credit_note'
+                        ? 'pqr_nota_credito'
+                        : existingRow?.source === 'rectificacion_muelle'
+                            ? 'rectificacion_muelle'
+                            : 'pqr_ajuste_factura_net';
+                const lineAmount = round2(item.affected_quantity * item.unit_price);
 
                 if (existingRow?.id) {
                     const { error: updErr } = await supabase
@@ -422,9 +514,11 @@ export default function FinancialAdjustmentModal({
                             quantity_returned: item.affected_quantity,
                             reason: reasonText,
                             status: 'approved',
+                            source: resolvedSource,
+                            calculated_amount: lineAmount,
                             notes: notesText,
                             resolved_at: nowIso,
-                            credit_note_number: mode === 'credit_note' ? creditNoteNumber : null,
+                            credit_note_number: null,
                             reference_invoice_number: referenceInvoiceNumber || null
                         })
                         .eq('id', existingRow.id);
@@ -438,9 +532,11 @@ export default function FinancialAdjustmentModal({
                             quantity_returned: item.affected_quantity,
                             reason: reasonText,
                             status: 'approved',
+                            source: resolvedSource,
+                            calculated_amount: lineAmount,
                             notes: notesText,
                             resolved_at: nowIso,
-                            credit_note_number: mode === 'credit_note' ? creditNoteNumber : null,
+                            credit_note_number: null,
                             reference_invoice_number: referenceInvoiceNumber || null
                         }]);
                     if (insErr) throw insErr;
@@ -454,37 +550,60 @@ export default function FinancialAdjustmentModal({
 
             if (mode === 'credit_note') {
                 // =========================================================
-                // OPCIÓN 3: NOTA CRÉDITO COMERCIAL
+                // OPCIÓN 3: NOTA CRÉDITO COMERCIAL (Diferida a Corte ADJ)
                 // =========================================================
-                if (orderId && selectedItems.length > 0) {
-                    for (const item of selectedItems) {
-                        await upsertApprovedReturn(item, 'NOTA CRÉDITO');
+                if (orderId) {
+                    if (useManualGlobal) {
+                        const globalReason = `[NOTA CRÉDITO GLOBAL PQR #${shortPqrId}]: ${notes || pqr.subject || 'Ajuste financiero global'}`;
+                        const globalNotes = `[RETORNO_FISICO: NO] | RCA: ${rcaCategoryL1} / ${rcaSubtypeL2} - Responsable: ${rcaResponsible} | NC: Pendiente Corte ADJ (Ref: ${referenceInvoiceNumber})`;
+                        const { error: globalInsErr } = await supabase
+                            .from('billing_returns')
+                            .insert([{
+                                order_id: orderId,
+                                product_id: null,
+                                quantity_returned: 1,
+                                calculated_amount: round2(calculatedCreditAmount),
+                                reason: globalReason,
+                                status: 'approved',
+                                source: 'pqr_nota_credito',
+                                notes: globalNotes,
+                                resolved_at: nowIso,
+                                credit_note_number: null,
+                                reference_invoice_number: referenceInvoiceNumber || null
+                            }]);
+                        if (globalInsErr) throw globalInsErr;
+                    } else if (selectedItems.length > 0) {
+                        for (const item of selectedItems) {
+                            await upsertApprovedReturn(item, 'NOTA CRÉDITO');
+                        }
                     }
                 }
 
                 // Stamp Credit Note traceability in orders.admin_notes
                 if (orderId) {
-                    const { data: currentOrder } = await supabase
+                    const { data: currentOrder, error: ordFetchErr } = await supabase
                         .from('orders')
                         .select('admin_notes')
                         .eq('id', orderId)
                         .maybeSingle();
+                    if (ordFetchErr) throw ordFetchErr;
                     const prevAdminNotes = currentOrder?.admin_notes || '';
-                    const cnTag = `[NOTA_CREDITO_PQR #${shortPqrId} | NC: ${creditNoteNumber} | FACTURA_REF: ${referenceInvoiceNumber} | VALOR: -${formatMoney(calculatedCreditAmount)}]: Nota Crédito comercial emitida por Calidad (SAC).`;
+                    const cnTag = `[NOTA_CREDITO_PQR #${shortPqrId} | NC: Pendiente Corte ADJ | FACTURA_REF: ${referenceInvoiceNumber} | VALOR: -${formatMoney(calculatedCreditAmount)}]: Nota Crédito comercial emitida por Calidad (SAC).`;
                     if (!prevAdminNotes.includes(`NOTA_CREDITO_PQR #${shortPqrId}`)) {
-                        await supabase
+                        const { error: ordUpdErr } = await supabase
                             .from('orders')
                             .update({
                                 admin_notes: `${prevAdminNotes}\n${cnTag}`.trim()
                             })
                             .eq('id', orderId);
+                        if (ordUpdErr) throw ordUpdErr;
                     }
                 }
 
-                const baseVal = isIvaResponsible ? Math.round(calculatedCreditAmount / 1.19) : calculatedCreditAmount;
-                const taxVal = isIvaResponsible ? calculatedCreditAmount - baseVal : 0;
+                const baseVal = creditTaxBreakdown.baseTotal;
+                const taxVal = creditTaxBreakdown.taxTotal;
 
-                const finalNotes = `${combinedHeaderNotes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Consecutivo Nota Crédito: ${creditNoteNumber} (Factura Ref: ${referenceInvoiceNumber})\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)} (Base: ${formatMoney(baseVal)} + IVA: ${formatMoney(taxVal)})\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
+                const finalNotes = `${combinedHeaderNotes}\n\n[CONCEPTO: Opción 3 - Nota Crédito Comercial Emitida]\n-> Consecutivo Nota Crédito: Pendiente Corte ADJ (Factura Ref: ${referenceInvoiceNumber})\n-> Valor Acreditado a Favor del Cliente: ${formatMoney(calculatedCreditAmount)} (Base: ${formatMoney(baseVal)} + IVA: ${formatMoney(taxVal)})\n-> Desglose de Ítems:\n${itemsSummary || `• Ajuste comercial directo por ${formatMoney(calculatedCreditAmount)}`}\n${entitiesFormatted ? `-> Responsabilidad Imputada: ${entitiesFormatted}\n` : ''}${rcaTag}\n[RESPONSABLE IMPUTADO: ${respLabel}]`;
 
                 const { error: pqrUpdateErr } = await supabase
                     .from('customer_service_pqrs')
@@ -501,79 +620,99 @@ export default function FinancialAdjustmentModal({
                     localStorage.removeItem(`pqr_audit_draft_${pqr.id}`);
                 } catch {}
 
-                onSuccess(`Nota Crédito ${creditNoteNumber} de ${formatMoney(calculatedCreditAmount)} emitida y aprobada con éxito.`);
+                onSuccess(`Nota Crédito de ${formatMoney(calculatedCreditAmount)} aprobada y encolada para Corte ADJ.`);
                 onClose();
 
             } else {
                 // =========================================================
-                // OPCIÓN 4: AJUSTAR FACTURA & RECALCULAR PEDIDO
+                // OPCIÓN 4: AJUSTAR FACTURA & RECALCULAR PEDIDO (SIN MUTAR order_items)
                 // =========================================================
                 if (!orderId) {
                     throw new Error('Esta PQR no tiene un pedido asociado en base de datos para recalcular.');
                 }
 
-                // 1. Update order_items quantities and approve billing_returns
-                if (useManualGlobal) {
-                    await supabase
-                        .from('billing_returns')
-                        .update({
-                            status: 'approved',
-                            resolved_at: nowIso,
-                            reviewed_by: pqr.resolved_by || null,
-                            reason: `[AJUSTE GLOBAL MANUAL PQR #${shortPqrId}]: ${notes || pqr.subject || 'Ajuste financiero autorizado'}`,
-                            calculated_amount: calculatedCreditAmount
-                        })
-                        .eq('order_id', orderId)
-                        .eq('status', 'pending_review');
-                } else {
-                    for (const item of selectedItems) {
-                        const newQty = Math.max(0, Number(item.original_quantity) - Number(item.affected_quantity));
-                        await supabase
-                            .from('order_items')
-                            .update({ quantity: newQty })
-                            .eq('order_id', orderId)
-                            .eq('product_id', item.product_id);
-
-                        await upsertApprovedReturn(item, 'AJUSTE FACTURA');
-                    }
+                // 1. Approve billing_returns (NEVER mutate order_items.quantity to prevent 2X deduction)
+                for (const item of selectedItems) {
+                    await upsertApprovedReturn(item, 'AJUSTE FACTURA');
                 }
 
-                // 2. Update orders total
-                const { data: currentOrder } = await supabase.from('orders').select('total, admin_notes').eq('id', orderId).single();
+                // 2. Recalculate orders totals using pqrAdjustmentEngine (IVA included per product.iva_rate)
+                const [freshOrderRes, freshItemsRes, freshReturnsRes] = await Promise.all([
+                    supabase.from('orders').select('total, subtotal, tax, admin_notes, logistics_data, profiles:profile_id(logistics_data, parent:parent_id(logistics_data))').eq('id', orderId).single(),
+                    supabase.from('order_items').select('id, product_id, quantity, picked_quantity, unit_price, selected_options, nickname, products(id, name, iva_rate)').eq('order_id', orderId),
+                    supabase.from('billing_returns').select('id, product_id, quantity_returned, status, reason, source, credit_note_number, calculated_amount, products(id, name, iva_rate)').eq('order_id', orderId)
+                ]);
+                if (freshOrderRes.error) throw freshOrderRes.error;
+                if (freshItemsRes.error) throw freshItemsRes.error;
+                if (freshReturnsRes.error) throw freshReturnsRes.error;
+
+                const currentOrder = freshOrderRes.data;
                 const previousTotal = Number(currentOrder?.total) || originalOrderTotal;
-                const newTotal = Math.max(0, previousTotal - calculatedCreditAmount);
+
+                const mappedItems: OrderItemLike[] = (freshItemsRes.data || []).map((oi: any) => ({
+                    id: oi.id,
+                    product_id: oi.product_id,
+                    product_name: oi.products?.name || oi.nickname,
+                    quantity: oi.quantity,
+                    picked_quantity: oi.picked_quantity,
+                    selected_options: oi.selected_options,
+                    unit_price: oi.unit_price,
+                    products: oi.products
+                }));
+                const mappedReturns: BillingReturnLike[] = (freshReturnsRes.data || []).map((r: any) => ({
+                    id: r.id,
+                    product_id: r.product_id,
+                    product_name: r.products?.name,
+                    quantity: r.quantity_returned,
+                    calculated_amount: r.calculated_amount,
+                    status: r.status,
+                    reason: r.reason,
+                    source: r.source,
+                    credit_note_number: r.credit_note_number,
+                    products: r.products
+                }));
+                const freshProf = (currentOrder as any)?.profiles;
+                const summary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                    isOffAgreementSplit: Boolean(currentOrder?.logistics_data?.is_off_agreement_split),
+                    agreementDiscountPct: extractAgreementDiscountPct(currentOrder, freshProf, freshProf?.parent)
+                });
+                const newTotal = summary.total;
+                const newSubtotal = summary.subtotal;
+                const newTax = summary.tax;
 
                 const updatedAdminNotes = `${currentOrder?.admin_notes || ''}\n[AJUSTE FACTURA PQR #${shortPqrId}]: Valor ajustado de ${formatMoney(previousTotal)} a ${formatMoney(newTotal)} (-${formatMoney(calculatedCreditAmount)}).`.trim();
 
-                await supabase
+                const { error: ordUpdateErr } = await supabase
                     .from('orders')
-                    .update({ 
+                    .update({
                         total: newTotal,
-                        subtotal: newTotal,
-                        admin_notes: updatedAdminNotes 
+                        subtotal: newSubtotal,
+                        tax: newTax,
+                        admin_notes: updatedAdminNotes
                     })
                     .eq('id', orderId);
+                if (ordUpdateErr) throw ordUpdateErr;
 
-                // 3. Update billing_invoices if exists
-                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', orderId).maybeSingle();
-                if (invoiceData) {
-                    const { data: orderProf } = await supabase
-                        .from('orders')
-                        .select('profiles:profile_id(iva_responsible)')
-                        .eq('id', orderId)
-                        .single();
-                    const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
-                    const totalBase = isIva ? newTotal / 1.19 : newTotal;
-                    const totalTax = isIva ? newTotal - totalBase : 0;
+                // 3. Update primary FV billing_invoices only if not synced to World Office
+                const { data: invoiceData, error: invFetchErr } = await supabase
+                    .from('billing_invoices')
+                    .select('id, order_id, worldoffice_sync_status')
+                    .eq('order_id', orderId)
+                    .or('is_credit_note.is.null,is_credit_note.eq.false')
+                    .limit(1)
+                    .maybeSingle();
+                if (invFetchErr) throw invFetchErr;
 
-                    await supabase
+                if (invoiceData?.id && invoiceData.worldoffice_sync_status !== 'synced') {
+                    const { error: invUpdErr } = await supabase
                         .from('billing_invoices')
                         .update({
-                            total_base: totalBase,
-                            total_tax: totalTax,
+                            total_base: newSubtotal,
+                            total_tax: newTax,
                             total_final: newTotal
                         })
                         .eq('id', invoiceData.id);
+                    if (invUpdErr) throw invUpdErr;
                 }
 
                 // 4. Update PQR status and notes preserving Invima and CAPA notes
@@ -734,6 +873,27 @@ export default function FinancialAdjustmentModal({
                     flexDirection: 'column',
                     gap: '1.25rem'
                 }}>
+                    {/* FAC-IMP Lock Banner for Option 4 */}
+                    {!isCredit && isOrderInvoicedLocked && (
+                        <div style={{
+                            padding: '10px 14px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FFFBEB',
+                            border: '1.5px solid #F59E0B',
+                            color: '#92400E',
+                            fontSize: '0.78rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontWeight: '700'
+                        }}>
+                            <AlertTriangle size={16} color="#D97706" />
+                            <span>
+                                Pedido ya facturado o en corte ({referenceInvoiceNumber || 'FAC-IMP'}). No se puede usar Opción 4; utiliza Opción 3 (Nota Crédito).
+                            </span>
+                        </div>
+                    )}
+
                     {/* Error Banner */}
                     {errorMsg && (
                         <div style={{
@@ -821,22 +981,19 @@ export default function FinancialAdjustmentModal({
                                 <label style={{ fontSize: '0.64rem', fontWeight: '800', color: '#6D28D9', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
                                     Consecutivo Nota Crédito (World Office)
                                 </label>
-                                <input
-                                    type="text"
-                                    value={creditNoteNumber}
-                                    onChange={e => setCreditNoteNumber(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '5px 8px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #C4B5FD',
-                                        fontSize: '0.76rem',
-                                        fontWeight: '900',
-                                        color: '#4C1D95',
-                                        backgroundColor: '#FFFFFF',
-                                        boxSizing: 'border-box'
-                                    }}
-                                />
+                                <div style={{
+                                    width: '100%',
+                                    padding: '5px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px dashed #C4B5FD',
+                                    fontSize: '0.74rem',
+                                    fontWeight: '800',
+                                    color: '#6D28D9',
+                                    backgroundColor: '#F5F3FF',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    {creditNoteNumber}
+                                </div>
                             </div>
                             <div>
                                 <label style={{ fontSize: '0.64rem', fontWeight: '800', color: '#6D28D9', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
@@ -864,15 +1021,15 @@ export default function FinancialAdjustmentModal({
                                     Base Contable Acreditada
                                 </span>
                                 <span style={{ fontSize: '0.84rem', fontWeight: '900', color: '#1E293B' }}>
-                                    {formatMoney(isIvaResponsible ? Math.round(calculatedCreditAmount / 1.19) : calculatedCreditAmount)}
+                                    {formatMoney(creditTaxBreakdown.baseTotal)}
                                 </span>
                             </div>
                             <div>
                                 <span style={{ fontSize: '0.64rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'block' }}>
-                                    Régimen IVA ({isIvaResponsible ? 'Gravado 19%' : 'Exento Agro 0%'})
+                                    IVA Discriminado (por Ítem)
                                 </span>
                                 <span style={{ fontSize: '0.84rem', fontWeight: '900', color: '#0D7A57' }}>
-                                    {formatMoney(isIvaResponsible ? calculatedCreditAmount - Math.round(calculatedCreditAmount / 1.19) : 0)}
+                                    {formatMoney(creditTaxBreakdown.taxTotal)}
                                 </span>
                             </div>
                         </div>
@@ -913,7 +1070,7 @@ export default function FinancialAdjustmentModal({
                                                     {showAllOrderItems ? `Ocultar productos sin novedad (${hiddenCount})` : `+ Ver demás productos del pedido (${hiddenCount})`}
                                                 </button>
                                             )}
-                                            {items.length > 0 && (
+                                            {isCredit && items.length > 0 && (
                                                 <button
                                                     type="button"
                                                     onClick={() => setUseManualGlobal(!useManualGlobal)}
@@ -1279,7 +1436,7 @@ export default function FinancialAdjustmentModal({
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={isSubmitting || calculatedCreditAmount <= 0}
+                        disabled={isSubmitting || calculatedCreditAmount <= 0 || (!isCredit && isOrderInvoicedLocked)}
                         style={{
                             padding: '10px 22px',
                             borderRadius: '10px',

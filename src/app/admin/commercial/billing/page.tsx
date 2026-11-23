@@ -18,6 +18,23 @@ import {
     extractExistingInvoiceNumber,
     resolveCanonicalDocType,
 } from '@/lib/commercial/billingOrderUtils';
+import {
+    allocateReturnsAcrossOrderItems,
+    recalculateOrderTotalsFromItems,
+    recalculateCreditNoteTotalsFromItems,
+    pickPrimaryFvInvoice,
+    isCreditNoteReturn,
+    isInvoiceDeductionReturn,
+    isAlreadyDeductedFromOrderItems,
+    isPhysicalReplacementReturn,
+    isDismissedNoCostReturn,
+    extractAgreementDiscountPct,
+    parseColombianCurrencyAmount,
+    round2,
+    round4,
+    type BillingReturnLike,
+    type OrderItemLike,
+} from '@/lib/commercial/pqrAdjustmentEngine';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
 import { 
@@ -178,6 +195,9 @@ export interface CutPreviewOrder {
     qualityDeductionReason?: string;
     qualityDeductionQty?: number;
     netTotal: number;
+    netSubtotal?: number;
+    netTax?: number;
+    billing_invoices?: any[];
     projectedInvoiceNumber: string;
     routeCode: string;
     stopSequence: number;
@@ -675,18 +695,16 @@ export function resolveReturnProductAndAmount(ret: any, pqr: any) {
     }
 
     let ncAmount = 0;
-    if (pqr?.resolution_notes) {
-        const valMatch = pqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.]+)/i) ||
-                         pqr.resolution_notes.match(/Nuevo Total Final:.*\(-\$([\d.]+)\)/i) ||
-                         pqr.resolution_notes.match(/Total Final:.*\(-\$([\d.]+)\)/i);
-        if (valMatch) ncAmount = parseInt(valMatch[1].replace(/\./g, ''), 10);
+    if (Number((ret as any)?.calculated_amount) > 0) {
+        ncAmount = Number((ret as any).calculated_amount);
     }
     if (!ncAmount) {
         const rcaMeta = parseRcaFromRecord(pqr || {});
         if ((rcaMeta as any).deductionAmount) ncAmount = Number((rcaMeta as any).deductionAmount);
     }
-    if (!ncAmount && (ret as any)?.calculated_amount) {
-        ncAmount = Number((ret as any).calculated_amount);
+    if (!ncAmount && pqr?.resolution_notes) {
+        const valMatch = pqr.resolution_notes.match(/Valor Acreditado a Favor del Cliente:\s*\$([\d.,]+)/i);
+        if (valMatch) ncAmount = parseColombianCurrencyAmount(valMatch[1]);
     }
 
     return { prodName, ncAmount };
@@ -1027,28 +1045,30 @@ export default function BillingDashboard() {
 
         // Quantity returned / claimed: suma de todas las devoluciones aprobadas o reportadas para este ítem
         let qtyClaimed = matchingReturns.reduce((sum, r) => sum + (Number(r.quantity_returned) || 0), 0);
-        let totalPqrClaimed = 0;
-        pqrsList.forEach(p => {
-            const resNotes = p.resolution_notes || '';
-            const lines = resNotes.split('\n');
-            lines.forEach((l: string) => {
-                if (l.trim().startsWith('•')) {
-                    const lowerL = l.toLowerCase();
-                    if (lowerL.includes(cleanName) || words.some((w: string) => lowerL.includes(w))) {
+        if (matchingReturns.length === 0) {
+            let totalPqrClaimed = 0;
+            pqrsList.forEach(p => {
+                const resNotes = p.resolution_notes || '';
+                const lines = resNotes.split('\n');
+                lines.forEach((l: string) => {
+                    if (l.trim().startsWith('•')) {
                         const m = l.match(/•\s*([^:]+):\s*([\d.,]+)\s*([A-Za-z]+)\s*@/i);
                         if (m) {
-                            const parsed = parseFloat(m[2].replace(',', '.'));
-                            if (!isNaN(parsed) && parsed > 0) {
-                                totalPqrClaimed += parsed;
+                            const bulletName = m[1].replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
+                            if (bulletName === cleanName) {
+                                const parsed = parseFloat(m[2].replace(',', '.'));
+                                if (!isNaN(parsed) && parsed > 0) {
+                                    totalPqrClaimed += parsed;
+                                }
                             }
                         }
                     }
-                }
+                });
             });
-        });
 
-        if (totalPqrClaimed > 0) {
-            qtyClaimed = Math.max(qtyClaimed, totalPqrClaimed);
+            if (totalPqrClaimed > 0) {
+                qtyClaimed = totalPqrClaimed;
+            }
         }
 
         if (qtyClaimed === 0 && matchedPqr?.description) {
@@ -1116,7 +1136,13 @@ export default function BillingDashboard() {
             badgeBg = '#FEF2F2';
             badgeColor = '#991B1B';
             badgeBorder = '#FECACA';
-            const remainingQty = Math.max(0, Number(item.quantity || 0) - qtyClaimed);
+            const alreadyDeductedInDb = matchingReturns.some(r =>
+                isAlreadyDeductedFromOrderItems(r) ||
+                (r.source == null && String(r.reason || '').toLowerCase().trim().startsWith('[ajuste factura pqr #'))
+            );
+            const remainingQty = alreadyDeductedInDb
+                ? Number(item.quantity || 0)
+                : Math.max(0, Number(item.quantity || 0) - qtyClaimed);
             invoiceInstruction = `Calidad autorizó descontar ${qtyClaimed} ${unit} de este ítem en la factura. Facturar únicamente ${remainingQty} ${unit}.`;
         } else if (
             returnNotes.includes('nota crédito') ||
@@ -1230,8 +1256,8 @@ export default function BillingDashboard() {
                 supabase
                     .from('billing_returns')
                     .select(`
-                        id, product_id, quantity_returned, reason, status, photo_url, notes, created_at,
-                        products (id, name, sku)
+                        id, product_id, quantity_returned, reason, status, source, credit_note_number, calculated_amount, photo_url, notes, created_at,
+                        products (id, name, accounting_id, iva_rate)
                     `)
                     .eq('order_id', order.id),
                 supabase
@@ -1587,7 +1613,7 @@ export default function BillingDashboard() {
             if (returnsError) throw returnsError;
             setReturns(returnsData || []);
 
-            // 3. Fetch invoices with profile data
+            // 3. Fetch invoices with profile data (solo FV para Cartera/Aging, excluir Notas Crédito)
             const { data: invoicesData, error: invoicesError } = await supabase
                 .from('billing_invoices')
                 .select(`
@@ -1605,6 +1631,7 @@ export default function BillingDashboard() {
                         )
                     )
                 `)
+                .or('is_credit_note.is.null,is_credit_note.eq.false')
                 .order('created_at', { ascending: false });
             if (invoicesError) throw invoicesError;
             setInvoices(invoicesData || []);
@@ -1621,8 +1648,8 @@ export default function BillingDashboard() {
                         id, quantity, picked_quantity, unit_price, selected_options
                     ),
                     billing_returns (
-                        id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
-                        products:product_id ( id, name, sku, accounting_id )
+                        id, quantity_returned, status, reason, notes, source, calculated_amount, credit_note_number, reference_invoice_number, product_id,
+                        products:product_id ( id, name, accounting_id, iva_rate )
                     ),
                     customer_service_pqrs (
                         id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
@@ -1683,8 +1710,8 @@ export default function BillingDashboard() {
                             count
                         ),
                         billing_returns (
-                            id, quantity_returned, status, reason, notes, credit_note_number, reference_invoice_number, product_id,
-                            products:product_id ( id, name, sku, accounting_id )
+                            id, quantity_returned, status, reason, notes, source, calculated_amount, credit_note_number, reference_invoice_number, product_id,
+                            products:product_id ( id, name, accounting_id, iva_rate )
                         ),
                         customer_service_pqrs (
                             id, type, category, status, priority, subject, description, created_at, resolved_at, resolution_notes
@@ -2304,6 +2331,7 @@ export default function BillingDashboard() {
     // Consolidado diario de Novedades para Notas Crédito World Office (Gemba Accounting)
     const creditNotesItems = useMemo<CreditNoteReportItem[]>(() => {
         return returns
+            .filter(ret => isCreditNoteReturn(ret as any) && ret.status !== 'rejected')
             .map(ret => {
                 const o: any = ret.orders || {};
                 const prof = o.profiles || {};
@@ -2313,7 +2341,7 @@ export default function BillingDashboard() {
                 const pqr = (o.customer_service_pqrs || [])[0];
                 const { prodName, ncAmount } = resolveReturnProductAndAmount(ret, pqr);
                 const invoiceRef = ret.reference_invoice_number || (o.sequence_id ? `FV-${o.sequence_id}` : '');
-                const creditNoteFolio = ret.credit_note_number || (o.sequence_id ? `NC-${o.sequence_id}-2010` : '');
+                const creditNoteFolio = ret.credit_note_number || 'Pendiente Corte ADJ';
                 const date = o.delivery_date || (ret.created_at ? ret.created_at.slice(0, 10) : '');
                 const pqrFolio = pqr?.id ? `PQR #${pqr.id.substring(0, 8).toUpperCase()}` : '';
 
@@ -2332,14 +2360,6 @@ export default function BillingDashboard() {
                     orderSequence: o.sequence_id,
                     status: ret.status
                 };
-            })
-            .filter(item => {
-                const reasonLower = (item.reason || '').toLowerCase();
-                return item.amount > 0 || 
-                    reasonLower.includes('nota crédito') || 
-                    reasonLower.includes('nota credito') || 
-                    reasonLower.includes('ajuste factura') || 
-                    Boolean(item.creditNoteFolio);
             });
     }, [returns, parentProfilesMap]);
 
@@ -2495,6 +2515,7 @@ export default function BillingDashboard() {
                     id,
                     total,
                     subtotal,
+                    tax,
                     profile_id,
                     sequence_id,
                     created_at,
@@ -2504,9 +2525,15 @@ export default function BillingDashboard() {
                     type,
                     logistics_data,
                     origin_source,
+                    billing_invoices!billing_invoices_order_id_fkey(id, invoice_number, is_credit_note),
                     order_items (
                         id,
-                        unit_price
+                        product_id,
+                        quantity,
+                        picked_quantity,
+                        selected_options,
+                        unit_price,
+                        products ( id, name, accounting_id, iva_rate )
                     ),
                     profiles (
                         id,
@@ -2528,9 +2555,17 @@ export default function BillingDashboard() {
             if (slot === 'ADJ') {
                 const { data: retOrders } = await supabase
                     .from('billing_returns')
-                    .select('order_id')
-                    .eq('status', 'approved');
-                const adjOrderIds = Array.from(new Set((retOrders || []).map(r => r.order_id).filter(Boolean)));
+                    .select('order_id, source, reason, credit_note_number, calculated_amount')
+                    .eq('status', 'approved')
+                    .is('credit_note_number', null);
+                const adjOrderIds = Array.from(
+                    new Set(
+                        (retOrders || [])
+                            .filter((r: any) => isCreditNoteReturn(r))
+                            .map((r: any) => r.order_id)
+                            .filter(Boolean)
+                    )
+                );
                 if (adjOrderIds.length === 0) {
                     setPreviewOrders([]);
                     setLoadingPreview(false);
@@ -2598,10 +2633,10 @@ export default function BillingDashboard() {
                 if (rs.order_id) routeStopsMap.set(rs.order_id, rs);
             });
 
-            // Fetch approved returns to compute Quality Deductions
+            // Fetch approved returns to compute Quality Deductions / NC items
             const { data: returnsData } = await supabase
                 .from('billing_returns')
-                .select('order_id, quantity_returned, reason, defect_category_l1, defect_subtype_l2')
+                .select('id, order_id, product_id, quantity_returned, calculated_amount, status, source, credit_note_number, reason, defect_category_l1, defect_subtype_l2, products(id, name, accounting_id, iva_rate)')
                 .eq('status', 'approved')
                 .in('order_id', orderIds);
 
@@ -2646,21 +2681,71 @@ export default function BillingDashboard() {
 
             const mapped: CutPreviewOrder[] = sorted.map((o, idx) => {
                 const rets = returnsMap.get(o.id) || [];
-                const net = Number(o.total) || 0;
-                
-                const deductionQty = rets.reduce((sum, r) => sum + (Number(r.quantity_returned) || 0), 0);
-                const deductionReason = rets.length > 0 
+                const mappedItems: OrderItemLike[] = (o.order_items || []).map((oi: any) => ({
+                    id: oi.id,
+                    product_id: oi.product_id,
+                    product_name: oi.products?.name,
+                    quantity: (oi.selected_options?._charge_overweight === true && Number(oi.picked_quantity) > Number(oi.quantity))
+                        ? oi.picked_quantity
+                        : oi.quantity,
+                    unit_price: oi.unit_price,
+                    products: oi.products
+                }));
+                const mappedReturns: BillingReturnLike[] = rets.map((r: any) => ({
+                    id: r.id,
+                    order_id: r.order_id,
+                    product_id: r.product_id,
+                    product_name: r.products?.name,
+                    quantity: r.quantity_returned,
+                    calculated_amount: r.calculated_amount,
+                    status: r.status,
+                    source: r.source,
+                    credit_note_number: r.credit_note_number,
+                    reason: r.reason,
+                    products: r.products
+                }));
+                const discountPct = extractAgreementDiscountPct(o.logistics_data, o.profiles, o.profiles?.parent);
+
+                let net = Number(o.total) || 0;
+                let netSubtotal = Number(o.subtotal || o.total || 0);
+                let netTax = Number(o.tax || 0);
+                let deductionQty = rets.reduce((sum, r) => sum + (Number(r.quantity_returned) || 0), 0);
+                let deductionAmount = 0;
+                let origTotal = net;
+
+                if (isNcSlot) {
+                    const pendingNcReturns = mappedReturns.filter((r) => !r.credit_note_number && isCreditNoteReturn(r));
+                    const ncSummary = recalculateCreditNoteTotalsFromItems(mappedItems, pendingNcReturns, {
+                        agreementDiscountPct: discountPct
+                    });
+                    net = ncSummary.total;
+                    netSubtotal = ncSummary.subtotal;
+                    netTax = ncSummary.tax;
+                    deductionQty = pendingNcReturns.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+                    deductionAmount = ncSummary.total;
+                    origTotal = Number(o.total) || 0;
+                } else {
+                    if (mappedItems.length > 0) {
+                        const fvSummary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                            isOffAgreementSplit: Boolean((o as any)?.logistics_data?.is_off_agreement_split),
+                            agreementDiscountPct: discountPct
+                        });
+                        net = fvSummary.total;
+                        netSubtotal = fvSummary.subtotal;
+                        netTax = fvSummary.tax;
+                    }
+                    if (o.admin_notes && o.admin_notes.includes('[AJUSTE FACTURA')) {
+                        const match = o.admin_notes.match(/-\$([0-9.,]+)/);
+                        if (match) {
+                            deductionAmount = parseColombianCurrencyAmount(match[1]) || 0;
+                        }
+                    }
+                    origTotal = deductionAmount > 0 ? net + deductionAmount : net;
+                }
+
+                const deductionReason = rets.length > 0
                     ? rets.map(r => r.reason || r.defect_category_l1).filter(Boolean).join(', ')
                     : '';
-                
-                let deductionAmount = 0;
-                if (o.admin_notes && o.admin_notes.includes('[AJUSTE FACTURA')) {
-                    const match = o.admin_notes.match(/-\$([0-9.,]+)/);
-                    if (match) {
-                        deductionAmount = parseFloat(match[1].replace(/,/g, '')) || 0;
-                    }
-                }
-                const origTotal = deductionAmount > 0 ? net + deductionAmount : net;
 
                 const stopInfo = routeStopsMap.get(o.id);
                 const routeCode = stopInfo?.routes?.vehicle_plate ? `Ruta ${stopInfo.routes.vehicle_plate}` : 'Sin Ruta';
@@ -2679,6 +2764,9 @@ export default function BillingDashboard() {
                     qualityDeductionReason: deductionReason,
                     qualityDeductionQty: deductionQty,
                     netTotal: net,
+                    netSubtotal,
+                    netTax,
+                    billing_invoices: Array.isArray((o as any).billing_invoices) ? (o as any).billing_invoices : (o as any).billing_invoices ? [(o as any).billing_invoices] : [],
                     projectedInvoiceNumber: projectedNum,
                     routeCode,
                     stopSequence,
@@ -2717,30 +2805,31 @@ export default function BillingDashboard() {
         if (previewOrders.length === 0) return;
         setPreviewCutPokaYokeError(null);
 
-        // Poka-Yoke Canónico (Escenario 121 SDD):
-        // Se prohíbe emitir corte o factura definitiva sobre pedidos despachados sin precio o consumo abierto no liquidado (excepto Remisión Obsequio o Reposición)
-        const unpricedOrder = previewOrders.find(o => {
-            const rep = getOrderReplacementInfo(o);
-            const isGiftOrReplacement = o.profile?.document_type === 'gift_remission' 
-                || rep.isReplacement 
-                || o.origin_source === 'customer_service'
-                || /reposici[oó]n/i.test(o.admin_notes || '')
-                || /obsequio/i.test(o.admin_notes || '');
-            if (isGiftOrReplacement) return false;
-            return (
-                o.netTotal === 0 ||
-                isOrderUnpricedOffAgreement(o)
-            );
-        });
-        if (unpricedOrder) {
-            const errorMsg = `El pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado). Acción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`;
-            setPreviewCutPokaYokeError(errorMsg);
-            showToast({
-                type: 'error',
-                title: 'Poka-Yoke de Facturación Activo',
-                message: errorMsg
+        // Poka-Yoke Canónico (Escenario 121 SDD): solo aplica en cortes de venta FV (AM/PM), nunca en ADJ
+        if (previewSlot !== 'ADJ') {
+            const unpricedOrder = previewOrders.find(o => {
+                const rep = getOrderReplacementInfo(o);
+                const isGiftOrReplacement = o.profile?.document_type === 'gift_remission' 
+                    || rep.isReplacement 
+                    || o.origin_source === 'customer_service'
+                    || /reposici[oó]n/i.test(o.admin_notes || '')
+                    || /obsequio/i.test(o.admin_notes || '');
+                if (isGiftOrReplacement) return false;
+                return (
+                    o.netTotal === 0 ||
+                    isOrderUnpricedOffAgreement(o)
+                );
             });
-            return;
+            if (unpricedOrder) {
+                const errorMsg = `El pedido #${unpricedOrder.sequence_id || unpricedOrder.id.slice(0, 8)} fue despachado sin precio (o sobre consumo abierto no liquidado). Acción requerida: El Área Comercial debe fijar la tarifa o se debe liquidar el pedido a costo vigente antes de emitir la factura electrónica.`;
+                setPreviewCutPokaYokeError(errorMsg);
+                showToast({
+                    type: 'error',
+                    title: 'Poka-Yoke de Facturación Activo',
+                    message: errorMsg
+                });
+                return;
+            }
         }
 
         setIsProcessing(true);
@@ -2750,12 +2839,22 @@ export default function BillingDashboard() {
             const isNcSlot = previewSlot === 'ADJ';
             const totalCutAmount = previewOrders.reduce((sum, o) => sum + o.netTotal, 0);
 
-            // 0. Poka-Yoke: Limpiar facturas huérfanas previas sin corte para los pedidos a procesar
-            await supabase
-                .from('billing_invoices')
-                .delete()
-                .is('cut_id', null)
-                .in('order_id', previewOrders.map(o => o.id));
+            // 0. Poka-Yoke: Limpiar facturas huérfanas previas sin corte (aislando FV vs ADJ)
+            if (!isNcSlot) {
+                await supabase
+                    .from('billing_invoices')
+                    .delete()
+                    .is('cut_id', null)
+                    .or('is_credit_note.is.null,is_credit_note.eq.false')
+                    .in('order_id', previewOrders.map(o => o.id));
+            } else {
+                await supabase
+                    .from('billing_invoices')
+                    .delete()
+                    .is('cut_id', null)
+                    .eq('is_credit_note', true)
+                    .in('order_id', previewOrders.map(o => o.id));
+            }
 
             // 1. Create billing_cuts record
             const { data: cutNumberData } = await supabase
@@ -2782,14 +2881,16 @@ export default function BillingDashboard() {
             if (cutErr) throw cutErr;
             createdCutRecord = newCut;
 
-            // 2. Link orders to this cut
-            const orderIdsToUpdate = previewOrders.map(o => o.id);
-            const { error: updateOrdersErr } = await supabase
-                .from('orders')
-                .update({ billing_cut_id: newCut.id })
-                .in('id', orderIdsToUpdate);
+            // 2. Link orders to this cut ONLY for FV cuts (ADJ NC must NEVER overwrite orders.billing_cut_id)
+            if (!isNcSlot) {
+                const orderIdsToUpdate = previewOrders.map(o => o.id);
+                const { error: updateOrdersErr } = await supabase
+                    .from('orders')
+                    .update({ billing_cut_id: newCut.id })
+                    .in('id', orderIdsToUpdate);
 
-            if (updateOrdersErr) throw updateOrdersErr;
+                if (updateOrdersErr) throw updateOrdersErr;
+            }
 
             // Atomic Re-Read for execution (Goldfish Safeguard 2)
             const { data: execSettings } = await supabase
@@ -2812,10 +2913,12 @@ export default function BillingDashboard() {
                 .in('invoice_number', candidateNumbers);
 
             if (collisions && collisions.length > 0) {
+                const activePrefix = isNcSlot ? ncPrefix : invoicePrefix;
                 const { data: allExisting } = await supabase
                     .from('billing_invoices')
-                    .select('invoice_number');
-                let maxFound = execInvoiceNext;
+                    .select('invoice_number')
+                    .ilike('invoice_number', `${activePrefix}-%`);
+                let maxFound = isNcSlot ? execNcNext : execInvoiceNext;
                 (allExisting || []).forEach(row => {
                     const match = String(row.invoice_number).match(/(\d+)$/);
                     if (match) {
@@ -2823,15 +2926,18 @@ export default function BillingDashboard() {
                         if (parsed >= maxFound) maxFound = parsed + 1;
                     }
                 });
-                if (!isNcSlot) execInvoiceNext = maxFound;
+                if (isNcSlot) {
+                    execNcNext = maxFound;
+                } else {
+                    execInvoiceNext = maxFound;
+                }
             }
 
-            // 3. Create billing_invoices records
+            // 3. Create billing_invoices records (IVA por ítem desde motor, jamás profiles.iva_responsible)
             const invoicesToInsert = previewOrders.map((o, idx) => {
-                const isIva = o.profile?.iva_responsible || false;
-                const total = o.netTotal;
-                const totalBase = isIva ? Math.round((total / 1.19) * 100) / 100 : total;
-                const totalTax = isIva ? Math.round((total - totalBase) * 100) / 100 : 0;
+                const total = round2(o.netTotal);
+                const totalBase = round2(o.netSubtotal ?? total);
+                const totalTax = round2(o.netTax ?? Math.max(0, total - totalBase));
 
                 const isB2B = o.profile?.role === 'b2b_client' || o.type === 'b2b' || !!o.profile?.parent_id;
                 const creditDays = o.profile?.payment_days || (isB2B ? 30 : 0);
@@ -2841,6 +2947,7 @@ export default function BillingDashboard() {
                 const numRaw = (isNcSlot ? execNcNext : execInvoiceNext) + idx;
                 const prefix = isNcSlot ? ncPrefix : invoicePrefix;
                 const formattedInvNum = `${prefix}-${numRaw}`;
+                const primaryFv = isNcSlot ? pickPrimaryFvInvoice(o.billing_invoices || []) : null;
 
                 return {
                     order_id: o.id,
@@ -2848,6 +2955,8 @@ export default function BillingDashboard() {
                     invoice_number: formattedInvNum,
                     invoice_prefix: prefix,
                     invoice_number_raw: numRaw,
+                    is_credit_note: isNcSlot,
+                    parent_invoice_id: primaryFv?.id ?? null,
                     total_base: totalBase,
                     total_tax: totalTax,
                     total_final: total,
@@ -2871,6 +2980,8 @@ export default function BillingDashboard() {
                     total_base: inv.total_base,
                     total_tax: inv.total_tax,
                     total_final: inv.total_final,
+                    is_credit_note: inv.is_credit_note,
+                    parent_invoice_id: inv.parent_invoice_id,
                     status: inv.status
                 }));
                 const fallbackRes = await supabase
@@ -2883,14 +2994,36 @@ export default function BillingDashboard() {
 
             if (invErr) throw invErr;
 
-            // 4. Update orders.invoice_id
+            // 4. Update orders.invoice_id (only for FV) OR stamp credit_note_number on approved returns (for ADJ)
             if (createdInvoices) {
-                for (const inv of createdInvoices) {
-                    if (inv.order_id) {
-                        await supabase
-                            .from('orders')
-                            .update({ invoice_id: inv.id })
-                            .eq('id', inv.order_id);
+                if (!isNcSlot) {
+                    for (const inv of createdInvoices) {
+                        if (inv.order_id) {
+                            await supabase
+                                .from('orders')
+                                .update({ invoice_id: inv.id })
+                                .eq('id', inv.order_id);
+                        }
+                    }
+                } else {
+                    for (const inv of createdInvoices) {
+                        if (inv.order_id && inv.invoice_number) {
+                            const { data: orderRets } = await supabase
+                                .from('billing_returns')
+                                .select('id, source, reason, credit_note_number')
+                                .eq('order_id', inv.order_id)
+                                .eq('status', 'approved')
+                                .is('credit_note_number', null);
+                            const ncRetIds = (orderRets || [])
+                                .filter((r: any) => isCreditNoteReturn(r))
+                                .map((r: any) => r.id);
+                            if (ncRetIds.length > 0) {
+                                await supabase
+                                    .from('billing_returns')
+                                    .update({ credit_note_number: inv.invoice_number })
+                                    .in('id', ncRetIds);
+                            }
+                        }
                     }
                 }
             }
@@ -2916,7 +3049,9 @@ export default function BillingDashboard() {
             showToast({
                 type: 'success',
                 title: `¡Corte ${previewSlot} Generado con Éxito!`,
-                message: `${previewOrders.length} facturas emitidas (Rango: ${previewOrders[0]?.projectedInvoiceNumber} al ${previewOrders[previewOrders.length - 1]?.projectedInvoiceNumber}).`
+                message: isNcSlot
+                    ? `${previewOrders.length} Notas Crédito emitidas (Rango: ${previewOrders[0]?.projectedInvoiceNumber} al ${previewOrders[previewOrders.length - 1]?.projectedInvoiceNumber}).`
+                    : `${previewOrders.length} facturas emitidas (Rango: ${previewOrders[0]?.projectedInvoiceNumber} al ${previewOrders[previewOrders.length - 1]?.projectedInvoiceNumber}).`
             });
             setIsPreviewModalOpen(false);
             setPreviewCutPokaYokeError(null);
@@ -2927,7 +3062,15 @@ export default function BillingDashboard() {
             // Rollback de rescate para no dejar pedidos bloqueados ni cortes vacíos
             if (createdCutRecord?.id) {
                 try {
-                    await supabase.from('orders').update({ billing_cut_id: null, invoice_id: null }).eq('billing_cut_id', createdCutRecord.id);
+                    if (previewSlot !== 'ADJ') {
+                        await supabase.from('orders').update({ billing_cut_id: null, invoice_id: null }).eq('billing_cut_id', createdCutRecord.id);
+                    } else {
+                        const { data: rbInvs } = await supabase.from('billing_invoices').select('invoice_number').eq('cut_id', createdCutRecord.id);
+                        const rbNcNums = (rbInvs || []).map((r: any) => r.invoice_number).filter(Boolean);
+                        if (rbNcNums.length > 0) {
+                            await supabase.from('billing_returns').update({ credit_note_number: null }).in('credit_note_number', rbNcNums);
+                        }
+                    }
                     await supabase.from('billing_invoices').delete().eq('cut_id', createdCutRecord.id);
                     await supabase.from('billing_cuts').delete().eq('id', createdCutRecord.id);
                 } catch (rbErr) {
@@ -2947,7 +3090,7 @@ export default function BillingDashboard() {
         const clientName = order.profiles?.company_name || order.profiles?.contact_name || 'Cliente';
         const orderSeq = order.sequence_id ? `#1710_${order.sequence_id}` : `#${order.id.slice(0, 8)}`;
         const invoiceRef = order.invoice_number || ret?.reference_invoice_number || `FV-${order.sequence_id}`;
-        const suggestedNc = ret?.credit_note_number || `NC-${order.sequence_id}-2010`;
+        const suggestedNc = ret?.credit_note_number || 'Pendiente Corte ADJ';
         
         const { prodName, ncAmount } = resolveReturnProductAndAmount(ret, pqr);
         const qty = ret?.quantity_returned || 0;
@@ -3029,52 +3172,93 @@ export default function BillingDashboard() {
     const handleProcessReturn = async (ret: BillingReturn, decision: 'approved' | 'rejected') => {
         try {
             if (decision === 'rejected') {
-                await supabase.from('billing_returns').update({ status: 'rejected' }).eq('id', ret.id);
+                const { error: rejErr } = await supabase.from('billing_returns').update({ status: 'rejected' }).eq('id', ret.id);
+                if (rejErr) throw rejErr;
             } else {
-                const { data: itemData } = await supabase
-                    .from('order_items')
-                    .select('unit_price')
-                    .eq('order_id', ret.order_id)
-                    .eq('product_id', ret.product_id)
-                    .single();
+                const resolvedSource =
+                    (ret as any).source === 'rectificacion_muelle'
+                        ? 'rectificacion_muelle'
+                        : isCreditNoteReturn(ret as any)
+                            ? 'pqr_nota_credito'
+                            : 'pqr_ajuste_factura_net';
 
-                const unitPrice = Number(itemData?.unit_price) || 0;
-                const priceCredit = unitPrice * Number(ret.quantity_returned);
+                const { error: appErr } = await supabase
+                    .from('billing_returns')
+                    .update({ status: 'approved', source: resolvedSource })
+                    .eq('id', ret.id);
+                if (appErr) throw appErr;
 
-                const { data: orderData } = await supabase.from('orders').select('total').eq('id', ret.order_id).single();
-                const newTotal = Math.max(0, (Number(orderData?.total) || 0) - priceCredit);
-                
-                await supabase
+                const [orderRes, itemsRes, returnsRes] = await Promise.all([
+                    supabase.from('orders').select('id, logistics_data').eq('id', ret.order_id).single(),
+                    supabase.from('order_items').select('*, products(id, name, iva_rate)').eq('order_id', ret.order_id),
+                    supabase.from('billing_returns').select('id, product_id, quantity_returned, status, reason, source, credit_note_number, calculated_amount, products(id, name, iva_rate)').eq('order_id', ret.order_id)
+                ]);
+                if (orderRes.error) throw orderRes.error;
+                if (itemsRes.error) throw itemsRes.error;
+                if (returnsRes.error) throw returnsRes.error;
+
+                const mappedItems: OrderItemLike[] = (itemsRes.data || []).map((oi: any) => ({
+                    id: oi.id,
+                    product_id: oi.product_id,
+                    product_name: oi.products?.name || oi.nickname,
+                    quantity: (oi.selected_options?._charge_overweight === true && Number(oi.picked_quantity) > Number(oi.quantity))
+                        ? oi.picked_quantity
+                        : oi.quantity,
+                    unit_price: oi.unit_price,
+                    products: oi.products
+                }));
+                const mappedReturns: BillingReturnLike[] = (returnsRes.data || []).map((r: any) => ({
+                    id: r.id,
+                    product_id: r.product_id,
+                    product_name: r.products?.name,
+                    quantity: r.quantity_returned,
+                    calculated_amount: r.calculated_amount,
+                    status: r.status,
+                    reason: r.reason,
+                    source: r.source,
+                    credit_note_number: r.credit_note_number,
+                    products: r.products
+                }));
+
+                const summary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                    isOffAgreementSplit: Boolean((orderRes.data as any)?.logistics_data?.is_off_agreement_split),
+                    agreementDiscountPct: extractAgreementDiscountPct(orderRes.data?.logistics_data)
+                });
+
+                const { error: ordUpdErr } = await supabase
                     .from('orders')
-                    .update({ total: newTotal })
+                    .update({
+                        total: summary.total,
+                        subtotal: summary.subtotal,
+                        tax: summary.tax
+                    })
                     .eq('id', ret.order_id);
+                if (ordUpdErr) throw ordUpdErr;
 
-                const { data: invoiceData } = await supabase.from('billing_invoices').select('id, order_id').eq('order_id', ret.order_id).single();
-                if (invoiceData) {
-                    const { data: orderProf } = await supabase
-                        .from('orders')
-                        .select('profiles(iva_responsible)')
-                        .eq('id', ret.order_id)
-                        .single();
-                    const isIva = (orderProf as any)?.profiles?.iva_responsible || false;
-                    const totalBase = isIva ? newTotal / 1.19 : newTotal;
-                    const totalTax = isIva ? newTotal - totalBase : 0;
+                const { data: invoiceData, error: invSelErr } = await supabase
+                    .from('billing_invoices')
+                    .select('id, order_id, worldoffice_sync_status')
+                    .eq('order_id', ret.order_id)
+                    .or('is_credit_note.is.null,is_credit_note.eq.false')
+                    .limit(1)
+                    .maybeSingle();
+                if (invSelErr) throw invSelErr;
 
-                    await supabase
+                if (invoiceData?.id && invoiceData.worldoffice_sync_status !== 'synced') {
+                    const { error: invUpdErr } = await supabase
                         .from('billing_invoices')
                         .update({
-                            total_base: totalBase,
-                            total_tax: totalTax,
-                            total_final: newTotal
+                            total_base: summary.subtotal,
+                            total_tax: summary.tax,
+                            total_final: summary.total
                         })
                         .eq('id', invoiceData.id);
+                    if (invUpdErr) throw invUpdErr;
                 }
-
-                await supabase.from('billing_returns').update({ status: 'approved' }).eq('id', ret.id);
             }
             showToast({
                 type: 'success',
-                message: `Novedad procesada: ${decision === 'approved' ? 'Aprobada y descontada' : 'Rechazada'}`
+                message: `Novedad procesada: ${decision === 'approved' ? 'Aprobada y recalculada' : 'Rechazada'}`
             });
             fetchData();
         } catch (err: any) {
@@ -3135,6 +3319,7 @@ export default function BillingDashboard() {
             resolveInvNum: (order: any) => number | string;
             resolveFecha: (order: any) => string;
             resolveObservaciones: (order: any) => string;
+            onlyPendingNcReturns?: boolean;
         }
     ) => {
         const exportRows: any[] = [];
@@ -3160,7 +3345,6 @@ export default function BillingDashboard() {
                 prof.contact_name ||
                 'Cliente General'
             ).trim();
-            const isIva = !!(parentProf?.iva_responsible ?? prof.iva_responsible);
             const { isB2B } = resolveCanonicalDocType(order, parentsMap);
             const paymentDays = Number(parentProf?.payment_days) || Number(prof.payment_days) || (isB2B ? 30 : 0);
 
@@ -3170,27 +3354,101 @@ export default function BillingDashboard() {
             // Escenario 254: Conversión de Libras (1 Kg = 2 Lb) si el cliente tiene billing_weight_unit === 'lb'
             const isClientInLb = (prof.logistics_data?.billing_weight_unit === 'lb') || (order.logistics_data?.billing_weight_unit === 'lb') || (parentProf?.logistics_data?.billing_weight_unit === 'lb');
             // Escenario 253: Descuento Comercial en Vigencia a la fecha del pedido
-            const discountPct = Number(order.logistics_data?.agreement_discount_pct || prof.logistics_data?.agreement_discount_pct || 0);
-            const discountDecimal = discountPct > 0 ? (discountPct / 100) : 0;
+            const discountPct = extractAgreementDiscountPct(order.logistics_data) || Number(prof.logistics_data?.agreement_discount_pct || 0);
+            const discountDecimal = discountPct > 0 ? round4(discountPct / 100) : 0;
             const branchName = isB2B ? resolveWorldOfficeBranch(prof, parentProf, true) : '';
             const noteStr = resolveWorldOfficeNote(order, prof, branchName, parentProf);
 
-            (order.order_items || []).forEach((item: any) => {
-                const baseItemQty = (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
+            const mappedItems: OrderItemLike[] = (order.order_items || []).map((item: any) => ({
+                ...item,
+                quantity: (item.selected_options?._charge_overweight === true && Number(item.picked_quantity) > Number(item.quantity))
                     ? Number(item.picked_quantity)
-                    : (Number(item.quantity) || 0);
+                    : (Number(item.quantity) || 0),
+                products: item.products
+            }));
+            const rawReturns = Array.isArray(order.billing_returns) ? order.billing_returns : [];
+            const mappedReturns: BillingReturnLike[] = rawReturns.map((r: any) => ({
+                ...r,
+                quantity: r.quantity_returned,
+                products: r.products
+            }));
 
-                // Descontar novedades autorizadas / PQR cerradas de la Factura de Venta plana
-                const matchedReturn = (order.billing_returns || []).find((r: any) =>
-                    (r.product_id === item.product_id || (r.products?.name && r.products.name.toLowerCase() === item.products?.name?.toLowerCase())) &&
-                    (r.status === 'approved' || (r.reason && (r.reason.includes('AJUSTE FACTURA') || r.reason.includes('NOTA CRÉDITO')))) &&
-                    !(r.reason && (r.reason.includes('Reprogramado en Pedido') || r.reason.toLowerCase().includes('reposición') || r.reason.toLowerCase().includes('reposicion')))
-                );
-                const deductionQty = matchedReturn ? Number(matchedReturn.quantity_returned || 0) : 0;
-                const rawQty = Math.max(0, baseItemQty - deductionQty);
+            if (options.tipoDocumento === 'NC') {
+                const ncStr = typeof rawInv === 'string' && rawInv.includes('-') ? rawInv : undefined;
+                const filteredReturns = options.onlyPendingNcReturns
+                    ? mappedReturns.filter((r) => !r.credit_note_number)
+                    : ncStr
+                        ? mappedReturns.filter((r) => r.credit_note_number === ncStr)
+                        : mappedReturns;
+                const ncSummary = recalculateCreditNoteTotalsFromItems(mappedItems, filteredReturns, {
+                    creditNoteNumber: options.onlyPendingNcReturns ? undefined : ncStr
+                });
+
+                ncSummary.lines.forEach((ncLine, lineIdx) => {
+                    const matchedItem = mappedItems.find((it) => (it.product_id || it.products?.id) === ncLine.productId) as any;
+                    const firstItemAccountingId = (mappedItems[0] as any)?.products?.accounting_id;
+                    const rawUom = ncLine.isManualGlobal ? 'Und' : (matchedItem?.products?.unit_of_measure || matchedItem?.unit || 'KG');
+                    const isKg = !ncLine.isManualGlobal && /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
+
+                    const qty = (isClientInLb && isKg) ? ncLine.quantity * 2 : ncLine.quantity;
+                    const unitPrice = (isClientInLb && isKg && ncLine.unitPriceGross > 0) ? ncLine.unitPriceGross / 2 : ncLine.unitPriceGross;
+                    const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
+
+                    const lineTotal = round2(qty * unitPrice);
+                    const lineBase = ncLine.isManualGlobal
+                        ? ncLine.baseTotal
+                        : (ncLine.ivaRatePct > 0 ? round2(lineTotal / (1 + ncLine.ivaRatePct / 100)) : lineTotal);
+                    const lineIva = ncLine.isManualGlobal ? ncLine.taxTotal : round2(lineTotal - lineBase);
+                    const effectiveIvaDecimal = ncLine.isManualGlobal
+                        ? (lineBase > 0 && lineIva > 0 ? round4(lineIva / lineBase) : 0)
+                        : round4((ncLine.ivaRatePct || 0) / 100);
+                    const prodCode = ncLine.isManualGlobal
+                        ? (firstItemAccountingId || 'NC-GLOBAL')
+                        : (ncLine.accountingId ?? `FRU-${lineIdx + 1}`);
+
+                    exportRows.push({
+                        tipoDocumento: 'NC',
+                        numero: invNum,
+                        consecutivo: invNum,
+                        fecha: options.resolveFecha(order),
+                        identificacionTercero: nit,
+                        nitCliente: nit,
+                        razonSocial: clientName,
+                        sucursal: branchName,
+                        isB2B,
+                        formaPago: isB2B ? 'Credito' : 'Contado',
+                        fechaEntrega: order.delivery_date || options.resolveFecha(order),
+                        diasCredito: paymentDays,
+                        codigoProducto: prodCode,
+                        descripcion: ncLine.isManualGlobal ? 'Ajuste Global Nota Crédito PQR' : (ncLine.productName || 'Nota Crédito FruFresco'),
+                        bodega: woWarehouse || 'Principal',
+                        clasificacion: woClassification || '',
+                        unidadMedida: uom,
+                        cantidad: qty,
+                        valorUnitario: ncLine.isManualGlobal ? lineBase : (effectiveIvaDecimal > 0 ? round2(unitPrice / (1 + effectiveIvaDecimal)) : unitPrice),
+                        valorBase: lineBase,
+                        ivaRateDecimal: effectiveIvaDecimal,
+                        tarifaIva: round2(effectiveIvaDecimal * 100),
+                        valorIva: lineIva,
+                        totalLinea: lineTotal,
+                        descuento: ncLine.isManualGlobal ? 0 : discountDecimal,
+                        notaEncabezado: noteStr,
+                        observaciones: options.resolveObservaciones(order)
+                    });
+                });
+                return;
+            }
+
+            const allocatedLines = allocateReturnsAcrossOrderItems(mappedItems, mappedReturns, {
+                isOffAgreementSplit: Boolean(order?.logistics_data?.is_off_agreement_split)
+            });
+
+            allocatedLines.forEach((line) => {
+                const rawQty = line.netQuantity;
                 if (rawQty <= 0) return;
 
-                const rawUnitPrice = Number(item.unit_price) || 0;
+                const item: any = line.item;
+                const rawUnitPrice = line.unitPriceGross;
                 const rawUom = item.products?.unit_of_measure || item.unit || 'KG';
                 const isKg = /^(kg|kilo|kilos|kilogramo|kilogramos)$/i.test(rawUom.trim());
 
@@ -3198,13 +3456,14 @@ export default function BillingDashboard() {
                 const unitPrice = (isClientInLb && isKg && rawUnitPrice > 0) ? rawUnitPrice / 2 : rawUnitPrice;
                 const uom = (isClientInLb && isKg) ? 'LB' : rawUom;
 
-                const lineTotal = qty * unitPrice;
-                const lineBase = isIva ? Math.round((lineTotal / 1.19) * 100) / 100 : lineTotal;
-                const lineIva = isIva ? Math.round((lineTotal - lineBase) * 100) / 100 : 0;
+                const lineTotal = round2(qty * unitPrice);
+                const ivaRatePct = line.ivaRatePct;
+                const lineBase = ivaRatePct > 0 ? round2(lineTotal / (1 + ivaRatePct / 100)) : lineTotal;
+                const lineIva = round2(lineTotal - lineBase);
                 const prodCode = item.products?.accounting_id ?? item.products?.sku ?? `FRU-${item.id?.slice(0, 4) || 'ITEM'}`;
 
                 exportRows.push({
-                    tipoDocumento: options.tipoDocumento,
+                    tipoDocumento: 'FV',
                     numero: invNum,
                     consecutivo: invNum,
                     fecha: options.resolveFecha(order),
@@ -3222,10 +3481,10 @@ export default function BillingDashboard() {
                     clasificacion: woClassification || '',
                     unidadMedida: uom,
                     cantidad: qty,
-                    valorUnitario: unitPrice,
+                    valorUnitario: ivaRatePct > 0 ? round2(unitPrice / (1 + ivaRatePct / 100)) : unitPrice,
                     valorBase: lineBase,
-                    ivaRateDecimal: isIva ? 0.19 : 0,
-                    tarifaIva: isIva ? 19 : 0,
+                    ivaRateDecimal: round4(ivaRatePct / 100),
+                    tarifaIva: ivaRatePct,
                     valorIva: lineIva,
                     totalLinea: lineTotal,
                     descuento: discountDecimal,
@@ -3241,9 +3500,22 @@ export default function BillingDashboard() {
     const exportToWorldOffice = async (cutId: string) => {
         try {
             const targetCut = cuts.find(c => c.id === cutId);
+            const isNcCut = targetCut?.cut_slot === 'ADJ';
 
-            // 1. Fetch cut orders with profiles and items
-            const { data: cutOrders, error: cutOrdersErr } = await supabase
+            // 1. Fetch assigned invoices for this cut first (supports both FV and ADJ cuts cleanly)
+            const { data: assignedInvoices, error: invFetchErr } = await supabase
+                .from('billing_invoices')
+                .select('order_id, invoice_number')
+                .eq('cut_id', cutId);
+            if (invFetchErr) throw invFetchErr;
+
+            const invoiceMap = new Map<string, string>();
+            (assignedInvoices || []).forEach(inv => {
+                if (inv.order_id && inv.invoice_number) invoiceMap.set(inv.order_id, inv.invoice_number);
+            });
+
+            // 2. Fetch cut orders with profiles and items
+            let ordersQuery = supabase
                 .from('orders')
                 .select(`
                     id, sequence_id, created_at, delivery_date, type, total, admin_notes, logistics_data, purchase_order_number,
@@ -3257,11 +3529,23 @@ export default function BillingDashboard() {
                         )
                     ),
                     billing_returns (
-                        id, product_id, quantity_returned, status, reason,
-                        products:product_id ( id, name )
+                        id, product_id, quantity_returned, calculated_amount, status, source, credit_note_number, reason,
+                        products:product_id ( id, name, accounting_id, iva_rate )
                     )
-                `)
-                .eq('billing_cut_id', cutId);
+                `);
+
+            if (isNcCut) {
+                const adjIds = Array.from(invoiceMap.keys());
+                if (adjIds.length === 0) {
+                    showToast({ type: 'warning', message: 'No se encontraron Notas Crédito asociadas a este corte ADJ.' });
+                    return;
+                }
+                ordersQuery = ordersQuery.in('id', adjIds);
+            } else {
+                ordersQuery = ordersQuery.eq('billing_cut_id', cutId);
+            }
+
+            const { data: cutOrders, error: cutOrdersErr } = await ordersQuery;
 
             if (cutOrdersErr) throw cutOrdersErr;
             if (!cutOrders || cutOrders.length === 0) {
@@ -3269,23 +3553,12 @@ export default function BillingDashboard() {
                 return;
             }
 
-            // 2. Fetch assigned invoices for consecutive numbers
-            const { data: assignedInvoices } = await supabase
-                .from('billing_invoices')
-                .select('order_id, invoice_number')
-                .eq('cut_id', cutId);
-
-            const invoiceMap = new Map<string, string>();
-            (assignedInvoices || []).forEach(inv => {
-                if (inv.order_id && inv.invoice_number) invoiceMap.set(inv.order_id, inv.invoice_number);
-            });
-
             // 2.1 Fetch parent profiles if any cut order belongs to a branch
             const cutParentsMap = await resolveExportParentsMap(cutOrders as any[]);
 
             // 3. Build flattened 57-column export rows using shared canonical builder
             const exportRows = buildWorldOfficeExportRows(cutOrders as any[], cutParentsMap, {
-                tipoDocumento: targetCut?.cut_slot === 'ADJ' ? 'NC' : 'FV',
+                tipoDocumento: isNcCut ? 'NC' : 'FV',
                 resolveInvNum: (order: any) => invoiceMap.get(order.id) || order.sequence_id,
                 resolveFecha: (order: any) => targetCut?.scheduled_date || order.delivery_date || getBogotaDate(0),
                 resolveObservaciones: (order: any) => `Pedido #${order.sequence_id} | Corte ${targetCut?.cut_slot || 'AM'} #${targetCut?.cut_number || 1}`
@@ -3349,7 +3622,7 @@ export default function BillingDashboard() {
             // 1. Obtener las facturas asociadas a este corte
             const { data: cutInvoices } = await supabase
                 .from('billing_invoices')
-                .select('id, invoice_number_raw, invoice_prefix')
+                .select('id, invoice_number, invoice_number_raw, invoice_prefix')
                 .eq('cut_id', cutId);
 
             // 2. Rebobinado seguro de consecutivos DIAN (Asunción 2 Goldfish)
@@ -3393,13 +3666,26 @@ export default function BillingDashboard() {
                 }
             }
 
-            // 3. Liberar pedidos: desvincular billing_cut_id e invoice_id
-            const { error: releaseErr } = await supabase
-                .from('orders')
-                .update({ billing_cut_id: null, invoice_id: null })
-                .eq('billing_cut_id', cutId);
+            // 3. Liberar pedidos (solo para cortes FV; en ADJ se preservan FV y solo se limpia credit_note_number)
+            if (!isNcSlot) {
+                const { error: releaseErr } = await supabase
+                    .from('orders')
+                    .update({ billing_cut_id: null, invoice_id: null })
+                    .eq('billing_cut_id', cutId);
 
-            if (releaseErr) throw releaseErr;
+                if (releaseErr) throw releaseErr;
+            } else if (cutInvoices && cutInvoices.length > 0) {
+                const ncNumbers = cutInvoices
+                    .map((inv: any) => inv.invoice_number)
+                    .filter(Boolean);
+                if (ncNumbers.length > 0) {
+                    const { error: resetRetErr } = await supabase
+                        .from('billing_returns')
+                        .update({ credit_note_number: null })
+                        .in('credit_note_number', ncNumbers);
+                    if (resetRetErr) throw resetRetErr;
+                }
+            }
 
             // 4. Eliminar las facturas de billing_invoices
             const { error: delInvErr } = await supabase
@@ -3534,8 +3820,8 @@ export default function BillingDashboard() {
                         )
                     ),
                     billing_returns (
-                        id, product_id, quantity_returned, status, reason,
-                        products:product_id ( id, name )
+                        id, product_id, quantity_returned, calculated_amount, status, source, credit_note_number, reason,
+                        products:product_id ( id, name, accounting_id, iva_rate )
                     )
                 `)
                 .in('id', orderIds);
@@ -3622,7 +3908,7 @@ export default function BillingDashboard() {
                         id, sequence_id, status, type, payment_method, delivery_date,
                         shipping_address, total, subtotal, tax,
                         warehouse_spaces, admin_notes, logistics_data,
-                        billing_invoices!billing_invoices_order_id_fkey(invoice_number),
+                        billing_invoices!billing_invoices_order_id_fkey(invoice_number, is_credit_note),
                         profiles (
                             id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
                             document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
@@ -3637,9 +3923,7 @@ export default function BillingDashboard() {
                     const existingIds = new Set(targetOrders.map(o => o.id));
                     for (const invOrder of invoicedDayOrders) {
                         if (!existingIds.has(invOrder.id)) {
-                            const invObj = Array.isArray((invOrder as any).billing_invoices)
-                                ? (invOrder as any).billing_invoices[0]
-                                : (invOrder as any).billing_invoices;
+                            const invObj = pickPrimaryFvInvoice((invOrder as any).billing_invoices);
                             if (invObj?.invoice_number || (invOrder as any).invoice_number) {
                                 targetOrders.push({
                                     ...invOrder,
@@ -3711,21 +3995,57 @@ export default function BillingDashboard() {
         setIsProcessing(true);
         try {
             const targetCut = cuts.find(c => c.id === cutId);
-            const { data: cutOrders, error: cutOrdersErr } = await supabase
-                .from('orders')
-                .select(`
-                    id, sequence_id, status, type, payment_method, delivery_date,
-                    shipping_address, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
-                    billing_invoices!billing_invoices_order_id_fkey(invoice_number),
-                    profiles (
-                        id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
-                        document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
-                    )
-                `)
-                .eq('billing_cut_id', cutId)
-                .order('sequence_id', { ascending: true });
+            const isNcCut = targetCut?.cut_slot === 'ADJ';
 
-            if (cutOrdersErr) throw cutOrdersErr;
+            let cutOrders: any[] = [];
+            const cutInvoiceMap = new Map<string, string>();
+
+            if (isNcCut) {
+                const { data: cutInvs, error: cutInvErr } = await supabase
+                    .from('billing_invoices')
+                    .select('order_id, invoice_number')
+                    .eq('cut_id', cutId);
+                if (cutInvErr) throw cutInvErr;
+                (cutInvs || []).forEach((ci: any) => {
+                    if (ci.order_id && ci.invoice_number) cutInvoiceMap.set(ci.order_id, ci.invoice_number);
+                });
+                const adjOrderIds = Array.from(cutInvoiceMap.keys());
+                if (adjOrderIds.length > 0) {
+                    const { data: adjOrders, error: adjOrdErr } = await supabase
+                        .from('orders')
+                        .select(`
+                            id, sequence_id, status, type, payment_method, delivery_date,
+                            shipping_address, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
+                            billing_invoices!billing_invoices_order_id_fkey(invoice_number, is_credit_note),
+                            profiles (
+                                id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
+                                document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
+                            )
+                        `)
+                        .in('id', adjOrderIds)
+                        .order('sequence_id', { ascending: true });
+                    if (adjOrdErr) throw adjOrdErr;
+                    cutOrders = adjOrders || [];
+                }
+            } else {
+                const { data: fvOrders, error: cutOrdersErr } = await supabase
+                    .from('orders')
+                    .select(`
+                        id, sequence_id, status, type, payment_method, delivery_date,
+                        shipping_address, total, subtotal, tax, warehouse_spaces, admin_notes, logistics_data,
+                        billing_invoices!billing_invoices_order_id_fkey(invoice_number, is_credit_note),
+                        profiles (
+                            id, company_name, razon_social, billing_nit, billing_razon_social, iva_responsible, contact_name, role, contact_phone, phone, address,
+                            document_type, municipality, city, parent_id, is_corporate_parent, logistics_data
+                        )
+                    `)
+                    .eq('billing_cut_id', cutId)
+                    .order('sequence_id', { ascending: true });
+
+                if (cutOrdersErr) throw cutOrdersErr;
+                cutOrders = fvOrders || [];
+            }
+
             if (!cutOrders || cutOrders.length === 0) {
                 showToast({ type: 'warning', message: 'No se encontraron pedidos asociados a este corte.' });
                 return;
@@ -3750,7 +4070,9 @@ export default function BillingDashboard() {
             await exportRelacionDocumentosWithPicker({
                 selectedDate: cutDate,
                 orders: cutOrders.map((o: any) => {
-                    const inv = Array.isArray(o.billing_invoices) ? o.billing_invoices[0] : o.billing_invoices;
+                    const inv = isNcCut
+                        ? { invoice_number: cutInvoiceMap.get(o.id) || null }
+                        : pickPrimaryFvInvoice(o.billing_invoices);
                     const rep = getOrderReplacementInfo(o);
                     const prof = o.profiles || {};
                     const parentProf = prof.parent_id ? cutParentsMap.get(prof.parent_id) : null;
@@ -3813,8 +4135,8 @@ export default function BillingDashboard() {
                         )
                     ),
                     billing_returns (
-                        id, product_id, quantity_returned, status, reason,
-                        products:product_id ( id, name )
+                        id, product_id, quantity_returned, calculated_amount, status, source, credit_note_number, reason,
+                        products:product_id ( id, name, accounting_id, iva_rate )
                     )
                 `)
                 .in('id', orderIds);
@@ -3841,6 +4163,7 @@ export default function BillingDashboard() {
 
             const exportRows = buildWorldOfficeExportRows(fullOrders as any[], previewParentsMap, {
                 tipoDocumento: isNcSlot ? 'NC' : 'FV',
+                onlyPendingNcReturns: isNcSlot,
                 resolveInvNum: (order: any) => {
                     const mappedInv = previewMap.get(order.id);
                     return mappedInv?.docNum || parseInt(String(mappedInv?.projected || order.sequence_id).replace(/\D/g, ''), 10) || order.sequence_id;
@@ -4184,15 +4507,37 @@ export default function BillingDashboard() {
             const { data: fullOrders, error: fullErr } = await supabase
                 .from('orders')
                 .select(`
-                    id, total, subtotal, tax, sequence_id, profiles ( id, nit, company_name, razon_social, iva_responsible, payment_days )
+                    id, total, subtotal, tax, sequence_id, logistics_data,
+                    profiles ( id, nit, company_name, razon_social, iva_responsible, payment_days, logistics_data, parent:parent_id(logistics_data) ),
+                    order_items ( id, product_id, quantity, picked_quantity, unit_price, selected_options, products(id, name, iva_rate) ),
+                    billing_returns ( id, product_id, quantity_returned, calculated_amount, status, reason, source, credit_note_number )
                 `)
                 .in('id', targetOrderIds);
 
             if (fullErr) throw fullErr;
 
-            const totalBase = (fullOrders || []).reduce((acc, o) => acc + Number(o.subtotal || o.total || 0), 0);
-            const totalTax = (fullOrders || []).reduce((acc, o) => acc + Number(o.tax || 0), 0);
-            const totalFinal = (fullOrders || []).reduce((acc, o) => acc + Number(o.total || 0), 0);
+            let totalBase = 0;
+            let totalTax = 0;
+            let totalFinal = 0;
+            (fullOrders || []).forEach((o: any) => {
+                const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                const discountPct = extractAgreementDiscountPct(o, prof, prof?.parent);
+                const mappedItems: OrderItemLike[] = (o.order_items || []).map((it: any) => ({
+                    ...it,
+                    products: it.products
+                }));
+                const mappedReturns: BillingReturnLike[] = (o.billing_returns || []).map((r: any) => ({
+                    ...r,
+                    quantity: r.quantity_returned
+                }));
+                const summary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                    isOffAgreementSplit: Boolean(o.logistics_data?.is_off_agreement_split),
+                    agreementDiscountPct: discountPct
+                });
+                totalBase += mappedItems.length > 0 ? summary.subtotal : Number(o.subtotal || o.total || 0);
+                totalTax += mappedItems.length > 0 ? summary.tax : Number(o.tax || 0);
+                totalFinal += mappedItems.length > 0 ? summary.total : Number(o.total || 0);
+            });
 
             const { nextNum: liveStartNum, prefix: livePrefix } = await readLiveNextInvoiceNumber();
             const invoiceNum = `${livePrefix}-${liveStartNum}`;
@@ -4210,6 +4555,7 @@ export default function BillingDashboard() {
                     total_base: totalBase,
                     total_tax: totalTax,
                     total_final: totalFinal,
+                    is_credit_note: false,
                     status: 'pending'
                 })
                 .select('id, invoice_number')
@@ -4284,7 +4630,40 @@ export default function BillingDashboard() {
         let createdCutId: string | null = null;
         try {
             const { nextNum: currentNext, prefix: livePrefix } = await readLiveNextInvoiceNumber();
-            const totalAmount = selected.reduce((acc, o) => acc + Number(o.total || 0), 0);
+            const { data: fullOrdersForBatch, error: batchOrdErr } = await supabase
+                .from('orders')
+                .select(`
+                    id, total, subtotal, tax, logistics_data,
+                    profiles ( id, logistics_data, parent:parent_id(logistics_data) ),
+                    order_items ( id, product_id, quantity, picked_quantity, unit_price, selected_options, products(id, name, iva_rate) ),
+                    billing_returns ( id, product_id, quantity_returned, calculated_amount, status, reason, source, credit_note_number )
+                `)
+                .in('id', targetOrderIds);
+            if (batchOrdErr) throw batchOrdErr;
+
+            const batchTotalsByOrder = new Map<string, { sub: number; tx: number; tot: number }>();
+            let totalAmount = 0;
+            (fullOrdersForBatch || []).forEach((o: any) => {
+                const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                const discountPct = extractAgreementDiscountPct(o, prof, prof?.parent);
+                const mappedItems: OrderItemLike[] = (o.order_items || []).map((it: any) => ({
+                    ...it,
+                    products: it.products
+                }));
+                const mappedReturns: BillingReturnLike[] = (o.billing_returns || []).map((r: any) => ({
+                    ...r,
+                    quantity: r.quantity_returned
+                }));
+                const summary = recalculateOrderTotalsFromItems(mappedItems, mappedReturns, {
+                    isOffAgreementSplit: Boolean(o.logistics_data?.is_off_agreement_split),
+                    agreementDiscountPct: discountPct
+                });
+                const sub = mappedItems.length > 0 ? summary.subtotal : Number(o.subtotal || o.total || 0);
+                const tx = mappedItems.length > 0 ? summary.tax : Number(o.tax || 0);
+                const tot = mappedItems.length > 0 ? summary.total : Number(o.total || 0);
+                batchTotalsByOrder.set(o.id, { sub, tx, tot });
+                totalAmount += tot;
+            });
 
             const newCut = await createBatchBillingCut(selected.length, totalAmount);
             createdCutId = newCut.id;
@@ -4292,9 +4671,10 @@ export default function BillingDashboard() {
             for (let i = 0; i < selected.length; i++) {
                 const ord = selected[i];
                 const invNum = `${livePrefix}-${currentNext + i}`;
-                const sub = Number(ord.subtotal || ord.total || 0);
-                const tx = Number(ord.tax || 0);
-                const tot = Number(ord.total || 0);
+                const calc = batchTotalsByOrder.get(ord.id);
+                const sub = calc ? calc.sub : Number(ord.subtotal || ord.total || 0);
+                const tx = calc ? calc.tx : Number(ord.tax || 0);
+                const tot = calc ? calc.tot : Number(ord.total || 0);
 
                 const { data: newInv, error: invErr } = await supabase
                     .from('billing_invoices')
@@ -4305,6 +4685,7 @@ export default function BillingDashboard() {
                         total_base: sub,
                         total_tax: tx,
                         total_final: tot,
+                        is_credit_note: false,
                         status: 'pending'
                     })
                     .select('id, invoice_number')
@@ -6686,10 +7067,7 @@ export default function BillingDashboard() {
                                                                         (p.resolution_notes || '').toLowerCase().includes('opción 3')
                                                                     ) || (order.customer_service_pqrs || [])[0];
 
-                                                                    const returnReasonLower = (firstReturn?.reason || '').toLowerCase();
-                                                                    const isCreditNote = returnReasonLower.includes('nota crédito') || 
-                                                                        returnReasonLower.includes('nota credito') || 
-                                                                        Boolean(firstReturn?.credit_note_number) ||
+                                                                    const isCreditNote = approvedReturns.some((r: any) => isCreditNoteReturn(r)) ||
                                                                         (associatedPqr?.resolution_notes || '').toLowerCase().includes('opción 3') ||
                                                                         (associatedPqr?.resolution_notes || '').toLowerCase().includes('nota crédito');
 
@@ -7130,7 +7508,7 @@ export default function BillingDashboard() {
                                                                             {formatMoney(order.total || 0)}
                                                                         </div>
                                                                         <div style={{ fontSize: '0.62rem', color: '#64748B' }}>
-                                                                            Tarifa {order.profiles?.iva_responsible ? '19% IVA' : '0% IVA'}
+                                                                            IVA por Ítem (Art. 424 E.T.)
                                                                         </div>
                                                                     </>
                                                                 );
@@ -7275,6 +7653,32 @@ export default function BillingDashboard() {
                                             <span>Todas ({returns.length})</span>
                                         </button>
                                     </div>
+
+                                    {/* Action: Generar Corte NC (ADJ) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenCutPreview('ADJ')}
+                                        disabled={isProcessing}
+                                        style={{
+                                            backgroundColor: '#7C3AED',
+                                            color: '#FFFFFF',
+                                            border: 'none',
+                                            padding: '0.38rem 0.85rem',
+                                            borderRadius: '7px',
+                                            fontWeight: '800',
+                                            fontSize: '0.75rem',
+                                            cursor: isProcessing ? 'not-allowed' : 'pointer',
+                                            opacity: isProcessing ? 0.6 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            boxShadow: '0 2px 5px rgba(124, 58, 237, 0.25)'
+                                        }}
+                                        title="Previsualizar y emitir Corte de Notas Crédito (ADJ)"
+                                    >
+                                        <Receipt size={14} />
+                                        <span>Generar Corte NC (ADJ)</span>
+                                    </button>
 
                                     {/* Action: Descargar Excel NC del Día */}
                                     <button
@@ -8287,7 +8691,12 @@ export default function BillingDashboard() {
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                         <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {previewSlot === 'PM' ? (
+                                            {previewSlot === 'ADJ' ? (
+                                                <>
+                                                    <Receipt size={18} style={{ color: '#7C3AED' }} />
+                                                    <span>Auditoría y Generación de Corte de Notas Crédito (ADJ)</span>
+                                                </>
+                                            ) : previewSlot === 'PM' ? (
                                                 <>
                                                     <Moon size={18} style={{ color: '#DC2626' }} />
                                                     <span>Auditoría y Generación de Corte Tarde · Pre-Despacho (FAC-IMP)</span>
@@ -8300,9 +8709,9 @@ export default function BillingDashboard() {
                                             )}
                                         </h3>
                                         <span style={{
-                                            backgroundColor: previewSlot === 'PM' ? '#FEF2F2' : '#ECFDF5',
-                                            color: previewSlot === 'PM' ? '#991B1B' : '#065F46',
-                                            border: `1px solid ${previewSlot === 'PM' ? '#FECACA' : '#A7F3D0'}`,
+                                            backgroundColor: previewSlot === 'ADJ' ? '#F5F3FF' : previewSlot === 'PM' ? '#FEF2F2' : '#ECFDF5',
+                                            color: previewSlot === 'ADJ' ? '#6D28D9' : previewSlot === 'PM' ? '#991B1B' : '#065F46',
+                                            border: `1px solid ${previewSlot === 'ADJ' ? '#DDD6FE' : previewSlot === 'PM' ? '#FECACA' : '#A7F3D0'}`,
                                             padding: '2px 8px',
                                             borderRadius: '6px',
                                             fontSize: '0.68rem',
@@ -8312,9 +8721,11 @@ export default function BillingDashboard() {
                                         </span>
                                     </div>
                                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.74rem', color: '#64748B' }}>
-                                        {previewSlot === 'PM'
-                                            ? 'Pre-Despacho (D-1): Pedidos programados que viajan mañana y exigen Factura DIAN física impresa en muelle (hoteles, colegios, grandes superficies). Genera plano World Office sin alterar alistamiento en bodega.'
-                                            : 'Post-Entrega (D): Remisiones entregadas con margen de gracia de 120m cumplido, pesos reales de báscula auditados y deducciones de SAC liquidadas.'}
+                                        {previewSlot === 'ADJ'
+                                            ? 'Corte ADJ: Emisión separada de Notas Crédito (NC) aprobadas por SAC/Calidad sin alterar ni sobrescribir las Facturas de Venta (FV) originales.'
+                                            : previewSlot === 'PM'
+                                                ? 'Pre-Despacho (D-1): Pedidos programados que viajan mañana y exigen Factura DIAN física impresa en muelle (hoteles, colegios, grandes superficies). Genera plano World Office sin alterar alistamiento en bodega.'
+                                                : 'Post-Entrega (D): Remisiones entregadas con margen de gracia de 120m cumplido, pesos reales de báscula auditados y deducciones de SAC liquidadas.'}
                                     </p>
                                 </div>
                                 <button
@@ -8538,19 +8949,33 @@ export default function BillingDashboard() {
 
                     const isInvoiceIssued = Boolean(selectedOrderDetail.billing_invoices?.invoice_number || selectedOrderDetail.invoice_number);
                     const modalInvoiceInfo = projectedInvoiceMap.get(selectedOrderDetail.id);
-                    const projectedInvoiceNumber = selectedOrderDetail.billing_invoices?.invoice_number 
+                    const primaryFv = pickPrimaryFvInvoice(selectedOrderDetail.billing_invoices);
+                    const projectedInvoiceNumber = primaryFv?.invoice_number
                         || selectedOrderDetail.invoice_number 
                         || modalInvoiceInfo?.number
                         || 'Pendiente de Corte';
 
                     const isB2B = modalBilling.isB2B;
-                    const isIvaResponsible = Boolean(selectedOrderDetail.profiles?.iva_responsible);
-                    const orderSubtotal = Number(selectedOrderDetail.subtotal || selectedOrderDetail.total || 0);
-                    const orderTotal = Number(selectedOrderDetail.total || 0);
-                    const calculatedTax = isIvaResponsible 
-                        ? Number(selectedOrderDetail.tax_amount || selectedOrderDetail.total_tax || (orderTotal > orderSubtotal ? orderTotal - orderSubtotal : Math.round(orderTotal * 0.19 / 1.19)))
-                        : 0;
-                    const baseImponible = isIvaResponsible ? (orderTotal - calculatedTax) : orderTotal;
+                    const mappedDetailItems: OrderItemLike[] = (orderDetailItems || []).map((it: any) => ({
+                        ...it,
+                        quantity: (it.selected_options?._charge_overweight === true && Number(it.picked_quantity) > Number(it.quantity))
+                            ? Number(it.picked_quantity)
+                            : Number(it.quantity || 0),
+                        products: it.products
+                    }));
+                    const mappedDetailReturns: BillingReturnLike[] = (orderDetailReturns || []).map((r: any) => ({
+                        ...r,
+                        quantity: r.quantity_returned,
+                        products: r.products
+                    }));
+                    const detailFinancialSummary = recalculateOrderTotalsFromItems(mappedDetailItems, mappedDetailReturns, {
+                        isOffAgreementSplit: Boolean(selectedOrderDetail?.logistics_data?.is_off_agreement_split),
+                        agreementDiscountPct: extractAgreementDiscountPct(selectedOrderDetail.logistics_data, selectedOrderDetail.profiles, selectedOrderDetail.profiles?.parent)
+                    });
+                    const orderTotal = mappedDetailItems.length > 0 ? detailFinancialSummary.total : Number(selectedOrderDetail.total || 0);
+                    const calculatedTax = mappedDetailItems.length > 0 ? detailFinancialSummary.tax : Number(selectedOrderDetail.tax || 0);
+                    const baseImponible = mappedDetailItems.length > 0 ? detailFinancialSummary.subtotal : Number(selectedOrderDetail.subtotal || orderTotal);
+                    const isIvaResponsible = calculatedTax > 0;
 
                     // Restriction / Reception Delivery Window
                     const rawRestrictions = selectedOrderDetail.profiles?.delivery_restrictions;
@@ -8587,23 +9012,14 @@ export default function BillingDashboard() {
                         let firstInitial: number | null = null;
                         let totalDeductions = 0;
                         while ((m = adjRegex.exec(selectedOrderDetail.admin_notes)) !== null) {
-                            const prev = parseFloat(m[1].replace(/\./g, '').replace(/,/g, '')) || 0;
-                            const ded = parseFloat(m[3].replace(/\./g, '').replace(/,/g, '')) || 0;
+                            const prev = parseColombianCurrencyAmount(m[1]) || 0;
+                            const ded = parseColombianCurrencyAmount(m[3]) || 0;
                             if (firstInitial === null) firstInitial = prev;
                             totalDeductions += ded;
                         }
                         if (firstInitial !== null && totalDeductions > 0) {
                             initialInvoiceTotal = firstInitial;
                             pqrDeductionsTotal = totalDeductions;
-                        } else {
-                            const matchNc = selectedOrderDetail.admin_notes.match(/\[NOTA_CREDITO_PQR[^\]]*VALOR:\s*-?\$?([\d.,]+)\]/i);
-                            if (matchNc) {
-                                const ncVal = parseFloat(matchNc[1].replace(/\./g, '').replace(/,/g, '')) || 0;
-                                if (ncVal > 0) {
-                                    pqrDeductionsTotal = ncVal;
-                                    initialInvoiceTotal = orderTotal + ncVal;
-                                }
-                            }
                         }
                     }
 
@@ -8634,7 +9050,7 @@ export default function BillingDashboard() {
                         }
                     }
 
-                    const netFacturableTotal = Math.max(0, initialInvoiceTotal - pqrDeductionsTotal);
+                    const netFacturableTotal = orderTotal;
 
                     const orderNoveltiesSummary = (() => {
                         if (!orderDetailItems || orderDetailItems.length === 0) return null;
@@ -9107,69 +9523,76 @@ export default function BillingDashboard() {
                                                                     )}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType === 'ajuste_factura' ? (() => {
-                                                                        const origQty = Number(item.quantity || 0);
-                                                                        const claimed = Number((itemNovelty as any).qtyClaimed || 0);
-                                                                        const netQty = Math.max(0, origQty - claimed);
-                                                                        const uom = item.unit || item.products?.unit_of_measure || 'Kg';
+                                                                    {(() => {
+                                                                        const allocatedLine = detailFinancialSummary.lines.find((l) => (l.item as any).id === item.id);
+                                                                        if (allocatedLine && allocatedLine.deductedQuantity > 0) {
+                                                                            const origQty = allocatedLine.originalQuantity;
+                                                                            const claimed = allocatedLine.deductedQuantity;
+                                                                            const netQty = allocatedLine.netQuantity;
+                                                                            const uom = item.unit || item.products?.unit_of_measure || 'Kg';
+                                                                            return (
+                                                                                <div>
+                                                                                    <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                        {origQty} {uom}
+                                                                                    </div>
+                                                                                    <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                        {netQty === 0 ? `0 ${uom} (No entregado)` : `${netQty} ${uom} Facturables`}
+                                                                                    </div>
+                                                                                    <span style={{ fontSize: '0.58rem', color: '#DC2626', fontWeight: '800' }}>
+                                                                                        -{claimed} PQR
+                                                                                    </span>
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        if (Number(item.quantity || 0) === 0) {
+                                                                            return (
+                                                                                <div>
+                                                                                    <div style={{ fontWeight: '800', color: '#94A3B8', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                        0 {item.unit || item.products?.unit_of_measure || 'Kg'}
+                                                                                    </div>
+                                                                                    <span style={{ fontSize: '0.58rem', color: '#64748B', fontWeight: '700' }}>
+                                                                                        (Sin Despacho)
+                                                                                    </span>
+                                                                                </div>
+                                                                            );
+                                                                        }
                                                                         return (
-                                                                            <div>
-                                                                                <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
-                                                                                    {origQty} {uom}
+                                                                            <>
+                                                                                <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
+                                                                                    {presentation.primary}
                                                                                 </div>
-                                                                                <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
-                                                                                    {netQty === 0 ? `0 ${uom} (No entregado)` : `${netQty} ${uom} Facturables`}
-                                                                                </div>
-                                                                                <span style={{ fontSize: '0.58rem', color: '#DC2626', fontWeight: '800' }}>
-                                                                                    -{claimed} PQR
-                                                                                </span>
-                                                                            </div>
+                                                                                {presentation.secondary && (
+                                                                                    <div style={{ fontSize: '0.64rem', color: '#0D7A57', fontWeight: '700', marginTop: '1px' }}>
+                                                                                        {presentation.secondary}
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
                                                                         );
-                                                                    })() : Number(item.quantity || 0) === 0 ? (
-                                                                        <div>
-                                                                            <div style={{ fontWeight: '800', color: '#94A3B8', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
-                                                                                0 {item.unit || item.products?.unit_of_measure || 'Kg'}
-                                                                            </div>
-                                                                            <span style={{ fontSize: '0.58rem', color: '#64748B', fontWeight: '700' }}>
-                                                                                (Sin Despacho)
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div style={{ fontWeight: '800', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>
-                                                                                {presentation.primary}
-                                                                            </div>
-                                                                            {presentation.secondary && (
-                                                                                <div style={{ fontSize: '0.64rem', color: '#0D7A57', fontWeight: '700', marginTop: '1px' }}>
-                                                                                    {presentation.secondary}
-                                                                                </div>
-                                                                            )}
-                                                                        </>
-                                                                    )}
+                                                                    })()}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums', fontSize: '0.76rem' }}>
                                                                     {formatMoney(item.unit_price || 0)}
                                                                 </td>
                                                                 <td style={{ padding: '0.50rem 0.75rem', textAlign: 'right', fontWeight: '900', color: '#0F172A', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                    {itemNovelty && (itemNovelty as any).qtyClaimed > 0 && itemNovelty.scenarioType === 'ajuste_factura' ? (() => {
-                                                                        const origQty = Number(item.quantity || 0);
-                                                                        const claimed = Number((itemNovelty as any).qtyClaimed || 0);
-                                                                        const netQty = Math.max(0, origQty - claimed);
-                                                                        const origTotal = origQty * Number(item.unit_price || 0);
-                                                                        const netTotal = netQty * Number(item.unit_price || 0);
-                                                                        return (
-                                                                            <div>
-                                                                                <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
-                                                                                    {formatMoney(origTotal)}
+                                                                    {(() => {
+                                                                        const allocatedLine = detailFinancialSummary.lines.find((l) => (l.item as any).id === item.id);
+                                                                        if (allocatedLine && allocatedLine.deductedQuantity > 0) {
+                                                                            const netQty = allocatedLine.netQuantity;
+                                                                            const origTotal = allocatedLine.originalQuantity * allocatedLine.unitPriceGross;
+                                                                            const netTotal = allocatedLine.netGrossTotal;
+                                                                            return (
+                                                                                <div>
+                                                                                    <div style={{ fontSize: '0.66rem', color: '#94A3B8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+                                                                                        {formatMoney(origTotal)}
+                                                                                    </div>
+                                                                                    <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
+                                                                                        {formatMoney(netTotal)}
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div style={{ fontWeight: '900', color: netQty === 0 ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', fontSize: '0.80rem' }}>
-                                                                                    {formatMoney(netTotal)}
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })() : (
-                                                                        formatMoney(itemTotal)
-                                                                    )}
+                                                                            );
+                                                                        }
+                                                                        return formatMoney(itemTotal);
+                                                                    })()}
                                                                 </td>
                                                             </tr>
                                                         );
@@ -9243,7 +9666,7 @@ export default function BillingDashboard() {
                                                     boxShadow: '0 1px 4px rgba(16, 185, 129, 0.15)'
                                                 }}>
                                                     <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                        <CheckCircle2 size={10} color="#059669" /> {isIvaResponsible ? 'Total con PQR (Inc. IVA)' : 'Total con PQR (Exento)'}
+                                                        <CheckCircle2 size={10} color="#059669" /> {calculatedTax > 0 ? 'Total con PQR (IVA incluido)' : 'Total con PQR (Exento)'}
                                                     </span>
                                                     <span style={{ fontSize: '1.05rem', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums' }}>
                                                         {formatMoney(netFacturableTotal)}
@@ -9263,7 +9686,7 @@ export default function BillingDashboard() {
                                             }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.1' }}>
                                                     <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#047857', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                        {isIvaResponsible ? 'Total Facturable (Inc. IVA)' : 'Total Facturable (Exento)'}
+                                                        {calculatedTax > 0 ? 'Total Facturable (IVA incluido)' : 'Total Facturable (Exento)'}
                                                     </span>
                                                     <span style={{ fontSize: '1.02rem', fontWeight: '900', color: '#065F46', fontVariantNumeric: 'tabular-nums' }}>
                                                         {formatMoney(orderTotal)}
@@ -9678,7 +10101,7 @@ export default function BillingDashboard() {
                                                         <tbody>
                                                             {itemsList.map((it: any) => {
                                                                 const billableQty = Number(it.billable_quantity ?? it.quantity ?? 0);
-                                                                const returnedQty = Number(it.quantity_returned || 0);
+                                                                const returnedQty = Number(it.returned_quantity ?? it.quantity_returned ?? 0);
 
                                                                 return (
                                                                     <tr key={it.id} style={{ borderTop: '1px solid #F1F5F9' }}>

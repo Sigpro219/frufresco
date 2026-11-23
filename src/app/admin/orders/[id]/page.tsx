@@ -34,6 +34,13 @@ import {
 } from 'lucide-react';
 import OverweightAdjustmentModal from '@/components/orders/OverweightAdjustmentModal';
 import { normalizeAddress } from '@/lib/orderDuplicates';
+import { computeLineWeightKg } from '@/lib/orders/unitConversionEngine';
+import {
+    recalculateOrderTotalsFromItems,
+    extractAgreementDiscountPct,
+    type BillingReturnLike,
+    type OrderItemLike,
+} from '@/lib/commercial/pqrAdjustmentEngine';
 
 export default function OrderDetailPage() {
     const { id } = useParams();
@@ -107,6 +114,7 @@ export default function OrderDetailPage() {
     // Edit States
     const [editForm, setEditForm] = useState<Partial<Order>>({});
     const [editItems, setEditItems] = useState<OrderItem[]>([]);
+    const [orderReturns, setOrderReturns] = useState<BillingReturnLike[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
 
@@ -129,7 +137,7 @@ export default function OrderDetailPage() {
                 .select(`
                     *,
                     profile:profiles!profile_id (
-                        id, company_name, contact_name, contact_phone, address, nit, latitude, longitude, delivery_restrictions, logistics_data
+                        id, company_name, contact_name, contact_phone, address, nit, latitude, longitude, delivery_restrictions, logistics_data, parent:parent_id(logistics_data)
                     )
                 `)
                 .eq('id', id)
@@ -142,29 +150,46 @@ export default function OrderDetailPage() {
             }
 
 
-            // 2. Fetch Items
-            const { data: itemsData, error: itemsError } = await supabase
-                .from('order_items')
-                .select(`
-                    *,
-                    product:products (
-                        id, name, unit_of_measure, image_url, variants, weight_kg, requires_label
-                    )
-                `)
-                .eq('order_id', id);
+            // 2. Fetch Items & Returns
+            const [{ data: itemsData, error: itemsError }, { data: returnsData }] = await Promise.all([
+                supabase
+                    .from('order_items')
+                    .select(`
+                        *,
+                        product:products (
+                            id, name, unit_of_measure, image_url, variants, weight_kg, requires_label, iva_rate
+                        )
+                    `)
+                    .eq('order_id', id),
+                supabase
+                    .from('billing_returns')
+                    .select('id, product_id, quantity_returned, calculated_amount, status, reason, source, credit_note_number, products(id, name, accounting_id, iva_rate)')
+                    .eq('order_id', id)
+            ]);
 
             if (itemsError) throw itemsError;
             setItems(itemsData || []);
             setEditItems(itemsData || []);
+            setOrderReturns(
+                (returnsData || []).map((r: any) => ({
+                    ...r,
+                    quantity: r.quantity_returned,
+                    products: r.products
+                }))
+            );
 
             // 3. Update Weight if it's 0 but items exist (Initial logic)
             if (orderData && (!orderData.total_weight_kg || orderData.total_weight_kg === 0) && itemsData?.length) {
                 const autoWeight = (itemsData as any[]).reduce((acc: number, item: any) => {
-                    const w = item.product?.weight_kg || 0;
-                    return acc + (item.quantity * w);
+                    return acc + computeLineWeightKg({
+                        quantity: item.quantity,
+                        billingUnit: item.unit || item.product?.unit_of_measure,
+                        productUnitOfMeasure: item.product?.unit_of_measure,
+                        productWeightKg: item.product?.weight_kg
+                    });
                 }, 0);
                 if (autoWeight > 0) {
-                    setEditForm(prev => ({ ...prev, total_weight_kg: autoWeight }));
+                    setEditForm(prev => ({ ...prev, total_weight_kg: Number(autoWeight.toFixed(3)) }));
                 }
             }
 
@@ -338,21 +363,12 @@ export default function OrderDetailPage() {
 
     const recalculateWeight = (currentItems: OrderItem[]) => {
         const total = currentItems.reduce((acc, item) => {
-            const unit = ((item as any).unit || item.product?.unit_of_measure || '').toLowerCase().trim();
-            const isKgUnit = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'kg.'].includes(unit);
-            const isLibraUnit = ['libra', 'libras', 'lb', 'lbs', '500g'].includes(unit);
-            
-            let weightFactor = 1.0;
-            if (isKgUnit) {
-                weightFactor = 1.0;
-            } else if (isLibraUnit) {
-                weightFactor = 0.5;
-            } else if (item.product?.weight_kg && Number(item.product.weight_kg) > 0) {
-                weightFactor = Number(item.product.weight_kg);
-            } else {
-                weightFactor = 1.0;
-            }
-            return acc + (item.quantity * weightFactor);
+            return acc + computeLineWeightKg({
+                quantity: item.quantity,
+                billingUnit: (item as any).unit || item.product?.unit_of_measure,
+                productUnitOfMeasure: item.product?.unit_of_measure,
+                productWeightKg: item.product?.weight_kg
+            });
         }, 0);
         setEditForm(prev => ({ ...prev, total_weight_kg: Number(total.toFixed(3)) }));
     };
@@ -368,7 +384,7 @@ export default function OrderDetailPage() {
         // Select options_config, variants, and pricing_model_prices
         const { data } = await supabase
             .from('products')
-            .select('id, name, image_url, unit_of_measure, options_config, variants, pricing_model_prices(price, model_id)')
+            .select('id, name, image_url, unit_of_measure, weight_kg, iva_rate, options_config, variants, pricing_model_prices(price, model_id)')
             .eq('is_active', true)
             .ilike('name', `%${term}%`)
             .limit(5);
@@ -435,7 +451,21 @@ export default function OrderDetailPage() {
     const handleSaveChanges = async () => {
         setSaving(true);
         try {
-            const newTotal = editItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+            const agreementDiscountPct = extractAgreementDiscountPct(
+                (order as any)?.logistics_data || (order as any)?.profile?.logistics_data || (order as any)?.profile?.parent?.logistics_data
+            );
+            const mappedForSave: OrderItemLike[] = editItems.map((it: any) => ({
+                id: it.id,
+                product_id: it.product_id,
+                product_name: it.product?.name,
+                quantity: it.quantity,
+                unit_price: it.unit_price,
+                products: it.product
+            }));
+            const saveSummary = recalculateOrderTotalsFromItems(mappedForSave, orderReturns, {
+                isOffAgreementSplit: Boolean(order?.logistics_data?.is_off_agreement_split),
+                agreementDiscountPct
+            });
 
             // Sync Items
             const originalIds = items.map(i => i.id).filter((item_id): item_id is string => item_id !== null);
@@ -465,7 +495,9 @@ export default function OrderDetailPage() {
                         delivery_slot: editForm.delivery_slot,
                         shipping_address: editForm.shipping_address,
                         admin_notes: editForm.admin_notes !== undefined ? editForm.admin_notes : order?.admin_notes,
-                        total: newTotal,
+                        total: saveSummary.total,
+                        subtotal: saveSummary.subtotal,
+                        tax: saveSummary.tax,
                         total_weight_kg: editForm.total_weight_kg,
                         status: editForm.status
                     },
@@ -552,9 +584,24 @@ export default function OrderDetailPage() {
         );
     }
 
+    const activeItemsForCalc: OrderItemLike[] = (isEditing ? editItems : items).map((it: any) => ({
+        id: it.id,
+        product_id: it.product_id,
+        product_name: it.product?.name,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        products: it.product
+    }));
+    const orderAgreementDiscountPct = extractAgreementDiscountPct(
+        (order as any)?.logistics_data || (order as any)?.profile?.logistics_data || (order as any)?.profile?.parent?.logistics_data
+    );
+    const orderFinancialSummary = recalculateOrderTotalsFromItems(activeItemsForCalc, orderReturns, {
+        isOffAgreementSplit: Boolean(order?.logistics_data?.is_off_agreement_split),
+        agreementDiscountPct: orderAgreementDiscountPct
+    });
     const totalToDisplay = isEditing
-        ? editItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
-        : order.total;
+        ? orderFinancialSummary.total
+        : (items.length > 0 ? orderFinancialSummary.total : order.total);
 
     const repInfo = getOrderReplacementInfo(order);
     const statusStyle = getStatusBadgeStyle(order.status);
@@ -1441,9 +1488,29 @@ export default function OrderDetailPage() {
                                                         </div>
                                                     ) : (
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                            <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.92rem', fontFamily: 'monospace' }}>
-                                                                {formatNumber(item.quantity, 1)} {item.product?.unit_of_measure || 'Kg'}
-                                                            </div>
+                                                            {(() => {
+                                                                const line = orderFinancialSummary.lines[i];
+                                                                if (line && line.deductedQuantity > 0) {
+                                                                    return (
+                                                                        <>
+                                                                            <div style={{ fontSize: '0.72rem', color: '#94A3B8', textDecoration: 'line-through', fontFamily: 'monospace' }}>
+                                                                                {formatNumber(line.originalQuantity, 1)} {item.product?.unit_of_measure || 'Kg'}
+                                                                            </div>
+                                                                            <div style={{ fontWeight: '900', color: line.netQuantity === 0 ? '#DC2626' : '#0F172A', fontSize: '0.92rem', fontFamily: 'monospace' }}>
+                                                                                {formatNumber(line.netQuantity, 1)} {item.product?.unit_of_measure || 'Kg'}
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.64rem', color: '#DC2626', fontWeight: '800', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                                -{line.deductedQuantity} PQR
+                                                                            </span>
+                                                                        </>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.92rem', fontFamily: 'monospace' }}>
+                                                                        {formatNumber(item.quantity, 1)} {item.product?.unit_of_measure || 'Kg'}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                             {(() => {
                                                                 const spec = formatStructuredSpecification({
                                                                     quantity: item.quantity,
@@ -1472,7 +1539,13 @@ export default function OrderDetailPage() {
                                                     )}
                                                 </td>
                                                 <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap', fontFamily: 'monospace', fontWeight: '900', fontSize: '0.9rem', color: item.unit_price === 0 ? '#059669' : '#0F172A' }}>
-                                                    {formatMoney(item.unit_price * item.quantity)}
+                                                    {(() => {
+                                                        const line = orderFinancialSummary.lines[i];
+                                                        if (!isEditing && line && line.deductedQuantity > 0) {
+                                                            return formatMoney(line.netGrossTotal);
+                                                        }
+                                                        return formatMoney(item.unit_price * item.quantity);
+                                                    })()}
                                                 </td>
                                             </tr>
                                         );

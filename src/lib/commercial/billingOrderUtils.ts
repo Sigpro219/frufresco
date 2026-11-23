@@ -28,7 +28,7 @@ export interface BillingOrderRecordLike {
     total?: number | null;
     total_amount?: number | null;
     invoice_number?: string | null;
-    billing_invoices?: { invoice_number?: string | null } | Array<{ invoice_number?: string | null }> | null;
+    billing_invoices?: { invoice_number?: string | null; is_credit_note?: boolean | null } | Array<{ invoice_number?: string | null; is_credit_note?: boolean | null }> | null;
     logistics_data?: {
         is_batch_accumulated?: boolean | null;
         is_gift_remission?: boolean | null;
@@ -59,7 +59,13 @@ const B2B_NAME_REGEX =
 
 export function extractExistingInvoiceNumber(order: BillingOrderRecordLike | null | undefined): string | null {
     if (!order) return null;
-    const bi = Array.isArray(order.billing_invoices) ? order.billing_invoices[0] : order.billing_invoices;
+    const list = Array.isArray(order.billing_invoices)
+        ? order.billing_invoices
+        : order.billing_invoices
+            ? [order.billing_invoices]
+            : [];
+    const fvOnly = list.filter((inv) => inv && inv.is_credit_note !== true);
+    const bi = fvOnly.find((inv) => inv.invoice_number && String(inv.invoice_number).trim().length > 0) || fvOnly[0];
     const num = bi?.invoice_number || order.invoice_number;
     return num && String(num).trim().length > 0 ? String(num).trim() : null;
 }

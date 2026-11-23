@@ -154,6 +154,7 @@ export default function CadenaRadianReconciliationSubmodule({ onSyncComplete }: 
             const { data: invData, error: invErr } = await supabase
                 .from('billing_invoices')
                 .select('*')
+                .or('is_credit_note.is.null,is_credit_note.eq.false')
                 .limit(1000);
 
             if (invErr) throw invErr;

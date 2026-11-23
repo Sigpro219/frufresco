@@ -277,11 +277,13 @@ export default function OverweightBillingArbitrationModal({
 
                 const { data: existingInv } = await supabase
                     .from('billing_invoices')
-                    .select('id')
+                    .select('id, worldoffice_sync_status')
                     .eq('order_id', row.orderId)
+                    .or('is_credit_note.is.null,is_credit_note.eq.false')
+                    .limit(1)
                     .maybeSingle();
 
-                if (existingInv?.id) {
+                if (existingInv?.id && existingInv.worldoffice_sync_status !== 'synced') {
                     await supabase
                         .from('billing_invoices')
                         .update({
