@@ -44,7 +44,10 @@ import {
     Smartphone,
     QrCode,
     Copy,
-    LocateFixed
+    LocateFixed,
+    PanelLeftClose,
+    PanelLeftOpen,
+    History
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -137,10 +140,12 @@ function LiveFleetMapControls({
     showTraffic,
     fitTrigger,
     points,
+    focusPoint,
 }: {
     showTraffic: boolean;
     fitTrigger: number;
     points: Array<{ lat: number; lng: number }>;
+    focusPoint?: { lat: number; lng: number; seq: number } | null;
 }) {
     const map = useMap();
 
@@ -165,6 +170,12 @@ function LiveFleetMapControls({
         points.forEach(p => bounds.extend(p));
         map.fitBounds(bounds, 60);
     }, [map, fitTrigger, points]);
+
+    useEffect(() => {
+        if (!map || !focusPoint) return;
+        map.panTo({ lat: focusPoint.lat, lng: focusPoint.lng });
+        map.setZoom(15);
+    }, [map, focusPoint]);
 
     return null;
 }
@@ -222,6 +233,10 @@ export default function TransportControlTower() {
     const [qrCopied, setQrCopied] = useState(false);
     const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(false);
     const [fitTrigger, setFitTrigger] = useState<number>(0);
+    const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+    const [sidebarMode, setSidebarMode] = useState<'routes' | 'fleet'>('routes');
+    const [showHistoryRoutes, setShowHistoryRoutes] = useState<boolean>(false);
+    const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number; seq: number } | null>(null);
 
     const handleOpenQrBeacon = async (route: ActiveRoute) => {
         setQrLoadingRouteId(route.id);
@@ -595,7 +610,15 @@ export default function TransportControlTower() {
     const vehiclesOnRoute = vehiclesMovingGps.length;
     const vehiclesMaintenance = activeFleet.filter(v => v.status === 'maintenance').length;
     const vehiclesAvailable = Math.max(0, totalVehicles - vehiclesOnRoute - vehiclesMaintenance);
-    const avgKilosPerRoute = activeRoutes.length > 0 ? Math.round(stats.totalKilos / activeRoutes.length) : 0;
+    const liveRoutes = activeRoutes.filter(r => ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
+    const completedHistoryRoutes = activeRoutes.filter(r => !['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
+    const displayedRoutes = showHistoryRoutes ? activeRoutes : liveRoutes;
+    const sortedFleetForSidebar = [...activeFleet].sort((a, b) => {
+        const aMov = isGpsFresh(a) && (a.speed || 0) > 0 ? 2 : hasRealGps(a) ? 1 : 0;
+        const bMov = isGpsFresh(b) && (b.speed || 0) > 0 ? 2 : hasRealGps(b) ? 1 : 0;
+        if (bMov !== aMov) return bMov - aMov;
+        return String(a.plate).localeCompare(String(b.plate));
+    });
 
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
@@ -620,51 +643,25 @@ export default function TransportControlTower() {
                     </div>
                 )}
                 
-                {/* ── TOP HEADER & INTEGRATED KPIS ── */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '1rem' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: THEME.colors.primary, boxShadow: `0 0 8px ${THEME.colors.primary}80` }}></div>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.primary, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                                CADENA DE SUMINISTRO &bull; TORRE DE CONTROL
-                            </span>
-                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.primaryLight, padding: '0.15rem 0.45rem', borderRadius: '6px' }}>
-                                Bodega Central Corabastos
-                            </span>
-                        </div>
-                        <h1 style={{ fontSize: 'clamp(1.35rem, 5vw, 1.75rem)', fontWeight: '900', color: THEME.colors.textMain, letterSpacing: '-0.02em', margin: 0, lineHeight: 1.1 }}>
-                            Transporte &amp; Despachos
-                        </h1>
-                    </div>
-
-                    {/* 4 Brand Harmonized KPI Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', flex: '1 1 100%', minWidth: 0, maxWidth: '850px' }}>
-                        <KPICard title="EN TRÁNSITO" value={formatNumber(stats.totalActive)} icon={<Truck size={17} strokeWidth={2} />} color={THEME.colors.primary} subtitle="Rutas en movimiento hoy" />
-                        <KPICard title="ENTREGAS" value={formatNumber(stats.completedToday)} icon={<CheckCircle2 size={17} strokeWidth={2} />} color="#059669" subtitle="Rutas finalizadas hoy" />
-                        <KPICard title="VOLUMEN TOTAL" value={`${formatNumber(stats.totalKilos)} kg`} icon={<Scale size={17} strokeWidth={2} />} color="#D97706" subtitle="Carga total a bordo" />
-                        <KPICard title="ALERTAS / NOVEDADES" value={formatNumber(stats.totalNovedades)} icon={<AlertTriangle size={17} strokeWidth={2} />} color="#DC2626" subtitle="Incidencias registradas" />
-                    </div>
-                </div>
-
-                {/* ── SEGMENTED NAVIGATION CONTROL BAR ── */}
+                {/* ── UNIFIED STICKY FROSTED CONTROL BAR ── */}
                 <div style={{ 
                     position: 'sticky',
-                    top: '80px',
-                    zIndex: 30,
-                    backgroundColor: THEME.colors.surface, 
-                    padding: '0.35rem 0.6rem', 
-                    borderRadius: THEME.radius.lg, 
-                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)', 
+                    top: '82px',
+                    zIndex: 40,
+                    backgroundColor: 'rgba(255, 255, 255, 0.94)', 
+                    padding: '0.4rem 0.65rem', 
+                    borderRadius: '14px', 
+                    boxShadow: '0 8px 24px -6px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04)', 
                     border: `1px solid ${THEME.colors.border}`,
                     display: 'flex',
                     flexWrap: 'wrap',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '0.85rem',
-                    gap: '0.65rem',
-                    backdropFilter: 'blur(8px)'
+                    marginBottom: '0.75rem',
+                    gap: '0.6rem',
+                    backdropFilter: 'blur(12px)'
                 }}>
-                    <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', scrollbarWidth: 'none', flex: '1 1 320px', minWidth: 0, maxWidth: '100%' }}>
+                    <div style={{ display: 'flex', gap: '0.25rem', overflowX: 'auto', scrollbarWidth: 'none', flex: '1 1 360px', minWidth: 0, maxWidth: '100%' }}>
                         {[
                             { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
                             { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
@@ -681,10 +678,10 @@ export default function TransportControlTower() {
                                     key={tab.id}
                                     onClick={() => handleSelectTab(tab.id as TransportTab)}
                                     style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.45rem 0.85rem', borderRadius: '8px', border: 'none',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.42rem 0.72rem', borderRadius: '8px', border: 'none',
                                         backgroundColor: isActive ? THEME.colors.primary : 'transparent',
                                         color: isActive ? '#FFFFFF' : THEME.colors.textSecondary,
-                                        fontSize: '0.76rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        fontSize: '0.74rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.16s ease',
                                         boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
                                         whiteSpace: 'nowrap'
                                     }}
@@ -708,9 +705,24 @@ export default function TransportControlTower() {
                         })}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, flexWrap: 'wrap' }}>
+                        {/* Compact Live Telemetry Pills */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain }}>
+                            <Truck size={12} color={THEME.colors.primary} />
+                            <span>{formatNumber(stats.totalActive)} activas</span>
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain }}>
+                            <Scale size={12} color="#D97706" />
+                            <span>{formatNumber(stats.totalKilos)} kg</span>
+                        </div>
+                        {stats.totalNovedades > 0 && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: '#B91C1C' }}>
+                                <AlertTriangle size={12} />
+                                <span>{formatNumber(stats.totalNovedades)}</span>
+                            </div>
+                        )}
                         {gpsSyncMessage && (
-                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.25rem 0.55rem', borderRadius: '6px' }}>
                                 {gpsSyncMessage}
                             </span>
                         )}
@@ -720,36 +732,30 @@ export default function TransportControlTower() {
                             disabled={isSyncingGps || loading}
                             title="Sincronizar telemetría con apps-360.online"
                             style={{ 
-                                padding: '0.45rem 0.85rem', borderRadius: '8px', border: `1px solid ${THEME.colors.primary}`, backgroundColor: isSyncingGps ? THEME.colors.primaryLight : '#0D7A57',
-                                color: isSyncingGps ? THEME.colors.primary : 'white', fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                                transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.25)'
+                                padding: '0.42rem 0.78rem', borderRadius: '8px', border: `1px solid ${THEME.colors.primary}`, backgroundColor: isSyncingGps ? THEME.colors.primaryLight : '#0D7A57',
+                                color: isSyncingGps ? THEME.colors.primary : 'white', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                                transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.22)'
                             }}
                         >
                             {isSyncingGps ? (
-                                <><Loader2 size={12} className="animate-spin" /> Sincronizando GPS...</>
+                                <><Loader2 size={12} className="animate-spin" /> Sync...</>
                             ) : (
-                                <><Navigation size={12} strokeWidth={2.5} /> Sincronizar GPS</>
+                                <><Navigation size={12} strokeWidth={2.5} /> Sync GPS</>
                             )}
                         </button>
 
                         <button 
                             onClick={() => fetchTransportData()}
                             disabled={loading}
+                            title="Actualizar datos"
                             style={{ 
-                                padding: '0.45rem 0.9rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
-                                color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.74rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                padding: '0.42rem 0.65rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
+                                color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
                                 transition: 'all 0.15s'
                             }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = THEME.colors.primary;
-                                e.currentTarget.style.color = THEME.colors.primary;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = THEME.colors.border;
-                                e.currentTarget.style.color = THEME.colors.textMain;
-                            }}
                         >
-                            {loading ? 'Actualizando...' : <><RefreshCw size={12} strokeWidth={2} /> Actualizar</>}
+                            <RefreshCw size={12} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
+                            <span>Actualizar</span>
                         </button>
                     </div>
                 </div>
@@ -758,10 +764,10 @@ export default function TransportControlTower() {
                 <div style={{ position: 'relative', minHeight: 'calc(100vh - 220px)' }}>
                     {activeTab === 'map' ? (
                         <div
-                            className="transport-monitor-grid"
+                            className={`transport-monitor-grid ${sidebarOpen ? 'with-sidebar' : 'map-only'}`}
                             style={{
                                 display: 'grid',
-                                gap: '1.25rem',
+                                gap: '0.85rem',
                             }}
                         >
                             <style jsx>{`
@@ -769,89 +775,161 @@ export default function TransportControlTower() {
                                     grid-template-columns: minmax(0, 1fr);
                                 }
                                 @media (min-width: 960px) {
-                                    .transport-monitor-grid {
-                                        grid-template-columns: 390px minmax(0, 1fr);
-                                        height: calc(100vh - 210px);
-                                        min-height: 540px;
+                                    .transport-monitor-grid.with-sidebar {
+                                        grid-template-columns: 325px minmax(0, 1fr);
+                                        height: calc(100vh - 154px);
+                                        min-height: 580px;
+                                    }
+                                    .transport-monitor-grid.map-only {
+                                        grid-template-columns: minmax(0, 1fr);
+                                        height: calc(100vh - 154px);
+                                        min-height: 580px;
                                     }
                                 }
                             `}</style>
-                            {/* Route Feed & Operational Intelligence Sidebar */}
-                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '1.1rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem', minHeight: '320px' }}>
-                                
-                                {/* 1. Sidebar Header */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: '900', color: THEME.colors.textMain, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Estado de Rutas en Vivo
-                                        </h3>
-                                        <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
-                                            Despachos asignados para hoy
-                                        </span>
+                            {/* Collapsible Route & Live Fleet Sidebar */}
+                            {sidebarOpen && (
+                            <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, padding: '0.85rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.7rem', minHeight: '320px' }}>
+                                {/* Segmented Sidebar Header (Rutas | Flota) + Collapse */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', paddingBottom: '0.55rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
+                                    <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '9px', flex: 1 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSidebarMode('routes')}
+                                            style={{
+                                                flex: 1, padding: '5px 8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+                                                fontSize: '0.72rem', fontWeight: '800',
+                                                backgroundColor: sidebarMode === 'routes' ? '#FFFFFF' : 'transparent',
+                                                color: sidebarMode === 'routes' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                                                boxShadow: sidebarMode === 'routes' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none'
+                                            }}
+                                        >
+                                            Rutas ({liveRoutes.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSidebarMode('fleet')}
+                                            style={{
+                                                flex: 1, padding: '5px 8px', borderRadius: '7px', border: 'none', cursor: 'pointer',
+                                                fontSize: '0.72rem', fontWeight: '800',
+                                                backgroundColor: sidebarMode === 'fleet' ? '#FFFFFF' : 'transparent',
+                                                color: sidebarMode === 'fleet' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                                                boxShadow: sidebarMode === 'fleet' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none'
+                                            }}
+                                        >
+                                            Flota ({activeFleet.length})
+                                        </button>
                                     </div>
-                                    <span style={{ fontSize: '0.72rem', fontWeight: '900', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
-                                        {activeRoutes.length} RUTAS
-                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSidebarOpen(false)}
+                                        title="Ocultar panel lateral para ampliar mapa"
+                                        style={{ padding: '6px', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: '#FFFFFF', color: THEME.colors.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                                    >
+                                        <PanelLeftClose size={14} />
+                                    </button>
                                 </div>
 
-                                {/* 2. Fleet Overview Mini-Bar (Fills empty space with actionable data) */}
-                                <div style={{ backgroundColor: THEME.colors.background, borderRadius: THEME.radius.md, padding: '0.65rem 0.8rem', border: `1px solid ${THEME.colors.border}` }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '800', color: THEME.colors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
-                                        Resumen Operativo de Flota
+                                {sidebarMode === 'fleet' ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                        {sortedFleetForSidebar.map((v: any) => {
+                                            const real = hasRealGps(v);
+                                            const fresh = isGpsFresh(v);
+                                            const moving = fresh && (v.speed || 0) > 0;
+                                            const drv = driversData.find((d: any) => d.id === v.driver_id);
+                                            const isSel = selectedVehicleId === v.id;
+                                            return (
+                                                <button
+                                                    key={v.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (real) {
+                                                            setSelectedVehicleId(v.id);
+                                                            setFocusPoint({ lat: Number(v.last_latitude), lng: Number(v.last_longitude), seq: Date.now() });
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%', textAlign: 'left', padding: '0.6rem 0.7rem', borderRadius: '10px',
+                                                        border: isSel ? `1.5px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
+                                                        backgroundColor: isSel ? '#ECFDF5' : real ? '#FFFFFF' : '#F8FAFC',
+                                                        cursor: real ? 'pointer' : 'default',
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                                        <div style={{
+                                                            width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0,
+                                                            backgroundColor: moving ? '#FF6B00' : real ? (fresh ? '#0D7A57' : '#DC2626') : '#94A3B8',
+                                                            boxShadow: moving ? '0 0 6px rgba(255,107,0,0.8)' : 'none'
+                                                        }} />
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontWeight: '900', fontSize: '0.84rem', color: THEME.colors.textMain }}>{v.plate}</div>
+                                                            <div style={{ fontSize: '0.66rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {drv?.contact_name || (v.vehicle_type || 'Furgón')}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                                        <div style={{ fontSize: '0.68rem', fontWeight: '800', color: moving ? '#EA580C' : real ? (fresh ? '#0D7A57' : '#B91C1C') : '#64748B' }}>
+                                                            {moving ? `${Math.round(v.speed)} km/h` : real ? (fresh ? 'Detenido' : 'Vencido') : 'Sin GPS'}
+                                                        </div>
+                                                        {real && v.last_gps_sync && (
+                                                            <div style={{ fontSize: '0.6rem', color: '#94A3B8' }}>
+                                                                {new Date(v.last_gps_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', textAlign: 'center' }}>
-                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
-                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: THEME.colors.primary }}>{vehiclesOnRoute}</div>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Ruta</div>
-                                        </div>
-                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
-                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#059669' }}>{vehiclesAvailable}</div>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>En Patio</div>
-                                        </div>
-                                        <div style={{ backgroundColor: 'white', padding: '0.4rem 0.2rem', borderRadius: '6px', border: `1px solid ${THEME.colors.border}` }}>
-                                            <div style={{ fontSize: '1rem', fontWeight: '900', color: '#D97706' }}>{avgKilosPerRoute}</div>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textSecondary }}>kg/Ruta</div>
-                                        </div>
+                                ) : (
+                                <>
+                                {completedHistoryRoutes.length > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
+                                        <span>{showHistoryRoutes ? 'Mostrando activas + historial' : 'Solo rutas activas de hoy'}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowHistoryRoutes(prev => !prev)}
+                                            style={{
+                                                border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                                                color: THEME.colors.primary, fontWeight: '800', fontSize: '0.68rem',
+                                                display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                            }}
+                                        >
+                                            <History size={12} />
+                                            {showHistoryRoutes ? 'Ocultar historial' : `Historial (${completedHistoryRoutes.length})`}
+                                        </button>
                                     </div>
-                                </div>
-                                
-                                {/* 3. Active Routes List or Rich Empty State */}
-                                {activeRoutes.length === 0 && !loading ? (
-                                    <div style={{ textAlign: 'center', padding: '2.5rem 1rem', backgroundColor: '#F9FBFA', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.borderActive}`, margin: 'auto 0' }}>
-                                        <div style={{ color: THEME.colors.primary, marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-                                            <Truck size={42} strokeWidth={1.5} />
+                                )}
+                                {/* Active Routes List or Rich Empty State */}
+                                {displayedRoutes.length === 0 && !loading ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem 1rem', backgroundColor: '#F9FBFA', borderRadius: THEME.radius.lg, border: `1px dashed ${THEME.colors.borderActive}`, margin: 'auto 0' }}>
+                                        <div style={{ color: THEME.colors.primary, marginBottom: '0.65rem', display: 'flex', justifyContent: 'center' }}>
+                                            <Truck size={36} strokeWidth={1.5} />
                                         </div>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.3rem' }}>
-                                            No hay rutas activas en este momento
+                                        <div style={{ fontSize: '0.86rem', fontWeight: '800', color: THEME.colors.textMain, marginBottom: '0.25rem' }}>
+                                            Sin rutas activas en curso
                                         </div>
-                                        <p style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, margin: '0 0 1.25rem', lineHeight: 1.4 }}>
+                                        <p style={{ fontSize: '0.73rem', color: THEME.colors.textSecondary, margin: '0 0 1rem', lineHeight: 1.4 }}>
                                             {vehiclesAvailable > 0 
-                                                ? `Tienes ${vehiclesAvailable} vehículo(s) disponible(s) en patio listos para asignar.` 
-                                                : 'La flota se encuentra disponible para programar despachos del día.'}
+                                                ? `${vehiclesAvailable} vehículo(s) listos para asignar en Planeación.` 
+                                                : 'Programa los despachos del día desde Planeación.'}
                                         </p>
                                         <button
                                             onClick={() => handleSelectTab('planner')}
                                             style={{
-                                                backgroundColor: THEME.colors.primary,
-                                                color: 'white',
-                                                padding: '0.55rem 1.1rem',
-                                                borderRadius: '8px',
-                                                fontSize: '0.78rem',
-                                                fontWeight: '800',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 2px 6px rgba(13, 122, 87, 0.2)'
+                                                backgroundColor: THEME.colors.primary, color: 'white', padding: '0.5rem 1rem',
+                                                borderRadius: '8px', fontSize: '0.75rem', fontWeight: '800', border: 'none',
+                                                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
                                             }}
                                         >
                                             <Compass size={14} /> Ir a Planeador de Rutas
                                         </button>
                                     </div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                        {activeRoutes.map(route => {
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                        {displayedRoutes.map(route => {
                                             const done = route.route_stops.filter(s => s.status === 'delivered' || s.status === 'failed').length;
                                             const total = route.route_stops.length;
                                             const progress = total > 0 ? (done / total) * 100 : 0;
@@ -940,7 +1018,10 @@ export default function TransportControlTower() {
                                         })}
                                     </div>
                                 )}
+                                </>
+                                )}
                             </div>
+                            )}
 
                             {/* Map Container with Floating HUD */}
                             <div style={{ borderRadius: THEME.radius.xl, overflow: 'hidden', border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md, position: 'relative', minHeight: '520px', height: '100%' }}>
@@ -951,6 +1032,7 @@ export default function TransportControlTower() {
                                                 showTraffic={showTrafficLayer}
                                                 fitTrigger={fitTrigger}
                                                 points={vehiclesWithRealGps.map((v: any) => ({ lat: Number(v.last_latitude), lng: Number(v.last_longitude) }))}
+                                                focusPoint={focusPoint}
                                             />
                                             {/* Bodega Central Marker */}
                                             <AdvancedMarker position={BODEGA_COORDS}>
@@ -1336,15 +1418,38 @@ export default function TransportControlTower() {
                                             })}
                                         </Map>
 
-                                        {/* Top-Right Map Quick Controls */}
+                                        {/* Top-Right Map Quick Controls (offset left of Google Maps native Fullscreen at right:10px) */}
                                         <div style={{
                                             position: 'absolute',
-                                            top: '14px',
-                                            right: '14px',
+                                            top: '10px',
+                                            right: '60px',
                                             display: 'flex',
                                             gap: '8px',
                                             zIndex: 10
                                         }}>
+                                            {!sidebarOpen && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSidebarOpen(true)}
+                                                    style={{
+                                                        padding: '7px 11px',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        backgroundColor: 'rgba(255,255,255,0.95)',
+                                                        color: THEME.colors.textMain,
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        boxShadow: THEME.shadow.sm,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    <PanelLeftOpen size={13} color={THEME.colors.primary} />
+                                                    <span>Panel</span>
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => setShowTrafficLayer(prev => !prev)}
