@@ -1,13 +1,50 @@
 /**
- * Motor de Asignación Geográfica de Bahías de Piso (1 a 150)
- * y Cubicaje de Canastillas para el Modo Manual de Bodega
- * 
- * Reglas de Negocio FruFresco:
- * - 150 Espacios físicos en el suelo de la nave central (Espacios en Suelo / Bahías).
+ * Motor de Asignación de Bahías de Piso (1 a 120 nominal, crecimiento elástico 121+)
+ * y Cubicaje de Canastillas para FruFresco (Manual y Digital)
+ *
+ * Reglas de Negocio FruFresco (Enmienda 2026-11-23):
+ * - 120 Espacios nominales en el suelo de la nave central (crecimiento elástico 121+ sin truncar).
  * - avg_kg_per_crate = 12.5 kg (estimación de volumen).
  * - space_capacity = 36 canastillas apilables por bahía.
- * - Asignación contigua por zona geográfica para que clientes del mismo camión queden juntos.
+ * - Ordenamiento estricto descendente por peso total combinado (Padre + Hijo Remisión $0):
+ *   el pedido más pesado ocupa el Espacio 1, seguido en orden descendente.
  */
+
+import { computeLineWeightKg } from '@/lib/orders/unitConversionEngine';
+
+export const DEFAULT_NOMINAL_SPACES = 120;
+
+export function resolveOrderWeightKg(order: any): number {
+    const headerWeight = Number(order?.total_weight_kg);
+    if (Number.isFinite(headerWeight) && headerWeight > 0) return headerWeight;
+    const items = Array.isArray(order?.order_items) ? order.order_items : [];
+    const itemsWeight = items.reduce((sum: number, it: any) => {
+        return sum + computeLineWeightKg({
+            quantity: it?.quantity,
+            billingUnit: it?.unit,
+            productUnitOfMeasure: it?.products?.unit_of_measure,
+            productWeightKg: it?.products?.weight_kg,
+        });
+    }, 0);
+    return Number.isFinite(itemsWeight) && itemsWeight > 0 ? Math.round(itemsWeight * 100) / 100 : 0;
+}
+
+function compareOrderTieBreak(
+    aId: string,
+    aSeq: number | string | undefined,
+    bId: string,
+    bSeq: number | string | undefined
+): number {
+    const hasA = aSeq !== undefined && aSeq !== null && String(aSeq).trim() !== '';
+    const hasB = bSeq !== undefined && bSeq !== null && String(bSeq).trim() !== '';
+    if (hasA && hasB) {
+        const seqCmp = String(aSeq).localeCompare(String(bSeq), undefined, { numeric: true });
+        if (seqCmp !== 0) return seqCmp;
+    } else if (hasA !== hasB) {
+        return hasA ? -1 : 1;
+    }
+    return String(aId).localeCompare(String(bId));
+}
 
 export interface OrderStagingInput {
     id: string;
@@ -234,7 +271,6 @@ export function allocateStagingSpacesGeographically(
 ): StagingAllocationResult[] {
     const avgKg = config.avg_kg_per_crate || 12.5;
     const capacity = config.space_capacity || 36;
-    const maxSpaces = config.max_spaces || 150;
 
     // 1. Enriquecer cada pedido con su zona calculada, ventana horaria y cubicaje
     const enriched = orders.map(o => {
@@ -252,71 +288,13 @@ export function allocateStagingSpacesGeographically(
         };
     });
 
-    // 2. Ordenar por Clúster Geográfico, luego por Ventana de Entrega (temprana primero para LIFO), y luego por volumen
-    const CORABASTOS_LAT = 4.633653;
-    const CORABASTOS_LNG = -74.160647;
-    const hasValidGps = (lat?: number | null, lng?: number | null): lat is number =>
-        typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && lat >= 3.5 && lat <= 6.0 && lng >= -75.5 && lng <= -73.0;
-    const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-        const toRad = (deg: number) => (deg * Math.PI) / 180;
-        const dLat = toRad(lat2 - lat1);
-        const dLng = toRad(lng2 - lng1);
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
-
-    const gpsItems = enriched.map(e => {
-        const rawLat = typeof e.raw.lat === 'number' ? e.raw.lat : parseFloat(String(e.raw.lat ?? ''));
-        const rawLng = typeof e.raw.lng === 'number' ? e.raw.lng : parseFloat(String(e.raw.lng ?? ''));
-        const valid = hasValidGps(rawLat, rawLng);
-        return {
-            ...e,
-            _lat: valid ? rawLat : null,
-            _lng: valid ? rawLng : null,
-            _validGps: valid,
-            _bearing: valid ? Math.atan2(rawLat - CORABASTOS_LAT, rawLng - CORABASTOS_LNG) : 0
-        };
-    });
-
-    const withGps = gpsItems.filter(e => e._validGps);
-    const withoutGps = gpsItems.filter(e => !e._validGps);
-    withoutGps.sort((a, b) => {
-        if (a.zone !== b.zone) return a.zone.localeCompare(b.zone);
-        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
-        return b.raw.total_weight_kg - a.raw.total_weight_kg;
-    });
-
-    const orderedGps: typeof gpsItems = [];
-    if (withGps.length > 0) {
-        const remaining = [...withGps].sort((a, b) =>
-            a.deliveryInfo.minutes !== b.deliveryInfo.minutes ? a.deliveryInfo.minutes - b.deliveryInfo.minutes : a._bearing - b._bearing
-        );
-        let current = remaining.shift()!;
-        orderedGps.push(current);
-        while (remaining.length > 0) {
-            let bestIdx = 0;
-            let bestCost = Infinity;
-            for (let i = 0; i < remaining.length; i++) {
-                const cand = remaining[i];
-                const travelMins = ((haversineKm(current._lat!, current._lng!, cand._lat!, cand._lng!) * 1.35) / 28) * 60;
-                const cost = travelMins + 0.5 * Math.abs(cand.deliveryInfo.minutes - current.deliveryInfo.minutes);
-                if (cost < bestCost) {
-                    bestCost = cost;
-                    bestIdx = i;
-                }
-            }
-            current = remaining.splice(bestIdx, 1)[0];
-            orderedGps.push(current);
-        }
-    }
-    const orderedAll = [...orderedGps, ...withoutGps];
-
-    // 3. Asignación secuencial de bahías contiguas en suelo (1..150)
+    // 2. Agrupar clústeres (Padre + Hijo Remisión $0) ANTES de ordenar y ordenar por peso combinado DESC
+    const enrichedIds = new Set(enriched.map(e => e.raw.id));
     const childByParentId = new Map<string, typeof enriched>();
     const splitChildIds = new Set<string>();
     enriched.forEach(item => {
         const log = item.raw.logistics_data;
-        if (log?.is_off_agreement_split && log?.parent_order_id) {
+        if (log?.is_off_agreement_split && log?.parent_order_id && enrichedIds.has(log.parent_order_id)) {
             splitChildIds.add(item.raw.id);
             const list = childByParentId.get(log.parent_order_id) || [];
             list.push(item);
@@ -324,14 +302,25 @@ export function allocateStagingSpacesGeographically(
         }
     });
 
+    const clusters = enriched
+        .filter(item => !splitChildIds.has(item.raw.id))
+        .map(parent => {
+            const linkedChildren = childByParentId.get(parent.raw.id) || [];
+            const combinedWeight = (Number(parent.raw.total_weight_kg) || 0) +
+                linkedChildren.reduce((sum, c) => sum + (Number(c.raw.total_weight_kg) || 0), 0);
+            return { parent, linkedChildren, combinedWeight };
+        })
+        .sort((a, b) => {
+            if (b.combinedWeight !== a.combinedWeight) return b.combinedWeight - a.combinedWeight;
+            return compareOrderTieBreak(a.parent.raw.id, a.parent.raw.sequence_id, b.parent.raw.id, b.parent.raw.sequence_id);
+        });
+
+    // 3. Asignación secuencial elástica de bahías contiguas (1..120 nominal, 121+ sin truncar)
     let currentSlot = 1;
     const results: StagingAllocationResult[] = [];
-    const resultsByOrderId = new Map<string, StagingAllocationResult>();
 
-    for (const item of orderedAll) {
-        if (splitChildIds.has(item.raw.id) && resultsByOrderId.has(item.raw.logistics_data.parent_order_id)) continue;
-        const linkedChildren = childByParentId.get(item.raw.id) || [];
-        const combinedWeight = item.raw.total_weight_kg + linkedChildren.reduce((sum, c) => sum + (c.raw.total_weight_kg || 0), 0);
+    for (const cluster of clusters) {
+        const { parent: item, linkedChildren, combinedWeight } = cluster;
         const spacesToAssign = linkedChildren.length > 0
             ? calculateCratesAndSpaces(combinedWeight, avgKg, capacity).spaces
             : item.spacesNeeded;
@@ -354,7 +343,6 @@ export function allocateStagingSpacesGeographically(
             clientType: item.raw.clientType
         };
         results.push(parentRes);
-        resultsByOrderId.set(item.raw.id, parentRes);
         linkedChildren.forEach(child => {
             const childRes: StagingAllocationResult = {
                 order_id: child.raw.id,
@@ -371,7 +359,6 @@ export function allocateStagingSpacesGeographically(
                 clientType: child.raw.clientType
             };
             results.push(childRes);
-            resultsByOrderId.set(child.raw.id, childRes);
         });
     }
 
@@ -418,7 +405,7 @@ export async function ensureUniversalStagingSpaces(
     if (supabaseClient && typeof supabaseClient.from === "function" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
         const baseQuery = supabaseClient
             .from("orders")
-            .select("id, sequence_id, status, delivery_date, warehouse_spaces, logistics_data")
+            .select("id, sequence_id, status, delivery_date, warehouse_spaces, total_weight_kg, logistics_data")
             .eq("delivery_date", targetDate);
         const res = typeof baseQuery?.neq === "function"
             ? await baseQuery.neq("status", "cancelled")
@@ -490,13 +477,18 @@ export async function ensureUniversalStagingSpaces(
         }
     });
 
+    const inheritedChildUpdates: { id: string; spaces: number[] }[] = [];
     rawOrders.forEach(ro => {
         const id = ro?.id;
         if (!id || spacesMap[id] || unallocatedIds.has(id)) return;
         const merged = mergedById.get(id) || ro;
         const parentId = merged.logistics_data?.is_off_agreement_split ? merged.logistics_data?.parent_order_id : null;
         if (parentId && allAllocatedSpaceMap[parentId]) {
-            spacesMap[id] = [...allAllocatedSpaceMap[parentId]];
+            const inheritedSpaces = [...allAllocatedSpaceMap[parentId]];
+            spacesMap[id] = inheritedSpaces;
+            if (!Array.isArray(merged.warehouse_spaces) || merged.warehouse_spaces.length === 0) {
+                inheritedChildUpdates.push({ id, spaces: inheritedSpaces });
+            }
             return;
         }
         unallocatedOrders.push(merged);
@@ -504,13 +496,27 @@ export async function ensureUniversalStagingSpaces(
     });
 
     if (unallocatedOrders.length === 0) {
+        if (inheritedChildUpdates.length > 0 && supabaseClient && typeof supabaseClient.from === "function") {
+            const childRes = await Promise.all(
+                inheritedChildUpdates.map(u =>
+                    supabaseClient.from("orders").update({ warehouse_spaces: u.spaces }).eq("id", u.id)
+                )
+            );
+            const failedChild = childRes.find(r => r && r.error);
+            if (failedChild?.error) {
+                throw new Error(`Error persistiendo bahías heredadas en Supabase: ${failedChild.error.message || JSON.stringify(failedChild.error)}`);
+            }
+        }
+        inheritedChildUpdates.forEach(u => {
+            const foundOrder = rawOrders.find(o => o.id === u.id);
+            if (foundOrder) foundOrder.warehouse_spaces = u.spaces;
+        });
         return spacesMap;
     }
 
-    // 2. Preparar inputs para las órdenes no asignadas
+    // 2. Preparar inputs con peso real (computeLineWeightKg, sin fallback arbitrario)
     const rawInputs: OrderStagingInput[] = unallocatedOrders.map(o => {
-        const totalKg = Number(o.total_weight_kg) || 
-            (o.order_items || []).reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.products?.weight_kg) || 1), 0);
+        const totalKg = resolveOrderWeightKg(o);
         return {
             id: o.id,
             sequence_id: o.sequence_id,
@@ -522,64 +528,47 @@ export async function ensureUniversalStagingSpaces(
             delivery_slot: o.delivery_slot || '',
             manual_delivery_time: o.manual_delivery_time || '',
             is_manual_delivery: o.is_manual_delivery || false,
-            total_weight_kg: totalKg > 0 ? totalKg : 15,
+            total_weight_kg: totalKg,
             existing_spaces: [],
             logistics_data: o.logistics_data
         };
     });
 
-    // 3. Enriquecer con zona geográfica, ventana LIFO y cálculo volumétrico
-    const enriched = rawInputs.map(input => {
-        const zone = deduceGeographicZone(input);
-        const { crates, spaces } = calculateCratesAndSpaces(input.total_weight_kg, 12.5, 36);
-        const customerName = input.company_name || input.customer_name || 'Cliente sin nombre';
-        const deliveryInfo = parseDeliveryWindowMinutes(input);
-        return {
-            raw: input,
-            zone,
-            customerName,
-            deliveryInfo,
-            crates,
-            spacesNeeded: spaces
-        };
-    });
-
-    enriched.sort((a, b) => {
-        if (a.zone !== b.zone) return a.zone.localeCompare(b.zone);
-        if (a.deliveryInfo.minutes !== b.deliveryInfo.minutes) return a.deliveryInfo.minutes - b.deliveryInfo.minutes;
-        return b.raw.total_weight_kg - a.raw.total_weight_kg;
-    });
-
-    // 4. Asignar slots libres contiguos evitando colisión con occupiedSlots
-    let currentCandidate = 1;
-    const updatesToPersist: { id: string; spaces: number[] }[] = [];
-    const splitChildByParent = new Map<string, any[]>();
+    // 3. Agrupar clústeres (Padre + Hijo Remisión $0) ANTES de ordenar por peso combinado DESC
+    const unallocatedInputIds = new Set(rawInputs.map(i => i.id));
+    const splitChildByParent = new Map<string, OrderStagingInput[]>();
     const splitChildOrderIds = new Set<string>();
-    unallocatedOrders.forEach(o => {
-        const log = o?.logistics_data;
-        if (log?.is_off_agreement_split && log?.parent_order_id) {
-            splitChildOrderIds.add(o.id);
+    rawInputs.forEach(input => {
+        const log = input.logistics_data;
+        if (log?.is_off_agreement_split && log?.parent_order_id && unallocatedInputIds.has(log.parent_order_id)) {
+            splitChildOrderIds.add(input.id);
             const list = splitChildByParent.get(log.parent_order_id) || [];
-            list.push(o);
+            list.push(input);
             splitChildByParent.set(log.parent_order_id, list);
         }
     });
 
-    for (const item of enriched) {
-        if (splitChildOrderIds.has(item.raw.id)) {
-            const pId = item.raw.logistics_data?.parent_order_id;
-            if (pId && spacesMap[pId]) {
-                spacesMap[item.raw.id] = spacesMap[pId];
-                updatesToPersist.push({ id: item.raw.id, spaces: spacesMap[pId] });
-                continue;
-            }
-        }
-        const linkedChildren = splitChildByParent.get(item.raw.id) || [];
-        const combinedWeight = item.raw.total_weight_kg + linkedChildren.reduce((sum, c) => sum + (Number(c.total_weight_kg) || 0), 0);
-        const spacesNeeded = linkedChildren.length > 0
-            ? calculateCratesAndSpaces(combinedWeight, 12.5, 36).spaces
-            : item.spacesNeeded;
-        let assigned: number[] = [];
+    const clusters = rawInputs
+        .filter(input => !splitChildOrderIds.has(input.id))
+        .map(parent => {
+            const linkedChildren = splitChildByParent.get(parent.id) || [];
+            const combinedWeight = (Number(parent.total_weight_kg) || 0) +
+                linkedChildren.reduce((sum, c) => sum + (Number(c.total_weight_kg) || 0), 0);
+            const { spaces } = calculateCratesAndSpaces(combinedWeight, 12.5, 36);
+            return { parent, linkedChildren, combinedWeight, spacesNeeded: spaces };
+        })
+        .sort((a, b) => {
+            if (b.combinedWeight !== a.combinedWeight) return b.combinedWeight - a.combinedWeight;
+            return compareOrderTieBreak(a.parent.id, a.parent.sequence_id, b.parent.id, b.parent.sequence_id);
+        });
+
+    // 4. Asignar siguientes huecos libres contiguos (Tanda 2 inmutable, crecimiento elástico 121+)
+    let currentCandidate = 1;
+    const updatesToPersist: { id: string; spaces: number[] }[] = [...inheritedChildUpdates];
+
+    for (const cluster of clusters) {
+        const { parent, linkedChildren, spacesNeeded } = cluster;
+        const assigned: number[] = [];
         while (assigned.length < spacesNeeded) {
             let allFree = true;
             for (let offset = 0; offset < spacesNeeded; offset++) {
@@ -598,8 +587,8 @@ export async function ensureUniversalStagingSpaces(
                 currentCandidate += spacesNeeded;
             }
         }
-        spacesMap[item.raw.id] = assigned;
-        updatesToPersist.push({ id: item.raw.id, spaces: assigned });
+        spacesMap[parent.id] = assigned;
+        updatesToPersist.push({ id: parent.id, spaces: assigned });
         linkedChildren.forEach(child => {
             spacesMap[child.id] = assigned;
             updatesToPersist.push({ id: child.id, spaces: assigned });

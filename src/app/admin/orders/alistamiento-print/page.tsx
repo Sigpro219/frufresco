@@ -438,7 +438,7 @@ export default function AlistamientoSabanaPrintPage() {
             let orderQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type, logistics_data,
+                    id, sequence_id, delivery_date, delivery_slot, shipping_address, warehouse_spaces, status, profile_id, type, total_weight_kg, logistics_data,
                     profiles:profile_id(id, created_at, parent_id, company_name, contact_name, address, role, logistics_data),
                     order_items(
                         id, order_id, product_id, quantity, unit, nickname, variant_label, selected_options,

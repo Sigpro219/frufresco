@@ -7,7 +7,9 @@ import {
     allocateStagingSpacesGeographically, 
     calculateCratesAndSpaces,
     ensureUniversalStagingSpaces,
-    formatSpaceLabel 
+    formatSpaceLabel,
+    resolveOrderWeightKg,
+    DEFAULT_NOMINAL_SPACES
 } from '@/lib/stagingSpaceAllocator';
 import { 
     Grid, 
@@ -180,8 +182,7 @@ export default function ManualDispatchWizardModal({
     // Enriquecer pedidos para el algoritmo de asignación
     const preparedOrders: OrderStagingInput[] = useMemo(() => {
         return selectedOrdersList.map(o => {
-            const totalKg = Number(o.total_weight_kg) || 
-                (o.order_items || []).reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0) * (Number(it.products?.weight_kg) || 1), 0);
+            const totalKg = resolveOrderWeightKg(o);
             
             return {
                 id: o.id,
@@ -196,7 +197,7 @@ export default function ManualDispatchWizardModal({
                 delivery_slot: o.delivery_slot || '',
                 manual_delivery_time: o.manual_delivery_time || '',
                 is_manual_delivery: o.is_manual_delivery || false,
-                total_weight_kg: totalKg > 0 ? totalKg : 15,
+                total_weight_kg: totalKg,
                 existing_spaces: manualSpacesMap[o.id] || o.warehouse_spaces || [],
                 delivery_restrictions: o.profiles?.delivery_restrictions || o.delivery_restrictions || null,
                 profile_logistics_data: o.profiles?.logistics_data || null,
@@ -210,7 +211,7 @@ export default function ManualDispatchWizardModal({
         return allocateStagingSpacesGeographically(preparedOrders, {
             avg_kg_per_crate: 12.5,
             space_capacity: 36,
-            max_spaces: 150
+            max_spaces: DEFAULT_NOMINAL_SPACES
         });
     }, [preparedOrders]);
 
@@ -1108,30 +1109,12 @@ export default function ManualDispatchWizardModal({
                                         Estado de Bahías: {assignedCount} de {selectedOrdersList.length} pedidos con bahía asignada
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                        Cálculo contrastado con ventanas de entrega (LIFO) y cubicaje de canastillas (36 por bahía).
+                                        Ordenado de mayor a menor peso total (Espacio 1 = pedido más pesado; 36 canastillas por bahía, crecimiento elástico 121+).
                                     </div>
                                 </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button
-                                    onClick={handleOptimizeSpacesWithGoogle}
-                                    disabled={optimizingGoogleSpaces}
-                                    style={{
-                                        padding: '7px 14px', borderRadius: '8px',
-                                        border: '1.5px solid #1E3A5F',
-                                        backgroundColor: '#1E3A5F',
-                                        color: '#FFFFFF',
-                                        fontWeight: '900', fontSize: '0.75rem', cursor: optimizingGoogleSpaces ? 'wait' : 'pointer',
-                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                        boxShadow: '0 2px 4px rgba(30,58,95,0.2)'
-                                    }}
-                                    title="Calcula camiones y secuencia LIFO con Google Route Optimization antes de imprimir"
-                                >
-                                    <Truck size={14} />
-                                    {optimizingGoogleSpaces ? 'Optimizando Google...' : 'Optimizar con Google (LIFO + Flota)'}
-                                </button>
-
                                 <button
                                     onClick={handleApplyAutoClustering}
                                     style={{
@@ -1144,7 +1127,7 @@ export default function ManualDispatchWizardModal({
                                     }}
                                 >
                                     <Sparkles size={14} color={assignedCount === selectedOrdersList.length ? '#16A34A' : '#D97706'} />
-                                    {assignedCount === selectedOrdersList.length ? 'Re-calcular GPS + Hora' : 'Auto-Asignar (GPS + Hora)'}
+                                    {assignedCount === selectedOrdersList.length ? 'Re-calcular Espacios (Mayor a Menor Peso)' : 'Auto-Asignar Espacios (Mayor a Menor Peso)'}
                                 </button>
 
                                 <button

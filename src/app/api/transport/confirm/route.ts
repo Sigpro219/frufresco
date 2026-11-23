@@ -300,12 +300,13 @@ export async function POST(request: Request) {
                     } else {
                         const spacesNeeded = Math.ceil(cratesCount / space_capacity);
                         let spaceCandidate = 1;
-                        while (spacesAssigned.length < spacesNeeded && spaceCandidate <= 150) {
-                            const hasOverlap = spacesTimeline[spaceCandidate].some(interval => {
+                        while (spacesAssigned.length < spacesNeeded) {
+                            const hasOverlap = (spacesTimeline[spaceCandidate] || []).some(interval => {
                                 return routeStartMin < interval.end && interval.start < routeEndMin;
                             });
                             if (!hasOverlap) {
                                 spacesAssigned.push(spaceCandidate);
+                                if (!spacesTimeline[spaceCandidate]) spacesTimeline[spaceCandidate] = [];
                                 spacesTimeline[spaceCandidate].push({ start: routeStartMin, end: routeEndMin });
                             }
                             spaceCandidate++;
