@@ -150,6 +150,7 @@ export default function DriverDashboard() {
             const { data: vData, error: vErr } = await supabase
                 .from('fleet_vehicles')
                 .select('plate')
+                .neq('status', 'inactive')
                 .order('plate', { ascending: true });
             
             if (vErr) throw vErr;

@@ -167,7 +167,7 @@ export default function TransportControlTower() {
     };
     const [activeRoutes, setActiveRoutes] = useState<ActiveRoute[]>([]);
     const [crateProfiles, setCrateProfiles] = useState<any[]>([]);
-    const [patioStock, setPatioStock] = useState<number>(420);
+    const [patioStock, setPatioStock] = useState<number>(0);
     const [isPatioModalOpen, setIsPatioModalOpen] = useState(false);
     const [patioModalType, setPatioModalType] = useState<'initial' | 'purchase' | 'damage'>('initial');
     const [patioModalQty, setPatioModalQty] = useState<number>(0);
@@ -497,9 +497,25 @@ export default function TransportControlTower() {
         );
     }
 
-    const totalVehicles = fleetData.length;
-    const vehiclesOnRoute = fleetData.filter(v => (v.speed || 0) > 0 || v.status === 'on_route' || activeRoutes.some((r: any) => (r.vehicle_plate === v.plate || r.driver_id === v.driver_id) && (r.status === 'in_transit' || r.status === 'loading'))).length;
-    const vehiclesMaintenance = fleetData.filter(v => v.status === 'maintenance').length;
+    const hasRealGps = (v: any): boolean => {
+        if (v?.last_latitude == null || v?.last_longitude == null || !v?.last_gps_sync) return false;
+        const lat = Number(v.last_latitude);
+        const lng = Number(v.last_longitude);
+        const syncMs = new Date(v.last_gps_sync).getTime();
+        return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !Number.isNaN(syncMs);
+    };
+    const isGpsFresh = (v: any): boolean =>
+        hasRealGps(v) && (Date.now() - new Date(v.last_gps_sync).getTime() <= 15 * 60 * 1000);
+
+    const activeFleet = fleetData.filter(v => v.status !== 'inactive');
+    const vehiclesWithRealGps = activeFleet.filter(hasRealGps);
+    const vehiclesMovingGps = vehiclesWithRealGps.filter(v => isGpsFresh(v) && (v.speed || 0) > 0);
+    const vehiclesStoppedGps = vehiclesWithRealGps.filter(v => !isGpsFresh(v) || (v.speed || 0) === 0);
+    const vehiclesWithoutGps = activeFleet.filter(v => !hasRealGps(v));
+
+    const totalVehicles = activeFleet.length;
+    const vehiclesOnRoute = vehiclesMovingGps.length;
+    const vehiclesMaintenance = activeFleet.filter(v => v.status === 'maintenance').length;
     const vehiclesAvailable = Math.max(0, totalVehicles - vehiclesOnRoute - vehiclesMaintenance);
     const avgKilosPerRoute = activeRoutes.length > 0 ? Math.round(stats.totalKilos / activeRoutes.length) : 0;
 
@@ -837,17 +853,16 @@ export default function TransportControlTower() {
                                                 </div>
                                             </AdvancedMarker>
 
-                                            {/* Fleet Vehicles on Live Map with Rich Operational Tooltips */}
-                                            {fleetData.map((v: any, i: number) => {
+                                            {/* Fleet Vehicles on Live Map (Zero-Mock: solo vehículos activos con telemetría GPS real) */}
+                                            {vehiclesWithRealGps.map((v: any) => {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
                                                 const activeRoute = activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
                                                 
-                                                const pos = v.last_latitude && v.last_longitude 
-                                                    ? { lat: Number(v.last_latitude), lng: Number(v.last_longitude) }
-                                                    : { lat: 4.633653 + (Math.sin(i) * 0.01), lng: -74.160647 + (Math.cos(i) * 0.01) };
+                                                const pos = { lat: Number(v.last_latitude), lng: Number(v.last_longitude) };
 
-                                                const isMoving = (v.speed || 0) > 0;
+                                                const fresh = isGpsFresh(v);
+                                                const isMoving = fresh && (v.speed || 0) > 0;
                                                 const isInRoute = isMoving || (activeRoute && (activeRoute.status === 'in_transit' || activeRoute.status === 'loading'));
                                                 const isAvailable = !isMoving && (v.status === 'available' || (!activeRoute && v.status !== 'maintenance'));
                                                 const isHovered = hoveredVehicleId === v.id;
@@ -923,7 +938,7 @@ export default function TransportControlTower() {
                                                                         }}
                                                                     />
                                                                 )}
-                                                                {v.speed > 0 && v.heading !== undefined ? (
+                                                                {isMoving && v.heading != null ? (
                                                                     <Navigation size={14} style={{ transform: `rotate(${v.heading}deg)`, transition: 'transform 0.4s ease' }} />
                                                                 ) : (
                                                                     initials || <Truck size={14} />
@@ -1103,8 +1118,13 @@ export default function TransportControlTower() {
                                                                                     </>
                                                                                 )}
                                                                             </span>
-                                                                            <span style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '4px', color: (v.speed || 0) > 0 ? '#EA580C' : (v.ignition_status ? '#D97706' : '#64748B') }}>
-                                                                                {(v.speed || 0) > 0 ? (
+                                                                            <span style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '4px', color: !fresh ? '#B91C1C' : (v.speed || 0) > 0 ? '#EA580C' : (v.ignition_status ? '#D97706' : '#64748B') }}>
+                                                                                {!fresh ? (
+                                                                                    <>
+                                                                                        <AlertTriangle size={11} style={{ color: '#B91C1C' }} />
+                                                                                        <span>Señal vencida</span>
+                                                                                    </>
+                                                                                ) : (v.speed || 0) > 0 ? (
                                                                                     <>
                                                                                         <Navigation size={11} style={{ color: '#EA580C' }} />
                                                                                         <span>{Math.round(v.speed)} km/h</span>
@@ -1123,7 +1143,7 @@ export default function TransportControlTower() {
                                                                             </span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', color: THEME.colors.textSecondary }}>
-                                                                            <span>{v.heading !== undefined ? `Rumbo: ${v.heading}°` : 'Rumbo: --'}</span>
+                                                                            <span>{v.heading != null ? `Rumbo: ${v.heading}°` : 'Rumbo: --'}</span>
                                                                             <span>{v.last_gps_sync ? `Sync: ${new Date(v.last_gps_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Sin datos'}</span>
                                                                         </div>
                                                                         {/* Watchdog Signal Loss Warning (> 15 mins) */}
@@ -1212,6 +1232,7 @@ export default function TransportControlTower() {
                                             position: 'absolute',
                                             bottom: '16px',
                                             left: '16px',
+                                            maxWidth: 'calc(100% - 32px)',
                                             backgroundColor: 'rgba(255, 255, 255, 0.94)',
                                             backdropFilter: 'blur(8px)',
                                             padding: '8px 14px',
@@ -1219,6 +1240,7 @@ export default function TransportControlTower() {
                                             border: `1px solid ${THEME.colors.border}`,
                                             boxShadow: THEME.shadow.md,
                                             display: 'flex',
+                                            flexWrap: 'wrap',
                                             alignItems: 'center',
                                             gap: '12px',
                                             fontSize: '0.68rem',
@@ -1230,12 +1252,19 @@ export default function TransportControlTower() {
                                                 <span>Bodega Central</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
-                                                <span>Flota en Patio ({vehiclesAvailable})</span>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FF6B00', boxShadow: '0 0 6px rgba(255,107,0,0.85)' }}></div>
+                                                <span>En Movimiento ({vehiclesMovingGps.length})</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FF6B00', boxShadow: '0 0 6px rgba(255,107,0,0.85)' }}></div>
-                                                <span>En Movimiento ({vehiclesOnRoute})</span>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
+                                                <span>Detenidos con GPS ({vehiclesStoppedGps.length})</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#64748B' }}>
+                                                <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#94A3B8' }}></div>
+                                                <span>
+                                                    Sin Señal GPS ({vehiclesWithoutGps.length})
+                                                    {vehiclesWithoutGps.length > 0 ? `: ${vehiclesWithoutGps.map((v: any) => v.plate).join(' · ')}` : ''}
+                                                </span>
                                             </div>
                                         </div>
                                     </>

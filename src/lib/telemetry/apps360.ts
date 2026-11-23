@@ -168,11 +168,12 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
     const plate = extractCleanPlate(candidateName);
     if (!plate) return null;
 
-    const speed = typeof obj.speed === 'string' ? parseFloat(obj.speed) : (obj.speed || 0);
+    const rawSpeed = typeof obj.speed === 'string' ? parseFloat(obj.speed) : (obj.speed || 0);
+    const safeSpeed = Math.max(0, Number.isFinite(rawSpeed) ? rawSpeed : 0);
     const heading = typeof obj.course === 'string' ? parseFloat(obj.course) : (obj.course || 0);
     
-    // Extracción de estado de ignición (ACC)
-    let isIgnitionOn = true;
+    // Extracción de estado de ignición (ACC): sin sensor explícito, solo encendido si hay movimiento real
+    let isIgnitionOn = safeSpeed > 0;
     if (Array.isArray(obj.sensors) && obj.sensors.length > 0) {
         const accSensor = obj.sensors.find(s => {
             const t = (s.type || '').toLowerCase();
@@ -212,7 +213,7 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
         imei,
         latitude: rawLat,
         longitude: rawLng,
-        speed: Math.max(0, isNaN(speed) ? 0 : speed),
+        speed: safeSpeed,
         heading: Math.max(0, Math.min(360, isNaN(heading) ? 0 : heading)),
         ignition_status: isIgnitionOn,
         odometer_km: odometer && !isNaN(odometer) ? odometer : undefined,

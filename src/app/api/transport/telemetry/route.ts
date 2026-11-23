@@ -13,9 +13,11 @@ const PingItemSchema = z.object({
     heading: z.number().min(0).max(360).optional().default(0),
     accuracy: z.number().optional(),
     battery_level: z.number().min(0).max(100).optional(),
-    ignition_status: z.boolean().optional().default(true),
+    ignition_status: z.boolean().optional(),
     tracking_source: z.enum(['hardware_gps', 'mobile_app']).optional().default('mobile_app'),
     timestamp: z.string().optional()
+}).refine((p) => !(p.latitude === 0 && p.longitude === 0), {
+    message: 'Coordenada (0,0) inválida'
 });
 
 const TelemetryPayloadSchema = z.union([
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
                     last_longitude: ping.longitude,
                     speed: ping.speed,
                     heading: ping.heading,
-                    ignition_status: ping.ignition_status,
+                    ignition_status: ping.ignition_status ?? ((ping.speed ?? 0) > 0),
                     last_gps_sync: now,
                     tracking_source: ping.tracking_source
                 })

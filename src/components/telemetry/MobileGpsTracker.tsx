@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface UseMobileGpsTrackerProps {
     plate: string;
@@ -49,13 +50,26 @@ export function useMobileGpsTracker({ plate, enabled, intervalMs = 60000 }: UseM
         if (!pings || pings.length === 0) return;
 
         try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+
             const res = await fetch('/api/transport/telemetry', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(pings)
             });
 
             if (res.ok) {
+                const body = await res.json().catch(() => null);
+                const results: Array<{ status?: string }> = body?.data?.results || body?.results || [];
+                const allIgnored = results.length > 0 && results.every(r => r.status === 'ignored_unregistered');
+                if (allIgnored) {
+                    setError('Placa no registrada en Flota');
+                    return;
+                }
                 setLastPing(new Date());
                 offlineQueue.current = [];
                 setQueueSize(0);
