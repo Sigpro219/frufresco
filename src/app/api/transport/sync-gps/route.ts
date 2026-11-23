@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { fetchApps360Fleet } from '@/lib/telemetry/apps360';
-import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
+import { isSandboxMode, isSandboxGpsReadonlyAllowed } from '@/lib/sandboxGuard';
 
 // 1. Esquema Zod de Parámetros de Consulta (Mandamiento 1)
 const SyncQuerySchema = z.object({
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
     const startTime = Date.now();
 
-    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+    if (isSandboxMode() && !isSandboxGpsReadonlyAllowed()) {
         return NextResponse.json(
             {
                 success: true,

@@ -4,7 +4,7 @@
  * Estandarizado bajo especialista-api (SPEC.md Dominio 6 - TMS)
  */
 
-import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
+import { isSandboxMode, isSandboxGpsReadonlyAllowed } from '@/lib/sandboxGuard';
 
 export interface NormalizedTelemetry {
     plate: string;
@@ -228,7 +228,7 @@ let cachedUserApiHash: { hash: string; expiresAt: number } | null = null;
  * Autentica contra la API REST moderna de Apps-360 (GPSWOX Engine) y obtiene el user_api_hash
  */
 export async function loginApps360(email?: string, password?: string, baseUrl?: string): Promise<string | null> {
-    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+    if (isSandboxMode() && !isSandboxGpsReadonlyAllowed()) {
         return null;
     }
 
@@ -282,7 +282,7 @@ export async function loginApps360(email?: string, password?: string, baseUrl?: 
  * Consulta la API REST oficial de apps-360.online y obtiene el estado en vivo de todos los vehículos
  */
 export async function fetchApps360Fleet(userHashOrKey?: string, baseUrl?: string): Promise<NormalizedTelemetry[]> {
-    if (isSandboxMode() && !areSandboxExternalApisAllowed()) {
+    if (isSandboxMode() && !isSandboxGpsReadonlyAllowed()) {
         return [];
     }
 

@@ -14,6 +14,13 @@ export function areSandboxExternalApisAllowed(): boolean {
   return process.env.ENABLE_SANDBOX_EXTERNAL_APIS === 'true';
 }
 
+export function isSandboxGpsReadonlyAllowed(): boolean {
+  return (
+    areSandboxExternalApisAllowed() ||
+    process.env.ENABLE_SANDBOX_GPS_READONLY === 'true'
+  );
+}
+
 export function isSandboxEmailAllowed(email?: string | null): boolean {
   if (!email) return false;
   return email.trim().toLowerCase().endsWith('@sandbox.frufresco.co');
