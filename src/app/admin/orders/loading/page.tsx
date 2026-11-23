@@ -13,7 +13,6 @@ import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
 import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
-import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { getDocumentBadgeStyle } from '@/components/ClientsModule';
@@ -3938,8 +3937,8 @@ useEffect(() => {
 
 
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                        {/* Selector Integrado de Fecha de Entrega (Prefijo + Input unidos) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                        {/* Selector Integrado de Fecha de Entrega */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <div
                                 style={{
@@ -3959,23 +3958,6 @@ useEffect(() => {
                                 }}
                                 title="Seleccionar fecha de entrega"
                             >
-                                <span style={{
-                                    fontSize: '0.68rem',
-                                    fontWeight: '900',
-                                    color: '#334155',
-                                    letterSpacing: '0.03em',
-                                    textTransform: 'uppercase',
-                                    backgroundColor: '#F1F5F9',
-                                    padding: '0 8px',
-                                    height: '100%',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    borderRight: '1px solid #E2E8F0',
-                                    whiteSpace: 'nowrap'
-                                }}>
-                                    <Truck size={13} style={{ color: THEME.colors.primary }} /> Entrega
-                                </span>
                                 <span style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -4148,7 +4130,7 @@ useEffect(() => {
                             placeholder="Buscar en TODAS las fechas y estados (#ID, OC/SOLPED, cliente, NIT, dirección)..."
                             filteredCount={filteredOrders.length}
                             totalCount={globalSearchOrders !== null ? filteredOrders.length : totalOrders}
-                            style={{ flex: 1, minWidth: '280px', maxWidth: 'none' }}
+                            style={{ flex: 1, minWidth: '140px', maxWidth: 'none' }}
                         />
 
                         {/* Info Button for Commands */}
@@ -4437,15 +4419,15 @@ useEffect(() => {
                         </div>
 
                         {/* View Mode Toggle (Table / Cards Gallery) */}
-                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', gap: '2px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', gap: '2px', border: '1px solid #E2E8F0', flexShrink: 0 }}>
                             <button
                                 type="button"
                                 onClick={() => setViewMode('table')}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '6px 10px',
+                                    justifyContent: 'center',
+                                    padding: '6px 8px',
                                     borderRadius: '6px',
                                     border: 'none',
                                     backgroundColor: viewMode === 'table' ? '#FFFFFF' : 'transparent',
@@ -4457,9 +4439,9 @@ useEffect(() => {
                                     transition: 'all 0.15s'
                                 }}
                                 title="Vista Lista / Tabla"
+                                aria-label="Vista Lista / Tabla"
                             >
-                                <List size={14} strokeWidth={2.2} />
-                                <span>Lista</span>
+                                <List size={15} strokeWidth={2.2} />
                             </button>
                             <button
                                 type="button"
@@ -4467,8 +4449,8 @@ useEffect(() => {
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '6px 10px',
+                                    justifyContent: 'center',
+                                    padding: '6px 8px',
                                     borderRadius: '6px',
                                     border: 'none',
                                     backgroundColor: viewMode === 'cards' ? '#FFFFFF' : 'transparent',
@@ -4480,9 +4462,9 @@ useEffect(() => {
                                     transition: 'all 0.15s'
                                 }}
                                 title="Vista Galería (Cuadrícula)"
+                                aria-label="Vista Galería (Cuadrícula)"
                             >
-                                <Grid size={14} strokeWidth={2.2} />
-                                <span>Galería</span>
+                                <Grid size={15} strokeWidth={2.2} />
                             </button>
                         </div>
 
@@ -4494,9 +4476,9 @@ useEffect(() => {
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
+                                gap: '5px',
                                 height: '38px',
-                                padding: '0 12px',
+                                padding: '0 10px',
                                 backgroundColor: '#ECFDF5',
                                 color: '#065F46',
                                 border: '1.5px solid #A7F3D0',
@@ -4518,9 +4500,10 @@ useEffect(() => {
                                 e.currentTarget.style.color = '#065F46';
                             }}
                             title="Descargar planilla oficial de Relación de Documentos (.xlsx) para la fecha seleccionada"
+                            aria-label="Descargar planilla oficial de Relación de Documentos (.xlsx)"
                         >
                             <FileSpreadsheet size={15} />
-                            <span>{isExportingRelacion ? 'Exportando...' : 'Relación Doc (.xlsx)'}</span>
+                            <span>{isExportingRelacion ? 'Exportando...' : 'Excel'}</span>
                         </button>
 
                         {/* Imprimir Remisiones Universales (Apto para pendientes + aprobados mixtos) */}
@@ -5981,11 +5964,11 @@ useEffect(() => {
                             </div>
 
                             <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
-                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora la <strong>documentación física de despacho</strong> requerida para transportadores, canastillas y control de mermas:
+                                Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora la <strong>documentación física de despacho</strong> requerida para transportadores y canastillas, o accede directo a los tableros digitales:
                             </div>
 
                             {/* Document Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
                                 {/* Remisiones */}
                                 <a
                                     href={`/admin/orders/contingency-print?mode=remissions&orderIds=${lastLaunchedOrderIds.join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
@@ -6169,81 +6152,6 @@ useEffect(() => {
                                         <ExternalLink size={12} />
                                     </div>
                                 </a>
-
-                                {/* Formato Control de Mermas y Desperdicio (Q y R) */}
-                                <div
-                                    style={{
-                                        backgroundColor: '#F8FAFC',
-                                        border: '1.5px solid #F59E0B',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between',
-                                        gap: '8px'
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: '900', fontSize: '0.85rem' }}>
-                                            <Printer size={16} /> Control Mermas
-                                        </div>
-                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                            Formato físico (Q y R) para pesaje de descarte, averías y limpieza en bodega.
-                                        </div>
-                                    </div>
-                                    <div style={{ marginTop: '0.5rem' }}>
-                                        <WasteFormatPrintButton deliveryDate={selectedDate !== 'all' ? selectedDate : getTomorrowDateStr()} />
-                                    </div>
-                                </div>
-
-                                {/* Relación de Documentos (.xlsx) - Clona formato operacional histórico */}
-                                <div
-                                    style={{
-                                        backgroundColor: '#F8FAFC',
-                                        border: '1.5px solid #059669',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between',
-                                        gap: '8px'
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#047857', fontWeight: '900', fontSize: '0.85rem' }}>
-                                            <FileSpreadsheet size={16} /> Relación de Documentos
-                                        </div>
-                                        <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                            Planilla Excel oficial (16 columnas) de despacho, clientes, direcciones y zonas.
-                                        </div>
-                                    </div>
-                                    <div style={{ marginTop: '0.5rem' }}>
-                                        <button
-                                            type="button"
-                                            disabled={isExportingRelacion}
-                                            onClick={handleExportRelacionDocumentos}
-                                            style={{
-                                                width: '100%',
-                                                padding: '7px 10px',
-                                                backgroundColor: '#059669',
-                                                color: '#FFFFFF',
-                                                borderRadius: '8px',
-                                                fontSize: '0.75rem',
-                                                fontWeight: '800',
-                                                border: 'none',
-                                                cursor: isExportingRelacion ? 'wait' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '5px',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                        >
-                                            <FileSpreadsheet size={12} />
-                                            <span>{isExportingRelacion ? 'Exportando...' : 'Descargar Excel (.xlsx)'}</span>
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
