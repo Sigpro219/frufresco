@@ -21,9 +21,12 @@ interface RouteStop {
         crates_count?: number | null;
         order_items: {
             id: string;
-            products: { name: string; unit_of_measure: string };
+            products: { name: string; unit_of_measure: string; accounting_id?: number | string | null };
             quantity: number;
             picked_quantity: number;
+            unit?: string | null;
+            variant_label?: string | null;
+            nickname?: string | null;
         }[];
     } | null;
 }
@@ -112,8 +115,8 @@ export default function LoadVerificationPage() {
                             id, company_name, contact_name, role
                         ),
                         order_items (
-                            id, quantity, picked_quantity,
-                            products (name, unit_of_measure)
+                            id, quantity, picked_quantity, unit, variant_label, nickname,
+                            products (name, unit_of_measure, accounting_id)
                         )
                     )
                 `)
@@ -388,14 +391,22 @@ export default function LoadVerificationPage() {
 
                         <div style={{ backgroundColor: 'rgba(9, 13, 22, 0.4)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                             <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '800', marginBottom: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mercancía a Cargar</div>
-                            {stop.orders?.order_items.map(item => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                    <span style={{ color: '#E2E8F0' }}>{item.products.name}</span>
-                                    <span style={{ fontWeight: '800', color: item.picked_quantity > 0 ? '#059669' : '#9CA3AF' }}>
-                                        {item.picked_quantity || 0} / {item.quantity} {item.products.unit_of_measure}
-                                    </span>
-                                </div>
-                            ))}
+                            {stop.orders?.order_items.map(item => {
+                                const variant = item.variant_label || item.nickname || '';
+                                const baseTitle = item.products.accounting_id
+                                    ? `#${item.products.accounting_id} ${item.products.name}`
+                                    : item.products.name;
+                                const displayTitle = variant ? `${baseTitle} (${variant})` : baseTitle;
+                                const displayUnit = item.unit || item.products.unit_of_measure;
+                                return (
+                                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                        <span style={{ color: '#E2E8F0' }}>{displayTitle}</span>
+                                        <span style={{ fontWeight: '800', color: item.picked_quantity > 0 ? '#059669' : '#9CA3AF' }}>
+                                            {item.picked_quantity || 0} / {item.quantity} {displayUnit}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}

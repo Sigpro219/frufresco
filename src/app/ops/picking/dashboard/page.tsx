@@ -209,8 +209,9 @@ export default function PickingDashboard() {
     const loadData = useCallback(async (signal?: AbortSignal, silent = false) => {
         if (!silent) setLoading(true);
         try {
-            // 1. Fetch Active Orders para la tanda operativa vigente (corte 8 PM)
-            const targetOpDate = getOperationalTargetDate(20);
+            // 1. Fetch Active Orders para la tanda operativa vigente (?date= explícito o corte 8 PM)
+            const urlDate = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('date') : null;
+            const targetOpDate = (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) ? urlDate : getOperationalTargetDate(20);
             let ordersQuery = supabase
                 .from('orders')
                 .select(`

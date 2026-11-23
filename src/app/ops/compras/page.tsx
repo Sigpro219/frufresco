@@ -7,8 +7,9 @@ import { useAuth } from "../../../lib/authContext";
 import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
-import { getCanonicalProcurementSpec, normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
+import { getCanonicalProcurementSpec, normalizeDemandToKg, calculateProcurementNetting, type NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
 import { getBogotaDateString } from '@/lib/dateUtils';
+import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
 import { 
   Calendar, 
@@ -52,6 +53,7 @@ interface ProcurementTask {
   status: "pending" | "partial" | "completed";
   category: string;
   product_id: string;
+  accounting_id?: number | string | null;
   variant_label?: string;
   delivery_date?: string;
   original_product_id?: string;
@@ -388,13 +390,7 @@ export default function ProcurementPage() {
         return todayBogota;
       }
 
-      const currentHour = now.getHours();
-
-      if (currentHour >= DEFAULT_CUTOFF_HOUR) {
-        return getBogotaDateString(new Date(Date.now() + 24 * 60 * 60 * 1000));
-      } else {
-        return todayBogota;
-      }
+      return getOperationalTargetDate(20);
     } catch (e) {
       if (isAbortError(e)) return "";
       console.error("Error reading cutoff settings", e);
@@ -453,7 +449,7 @@ export default function ProcurementPage() {
         const [productsRes, resolvedInv, purchasesRes, noveltiesRes] = await Promise.all([
           supabase
             .from("products")
-            .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure")
+            .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure, weight_kg, accounting_id")
             .in("id", productIds)
             .abortSignal(signal as any),
           resolveInitialInventory({ supabase, targetDate }),
@@ -514,7 +510,8 @@ export default function ProcurementPage() {
         let formatted: ProcurementTask[] = rawTasks.map((t: any) => {
           const prod = productMap[t.product_id];
           const pName = prod?.parent_id ? (parentMap[prod.parent_id] || prod.name) : (prod?.name || "");
-          let name = prod?.name || `Producto #${t.product_id.split("-")[0]}`;
+          const baseName = prod?.name || `Producto #${t.product_id.split("-")[0]}`;
+          let name = prod?.accounting_id ? `#${prod.accounting_id} ${baseName}` : baseName;
           if (t.variant_label) {
             name = `${name} (${t.variant_label})`;
           }
@@ -528,6 +525,7 @@ export default function ProcurementPage() {
           return {
             id: t.id,
             product_id: t.product_id,
+            accounting_id: prod?.accounting_id ?? null,
             product_name: name,
             variant_label: t.variant_label,
             total_requested: t.total_requested,
@@ -550,55 +548,51 @@ export default function ProcurementPage() {
           };
         });
 
-        // 6. Apply Netting Logic (Model A and Model B combined)
-        // Group tasks by base product (parent_id if exists, otherwise product_id)
-        const groups: Record<string, ProcurementTask[]> = {};
-        formatted.forEach(t => {
-          const baseKey = t.parent_id || t.product_id;
-          if (!groups[baseKey]) groups[baseKey] = [];
-          groups[baseKey].push(t);
+        // 6. Apply Canonical Netting Engine (1:1 parity with purchases-print)
+        const nettingInputs: NettingOrderItem[] = rawTasks.map((t: any) => {
+          const prod = productMap[t.product_id];
+          return {
+            id: t.id,
+            product_id: t.product_id,
+            product_name: prod?.name || '',
+            quantity: Number(t.total_requested) || 0,
+            unit: t.unit || prod?.unit_of_measure || 'Kg',
+            variant_label: t.variant_label || '',
+            accounting_id: prod?.accounting_id ?? null,
+            products: prod ? {
+              id: prod.id,
+              name: prod.name,
+              parent_id: prod.parent_id,
+              unit_of_measure: prod.unit_of_measure,
+              purchase_sublist: prod.purchase_sublist,
+              min_inventory_level: prod.min_inventory_level,
+              weight_kg: prod.weight_kg,
+              accounting_id: prod.accounting_id,
+            } : null,
+          };
         });
 
-        Object.keys(groups).forEach(baseKey => {
-          const groupTasks = groups[baseKey];
-          // Sort group: base product task first (empty variant label), then variant tasks alphabetically
-          groupTasks.sort((a, b) => {
-            const labelA = a.variant_label || "";
-            const labelB = b.variant_label || "";
-            if (labelA === "" && labelB !== "") return -1;
-            if (labelA !== "" && labelB === "") return 1;
-            return labelA.localeCompare(labelB);
-          });
+        const compiledNetting = calculateProcurementNetting({
+          items: nettingInputs,
+          stocks: stockMap,
+          options: { mermaFactor: 0.0, applySafetyStock: true },
+        });
 
-          // Calculate sequential netting
-          // Total stock for this base product key is sum of stocks of itself and its variants (or just itself)
-          // To be safe, we check stockMap for all product_ids represented in the groupTasks
-          let totalGroupStock = 0;
-          const processedProductIds = new Set<string>();
-          groupTasks.forEach(gt => {
-            if (!processedProductIds.has(gt.product_id)) {
-              totalGroupStock += stockMap[gt.product_id] || 0;
-              processedProductIds.add(gt.product_id);
-            }
+        const nettingByKey = new Map(compiledNetting.map(c => [`${c.product_id}__${c.canonical_spec}`, c]));
+        formatted.forEach(gt => {
+          const prod = productMap[gt.product_id];
+          const cSpec = getCanonicalProcurementSpec({
+            variant_label: gt.variant_label || '',
+            product_name: prod?.name || '',
+            product: prod || { name: '' },
           });
-          if (groupTasks[0]?.parent_id && !processedProductIds.has(groupTasks[0].parent_id)) {
-            totalGroupStock += stockMap[groupTasks[0].parent_id] || 0;
-            processedProductIds.add(groupTasks[0].parent_id);
+          const match = nettingByKey.get(`${gt.product_id}__${cSpec}`) || compiledNetting.find(c => c.product_id === gt.product_id);
+          if (match) {
+            gt.raw_order_qty = match.raw_demand_kg;
+            gt.min_inventory_level = match.safety_stock;
+            gt.applied_stock = match.applied_stock;
+            gt.meta_neteo = match.net_to_buy;
           }
-
-          let remainingStock = totalGroupStock;
-          groupTasks.forEach((gt, idx) => {
-            const pedido = Math.round(gt.total_requested * 10) / 10;
-            // Safety stock: only add to the first item of the sequence (línea estándar base)
-            const safety = (idx === 0) ? (gt.min_inventory_level || 0) : 0;
-            const grossReq = Math.round((pedido + safety) * 10) / 10;
-            const appliedStock = Math.min(remainingStock, grossReq);
-            remainingStock = Math.max(0, Math.round((remainingStock - appliedStock) * 10) / 10);
-            const meta = Math.max(0, Math.round((grossReq - appliedStock) * 10) / 10);
-
-            gt.applied_stock = appliedStock;
-            gt.meta_neteo = meta;
-          });
         });
 
         // 7. Filter Category
@@ -715,7 +709,7 @@ export default function ProcurementPage() {
                     orders!inner(delivery_date, status)
                 `,
         )
-        .in("orders.status", ["para_compra", "approved", "picking"])
+        .in("orders.status", ["pending_approval", "pending", "recibido", "para_compra", "approved", "picking", "in_preparation", "shipped", "delivered", "completed"])
         .range(from, to)
         .abortSignal(signal as any)
     );
@@ -772,11 +766,11 @@ export default function ProcurementPage() {
       totals[key].qty += norm.effectiveQty;
     });
 
-    // 3. Upsert en procurement_tasks en bloque (Alta velocidad)
+    // 3. Upsert en procurement_tasks en bloque (precisión 2 decimales) y purga de huérfanas
     const upsertRows = Object.values(totals).map((task) => ({
       product_id: task.pid,
       variant_label: task.variant,
-      total_requested: Math.round(task.qty * 10) / 10,
+      total_requested: Math.round(task.qty * 100) / 100,
       unit: task.unit,
       delivery_date: task.delivery_date,
     }));
@@ -790,6 +784,38 @@ export default function ProcurementPage() {
       if (upsertErr) {
         if (isAbortError(upsertErr)) return;
         console.error("Error upserting procurement tasks:", upsertErr);
+      }
+    }
+
+    const syncedDates = Array.from(new Set([targetDate, ...Object.values(totals).map(t => t.delivery_date)])).filter(Boolean);
+    if (syncedDates.length > 0) {
+      const { data: existingTasks } = await supabase
+        .from("procurement_tasks")
+        .select("id, product_id, variant_label, delivery_date, total_requested")
+        .in("delivery_date", syncedDates)
+        .abortSignal(signal as any);
+
+      const orphanTasks = (existingTasks || []).filter((et: any) => {
+        const key = `${et.product_id}_${et.variant_label || ''}_${et.delivery_date}`;
+        return !totals[key] && Number(et.total_requested) > 0;
+      });
+
+      if (orphanTasks.length > 0) {
+        const orphanIds = orphanTasks.map((o: any) => o.id);
+        const { data: linkedPurchases } = await supabase
+          .from("purchases")
+          .select("task_id")
+          .in("task_id", orphanIds);
+        const protectedIds = new Set((linkedPurchases || []).map((p: any) => p.task_id));
+        const toDelete = orphanIds.filter((id: string) => !protectedIds.has(id));
+        const toZero = orphanIds.filter((id: string) => protectedIds.has(id));
+
+        if (toDelete.length > 0) {
+          await supabase.from("procurement_tasks").delete().in("id", toDelete);
+        }
+        if (toZero.length > 0) {
+          await supabase.from("procurement_tasks").update({ total_requested: 0 }).in("id", toZero);
+        }
       }
     }
   };
@@ -2382,10 +2408,10 @@ export default function ProcurementPage() {
                                 </span>
                               </div>
                               <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "2px" }}>
-                                Meta: <strong style={{ color: "var(--ops-text)" }}>{(item.meta_neteo || 0).toFixed(0)} {item.unit}</strong> | Comprado: <strong style={{ color: "var(--ops-text)" }}>{(item.total_purchased || 0).toFixed(0)} {item.unit}</strong> | Faltante: <strong style={{ color: item.status === "completed" ? "#10B981" : "#F59E0B" }}>{Math.max(0, (item.meta_neteo || 0) - (item.total_purchased || 0)).toFixed(0)} {item.unit}</strong>
+                                Meta: <strong style={{ color: "var(--ops-text)" }}>{formatNumber(item.meta_neteo || 0)} {item.unit}</strong> | Comprado: <strong style={{ color: "var(--ops-text)" }}>{formatNumber(item.total_purchased || 0)} {item.unit}</strong> | Faltante: <strong style={{ color: item.status === "completed" ? "#10B981" : "#F59E0B" }}>{formatNumber(Math.max(0, (item.meta_neteo || 0) - (item.total_purchased || 0)))} {item.unit}</strong>
                               </div>
                               <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: "2px", fontFamily: "monospace" }}>
-                                Fórmula: Ped {(item.raw_order_qty || 0).toFixed(0)} - Stock {(item.applied_stock || 0).toFixed(0)} + Seg {(item.min_inventory_level || 0).toFixed(0)}
+                                Fórmula: Ped {formatNumber(item.raw_order_qty || 0)} - Stock {formatNumber(item.applied_stock || 0)} + Seg {formatNumber(item.min_inventory_level || 0)}
                               </div>
                             </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { fetchAllRows } from '@/lib/supabase';
 import { isAbortError } from '@/lib/errorUtils';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { OPERATIONAL_CELLS, getOperationalTargetDate, normalizeOperationalCell } from '@/lib/ops/operationalCells';
@@ -29,6 +30,7 @@ interface SupabaseOrderItem {
     product_id: string;
     quantity: number;
     picked_quantity: number | null;
+    unit?: string | null;
     variant_label?: string | null;
     nickname?: string | null;
     selected_options?: Record<string, any> | null;
@@ -77,23 +79,26 @@ export default function PickingTerminal() {
         try {
             const targetDate = getOperationalTargetDate(20);
             const normalizedTargetCell = normalizeOperationalCell(cell);
-            const { data, error } = await supabase
-                .from('order_items')
-                .select(`
-                    id, product_id, quantity, picked_quantity, variant_label, nickname, selected_options,
-                    products!inner (id, name, category, unit_of_measure, buying_team, accounting_id, parent_id),
-                    orders!inner (
-                        status, delivery_date, warehouse_spaces, logistics_data,
-                        profiles:profile_id (
-                            role,
-                            company_name,
-                            contact_name
+            const { data, error } = await fetchAllRows<SupabaseOrderItem>((from, to) =>
+                supabase
+                    .from('order_items')
+                    .select(`
+                        id, product_id, quantity, picked_quantity, unit, variant_label, nickname, selected_options,
+                        products!inner (id, name, category, unit_of_measure, buying_team, accounting_id, parent_id),
+                        orders!inner (
+                            status, delivery_date, warehouse_spaces, logistics_data,
+                            profiles:profile_id (
+                                role,
+                                company_name,
+                                contact_name
+                            )
                         )
-                    )
-                `)
-                .eq('orders.delivery_date', targetDate)
-                .in('orders.status', ['para_compra', 'approved', 'picking', 'in_preparation'])
-                .abortSignal(signal as any);
+                    `)
+                    .eq('orders.delivery_date', targetDate)
+                    .in('orders.status', ['para_compra', 'approved', 'picking', 'in_preparation'])
+                    .range(from, to)
+                    .abortSignal(signal as any)
+            );
 
             if (!isMounted.current) return;
             if (error) throw error;
@@ -128,9 +133,10 @@ export default function PickingTerminal() {
                             ? (p.company_name || 'Sin Razón Social') 
                             : (p.contact_name || p.company_name || 'Cliente B2C');
                     }
+                    const itemUnit = item.unit || item.products.unit_of_measure;
                     const physicalInst = resolvePhysicalInstruction({
                         quantity: item.quantity,
-                        unit: item.products.unit_of_measure,
+                        unit: itemUnit,
                         variant_label: item.variant_label,
                         nickname: item.nickname,
                         selected_options: item.selected_options
@@ -142,7 +148,8 @@ export default function PickingTerminal() {
                     const dispName = variant ? `${baseLabel} (${variant})` : baseLabel;
                     const pid = item.product_id || item.products.id;
                     const parentId = item.products?.parent_id || null;
-                    const availStock = stockByProd[pid] ?? (parentId ? stockByProd[parentId] : undefined) ?? 0;
+                    const childStock = stockByProd[pid] || 0;
+                    const availStock = childStock > 0 ? childStock : (parentId ? (stockByProd[parentId] || 0) : 0);
 
                     return {
                         id: item.id,
@@ -151,7 +158,7 @@ export default function PickingTerminal() {
                         product_name: dispName,
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity || 0,
-                        unit_of_measure: item.products.unit_of_measure,
+                        unit_of_measure: itemUnit,
                         customer_name: customerName,
                         zone_name: 'General',
                         space_label: getOrderSpaceDisplayLabel(item.orders),

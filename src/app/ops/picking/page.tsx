@@ -10,6 +10,7 @@ import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import { getOperationalTargetDate, OPERATIONAL_CELLS, normalizeOperationalCell } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
+import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { 
     Calendar, 
     GraduationCap, 
@@ -97,7 +98,7 @@ export default function PickingExecutionPage() {
                                         id, status, warehouse_spaces, crates_count, delivery_date, created_at, profile_id, logistics_data,
                     profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
                     order_items (
-                        id, product_id, quantity, picked_quantity, quality_status, quality_notes, nickname, variant_label,
+                        id, product_id, quantity, picked_quantity, unit, selected_options, quality_status, quality_notes, nickname, variant_label,
                         products (name, category, unit_of_measure, buying_team, accounting_id, parent_id)
                     )
                 `)
@@ -293,8 +294,17 @@ export default function PickingExecutionPage() {
                             const resolvedCell = normalizeOperationalCell(product?.buying_team, product?.category);
                             const variant = item.variant_label || item.nickname || '';
                             const baseName = product?.accounting_id ? `#${product.accounting_id} ${product?.name || 'Producto'}` : (product?.name || 'Producto Desconocido');
-                            const dispName = variant ? `${baseName} (${variant})` : baseName;
-                            const resolvedStock = stockMap[item.product_id] ?? (product?.parent_id ? stockMap[product.parent_id] : undefined) ?? 0;
+                            const itemUnit = item.unit || product?.unit_of_measure || 'un';
+                            const physicalInst = resolvePhysicalInstruction({
+                                quantity: item.quantity,
+                                unit: itemUnit,
+                                variant_label: item.variant_label,
+                                nickname: item.nickname,
+                                selected_options: item.selected_options
+                            });
+                            const dispName = physicalInst ? `${baseName} (${physicalInst})` : (variant ? `${baseName} (${variant})` : baseName);
+                            const childStock = Number(stockMap[item.product_id] || 0);
+                            const resolvedStock = childStock > 0 ? childStock : (product?.parent_id ? Number(stockMap[product.parent_id] || 0) : 0);
                             return {
                                 id: item.id,
                                 product_id: item.product_id,
@@ -303,7 +313,7 @@ export default function PickingExecutionPage() {
                                 picked_quantity: item.picked_quantity || 0,
                                 quality_status: item.quality_status,
                                 quality_notes: item.quality_notes,
-                                unit: product?.unit_of_measure || 'un',
+                                unit: itemUnit,
                                 category: resolvedCell,
                                 available_stock: resolvedStock
                             };

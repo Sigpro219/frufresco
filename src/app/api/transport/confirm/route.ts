@@ -259,6 +259,7 @@ export async function POST(request: Request) {
                     stops_count: orderIds.length,
                     total_orders: orderIds.length,
                     total_kilos: totalKilos,
+                    total_crates: totalCrates,
                     logic_parameters_snapshot: {
                         ...params,
                         fleet_start_time: departureTimeStr

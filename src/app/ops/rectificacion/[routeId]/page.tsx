@@ -500,24 +500,25 @@ export default function RouteRectificationDetailPage() {
                         .eq('order_id', ordId);
                     if (fetchItemsErr) throw fetchItemsErr;
                     if (ordItems && ordItems.length > 0) {
-                        let newSubtotal = 0;
+                        let newTotal = 0;
                         let newTax = 0;
                         for (const it of ordItems as any[]) {
                             const qty = Number(it.quantity) || 0;
                             const price = Number(it.unit_price) || 0;
-                            const lineSub = qty * price;
+                            const lineTotal = qty * price;
                             const prodObj = Array.isArray(it.products) ? it.products[0] : it.products;
                             const ivaRate = Number(prodObj?.iva_rate || 0);
-                            newSubtotal += lineSub;
+                            newTotal += lineTotal;
                             if (ivaRate > 0) {
-                                newTax += lineSub * (ivaRate / 100);
+                                newTax += lineTotal * (ivaRate / (100 + ivaRate));
                             }
                         }
-                        const roundedSub = Math.round(newSubtotal);
+                        const roundedTotal = Math.round(newTotal);
                         const roundedTax = Math.round(newTax);
+                        const roundedSub = roundedTotal - roundedTax;
                         const { error: ordRecalcErr } = await supabase
                             .from('orders')
-                            .update({ subtotal: roundedSub, tax: roundedTax, total: roundedSub + roundedTax })
+                            .update({ subtotal: roundedSub, tax: roundedTax, total: roundedTotal })
                             .eq('id', ordId);
                         if (ordRecalcErr) throw ordRecalcErr;
                     }

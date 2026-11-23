@@ -469,6 +469,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     theoreticalMetrics,
                     params,
                     routeStartTimes: dynamicStartTimes, // Pasar las horas de salida estimadas dinámicas
+                    preserveExistingSpaces: true,
                     ...(Object.keys(stopEtas).length > 0 ? { stopEtas } : {})
                 })
             });

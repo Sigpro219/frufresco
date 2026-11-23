@@ -5704,12 +5704,19 @@ useEffect(() => {
                                         setShowLockWarningModal(false);
                                         await handleBulkAction('para_compra', true, true);
                                         const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
-                                        fetch('/api/ops/shifts', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            credentials: 'include',
-                                            body: JSON.stringify({ action: 'set_mode', mode: 'digital_native', shift_date: targetShiftDate })
-                                        }).catch(() => {});
+                                        try {
+                                            const shiftRes = await fetch('/api/ops/shifts', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                credentials: 'include',
+                                                body: JSON.stringify({ action: 'set_mode', mode: 'digital_native', shift_date: targetShiftDate })
+                                            });
+                                            if (!shiftRes.ok) {
+                                                console.warn('[Opción A] No se pudo activar turno digital_native:', shiftRes.status);
+                                            }
+                                        } catch (shiftErr) {
+                                            console.warn('[Opción A] Error activando turno digital_native:', shiftErr);
+                                        }
                                         setShowPostLaunchModal(true);
                                     }}
                                     style={{
@@ -5881,6 +5888,20 @@ useEffect(() => {
                                                         setLastLaunchedOrderIds(ids);
                                                         setShowInventoryGateModal(false);
                                                         await handleBulkAction('para_compra', true, true);
+                                                        const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
+                                                        try {
+                                                            const shiftRes = await fetch('/api/ops/shifts', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                credentials: 'include',
+                                                                body: JSON.stringify({ action: 'set_mode', mode: 'digital_native', shift_date: targetShiftDate })
+                                                            });
+                                                            if (!shiftRes.ok) {
+                                                                console.warn('[Opción A Override] No se pudo activar turno digital_native:', shiftRes.status);
+                                                            }
+                                                        } catch (shiftErr) {
+                                                            console.warn('[Opción A Override] Error activando turno digital_native:', shiftErr);
+                                                        }
                                                         setShowPostLaunchModal(true);
                                                     } catch (ovErr: any) {
                                                         alert('Error registrando autorización de emergencia: ' + (ovErr?.message || ovErr));

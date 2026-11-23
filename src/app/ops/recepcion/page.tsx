@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/authContext';
 import Image from 'next/image';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
 import { 
   Calendar, 
   BookOpen, 
@@ -47,6 +48,9 @@ interface Product {
     category: string;
     inventory_group?: string;
     image_url?: string;
+    parent_id?: string | null;
+    weight_kg?: number | null;
+    accounting_id?: number | string | null;
 }
 
 interface Purchase {
@@ -205,7 +209,10 @@ export default function ReceptionPage() {
                         unit_of_measure,
                         category,
                         inventory_group,
-                        image_url
+                        image_url,
+                        parent_id,
+                        weight_kg,
+                        accounting_id
                     ),
                     provider:providers (
                         name
@@ -259,7 +266,7 @@ export default function ReceptionPage() {
 
         const measured = parseFloat(inputQty);
         // La "Verdad" es lo que recogió el transportador (si existe) o lo comprado
-        const expected = selectedItem.picked_quantity || selectedItem.quantity;
+        const expected = selectedItem.picked_up_quantity || selectedItem.picked_quantity || selectedItem.quantity;
 
         // Tolerancia pequeña por decimales
         const isValid = Math.abs(measured - expected) < 0.05 || measured > expected;
@@ -320,7 +327,7 @@ export default function ReceptionPage() {
             if (finalReason) updateData.rejection_reason = finalReason;
 
             // Use inputQty if available (as a number), otherwise fallback to the expected quantity
-            const receivedQty = inputQty ? parseFloat(inputQty) : (selectedItem.picked_quantity || selectedItem.quantity);
+            const receivedQty = inputQty ? parseFloat(inputQty) : (selectedItem.picked_up_quantity || selectedItem.picked_quantity || selectedItem.quantity);
 
             // 1. Update purchase status
             const { error: purchaseError } = await supabase
@@ -432,6 +439,23 @@ export default function ReceptionPage() {
             const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).single();
             
             if (warehouseData) {
+                const hasParent = Boolean(selectedItem.product?.parent_id);
+                const targetProductId = selectedItem.product?.parent_id || selectedItem.product_id;
+                const toTargetMass = (qty: number) => {
+                    if (!hasParent) return qty;
+                    const norm = normalizeDemandToKg({
+                        quantity: qty,
+                        rawUnit: selectedItem.product?.unit_of_measure,
+                        productUom: selectedItem.product?.unit_of_measure,
+                        variantLabel: selectedItem.variant_label,
+                        productWeightKg: selectedItem.product?.weight_kg
+                    });
+                    return Math.round(norm.effectiveQty * 100) / 100;
+                };
+                const originTag = hasParent
+                    ? ` [Origen hijo ${selectedItem.product?.accounting_id ? `#${selectedItem.product.accounting_id} ` : ''}${selectedItem.product?.name || ''}]`
+                    : '';
+
                 if (finalStatus !== 'received_rejected') {
                     const statusTo = (finalStatus === 'received_ok') ? 'available' : 'in_process';
                     
@@ -439,28 +463,30 @@ export default function ReceptionPage() {
                         const excessQty = parseFloat((receivedQty - expected).toFixed(2));
                         
                         // 2a. Expected quantity goes to active inventory (available/in_process)
-                        await supabase.from('inventory_movements').insert([{
-                            product_id: selectedItem.product_id,
+                        const { error: movExpectedErr } = await supabase.from('inventory_movements').insert([{
+                            product_id: targetProductId,
                             warehouse_id: warehouseData.id,
-                            quantity: expected,
+                            quantity: toTargetMass(expected),
                             type: 'entry',
                             status_to: statusTo,
-                            notes: `Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- OK (Cantidad Esperada)`,
+                            notes: `Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- OK (Cantidad Esperada)${originTag}`,
                             reference_type: 'purchase_reception',
                             reference_id: selectedItem.id
                         }]);
+                        if (movExpectedErr) throw movExpectedErr;
 
                         // 2b. Excess quantity goes to quarantine (in_process)
-                        await supabase.from('inventory_movements').insert([{
-                            product_id: selectedItem.product_id,
+                        const { error: movExcessErr } = await supabase.from('inventory_movements').insert([{
+                            product_id: targetProductId,
                             warehouse_id: warehouseData.id,
-                            quantity: excessQty,
+                            quantity: toTargetMass(excessQty),
                             type: 'entry',
                             status_to: 'in_process',
-                            notes: `[Excedente: +${excessQty} ${selectedItem.product.unit_of_measure}] Pendiente de aprobación por supervisor`,
+                            notes: `[Excedente: +${excessQty} ${selectedItem.product.unit_of_measure}] Pendiente de aprobación por supervisor${originTag}`,
                             reference_type: 'purchase_reception',
                             reference_id: selectedItem.id
                         }]);
+                        if (movExcessErr) throw movExcessErr;
 
                         // 2c. Log weight discrepancy for supervisor approval
                         const { error: discrepancyError } = await supabase.from('weight_discrepancies').insert([{
@@ -476,29 +502,31 @@ export default function ReceptionPage() {
                         }
                     } else {
                         // Normal reception without excess
-                        await supabase.from('inventory_movements').insert([{
-                            product_id: selectedItem.product_id,
+                        const { error: movNormalErr } = await supabase.from('inventory_movements').insert([{
+                            product_id: targetProductId,
                             warehouse_id: warehouseData.id,
-                            quantity: receivedQty,
+                            quantity: toTargetMass(receivedQty),
                             type: 'entry',
                             status_to: statusTo,
-                            notes: `${notePrefix}Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'OK'}`,
+                            notes: `${notePrefix}Ingreso por recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'OK'}${originTag}`,
                             reference_type: 'purchase_reception',
                             reference_id: selectedItem.id
                         }]);
+                        if (movNormalErr) throw movNormalErr;
                     }
                 } else {
                     // Record absolute rejection in inventory movements with quantity 0
-                    await supabase.from('inventory_movements').insert([{
-                        product_id: selectedItem.product_id,
+                    const { error: movRejErr } = await supabase.from('inventory_movements').insert([{
+                        product_id: targetProductId,
                         warehouse_id: warehouseData.id,
                         quantity: 0,
                         type: 'entry',
                         status_to: 'rejected',
-                        notes: `Rechazo en recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'Motivo no especificado'}`,
+                        notes: `Rechazo en recepción: ${selectedItem.variant_label ? `(${selectedItem.variant_label}) ` : ''}- ${finalReason || 'Motivo no especificado'}${originTag}`,
                         reference_type: 'purchase_reception',
                         reference_id: selectedItem.id
                     }]);
+                    if (movRejErr) throw movRejErr;
                 }
             }
 
