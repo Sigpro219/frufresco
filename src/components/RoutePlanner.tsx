@@ -909,13 +909,13 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     return (
         <>
-            <div className="max-w-[1600px] mx-auto grid grid-cols-1 xl:grid-cols-[440px_1fr] gap-5 items-start">
+            <div className="rp-layout">
             {/* Orders Sidebar */}
             <div 
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
                 onDragLeave={() => setDragOverSidebar(false)}
                 onDrop={(e) => { handleSidebarDrop(e); setDragOverSidebar(false); }}
-                className="xl:sticky xl:top-[136px] xl:max-h-[calc(100vh-152px)]"
+                className="rp-sidebar"
                 style={{ 
                     backgroundColor: dragOverSidebar ? '#ECFDF5' : '#FFFFFF', 
                     borderRadius: '16px', 
@@ -1763,7 +1763,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
                     return (
                         <>
-                            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
+                            <div className="rp-fleet-grid">
                                 {vehiclesToRenderMain.map(vehicle => {
                                     const load = getVehicleLoad(vehicle.id);
                                     const cratesNeeded = getVehicleCrates(vehicle.id);
@@ -1835,7 +1835,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 </div>
 
                                                 {/* Dual Capacity Progress Bars */}
-                                                <div className="grid grid-cols-2 gap-2" style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.5rem' }}>
+                                                <div className="rp-dual-bars" style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.5rem' }}>
                                                     <div style={{ backgroundColor: isKgOverloaded ? '#FEF2F2' : '#F8FAFC', border: `1px solid ${isKgOverloaded ? '#FECACA' : '#E2E8F0'}`, borderRadius: '8px', padding: '4px 7px' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', fontWeight: '800', color: isKgOverloaded ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
                                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: isKgOverloaded ? '#DC2626' : '#0D7A57' }}>
@@ -2009,7 +2009,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <div style={{ fontSize: '0.70rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
                                         Flota Disponible Sin Asignar ({idleVehiclesList.length})
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                    <div className="rp-idle-grid">
                                         {idleVehiclesList.map(vehicle => {
                                             const isDragOver = dragOverVehicleId === vehicle.id;
                                             return (
@@ -2058,6 +2058,50 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             </div>
             {/* Inject keyframes dynamically */}
             <style>{`
+                .rp-layout {
+                    max-width: 1600px;
+                    margin: 0 auto;
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 1.25rem;
+                    align-items: start;
+                }
+                @media (min-width: 1024px) {
+                    .rp-layout {
+                        grid-template-columns: 420px minmax(0, 1fr);
+                    }
+                    .rp-sidebar {
+                        position: sticky;
+                        top: 136px;
+                        max-height: calc(100vh - 152px);
+                    }
+                }
+                .rp-fleet-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 1rem;
+                    align-items: start;
+                }
+                @media (min-width: 768px) {
+                    .rp-fleet-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+                @media (min-width: 1520px) {
+                    .rp-fleet-grid {
+                        grid-template-columns: repeat(3, minmax(0, 1fr));
+                    }
+                }
+                .rp-dual-bars {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 0.5rem;
+                }
+                .rp-idle-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                    gap: 0.65rem;
+                }
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
