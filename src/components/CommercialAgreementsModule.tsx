@@ -479,7 +479,7 @@ export default function CommercialAgreementsModule() {
     const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
     const [clientSearchQuery, setClientSearchQuery] = useState('');
     const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'matriz' | 'sucursal'>('all');
-    const [createClientStatusFilter, setCreateClientStatusFilter] = useState<'available' | 'all'>('available');
+    const [createClientStatusFilter, setCreateClientStatusFilter] = useState<'available' | 'all'>('all');
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -570,7 +570,6 @@ export default function CommercialAgreementsModule() {
     const [editParsing, setEditParsing] = useState(false);
     const [editSaving, setEditSaving] = useState(false);
     const [editStep, setEditStep] = useState<number>(1);
-    const [editConfirmationChecked, setEditConfirmationChecked] = useState(false);
     const [isEditKpiCollapsed, setIsEditKpiCollapsed] = useState(false);
 
     // Drawer Inactive SKUs Auto-activation State
@@ -1448,6 +1447,7 @@ export default function CommercialAgreementsModule() {
         setSelectedClientIds([]);
         setIsMultiClientMode(false);
         setClientTypeFilter('all');
+        setCreateClientStatusFilter('all');
         setClientSearchQuery('');
         setUploadedItems([]);
         setExcelPreviewData(null);
@@ -3368,7 +3368,6 @@ export default function CommercialAgreementsModule() {
         setEditExcelPreviewSearch('');
         setEditExcelPreviewFilter('all');
         setEditStep(1);
-        setEditConfirmationChecked(false);
         setIsEditModalOpen(true);
     };
 
@@ -3482,15 +3481,101 @@ export default function CommercialAgreementsModule() {
                 expiry.setFullYear(expiry.getFullYear() + numEditDuration);
             }
             const calculatedValidUntil = expiry.toISOString();
-            
-            const cleanBaseName = (editingAgreement.model_snapshot_name || `${editingAgreement.profiles?.company_name || editingAgreement.client_name || 'Acuerdo'} - ${editStartDate.split('-').reverse().join('-')}`).replace(/\s*\[DTO_COMERCIAL:\s*\d+(\.\d+)?%\]/gi, '');
+
+            // Preparar y validar ítems desde editExcelPreviewData.items ANTES de mutar quotes/profiles
+            const hasPreviewItems = Boolean(editExcelPreviewData && editExcelPreviewData.items.length > 0);
+            let uniqueItems: any[] = [];
+            let subtotal = 0;
+            let totalTax = 0;
+            let total = 0;
+
+            if (hasPreviewItems && editExcelPreviewData) {
+                const matchedEntries = editExcelPreviewData.items.filter((item) => Boolean(item.matched_product?.id));
+                const itemsToInsert = matchedEntries.map((item) => {
+                    const dbProduct = item.matched_product!;
+                    const basePrice = Number(item.cost_basis ?? dbProduct.cost_basis ?? 0);
+                    const negotiatedPrice = Number(item.unit_price) || 0;
+                    const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
+                    const ivaRate = Number(item.iva_rate ?? dbProduct.iva_rate ?? 0);
+                    const ivaAmount = negotiatedPrice * (ivaRate / 100);
+
+                    return {
+                        quote_id: editingAgreement.id,
+                        product_id: dbProduct.id,
+                        product_name: dbProduct.name,
+                        quantity: 1,
+                        cost_basis: basePrice,
+                        margin_percent: marginPercent,
+                        unit_price: negotiatedPrice,
+                        iva_rate: ivaRate,
+                        iva_amount: ivaAmount,
+                        total_price: negotiatedPrice + ivaAmount
+                    };
+                });
+
+                uniqueItems = Array.from(new Map(itemsToInsert.map((it) => [it.product_id, it])).values());
+                if (uniqueItems.length === 0) {
+                    showToast('No hay productos válidos reconocidos para actualizar el acuerdo.', 'error');
+                    return;
+                }
+
+                // Poka-Yoke: Confirmar y activar SKUs inactivos ANTES de mutar cabecera o borrar ítems
+                const inactiveProducts = Array.from(
+                    new Map(
+                        matchedEntries
+                            .filter((item) => item.matched_product?.is_active === false || item.is_inactive)
+                            .map((item) => [item.matched_product.id, item.matched_product])
+                    ).values()
+                );
+
+                if (inactiveProducts.length > 0) {
+                    const confirmMsg = `ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo dentro de este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y actualizar acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
+                    const shouldActivate = window.confirm(confirmMsg);
+                    if (!shouldActivate) {
+                        return;
+                    }
+
+                    const inactiveIds = inactiveProducts.map((p) => p.id);
+                    const { error: actErr } = await supabase
+                        .from('products')
+                        .update({ is_active: true })
+                        .in('id', inactiveIds);
+
+                    if (actErr) {
+                        console.error('Error auto-activando productos en edición:', actErr);
+                        showToast('Advertencia: No se pudieron activar algunos productos automáticamente', 'warning');
+                    } else {
+                        showToast(`${inactiveIds.length} producto(s) reactivado(s) exitosamente en catálogo`, 'success');
+                    }
+                }
+
+                // Calcular totales estrictamente sobre los ítems ya deduplicados
+                for (const it of uniqueItems) {
+                    subtotal += Number(it.unit_price) || 0;
+                    totalTax += Number(it.iva_amount) || 0;
+                }
+                total = subtotal + totalTax;
+            }
+
+            // Actualizar sufijo de fecha DD-MM-YY en model_snapshot_name preservando [DTO_COMERCIAL: X%]
+            const rawDateParts = (editStartDate || new Date().toISOString().split('T')[0]).split('-');
+            const dateSuffix = rawDateParts.length === 3
+                ? `${rawDateParts[2]}-${rawDateParts[1]}-${rawDateParts[0].slice(-2)}`
+                : editStartDate;
+            const cleanWithoutDto = (editingAgreement.model_snapshot_name || `${editingAgreement.profiles?.company_name || editingAgreement.client_name || 'Acuerdo'} - ${dateSuffix}`)
+                .replace(/\s*\[DTO_COMERCIAL:\s*\d+(\.\d+)?%\]/gi, '')
+                .trim();
+            const cleanBaseName = /\s*-\s*\d{2}-\d{2}-\d{2,4}\s*$/.test(cleanWithoutDto)
+                ? cleanWithoutDto.replace(/\s*-\s*\d{2}-\d{2}-\d{2,4}\s*$/, ` - ${dateSuffix}`)
+                : cleanWithoutDto;
             const dtoTag = editDiscountPct > 0 ? ` [DTO_COMERCIAL: ${editDiscountPct}%]` : '';
             const defaultUpdatedName = `${cleanBaseName}${dtoTag}`;
-            // 1. Update the quote record itself
+
+            // 1. Update the quote record itself (con T12:00:00 anti-desfase UTC-5)
             const { error: updateErr } = await supabase
                 .from('quotes')
                 .update({
-                    start_date: editStartDate ? new Date(editStartDate).toISOString() : new Date().toISOString(),
+                    start_date: editStartDate ? new Date(editStartDate + 'T12:00:00').toISOString() : new Date().toISOString(),
                     valid_until: calculatedValidUntil,
                     model_snapshot_name: defaultUpdatedName
                 })
@@ -3513,108 +3598,37 @@ export default function CommercialAgreementsModule() {
                 }
             }
             
-            // 2. If new excel file uploaded, replace items
-            if (editUploadedItems.length > 0) {
-                // Query full database catalogue with pagination
-                const productMap = await fetchAllProductsMap();
-
-                // Poka-Yoke: Check for inactive SKUs
-                const inactiveProducts: any[] = [];
-                editUploadedItems.forEach(item => {
-                    const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
-                    if (dbProduct && dbProduct.is_active === false) {
-                        inactiveProducts.push(dbProduct);
-                    }
-                });
-
-                if (inactiveProducts.length > 0) {
-                    const confirmMsg = `ATENCIÓN COMERCIAL:\n\nSe detectaron ${inactiveProducts.length} producto(s) inactivo(s) en el catálogo dentro de este acuerdo:\n${inactiveProducts.slice(0, 5).map(p => `• ${p.name}`).join('\n')}${inactiveProducts.length > 5 ? `\n... y ${inactiveProducts.length - 5} más` : ''}\n\n¿Deseas ACTIVARLOS AUTOMÁTICAMENTE en el catálogo para que puedan ser vendidos y seleccionados en la toma de pedidos?\n\n- [Aceptar]: Activar productos y actualizar acuerdo.\n- [Cancelar]: Volver para revisar la lista.`;
-                    
-                    const shouldActivate = window.confirm(confirmMsg);
-                    if (!shouldActivate) {
-                        setEditSaving(false);
-                        return;
-                    }
-
-                    const inactiveIds = Array.from(new Set(inactiveProducts.map(p => p.id)));
-                    const { error: actErr } = await supabase
-                        .from('products')
-                        .update({ is_active: true })
-                        .in('id', inactiveIds);
-
-                    if (actErr) {
-                        console.error('Error auto-activando productos en edición:', actErr);
-                        showToast('Advertencia: No se pudieron activar algunos productos automáticamente', 'warning');
-                    } else {
-                        showToast(`${inactiveIds.length} producto(s) reactivado(s) exitosamente en catálogo`, 'success');
-                    }
-                }
-                
-                // Delete old items for this specific active agreement being updated
+            // 2. Replace quote_items in batches of 100 if Excel was uploaded
+            if (uniqueItems.length > 0) {
                 const { error: deleteErr } = await supabase
                     .from('quote_items')
                     .delete()
                     .eq('quote_id', editingAgreement.id);
                     
                 if (deleteErr) throw deleteErr;
-                
-                // Insert new items
-                const itemsToInsert: any[] = [];
-                let matchCount = 0;
-                let subtotal = 0;
-                let totalTax = 0;
-                
-                editUploadedItems.forEach(item => {
-                    const dbProduct = findProductInMap(productMap, item.accounting_id, item.product_name) || productMap[String(item.accounting_id)];
-                    if (dbProduct) {
-                        matchCount++;
-                        const basePrice = dbProduct.cost_basis || 0;
-                        const negotiatedPrice = item.unit_price;
-                        const marginPercent = negotiatedPrice > 0 ? Math.round(((negotiatedPrice - basePrice) / negotiatedPrice) * 10000) / 100 : 0;
-                        
-                        const ivaRate = dbProduct.iva_rate || 0;
-                        const ivaAmount = negotiatedPrice * (ivaRate / 100);
-                        
-                        subtotal += negotiatedPrice;
-                        totalTax += ivaAmount;
-                        
-                        itemsToInsert.push({
-                            quote_id: editingAgreement.id,
-                            product_id: dbProduct.id,
-                            product_name: dbProduct.name,
-                            quantity: 1,
-                            cost_basis: basePrice,
-                            margin_percent: marginPercent,
-                            unit_price: negotiatedPrice,
-                            iva_rate: ivaRate,
-                            iva_amount: ivaAmount,
-                            total_price: negotiatedPrice + ivaAmount
-                        });
-                    }
-                });
-                
-                const total = subtotal + totalTax;
-                
-                if (itemsToInsert.length > 0) {
+
+                const batchSize = 100;
+                for (let i = 0; i < uniqueItems.length; i += batchSize) {
+                    const batch = uniqueItems.slice(i, i + batchSize);
                     const { error: itemsErr } = await supabase
                         .from('quote_items')
-                        .insert(Array.from(new Map(itemsToInsert.map(it => [it.product_id, it])).values()));
+                        .insert(batch);
                     if (itemsErr) throw itemsErr;
-                    
-                    // Update header totals in quotes table to match the new item totals
-                    const { error: updateQuoteTotalsErr } = await supabase
-                        .from('quotes')
-                        .update({
-                            subtotal_amount: subtotal,
-                            total_tax_amount: totalTax,
-                            total_amount: total
-                        })
-                        .eq('id', editingAgreement.id);
-                        
-                    if (updateQuoteTotalsErr) throw updateQuoteTotalsErr;
                 }
-                
-                showToast(`Acuerdo modificado con éxito. Se actualizaron ${matchCount} precios de productos.`, 'success');
+
+                // Update header totals in quotes table to match the deduplicated item totals
+                const { error: updateQuoteTotalsErr } = await supabase
+                    .from('quotes')
+                    .update({
+                        subtotal_amount: subtotal,
+                        total_tax_amount: totalTax,
+                        total_amount: total
+                    })
+                    .eq('id', editingAgreement.id);
+                    
+                if (updateQuoteTotalsErr) throw updateQuoteTotalsErr;
+
+                showToast(`Acuerdo modificado con éxito. Se actualizaron ${uniqueItems.length} precios de productos.`, 'success');
             } else {
                 showToast(`Acuerdo modificado con éxito. Fechas actualizadas.`, 'success');
             }
@@ -9637,40 +9651,24 @@ export default function CommercialAgreementsModule() {
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                             <span style={{ color: '#64748B' }}>Actualización de Precios:</span>
-                                            <strong>
-                                                {editUploadedItems.length > 0 ? (
-                                                    <span style={{ color: THEME.colors.primary }}>Reemplazar con {editUploadedItems.length} productos de Excel</span>
+                                            <strong style={{ textAlign: 'right' }}>
+                                                {editExcelPreviewData && editExcelPreviewData.matchedCount > 0 ? (
+                                                    <>
+                                                        <span style={{ color: THEME.colors.primary }}>
+                                                            Reemplazar con {editExcelPreviewData.matchedCount} productos reconocidos de Excel
+                                                        </span>
+                                                        {editExcelPreviewData.unmatchedCount > 0 && (
+                                                            <div style={{ fontSize: '0.74rem', color: '#D97706', fontWeight: 600, marginTop: '2px' }}>
+                                                                ({editExcelPreviewData.unmatchedCount} no reconocidos serán omitidos)
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 ) : (
                                                     <span style={{ color: '#64748B' }}>Conservar precios congelados actuales</span>
                                                 )}
                                             </strong>
                                         </div>
                                     </div>
-
-                                    {/* Safety Checkbox */}
-                                    <label style={{ 
-                                        display: 'flex', 
-                                        alignItems: 'flex-start', 
-                                        gap: '12px', 
-                                        textAlign: 'left', 
-                                        padding: '14px 18px', 
-                                        backgroundColor: '#FFFBEB', 
-                                        border: '1.5px solid #FCD34D', 
-                                        borderRadius: '10px',
-                                        cursor: 'pointer',
-                                        width: '100%',
-                                        maxWidth: '600px'
-                                    }}>
-                                        <input 
-                                            type="checkbox"
-                                            checked={editConfirmationChecked}
-                                            onChange={(e) => setEditConfirmationChecked(e.target.checked)}
-                                            style={{ marginTop: '3px', width: '18px', height: '18px', cursor: 'pointer', accentColor: '#D97706' }}
-                                        />
-                                        <span style={{ fontSize: '0.8rem', color: '#92400E', lineHeight: '1.4', fontWeight: 'bold' }}>
-                                            Confirmo que he validado la vigencia y las tarifas con el cliente B2B y el área comercial, y autorizo la actualización de este acuerdo en el sistema.
-                                        </span>
-                                    </label>
                                 </div>
                             )}
 
@@ -9777,21 +9775,21 @@ export default function CommercialAgreementsModule() {
                                 {editStep === 3 && (
                                     <button 
                                         type="button" 
-                                        disabled={!editConfirmationChecked || editSaving}
+                                        disabled={editSaving}
                                         onClick={handleEditSubmit}
                                         style={{ 
                                             padding: '10px 24px', 
                                             borderRadius: THEME.radius.md, 
                                             border: 'none', 
-                                            backgroundColor: (!editConfirmationChecked || editSaving) ? '#CBD5E1' : THEME.colors.primary, 
+                                            backgroundColor: editSaving ? '#CBD5E1' : THEME.colors.primary, 
                                             color: 'white', 
                                             fontWeight: 'bold',
                                             fontSize: '0.85rem',
-                                            cursor: (!editConfirmationChecked || editSaving) ? 'not-allowed' : 'pointer',
+                                            cursor: editSaving ? 'not-allowed' : 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '8px',
-                                            boxShadow: (!editConfirmationChecked || editSaving) ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
+                                            boxShadow: editSaving ? 'none' : '0 4px 12px rgba(13, 122, 87, 0.25)'
                                         }}
                                     >
                                         {editSaving ? (
