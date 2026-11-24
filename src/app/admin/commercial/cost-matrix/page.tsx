@@ -731,17 +731,34 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             const computedTercils = computeProductTerciles(activeIds, purchaseCounts);
             setProductTerciles(computedTercils);
 
+            const fetchAllManualMatrix = async () => {
+                const rows: any[] = [];
+                let from = 0;
+                const pageSize = 1000;
+                while (true) {
+                    const { data, error } = await supabase
+                        .from('commercial_cost_matrix')
+                        .select('*')
+                        .setHeader('Cache-Control', 'no-store')
+                        .range(from, from + pageSize - 1);
+                    if (error) throw error;
+                    if (!data || data.length === 0) break;
+                    rows.push(...data);
+                    if (data.length < pageSize) break;
+                    from += pageSize;
+                }
+                return rows;
+            };
+
             const [
-                { data: manual, error: manualErr },
+                manual,
                 { data: histSetting },
                 { data: convData }
             ] = await Promise.all([
-                supabase.from('commercial_cost_matrix').select('*').setHeader('Cache-Control', 'no-store'),
+                fetchAllManualMatrix(),
                 supabase.from('app_settings').select('value').eq('key', 'commercial_cost_matrix_history').maybeSingle(),
                 supabase.from('product_conversions').select('product_id, from_unit, to_unit, conversion_factor')
             ]);
-
-            if (manualErr) throw manualErr;
             
             const manualMap: Record<string, any> = {};
             manual?.forEach(m => {

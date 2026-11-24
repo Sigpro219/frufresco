@@ -452,13 +452,17 @@ export async function batchRecalculateAndSyncPrices(
     try {
         let prods: PricingProductRow[];
         if (targetProductIds && targetProductIds.length > 0) {
-            const { data, error } = await supabaseClient
-                .from('products')
-                .select('id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure')
-                .eq('is_active', true)
-                .in('id', targetProductIds);
-            if (error) throw error;
-            prods = (data || []) as PricingProductRow[];
+            prods = [];
+            for (let i = 0; i < targetProductIds.length; i += 100) {
+                const idChunk = targetProductIds.slice(i, i + 100);
+                const { data, error } = await supabaseClient
+                    .from('products')
+                    .select('id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure')
+                    .eq('is_active', true)
+                    .in('id', idChunk);
+                if (error) throw error;
+                if (data) prods.push(...(data as PricingProductRow[]));
+            }
         } else {
             prods = await fetchAllRows<PricingProductRow>(supabaseClient, 'products', 'id, name, iva_rate, theoretical_shrinkage_pct, parent_id, unit_of_measure', { eq: ['is_active', true] });
         }
@@ -684,7 +688,10 @@ export async function batchRecalculateAndSyncPrices(
         // Upsert PMP in chunks of 250
         for (let i = 0; i < pmpBatch.length; i += 250) {
             const chunk = pmpBatch.slice(i, i + 250);
-            await supabaseClient.from('pricing_model_prices').upsert(chunk, { onConflict: 'model_id,product_id' });
+            const { error: pmpUpsertErr } = await supabaseClient
+                .from('pricing_model_prices')
+                .upsert(chunk, { onConflict: 'model_id,product_id' });
+            if (pmpUpsertErr) throw pmpUpsertErr;
         }
 
         // SPEC.md §7.2: Supresión total de escritura a products.base_price en sincronización masiva.

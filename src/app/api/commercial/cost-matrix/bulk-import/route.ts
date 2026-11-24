@@ -39,20 +39,39 @@ export async function POST(req: NextRequest) {
             dedupedMap.set(item.product_id, item);
         }
 
-        // Consultar catálogo activo, conversiones y matriz actual para:
+        // Consultar catálogo activo, conversiones y matriz actual (paginado .range para evitar truncamiento >1000 filas):
         // 1) Preservar el costo previo en el historial de matriz (`commercial_cost_matrix_history`) para COMPRA 2..8
         // 2) Propagar automáticamente el nuevo costo de padres a sus hijos derivados (`parent_id`)
+        const fetchAllPaginated = async (table: string, columns: string, onlyActive = false) => {
+            const rows: any[] = [];
+            let from = 0;
+            const pageSize = 1000;
+            while (true) {
+                let q = supabaseAdmin.from(table).select(columns).range(from, from + pageSize - 1);
+                if (onlyActive) q = q.eq('is_active', true);
+                const { data, error } = await q;
+                if (error) throw error;
+                if (!data || data.length === 0) break;
+                rows.push(...data);
+                if (data.length < pageSize) break;
+                from += pageSize;
+            }
+            return rows;
+        };
+
         const [
-            { data: allProducts },
-            { data: conversions },
-            { data: currentMatrix },
-            { data: existingHistRow }
+            allProducts,
+            { data: conversions, error: convErr },
+            currentMatrix,
+            { data: existingHistRow, error: histErr }
         ] = await Promise.all([
-            supabaseAdmin.from('products').select('id, parent_id, unit_of_measure, is_active').eq('is_active', true),
+            fetchAllPaginated('products', 'id, parent_id, unit_of_measure, is_active', true),
             supabaseAdmin.from('product_conversions').select('product_id, from_unit, to_unit, conversion_factor'),
-            supabaseAdmin.from('commercial_cost_matrix').select('product_id, manual_cost, updated_at, updated_by'),
+            fetchAllPaginated('commercial_cost_matrix', 'product_id, manual_cost, updated_at, updated_by', false),
             supabaseAdmin.from('app_settings').select('value').eq('key', 'commercial_cost_matrix_history').maybeSingle()
         ]);
+        if (convErr) throw convErr;
+        if (histErr) throw histErr;
 
         const prodMap = new Map<string, any>((allProducts || []).map((p: any) => [p.id, p]));
         const currentMatrixMap = new Map<string, any>((currentMatrix || []).map((m: any) => [m.product_id, m]));
@@ -156,10 +175,14 @@ export async function POST(req: NextRequest) {
         // Propagar inmediatamente los nuevos costos a los modelos de precios y catálogo de venta
         // (SDD v1.9.319: No se insertan compras ficticias de 1 Kg en `purchases`; `commercial_cost_matrix` gobierna por fecha)
         const productIds = cleanUpdates.map((item: any) => item.product_id);
-        try {
-            await batchRecalculateAndSyncPrices(supabaseAdmin, productIds);
-        } catch (syncErr) {
-            console.warn('[Bulk Import Cost Matrix] Pricing sync warning:', syncErr);
+        const syncResult = await batchRecalculateAndSyncPrices(supabaseAdmin, productIds);
+        if (!syncResult?.success) {
+            return NextResponse.json(
+                {
+                    error: `La matriz de costos se guardó (${updatedCount} productos), pero falló la sincronización hacia Modelos de Precios: ${syncResult?.error || 'Error desconocido'}`
+                },
+                { status: 500 }
+            );
         }
 
         // Resolve valid collaborator_id for foreign key constraint in audit_logs (references collaborators.id)
