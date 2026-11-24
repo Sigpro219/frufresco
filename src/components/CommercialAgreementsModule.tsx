@@ -7097,8 +7097,13 @@ export default function CommercialAgreementsModule() {
                                                                     key={c.id}
                                                                     onClick={() => {
                                                                         if (hasActive) {
-                                                                            showToast(`${c.company_name} ya tiene un Acuerdo Activo (#${activeAgInfo?.agreement.quote_number}). Para crearle uno nuevo, primero debes revocar el actual.`, 'warning');
-                                                                            return;
+                                                                            const isParentInherited = Boolean(activeAgInfo?.isParent);
+                                                                            showToast(
+                                                                                isParentInherited
+                                                                                    ? `${c.company_name} hereda el Acuerdo Activo (#${activeAgInfo?.agreement.quote_number}) de su Casa Matriz. Este nuevo acuerdo aplicará exclusivamente a esta sucursal.`
+                                                                                    : `${c.company_name} ya tiene un Acuerdo Activo (#${activeAgInfo?.agreement.quote_number}). Al guardar, se solicitará confirmar su reemplazo automático.`,
+                                                                                'warning'
+                                                                            );
                                                                         }
                                                                         setSelectedClientId(c.id);
                                                                         setClientSearchQuery('');
@@ -7109,18 +7114,15 @@ export default function CommercialAgreementsModule() {
                                                                     style={{
                                                                         padding: '12px 16px',
                                                                         borderBottom: '1px solid #F1F5F9',
-                                                                        cursor: hasActive ? 'not-allowed' : 'pointer',
+                                                                        cursor: 'pointer',
                                                                         display: 'flex',
                                                                         justifyContent: 'space-between',
                                                                         alignItems: 'center',
                                                                         transition: 'all 0.15s ease',
-                                                                        backgroundColor: hasActive ? '#FFFBEB' : 'transparent',
-                                                                        opacity: hasActive ? 0.8 : 1
+                                                                        backgroundColor: hasActive ? '#FFFBEB' : 'transparent'
                                                                     }}
                                                                     onMouseEnter={(e) => {
-                                                                        if (!hasActive) {
-                                                                            e.currentTarget.style.backgroundColor = isSucursal ? '#F0F9FF' : '#F0FDF4';
-                                                                        }
+                                                                        e.currentTarget.style.backgroundColor = hasActive ? '#FEF3C7' : (isSucursal ? '#F0F9FF' : '#F0FDF4');
                                                                     }}
                                                                     onMouseLeave={(e) => {
                                                                         e.currentTarget.style.backgroundColor = hasActive ? '#FFFBEB' : 'transparent';
@@ -7158,7 +7160,9 @@ export default function CommercialAgreementsModule() {
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                                         {hasActive ? (
                                                                             <span 
-                                                                                title="Este cliente ya posee un acuerdo comercial vigente. Debe revocarse para crear uno nuevo."
+                                                                                title={activeAgInfo?.isParent
+                                                                                    ? 'Esta sucursal hereda un acuerdo activo de su Casa Matriz. Puedes crearle uno exclusivo aquí.'
+                                                                                    : 'Este cliente ya posee un acuerdo comercial vigente. Al seleccionarlo podrás reemplazarlo con confirmación al guardar.'}
                                                                                 style={{ 
                                                                                     fontSize: '0.7rem', 
                                                                                     padding: '3px 9px', 
@@ -7183,7 +7187,7 @@ export default function CommercialAgreementsModule() {
                                                                                 <Building2 size={12} /> Casa Matriz {c.branchCount > 0 ? `(${c.branchCount} ${c.branchCount === 1 ? 'sucursal' : 'sucursales'})` : ''}
                                                                             </span>
                                                                         )}
-                                                                        {!hasActive && <ChevronRight size={16} color="#94A3B8" />}
+                                                                        <ChevronRight size={16} color="#94A3B8" />
                                                                     </div>
                                                                 </div>
                                                             );
@@ -7303,12 +7307,12 @@ export default function CommercialAgreementsModule() {
 
                                                         {/* ACTIVE AGREEMENT STATUS OR SUCCESS CONFIRMATION */}
                                                         {(() => {
-                                                            const activeAgreement = agreements.find(a => 
-                                                                a.client_id === selectedClientId && 
-                                                                getAgreementStatus(a.valid_until).type !== 'expired'
-                                                            );
+                                                            const activeAgInfo = getClientActiveAgreement(selectedClientId);
+                                                            const activeAgreement = activeAgInfo?.agreement || null;
 
                                                             if (activeAgreement) {
+                                                                const isParentInherited = Boolean(activeAgInfo?.isParent);
+                                                                const isSharedMaster = Boolean(activeAgInfo?.isShared);
                                                                 const itemsCount = (activeAgreement as any).items?.length || (activeAgreement as any).quote_items?.length || 0;
                                                                 const rawStartDate = activeAgreement.start_date || activeAgreement.created_at;
                                                                 const startDateFormatted = rawStartDate 
@@ -7336,7 +7340,11 @@ export default function CommercialAgreementsModule() {
                                                                         <div style={{ flex: 1 }}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                                                 <strong style={{ color: '#92400E', fontSize: '0.95rem' }}>
-                                                                                    Advertencia: {isSucursal ? 'Esta Sucursal' : 'Esta Casa Matriz'} ya tiene un Acuerdo Comercial Vigente
+                                                                                    {isParentInherited
+                                                                                        ? 'Aviso: Esta Sucursal hereda un Acuerdo Activo de su Casa Matriz'
+                                                                                        : isSharedMaster
+                                                                                            ? `Advertencia: ${isSucursal ? 'Esta Sucursal' : 'Esta Casa Matriz'} pertenece a una Lista Maestra Activa`
+                                                                                            : `Advertencia: ${isSucursal ? 'Esta Sucursal' : 'Esta Casa Matriz'} ya tiene un Acuerdo Comercial Activo`}
                                                                                 </strong>
                                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', backgroundColor: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', color: '#B45309', fontWeight: 'bold', border: '1px solid #FDE68A' }}>
                                                                                     {formatAgreementNumber(activeAgreement.quote_number, activeAgreement.created_at)}
@@ -7347,7 +7355,11 @@ export default function CommercialAgreementsModule() {
                                                                             </p>
                                                                             <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: '6px', fontSize: '0.75rem', color: '#92400E', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                                 <Info size={14} style={{ flexShrink: 0 }} />
-                                                                                <span>Si continúas creando este nuevo acuerdo, el anterior pasará automáticamente a estado <strong>Vencido / Sustituido</strong>.</span>
+                                                                                <span>
+                                                                                    {isParentInherited
+                                                                                        ? 'El acuerdo de la Casa Matriz permanecerá intacto; este nuevo acuerdo aplicará con prioridad exclusiva para esta sucursal.'
+                                                                                        : <>Si continúas y confirmas al guardar, el acuerdo anterior pasará automáticamente a estado <strong>Reemplazado (superseded)</strong>.</>}
+                                                                                </span>
                                                                             </div>
                                                                         </div>
                                                                     </div>

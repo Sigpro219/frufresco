@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Portero Único de Conflictos de Acuerdos Comerciales (Escenario 480 — SDD v1.9.435).
  * Detecta acuerdos activos en conflicto entre acuerdos individuales y Listas Maestras,
  * y ejecuta limpieza atómica cross-canal para garantizar Fuente Única de Verdad.
