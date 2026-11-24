@@ -220,93 +220,280 @@ export async function POST(request: Request) {
         // Check if fleet actually has certified refrigerated vehicles
         const hasRefrigeratedFleet = vehicles.some((v: any) => v.is_refrigerated === true || v.refrigerated === true);
 
-        // Co-asignación obligatoria de parejas 10A/10B (is_off_agreement_split) en el mismo camión
+        // --- CONSOLIDACIÓN EN 2 FASES (Goldfish Escenario 477 §1.8) ---
+        // Fase 1: Co-asignación atómica de parejas 10A/10B (is_off_agreement_split) en RoutingUnits
         const splitChildrenByParent = new Map<string, any[]>();
-        const splitParentByChild = new Map<string, string>();
         const splitChildIds = new Set<string>();
         const orderByIdMap = new Map<string, any>(orders.map((o: any) => [String(o.id), o]));
         orders.forEach((o: any) => {
             const pId = o?.logistics_data?.is_off_agreement_split ? o?.logistics_data?.parent_order_id : null;
             if (pId && orderByIdMap.has(String(pId))) {
                 splitChildIds.add(String(o.id));
-                splitParentByChild.set(String(o.id), String(pId));
                 const list = splitChildrenByParent.get(String(pId)) || [];
                 list.push(o);
                 splitChildrenByParent.set(String(pId), list);
             }
         });
 
-        const routingOrders = orders.filter((o: any) => !splitChildIds.has(String(o.id))).map((o: any) => {
-            const children = splitChildrenByParent.get(String(o.id)) || [];
-            if (children.length === 0) return o;
-            const extraKg = children.reduce((acc, c) => acc + (parseFloat(c.total_weight_kg) || 0), 0);
-            const extraCrates = children.reduce((acc, c) => acc + (Number(c.crates) || 0), 0);
-            return {
-                ...o,
-                total_weight_kg: (parseFloat(o.total_weight_kg) || 0) + extraKg,
-                crates: o.crates ? Number(o.crates) + extraCrates : undefined
-            };
-        });
+        const rawPrioritySet = new Set<string>(priorityOrderIds.map((id: string) => String(id)));
+        const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
 
-        const routingOrderIds = new Set<string>(routingOrders.map((o: any) => String(o.id)));
-        const effectivePriorityIds = new Set<string>();
-        priorityOrderIds.forEach((rawId: string) => {
-            const normalized = splitParentByChild.get(String(rawId)) || String(rawId);
-            if (routingOrderIds.has(normalized)) {
-                effectivePriorityIds.add(normalized);
-            }
-        });
-        const hasPriorityOrders = effectivePriorityIds.size > 0;
+        const normalizeTextKey = (val?: string | null) =>
+            String(val || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
 
-        const expandSplitAssignments = (rawAssign: Record<string, string[]>, etas: Record<string, string>) => {
-            const out: Record<string, string[]> = {};
-            Object.entries(rawAssign).forEach(([vid, ids]) => {
-                const expanded: string[] = [];
-                ids.forEach(oid => {
-                    expanded.push(oid);
-                    const children = splitChildrenByParent.get(String(oid)) || [];
-                    children.forEach(c => {
-                        const cid = String(c.id);
-                        expanded.push(cid);
-                        if (etas[oid]) etas[cid] = etas[oid];
-                    });
-                });
-                out[vid] = expanded;
-            });
-            return out;
+        const computeOrderCrates = (o: any) => {
+            const w = Math.max(1, Math.ceil(parseFloat(o.total_weight_kg) || 1));
+            return Number(o.crates) || Math.max(1, Math.ceil(w / avg_kg_per_crate));
         };
 
-        const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
+        interface RoutingUnit {
+            leaderId: string;
+            memberOrders: any[];
+            memberOrderIds: string[];
+            weightKg: number;
+            crates: number;
+            isRefrigerated: boolean;
+            isPriority: boolean;
+            isB2B: boolean;
+            isCashOnDelivery: boolean;
+            startMs: number;
+            endMs: number;
+            timeWindow: { startTime: string; endTime: string };
+            lat: number;
+            lng: number;
+            siteKey: string;
+        }
+
+        const routingUnits: RoutingUnit[] = orders
+            .filter((o: any) => !splitChildIds.has(String(o.id)))
+            .map((parent: any) => {
+                const children = splitChildrenByParent.get(String(parent.id)) || [];
+                const memberOrders = [parent, ...children];
+                const memberOrderIds = memberOrders.map(m => String(m.id));
+
+                const rawSumKg = memberOrders.reduce((acc, m) => {
+                    const w = parseFloat(m.total_weight_kg);
+                    return acc + (isNaN(w) || w <= 0 ? 1 : w);
+                }, 0);
+                const weightKg = Math.max(1, Math.ceil(rawSumKg));
+                const crates = memberOrders.reduce((acc, m) => acc + computeOrderCrates(m), 0);
+
+                const isRefrigerated = memberOrders.some(m => refrigeratedOrderIds.has(m.id));
+                const isPriority = memberOrders.some(m => rawPrioritySet.has(String(m.id)));
+                const isB2B = memberOrders.some(m =>
+                    !!m.is_b2b || (m.type?.toLowerCase().includes('b2b') ?? false) || m.profiles?.role === 'b2b_client' || m.profiles?.role === 'b2b'
+                );
+                const isCashOnDelivery = memberOrders.some(m =>
+                    m.payment_method === 'cash_on_delivery' || m.payment_type === 'cash_on_delivery' || m.payment_method === 'contraentrega'
+                );
+
+                // Intersect split member windows if valid, else fallback to parent window so 10A+10B never split
+                const parentWin = getOrderTimeWindow(parent, targetDate);
+                let interStartMs = new Date(parentWin.startTime).getTime();
+                let interEndMs = new Date(parentWin.endTime).getTime();
+                for (const child of children) {
+                    const cw = getOrderTimeWindow(child, targetDate);
+                    const cs = new Date(cw.startTime).getTime();
+                    const ce = new Date(cw.endTime).getTime();
+                    if (Math.max(interStartMs, cs) < Math.min(interEndMs, ce)) {
+                        interStartMs = Math.max(interStartMs, cs);
+                        interEndMs = Math.min(interEndMs, ce);
+                    }
+                }
+                const unitWindow = {
+                    startTime: new Date(interStartMs).toISOString(),
+                    endTime: new Date(interEndMs).toISOString()
+                };
+
+                // Poka-Yoke coordinates (Bogotá, Sabana & Melgar/Girardot box) + warnings per real orderId
+                let rawLat = parseFloat(parent.latitude || parent.profiles?.latitude);
+                let rawLng = parseFloat(parent.longitude || parent.profiles?.longitude);
+                const hasValidCoords = !(isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0);
+
+                if (!hasValidCoords) {
+                    memberOrders.forEach(m => {
+                        geocodingWarnings.push({
+                            orderId: String(m.id),
+                            customerName: m.customer_name || m.profiles?.full_name || 'Cliente',
+                            reason: 'Coordenadas GPS ausentes o fuera de Bogotá/Sabana; asignado temporalmente a bodega central'
+                        });
+                    });
+                    rawLat = 4.633653;
+                    rawLng = -74.160647;
+                }
+
+                // Strict composite siteKey (never group unrelated invalid-coords orders at Bodega Central)
+                const dateKey = String(parent.delivery_date || targetDate).split('T')[0];
+                const rawAddrNorm = normalizeTextKey(parent.shipping_address || parent.address);
+                const normAddr = rawAddrNorm === 'sin direccion' ? '' : rawAddrNorm;
+                const normName = normalizeTextKey(parent.customer_name || parent.profiles?.company_name || parent.profiles?.contact_name);
+
+                let siteKey = `order:${parent.id}`;
+                if (hasValidCoords) {
+                    const clientPart = parent.profile_id ? String(parent.profile_id) : (normName ? `name:${normName}` : `order:${parent.id}`);
+                    siteKey = `${dateKey}|${clientPart}|${rawLat.toFixed(4)},${rawLng.toFixed(4)}|${normAddr}`;
+                } else if (parent.profile_id && normAddr) {
+                    siteKey = `${dateKey}|${parent.profile_id}|nogps|${normAddr}`;
+                }
+
+                return {
+                    leaderId: String(parent.id),
+                    memberOrders,
+                    memberOrderIds,
+                    weightKg,
+                    crates,
+                    isRefrigerated,
+                    isPriority,
+                    isB2B,
+                    isCashOnDelivery,
+                    startMs: interStartMs,
+                    endMs: interEndMs,
+                    timeWindow: unitWindow,
+                    lat: rawLat,
+                    lng: rawLng,
+                    siteKey
+                };
+            });
+
+        // Fase 2: Consolidación Same-Site Co-Routing con FFD, intersección horaria estricta y límites de cadena de frío
+        const maxFleetWeight = vehicles.reduce((m: number, v: any) => Math.max(m, Number(v.capacity_kg) || 0), 0) || 1500;
+        const maxFleetCrates = vehicles.reduce((m: number, v: any) => Math.max(m, Number(v.max_crates_capacity) || 483), 0) || 483;
+        const refrigVehicles = vehicles.filter((v: any) => v.is_refrigerated === true || v.refrigerated === true);
+        const maxRefrigWeight = refrigVehicles.reduce((m: number, v: any) => Math.max(m, Number(v.capacity_kg) || 0), 0);
+        const maxRefrigCrates = refrigVehicles.reduce((m: number, v: any) => Math.max(m, Number(v.max_crates_capacity) || 483), 0);
+
+        interface ConsolidatedCluster {
+            clusterId: string;
+            memberOrderIds: string[];
+            weightKg: number;
+            crates: number;
+            isRefrigerated: boolean;
+            isPriority: boolean;
+            isB2B: boolean;
+            isCashOnDelivery: boolean;
+            startMs: number;
+            endMs: number;
+            timeWindow: { startTime: string; endTime: string };
+            lat: number;
+            lng: number;
+        }
+
+        const unitsBySite = new Map<string, RoutingUnit[]>();
+        routingUnits.forEach(u => {
+            const list = unitsBySite.get(u.siteKey) || [];
+            list.push(u);
+            unitsBySite.set(u.siteKey, list);
+        });
+
+        const consolidatedClusters: ConsolidatedCluster[] = [];
+        const clusterById = new Map<string, ConsolidatedCluster>();
+
+        unitsBySite.forEach(siteUnits => {
+            // FFD: refrigerated units first, then heaviest weight first
+            const sortedUnits = [...siteUnits].sort((a, b) => {
+                if (a.isRefrigerated !== b.isRefrigerated) return a.isRefrigerated ? -1 : 1;
+                return b.weightKg - a.weightKg;
+            });
+
+            const siteBatches: ConsolidatedCluster[] = [];
+            for (const u of sortedUnits) {
+                let placed = false;
+                for (const batch of siteBatches) {
+                    const interStart = Math.max(batch.startMs, u.startMs);
+                    const interEnd = Math.min(batch.endMs, u.endMs);
+                    if (!(interStart < interEnd)) continue;
+
+                    const combinedRefrig = batch.isRefrigerated || u.isRefrigerated;
+                    const capWeight = (hasRefrigeratedFleet && combinedRefrig) ? maxRefrigWeight : maxFleetWeight;
+                    const capCrates = (hasRefrigeratedFleet && combinedRefrig) ? maxRefrigCrates : maxFleetCrates;
+
+                    if (batch.weightKg + u.weightKg <= capWeight && batch.crates + u.crates <= capCrates) {
+                        batch.memberOrderIds.push(...u.memberOrderIds);
+                        batch.weightKg += u.weightKg;
+                        batch.crates += u.crates;
+                        batch.isRefrigerated = combinedRefrig;
+                        batch.isPriority = batch.isPriority || u.isPriority;
+                        batch.isB2B = batch.isB2B || u.isB2B;
+                        batch.isCashOnDelivery = batch.isCashOnDelivery || u.isCashOnDelivery;
+                        batch.startMs = interStart;
+                        batch.endMs = interEnd;
+                        batch.timeWindow = {
+                            startTime: new Date(interStart).toISOString(),
+                            endTime: new Date(interEnd).toISOString()
+                        };
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    const batchIdx = siteBatches.length;
+                    const clusterId = (sortedUnits.length === 1 && u.memberOrderIds.length === 1)
+                        ? u.leaderId
+                        : `site::${u.leaderId}::${batchIdx}`;
+                    siteBatches.push({
+                        clusterId,
+                        memberOrderIds: [...u.memberOrderIds],
+                        weightKg: u.weightKg,
+                        crates: u.crates,
+                        isRefrigerated: u.isRefrigerated,
+                        isPriority: u.isPriority,
+                        isB2B: u.isB2B,
+                        isCashOnDelivery: u.isCashOnDelivery,
+                        startMs: u.startMs,
+                        endMs: u.endMs,
+                        timeWindow: { ...u.timeWindow },
+                        lat: u.lat,
+                        lng: u.lng
+                    });
+                }
+            }
+            for (const b of siteBatches) {
+                consolidatedClusters.push(b);
+                clusterById.set(b.clusterId, b);
+            }
+        });
+
+        const hasPriorityOrders = consolidatedClusters.some(c => c.isPriority);
+
+        // Expansión hermética: devuelve únicamente orderIds reales en routes y stop_etas
+        const expandClusterAssignments = (rawAssign: Record<string, string[]>, rawEtas: Record<string, string>) => {
+            const expandedAssignments: Record<string, string[]> = {};
+            const expandedStopEtas: Record<string, string> = {};
+            Object.entries(rawAssign).forEach(([vid, clusterIds]) => {
+                const expanded: string[] = [];
+                clusterIds.forEach(cid => {
+                    const cluster = clusterById.get(String(cid));
+                    const memberIds = cluster ? cluster.memberOrderIds : [String(cid)];
+                    const etaVal = rawEtas[cid];
+                    memberIds.forEach(realId => {
+                        expanded.push(realId);
+                        if (etaVal) expandedStopEtas[realId] = etaVal;
+                    });
+                });
+                expandedAssignments[vid] = expanded;
+            });
+            return { expandedAssignments, expandedStopEtas };
+        };
 
         const gcpRequest = {
             timeout: "15s",
             model: {
                 globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
                 globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
-                shipments: routingOrders.map((o: any) => {
-                    const isB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
-
-                    // 1. Poka-Yoke Sanitization for Weights and Crates
-                    const rawWeight = parseFloat(o.total_weight_kg);
-                    const sanitizedWeight = Math.max(1, Math.ceil(isNaN(rawWeight) || rawWeight <= 0 ? 1 : rawWeight));
-                    const cratesCount = o.crates || Math.max(1, Math.ceil(sanitizedWeight / avg_kg_per_crate));
-                    
-                    // Cash-on-delivery dwell delta (+5 mins for cash collection and verification)
-                    const isCashOnDelivery = o.payment_method === 'cash_on_delivery' || o.payment_type === 'cash_on_delivery' || o.payment_method === 'contraentrega';
-                    const cashDwellDelta = isCashOnDelivery ? 5 : 0;
-
-                    const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cratesCount) + cashDwellDelta;
-                    // Cap the maximum delivery service duration at a realistic operational limit (max 60 minutes, min 5 minutes)
+                shipments: consolidatedClusters.map((cluster) => {
+                    const cashDwellDelta = cluster.isCashOnDelivery ? 5 : 0;
+                    const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cluster.crates) + cashDwellDelta;
                     const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 60));
-                    
-                    const timeWindow = getOrderTimeWindow(o, targetDate);
-                    const isRefrigerated = refrigeratedOrderIds.has(o.id);
-                    const isPriority = effectivePriorityIds.has(String(o.id));
 
-                    let shipmentTimeWindow: Record<string, any> = timeWindow;
-                    if (isPriority) {
-                        const startMs = new Date(timeWindow.startTime).getTime();
-                        const endMs = new Date(timeWindow.endTime).getTime();
+                    let shipmentTimeWindow: Record<string, any> = cluster.timeWindow;
+                    if (cluster.isPriority) {
+                        const startMs = cluster.startMs;
+                        const endMs = cluster.endMs;
                         const fleetStartMs = new Date(`${targetDate}T${fleet_start}:00-05:00`).getTime();
                         const targetSoftMs = Math.min(
                             endMs,
@@ -320,55 +507,38 @@ export async function POST(request: Request) {
                         );
                         if (Number.isFinite(startMs) && Number.isFinite(endMs) && targetSoftMs >= startMs && targetSoftMs < endMs) {
                             shipmentTimeWindow = {
-                                ...timeWindow,
+                                ...cluster.timeWindow,
                                 softEndTime: new Date(targetSoftMs).toISOString(),
                                 costPerHourAfterSoftEndTime: 250
                             };
                         }
                     }
 
-                    // 2. Poka-Yoke Sanitization for Coordinates (Bogotá & Sabana bounding box)
-                    let rawLat = parseFloat(o.latitude || o.profiles?.latitude);
-                    let rawLng = parseFloat(o.longitude || o.profiles?.longitude);
-                    const hasInvalidCoords = isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0;
-
-                    if (hasInvalidCoords) {
-                        geocodingWarnings.push({
-                            orderId: String(o.id),
-                            customerName: o.customer_name || o.profiles?.full_name || 'Cliente',
-                            reason: 'Coordenadas GPS ausentes o fuera de Bogotá/Sabana; asignado temporalmente a bodega central'
-                        });
-                        rawLat = 4.633653;
-                        rawLng = -74.160647;
-                    }
-
                     const demands: Record<string, { amount: string }> = {
-                        "weight": { "amount": String(sanitizedWeight) },
-                        "crates": { "amount": String(cratesCount) }
+                        "weight": { "amount": String(cluster.weightKg) },
+                        "crates": { "amount": String(cluster.crates) }
                     };
                     if (hasRefrigeratedFleet) {
-                        demands["refrigerated"] = { "amount": isRefrigerated ? "1" : "0" };
+                        demands["refrigerated"] = { "amount": cluster.isRefrigerated ? "1" : "0" };
                     }
-                    if (isPriority) {
+                    if (cluster.isPriority) {
                         demands["priority_slots"] = { "amount": "1" };
                     }
 
-                    // Delivery-only task: Cargo is assumed loaded at vehicle.startLocation (Depot)
                     return {
                         deliveries: [
                             { 
                                 arrivalLocation: { 
-                                    latitude: rawLat, 
-                                    longitude: rawLng 
+                                    latitude: cluster.lat, 
+                                    longitude: cluster.lng 
                                 },
                                 timeWindows: [shipmentTimeWindow],
                                 duration: `${unloadingTime * 60}s`
                             }
                         ],
                         loadDemands: demands,
-                        // Strategic Pareto Priority: Urgent Priority > B2B accounts > B2C
-                        penaltyCost: isPriority ? 2000000 : (isB2B ? 500000 : 1000),
-                        label: String(o.id)
+                        penaltyCost: cluster.isPriority ? 2000000 : (cluster.isB2B ? 500000 : 1000),
+                        label: cluster.clusterId
                     };
                 }),
                 vehicles: vehicles.map((v: any) => {
@@ -588,18 +758,18 @@ export async function POST(request: Request) {
                             const visitOrderIds = (route.visits || [])
                                 .filter((vst: any) => !vst.isPickup)
                                 .map((vst: any) => {
-                                    // Google omits shipmentIndex if it is 0. Using shipmentLabel (order id) is safer and direct.
-                                    const orderId = vst.shipmentLabel || orders[vst.shipmentIndex ?? 0]?.id;
-                                    if (orderId && vst.startTime) {
+                                    // Google omits shipmentIndex if it is 0. Using shipmentLabel (clusterId) is safer and direct.
+                                    const clusterId = vst.shipmentLabel || consolidatedClusters[vst.shipmentIndex ?? 0]?.clusterId;
+                                    if (clusterId && vst.startTime) {
                                         try {
                                             const dateObj = new Date(vst.startTime);
                                             const bogotaDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
                                             const h = bogotaDate.getHours().toString().padStart(2, '0');
                                             const m = bogotaDate.getMinutes().toString().padStart(2, '0');
-                                            stopEtas[orderId] = `${h}:${m}`;
+                                            stopEtas[clusterId] = `${h}:${m}`;
                                         } catch (_) {}
                                     }
-                                    return orderId;
+                                    return clusterId;
                                 })
                                 .filter(Boolean);
                             
@@ -616,8 +786,8 @@ export async function POST(request: Request) {
                                 } catch (_) {}
                             } else if (visitOrderIds.length > 0) {
                                 // If vehicleStartTime is omitted, infer from first stop ETA minus 45 mins travel
-                                const firstOrderId = visitOrderIds[0];
-                                const firstEta = stopEtas[firstOrderId];
+                                const firstClusterId = visitOrderIds[0];
+                                const firstEta = stopEtas[firstClusterId];
                                 if (firstEta) {
                                     const [eh, em] = firstEta.split(':').map(Number);
                                     let depMins = eh * 60 + em - 45;
@@ -632,14 +802,19 @@ export async function POST(request: Request) {
                     });
                 }
 
-                // Extract skipped shipments from Google Cloud Route Optimization response
-                const skippedOrders = (gcpData.skippedShipments || []).map((s: any) => ({
-                    orderId: s.label || (s.index !== undefined ? orders[s.index]?.id : undefined),
-                    reasons: s.reasons || []
-                }));
+                // Extract and expand skipped shipments from Google Cloud Route Optimization response to real orderIds
+                const skippedOrders = (gcpData.skippedShipments || []).flatMap((s: any) => {
+                    const cId = s.label || (s.index !== undefined ? consolidatedClusters[s.index]?.clusterId : undefined);
+                    const cluster = cId ? clusterById.get(String(cId)) : undefined;
+                    const realIds = cluster ? cluster.memberOrderIds : (cId ? [String(cId)] : []);
+                    return realIds.map(realId => ({
+                        orderId: realId,
+                        reasons: s.reasons || []
+                    }));
+                });
 
-                // Generate AI explanation of the routing plan (expandiendo parejas 10A/10B)
-                const finalAssignments = expandSplitAssignments(assignments, stopEtas);
+                // Expand consolidated clusters hermetically to real orderIds only
+                const { expandedAssignments: finalAssignments, expandedStopEtas: finalStopEtas } = expandClusterAssignments(assignments, stopEtas);
                 const assignedOrderIds = new Set(Object.values(finalAssignments).flat());
                 const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
                 const explanation = await generateAiExplanation(orders, vehicles, finalAssignments, unassignedOrders);
@@ -648,7 +823,7 @@ export async function POST(request: Request) {
                     message: "Optimization generated by REAL Google Engine",
                     routes: finalAssignments,
                     route_start_times: routeStartTimes,
-                    stop_etas: stopEtas,
+                    stop_etas: finalStopEtas,
                     theoretical_metrics: (() => {
                         const rawDur = gcpData.metrics?.totalDuration;
                         const durSeconds = typeof rawDur === 'string'
@@ -672,21 +847,15 @@ export async function POST(request: Request) {
         }
         
         // --- SIMULATION MODE --- (Fallback)
-        // Since we are in development/draft, we return the structured request 
-        // and a simulated local assignment until the API Key is ready.
+        // Consumes pre-consolidated clusters directly (same-site + 10A/10B + cold-chain + timeWindows)
         const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(
-            routingOrders,
+            consolidatedClusters,
             vehicles,
             fleet_start,
             fleet_end,
-            {
-                priorityIds: effectivePriorityIds,
-                refrigeratedOrderIds,
-                hasRefrigeratedFleet,
-                avgKgPerCrate: avg_kg_per_crate
-            }
+            { hasRefrigeratedFleet }
         );
-        const finalSimAssignments = expandSplitAssignments(simulatedAssignments, simEtas);
+        const { expandedAssignments: finalSimAssignments, expandedStopEtas: finalSimEtas } = expandClusterAssignments(simulatedAssignments, simEtas);
         const assignedSimIds = new Set(Object.values(finalSimAssignments).flat());
         const unassignedSimOrders = orders.filter(o => !assignedSimIds.has(String(o.id)));
         const explanation = await generateAiExplanation(orders, vehicles, finalSimAssignments, unassignedSimOrders);
@@ -703,7 +872,7 @@ export async function POST(request: Request) {
             simulation: true,
             routes: finalSimAssignments,
             route_start_times: simStartTimes,
-            stop_etas: simEtas,
+            stop_etas: finalSimEtas,
             theoretical_metrics: {
                 distance_km: vehicles.length * 4,
                 duration_min: vehicles.length * 20
@@ -727,28 +896,30 @@ export async function POST(request: Request) {
 
 
 function calculateSimulationAssignments(
-    orders: any[],
+    clusters: Array<{
+        clusterId: string;
+        weightKg: number;
+        crates: number;
+        isRefrigerated: boolean;
+        isPriority: boolean;
+        timeWindow: { startTime: string; endTime: string };
+    }>,
     vehicles: any[],
     fleetStart = '04:30',
     fleetEnd = '19:00',
     options?: {
-        priorityIds?: Set<string>;
-        refrigeratedOrderIds?: Set<any>;
         hasRefrigeratedFleet?: boolean;
-        avgKgPerCrate?: number;
     }
 ) {
     const newAssignments: Record<string, string[]> = {};
     const simStartTimes: Record<string, string> = {};
     const simEtas: Record<string, string> = {};
-    const priorityIds = options?.priorityIds || new Set<string>();
-    const refrigeratedOrderIds = options?.refrigeratedOrderIds || new Set<any>();
     const hasRefrigeratedFleet = Boolean(options?.hasRefrigeratedFleet);
-    const avgKgPerCrate = options?.avgKgPerCrate || 12.5;
 
     const usedWeight: Record<string, number> = {};
     const usedCrates: Record<string, number> = {};
     const usedPriorityCount: Record<string, number> = {};
+    const clusterById = new Map(clusters.map(c => [c.clusterId, c]));
 
     vehicles.forEach(v => {
         newAssignments[v.id] = [];
@@ -758,27 +929,10 @@ function calculateSimulationAssignments(
         usedPriorityCount[v.id] = 0;
     });
 
-    const getOrderCrates = (o: any) => {
-        const w = Math.max(1, Math.ceil(parseFloat(o.total_weight_kg) || 1));
-        return Number(o.crates) || Math.max(1, Math.ceil(w / avgKgPerCrate));
-    };
-
-    // Group orders by location (latitude/longitude and customer name) to keep same-location orders together
-    const grouped: Record<string, typeof orders> = {};
-    orders.forEach(o => {
-        const key = `${o.latitude || ''}_${o.longitude || ''}_${o.customer_name}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(o);
-    });
-
-    // Sort groups: priority groups first (so they get earliest stops/ETAs), then total weight descending
-    const groups = Object.values(grouped).sort((a, b) => {
-        const aPrio = a.some(o => priorityIds.has(String(o.id))) ? 1 : 0;
-        const bPrio = b.some(o => priorityIds.has(String(o.id))) ? 1 : 0;
-        if (aPrio !== bPrio) return bPrio - aPrio;
-        const weightA = a.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
-        const weightB = b.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
-        return weightB - weightA;
+    // Sort pre-consolidated clusters: priority first (earliest stops/ETAs), then weight descending
+    const sortedClusters = [...clusters].sort((a, b) => {
+        if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+        return b.weightKg - a.weightKg;
     });
 
     const pickEligibleVehicle = (groupWeight: number, groupCrates: number, needsRefrig: boolean, maxPriorityCap: number | null) => {
@@ -800,59 +954,50 @@ function calculateSimulationAssignments(
         return bestVehicle;
     };
 
-    // Assign groups to vehicles using a capacity- and priority-aware approach (1-2 priority orders per truck)
-    groups.forEach(group => {
-        const groupWeight = group.reduce((sum, o) => sum + (parseFloat(o.total_weight_kg) || 0), 0);
-        const groupCrates = group.reduce((sum, o) => sum + getOrderCrates(o), 0);
-        const groupPrioCount = group.filter(o => priorityIds.has(String(o.id))).length;
-        const needsRefrig = group.some(o => refrigeratedOrderIds.has(o.id));
-
+    // Assign pre-consolidated clusters using capacity-, cold-chain-, and priority-aware rules (1-2 priority per truck)
+    sortedClusters.forEach(cluster => {
         let bestVehicle: any = null;
-        if (groupPrioCount > 0) {
+        if (cluster.isPriority) {
             bestVehicle =
-                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, 1) ||
-                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, 2) ||
-                pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, null);
+                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, 1) ||
+                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, 2) ||
+                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, null);
         } else {
-            bestVehicle = pickEligibleVehicle(groupWeight, groupCrates, needsRefrig, null);
+            bestVehicle = pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, null);
         }
 
         if (bestVehicle) {
-            group.forEach(order => {
-                newAssignments[bestVehicle.id].push(order.id);
-            });
-            usedWeight[bestVehicle.id] += groupWeight;
-            usedCrates[bestVehicle.id] += groupCrates;
-            usedPriorityCount[bestVehicle.id] += groupPrioCount;
+            newAssignments[bestVehicle.id].push(cluster.clusterId);
+            usedWeight[bestVehicle.id] += cluster.weightKg;
+            usedCrates[bestVehicle.id] += cluster.crates;
+            if (cluster.isPriority) usedPriorityCount[bestVehicle.id] += 1;
         }
     });
 
-    // Calculate dynamic departure times for each vehicle based on earliest delivery window
+    // Calculate dynamic departure times for each vehicle based on earliest cluster delivery window
     const [defH, defM] = fleetStart.split(':').map(Number);
     const minFleetMins = defH * 60 + defM;
 
     Object.keys(newAssignments).forEach(vId => {
-        const orderIds = newAssignments[vId];
-        if (orderIds.length === 0) return;
+        const clusterIds = newAssignments[vId];
+        if (clusterIds.length === 0) return;
 
         let earliestMins = Infinity;
-        orderIds.forEach(oId => {
-            const o = orders.find(ord => ord.id === oId);
-            if (o) {
-                const win = o.logistics_data?.windows?.[0] || o.profiles?.logistics_data?.windows?.[0];
-                const startTimeStr = win?.startTime || win?.start || '';
-                if (startTimeStr && startTimeStr.includes(':')) {
-                    const [wh, wm] = startTimeStr.split(':').map(Number);
-                    if (!isNaN(wh) && !isNaN(wm)) {
-                        const totalM = wh * 60 + wm;
-                        if (totalM < earliestMins) earliestMins = totalM;
+        clusterIds.forEach(cId => {
+            const c = clusterById.get(cId);
+            if (c?.timeWindow?.startTime) {
+                try {
+                    const dt = new Date(c.timeWindow.startTime);
+                    const bogota = new Date(dt.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+                    const totalM = bogota.getHours() * 60 + bogota.getMinutes();
+                    if (!isNaN(totalM) && totalM > 0 && totalM < earliestMins) {
+                        earliestMins = totalM;
                     }
-                }
+                } catch (_) {}
             }
         });
 
         if (earliestMins !== Infinity) {
-            // Subtract 45 minutes travel time from bodega
             let depMins = earliestMins - 45;
             depMins = Math.max(minFleetMins, depMins);
             const dh = Math.floor(depMins / 60).toString().padStart(2, '0');
@@ -862,13 +1007,13 @@ function calculateSimulationAssignments(
             simStartTimes[vId] = fleetStart;
         }
 
-        // Generate sequential ETAs for simulation
+        // Generate sequential ETAs for simulation (keyed by clusterId; expanded hermetically by caller)
         let currentMins = (simStartTimes[vId] ? parseInt(simStartTimes[vId].split(':')[0]) * 60 + parseInt(simStartTimes[vId].split(':')[1]) : minFleetMins) + 30;
-        orderIds.forEach(oId => {
+        clusterIds.forEach(cId => {
             const eh = Math.floor(currentMins / 60).toString().padStart(2, '0');
             const em = (currentMins % 60).toString().padStart(2, '0');
-            simEtas[oId] = `${eh}:${em}`;
-            currentMins += 25; // 25 mins average service + travel to next
+            simEtas[cId] = `${eh}:${em}`;
+            currentMins += 25;
         });
     });
     
