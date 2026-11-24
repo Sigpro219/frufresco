@@ -29,6 +29,9 @@ import {
     CheckCircle2,
     Coins,
     Star,
+    Search,
+    Sliders,
+    ArrowDownUp,
     Printer,
     MessageSquare,
     Navigation
@@ -107,6 +110,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         });
     };
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [tableSearch, setTableSearch] = useState<string>('');
+    const [tableFilter, setTableFilter] = useState<'all' | 'pending' | 'priority'>('all');
+    const [routeViewMode, setRouteViewMode] = useState<'delivery' | 'lifo'>('delivery');
     const [loading, setLoading] = useState(true);
     const [optimizing, setOptimizing] = useState(false);
     const [optimizationError, setOptimizationError] = useState<string | null>(null);
@@ -243,6 +249,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     notes = notes.replace(/\[PAGO:.*?\]/gi, '')
                                  .replace(/\[ORIGIN:.*?\]/gi, '')
                                  .replace(/\[CLIENTE HOGAR.*?\]/gi, '')
+                                 .replace(/\[Audit[^\]]*\]/gi, '')
+                                 .replace(/\[AUDITOR[IÍ]A[^\]]*\]/gi, '')
+                                 .replace(/\[ORDEN DE COMPRA[^\]]*\]/gi, '')
                                  .replace(/CLIENTE HOGAR.*?(\||\n|$)/gi, '')
                                  .replace(/\[PEDIDO CORREO\][\s\S]*$/gi, '')
                                  .replace(/Asunto:[\s\S]*$/gi, '')
@@ -344,6 +353,17 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         
                         setAssignments(filteredAssignments);
                         setIsOptimized(savedData.isOptimized || false);
+                        if (savedData.optimizationSource === 'google' || savedData.optimizationSource === 'simulation') {
+                            setOptimizationSource(savedData.optimizationSource);
+                        } else {
+                            setOptimizationSource(null);
+                        }
+                        if (savedData.stopEtas && typeof savedData.stopEtas === 'object') {
+                            setStopEtas(savedData.stopEtas);
+                        }
+                        if (savedData.routeStartTimes && typeof savedData.routeStartTimes === 'object') {
+                            setRouteStartTimes(savedData.routeStartTimes);
+                        }
                         if (savedData.theoreticalMetrics) {
                             setTheoreticalMetrics(savedData.theoreticalMetrics);
                         }
@@ -378,6 +398,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 targetDate,
                 assignments,
                 isOptimized,
+                optimizationSource,
+                stopEtas,
+                routeStartTimes,
                 theoreticalMetrics,
                 aiReportText
             };
@@ -385,7 +408,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         } catch (e) {
             console.error("Error al guardar borrador en localStorage:", e);
         }
-    }, [assignments, isOptimized, theoreticalMetrics, aiReportText, loading, selectedDeliveryDate]);
+    }, [assignments, isOptimized, optimizationSource, stopEtas, routeStartTimes, theoreticalMetrics, aiReportText, loading, selectedDeliveryDate]);
 
     const handleAutoOptimize = async () => {
         if (readOnly) return;
@@ -566,16 +589,53 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         return orders.filter(o => orderIds.includes(o.id)).reduce((sum, o) => sum + o.total_weight_kg, 0);
     };
 
+    const getOrderCrates = (order?: Order | null) => {
+        const avgKg = parseFloat(String(params.avg_kg_per_crate || '12.5').replace(',', '.')) || 12.5;
+        const w = Number(order?.total_weight_kg) || 0;
+        return Math.max(1, Math.ceil(w / avgKg));
+    };
+
+    const getVehicleCrates = (vehicleId: string) => {
+        const orderIds = assignments[vehicleId] || [];
+        return orderIds.reduce((sum, oid) => {
+            const ord = orders.find(o => o.id === oid);
+            return sum + (ord ? getOrderCrates(ord) : 0);
+        }, 0);
+    };
+
+    const NUMERIC_PARAM_IDS = new Set([
+        'base_setup_time',
+        'time_per_10_crates_unload',
+        'time_per_10_crates_delivery',
+        'driver_break_mins',
+        'avg_kg_per_crate',
+        'warehouse_base_load_time',
+        'warehouse_time_per_10_crates_load',
+        'space_capacity',
+        'b2b_kg_min',
+        'b2c_kg_min'
+    ]);
+
     const updateParameter = async (id: string, value: any) => {
         if (readOnly) return;
         setParams(prev => ({ ...prev, [id]: value }));
-        await supabase.from('logistic_parameters').upsert({ id, value: value.toString() });
+        if (NUMERIC_PARAM_IDS.has(id)) {
+            const norm = String(value ?? '').replace(',', '.').trim();
+            if (!norm || norm.endsWith('.')) return;
+            const parsedNum = Number(norm);
+            if (!Number.isFinite(parsedNum) || parsedNum < 0) return;
+            await supabase.from('logistic_parameters').upsert({ id, value: String(parsedNum) });
+            return;
+        }
+        await supabase.from('logistic_parameters').upsert({ id, value: String(value) });
     };
 
     const toggleAssignment = (orderId: string, vehicleId: string) => {
         if (readOnly) return;
         setIsOptimized(false); // If manual change happens, reset optimized flag
         setOptimizationSource(null);
+        setTheoreticalMetrics(null);
+        setStopEtas({});
         const currentOrders = assignments[vehicleId] || [];
         if (currentOrders.includes(orderId)) {
             setAssignments({ ...assignments, [vehicleId]: currentOrders.filter(id => id !== orderId) });
@@ -591,7 +651,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     // Drag and Drop Handlers
     const handleDragStart = (e: React.DragEvent, orderId: string, sourceVehicleId?: string, sourceIndex?: number) => {
-        if (readOnly) {
+        if (readOnly || (sourceVehicleId && routeViewMode === 'lifo')) {
             e.preventDefault();
             return;
         }
@@ -608,6 +668,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const handleDropOnVehicle = (e: React.DragEvent, targetVehicleId: string, targetIndex?: number) => {
         e.preventDefault();
         if (readOnly) return;
+        if (targetIndex !== undefined && routeViewMode === 'lifo') return;
         const orderId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('orderId');
         if (!orderId) return;
 
@@ -631,6 +692,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         });
         setIsOptimized(false);
         setOptimizationSource(null);
+        setTheoreticalMetrics(null);
+        setStopEtas({});
     };
 
     const handleSidebarDrop = (e: React.DragEvent) => {
@@ -647,6 +710,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             });
             setIsOptimized(false);
             setOptimizationSource(null);
+            setTheoreticalMetrics(null);
+            setStopEtas({});
         }
     };
 
@@ -717,9 +782,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <span style="font-weight: 700; color: #1E293B;">${stop.customer_name}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 0.75rem; color: #64748B;">${stop.total_weight_kg} kg (${stop.crates} can.)</span>
+                                    <span style="font-size: 0.75rem; color: #64748B;">${formatNumber(stop.total_weight_kg || 0, 1)} kg (${stop.crates} can.)</span>
                                     <span style="font-size: 0.7rem; font-weight: 850; background-color: rgba(14, 165, 233, 0.08); color: #0284C7; padding: 2px 6px; border-radius: 4px;">
-                                        ${stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin Espacio'}
+                                        ${(() => {
+                                            const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
+                                            return label ? `ESP ${label}` : (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin Espacio');
+                                        })()}
                                     </span>
                                 </div>
                             </div>
@@ -738,7 +806,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: #64748B; font-weight: 800;">ENTREGAS / PESO</div>
-                        <div style="font-weight: 800; color: #1E293B; font-size: 0.85rem; margin-top: 2px;">${route.stops_count} entregas • ${route.total_kilos.toLocaleString()} kg</div>
+                        <div style="font-weight: 800; color: #1E293B; font-size: 0.85rem; margin-top: 2px;">${route.stops_count} entregas • ${formatNumber(route.total_kilos || 0, 1)} kg</div>
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: #64748B; font-weight: 800;">ESPACIOS BODEGA</div>
@@ -761,16 +829,15 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             <html>
             <head>
                 <title>Manifiesto de Despacho - Investments Cortes</title>
-                <script src="https://cdn.tailwindcss.com"></script>
                 <style>
                     @page { margin: 15mm 15mm; size: letter; }
-                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: white !important; margin: 0; color: #1f2937; }
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff !important; margin: 0; color: #1f2937; }
                     .page-break-inside-avoid { page-break-inside: avoid !important; break-inside: avoid !important; }
                     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 </style>
             </head>
-            <body class="bg-white">
-                <div class="max-w-[210mm] mx-auto min-h-[297mm] p-8 flex flex-col justify-between" style="box-sizing: border-box;">
+            <body style="background-color: #ffffff; margin: 0;">
+                <div style="max-width: 210mm; margin: 0 auto; min-height: 297mm; padding: 2rem; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
                     <div>
                         <!-- Header -->
                         <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
@@ -789,12 +856,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
                         <!-- Meta -->
                         <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; font-size: 0.9rem; color: #6b7280;">
-                            <div>Fecha: <span class="font-bold text-gray-700">${dateStr}</span></div>
-                            <div>Ref: <span class="font-bold text-gray-700">Manifiesto de Despacho</span></div>
+                            <div>Fecha: <span style="font-weight: 700; color: #374151;">${dateStr}</span></div>
+                            <div>Ref: <span style="font-weight: 700; color: #374151;">Manifiesto de Despacho</span></div>
                         </div>
 
                         <!-- Title -->
-                        <h1 style="font-size: 1.5rem; font-weight: 900; color: #111827; margin-bottom: 1.5rem; text-align: center; text-transform: uppercase; tracking-tight: -0.025em;">
+                        <h1 style="font-size: 1.5rem; font-weight: 900; color: #111827; margin-bottom: 1.5rem; text-align: center; text-transform: uppercase; letter-spacing: -0.025em;">
                             Manifiesto de Despacho y Plan de Rutas
                         </h1>
 
@@ -842,22 +909,23 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     return (
         <>
-            <div className="grid grid-cols-1 xl:grid-cols-[540px_1fr] gap-5 xl:h-[calc(100vh-180px)] min-h-[520px] xl:overflow-hidden">
+            <div className="max-w-[1600px] mx-auto grid grid-cols-1 xl:grid-cols-[440px_1fr] gap-5 items-start">
             {/* Orders Sidebar */}
             <div 
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
                 onDragLeave={() => setDragOverSidebar(false)}
                 onDrop={(e) => { handleSidebarDrop(e); setDragOverSidebar(false); }}
+                className="xl:sticky xl:top-[136px] xl:max-h-[calc(100vh-152px)]"
                 style={{ 
-                    backgroundColor: dragOverSidebar ? '#F5F3FF' : 'white', 
+                    backgroundColor: dragOverSidebar ? '#ECFDF5' : '#FFFFFF', 
                     borderRadius: '16px', 
                     border: dragOverSidebar ? '2px dashed #0D7A57' : '1px solid #E2E8F0', 
                     boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                     display: 'flex', 
                     flexDirection: 'column', 
                     overflow: 'hidden',
-                    height: '100%',
-                    minHeight: 0,
+                    zIndex: 20,
+                    minHeight: '420px',
                     transition: 'all 0.2s'
                 }}
             >
@@ -944,24 +1012,101 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     {priorityOrderIds.length} prioritario{priorityOrderIds.length > 1 ? 's' : ''}
                                 </span>
                             )}
-                            <span style={{ fontSize: '0.62rem', backgroundColor: '#EDE9FE', color: '#6D28D9', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #DDD6FE' }}>
-                                {orders.length} pedidos disponibles
+                            <span style={{ fontSize: '0.62rem', backgroundColor: '#F1F5F9', color: '#0F172A', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #CBD5E1' }}>
+                                {orders.length} pedidos
                             </span>
+                        </div>
+                    </div>
+                    {/* Compact Search + Filter Pills */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Search size={13} style={{ position: 'absolute', left: '9px', color: '#64748B', pointerEvents: 'none' }} />
+                            <input
+                                type="text"
+                                value={tableSearch}
+                                onChange={(e) => setTableSearch(e.target.value)}
+                                placeholder="Buscar cliente, dirección o ESP..."
+                                style={{
+                                    width: '100%',
+                                    padding: '5px 26px 5px 28px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    backgroundColor: '#FFFFFF',
+                                    fontSize: '0.70rem',
+                                    fontWeight: '600',
+                                    color: '#0F172A',
+                                    outline: 'none'
+                                }}
+                            />
+                            {tableSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTableSearch('')}
+                                    aria-label="Limpiar búsqueda"
+                                    style={{ position: 'absolute', right: '6px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px', display: 'flex' }}
+                                >
+                                    <X size={12} />
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {(() => {
+                                const pendingCount = orders.filter(o => !Object.values(assignments).some(ids => ids.includes(o.id))).length;
+                                const pills: Array<{ id: 'all' | 'pending' | 'priority'; label: string }> = [
+                                    { id: 'all', label: `Todos (${orders.length})` },
+                                    { id: 'pending', label: `Pendientes (${pendingCount})` },
+                                    { id: 'priority', label: `★ Prioritarios (${priorityOrderIds.length})` }
+                                ];
+                                return pills.map(p => {
+                                    const active = tableFilter === p.id;
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => setTableFilter(p.id)}
+                                            style={{
+                                                padding: '3px 8px',
+                                                borderRadius: '9999px',
+                                                fontSize: '0.62rem',
+                                                fontWeight: '800',
+                                                border: active ? '1px solid #0D7A57' : '1px solid #E2E8F0',
+                                                backgroundColor: active ? '#ECFDF5' : '#FFFFFF',
+                                                color: active ? '#065F46' : '#475569',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '0', scrollbarWidth: 'thin' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.7rem' }}>
-                        <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', color: '#475569', fontWeight: '800', textAlign: 'left', zIndex: 10, borderBottom: '1px solid #E2E8F0' }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.7rem' }}>
+                        <thead>
                             <tr>
-                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', width: '56px' }}>TIPO</th>
-                                <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB' }}>CLIENTE</th>
-                                <th style={{ padding: '0.6rem 0.5rem', borderBottom: '1px solid #E5E7EB', textAlign: 'right' }}>CANT.</th>
-                                <th style={{ padding: '0.6rem 0.8rem', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>CONDICIÓN</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1', width: '56px' }}>TIPO</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.45rem', borderBottom: '2px solid #CBD5E1' }}>CLIENTE &amp; LOGÍSTICA</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'right', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1', width: '74px' }}>CARGA</th>
                             </tr>
                         </thead>
                         <tbody>
                             {[...orders]
+                                .filter(order => {
+                                    const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
+                                    const isPriority = priorityOrderIds.includes(String(order.id));
+                                    if (tableFilter === 'pending' && isAssigned) return false;
+                                    if (tableFilter === 'priority' && !isPriority) return false;
+                                    if (tableSearch.trim()) {
+                                        const q = tableSearch.trim().toLowerCase();
+                                        const espLabel = (getOrderSpaceDisplayLabel(order) || '').toLowerCase();
+                                        const hay = `${order.customer_name || ''} ${order.address || ''} ${order.delivery_zone || ''} esp ${espLabel} ${espLabel}`.toLowerCase();
+                                        if (!hay.includes(q)) return false;
+                                    }
+                                    return true;
+                                })
                                 .sort((a, b) => {
                                     const aAssigned = Object.values(assignments).some(ids => ids.includes(a.id));
                                     const bAssigned = Object.values(assignments).some(ids => ids.includes(b.id));
@@ -973,10 +1118,14 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     return 0;
                                 })
                                 .map(order => {
-                                    const isAssigned = Object.values(assignments).some(ids => ids.includes(order.id));
+                                    const assignedVehicleId = Object.keys(assignments).find(vid => (assignments[vid] || []).includes(order.id));
+                                    const assignedVehicle = assignedVehicleId ? vehicles.find(v => v.id === assignedVehicleId) : null;
+                                    const isAssigned = Boolean(assignedVehicleId);
                                     const isPriority = priorityOrderIds.includes(String(order.id));
-                                    const rowBg = isAssigned ? '#F0FDFA' : (isPriority ? '#FFFBEB' : 'white');
-                                    const rowHoverBg = isAssigned ? '#CCFBF1' : (isPriority ? '#FEF3C7' : '#F9FAFB');
+                                    const rowBg = isPriority ? '#FFFBEB' : (isAssigned ? '#F8FAFC' : '#FFFFFF');
+                                    const rowHoverBg = isPriority ? '#FEF3C7' : (isAssigned ? '#F1F5F9' : '#F8FAFC');
+                                    const spaceLabel = getOrderSpaceDisplayLabel(order);
+                                    const orderCrates = getOrderCrates(order);
                                     return (
                                     <tr 
                                         key={order.id} 
@@ -984,16 +1133,13 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         onDragStart={(e) => handleDragStart(e, order.id)}
                                         style={{ 
                                             backgroundColor: rowBg,
-                                            borderBottom: '1px solid #F3F4F6',
-                                            transition: 'all 0.2s',
-                                            cursor: readOnly ? 'default' : 'grab',
-                                            opacity: isAssigned ? 0.6 : 1
+                                            cursor: readOnly ? 'default' : 'grab'
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = rowHoverBg}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                     >
-                                        <td style={{ padding: '0.6rem 0.8rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', borderLeft: isAssigned ? '3px solid #10B981' : '3px solid transparent', verticalAlign: 'top' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <button
                                                     type="button"
                                                     disabled={readOnly}
@@ -1007,7 +1153,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         width: '22px',
                                                         height: '22px',
                                                         borderRadius: '6px',
-                                                        border: `1px solid ${isPriority ? '#F59E0B' : '#E2E8F0'}`,
+                                                        border: `1px solid ${isPriority ? '#F59E0B' : '#CBD5E1'}`,
                                                         backgroundColor: isPriority ? '#FEF3C7' : '#FFFFFF',
                                                         display: 'flex',
                                                         alignItems: 'center',
@@ -1025,103 +1171,65 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     />
                                                 </button>
                                                 <div style={{ 
-                                                    width: '24px', height: '24px', borderRadius: '6px', 
-                                                    backgroundColor: order.is_b2b ? '#E0F2FE' : '#EDE9FE', 
-                                                    color: order.is_b2b ? '#0369A1' : '#6D28D9', 
+                                                    width: '24px', height: '22px', borderRadius: '6px', 
+                                                    backgroundColor: order.is_b2b ? '#E0F2FE' : '#F1F5F9', 
+                                                    color: order.is_b2b ? '#0369A1' : '#334155', 
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontWeight: '900', fontSize: '0.6rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#DDD6FE'}`,
+                                                    fontWeight: '900', fontSize: '0.58rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#CBD5E1'}`,
                                                     flexShrink: 0
                                                 }}>
                                                     {order.is_b2b ? 'B2B' : 'B2C'}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.6rem 0.5rem', maxWidth: '190px' }}>
-                                            <div style={{ fontWeight: '900', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <td style={{ padding: '0.5rem 0.45rem', borderBottom: '1px solid #E2E8F0', maxWidth: '260px', verticalAlign: 'top' }}>
+                                            <div className="line-clamp-2" style={{ fontWeight: '800', color: isAssigned ? '#334155' : '#0F172A', lineHeight: 1.25 }}>
                                                 {order.customer_name}
                                             </div>
-                                            <div style={{ fontSize: '0.6rem', color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }}>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={10} strokeWidth={1.5} /> {order.address}</span>
+                                            <div style={{ fontSize: '0.60rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} strokeWidth={1.5} /> {order.address}</span>
                                             </div>
-                                            {order.address_complement && (
-                                                <div style={{ fontSize: '0.55rem', color: '#0891B2', fontWeight: '800', marginTop: '1px' }}>
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Building2 size={10} strokeWidth={1.5} /> {order.address_complement}</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
-                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
-                                            <div style={{ fontSize: '0.6rem', color: '#0D9488', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                                                <Package size={10} /> {order.crates} und
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '0.6rem 0.8rem', textAlign: 'left', maxWidth: '160px' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                    {isPriority && (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', color: '#B45309', backgroundColor: '#FEF3C7', border: '1px solid #F59E0B', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <Star size={8} fill="#F59E0B" stroke="#B45309" strokeWidth={2} /> PRIORITARIO
-                                                        </span>
-                                                    )}
-                                                    <div style={{ 
-                                                        fontSize: '0.58rem', 
-                                                        fontWeight: '800', 
-                                                        padding: '0.12rem 0.38rem', 
-                                                        borderRadius: '4px', 
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '3px',
-                                                        backgroundColor: order.slot_type === 'manual' ? '#EFF6FF' : 
-                                                                         order.slot_type === 'profile' ? '#F0FDF4' : '#F8FAFC',
-                                                        color: order.slot_type === 'manual' ? '#1D4ED8' : 
-                                                               order.slot_type === 'profile' ? '#15803D' : '#475569',
-                                                        border: `1px solid ${
-                                                            order.slot_type === 'manual' ? '#BFDBFE' : 
-                                                            order.slot_type === 'profile' ? '#BBF7D0' : '#E2E8F0'
-                                                        }`
-                                                    }}>
-                                                        <Clock size={9} strokeWidth={2} /> {order.display_slot}
-                                                    </div>
-                                                    {getOrderSpaceDisplayLabel(order) && (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            ESP {getOrderSpaceDisplayLabel(order)}
-                                                        </span>
-                                                    )}
-                                                    {order.is_b2b ? (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#1E40AF', backgroundColor: '#EFF6FF', border: '1px solid #DBEAFE', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <FileText size={8} strokeWidth={2} /> Acuerdo
-                                                        </span>
-                                                    ) : order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' ? (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <Coins size={8} strokeWidth={2} /> Por Cobrar
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: '#166534', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <CheckCircle2 size={8} strokeWidth={2} /> Pagado
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {order.novedad && (
-                                                    <div style={{ 
-                                                        fontSize: '0.55rem', 
-                                                        color: '#475569', 
-                                                        backgroundColor: '#F8FAFC', 
-                                                        padding: '0.15rem 0.35rem', 
-                                                        borderRadius: '4px', 
-                                                        fontWeight: '700', 
-                                                        border: '1px solid #E2E8F0',
-                                                        whiteSpace: 'nowrap',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        maxWidth: '150px',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '3px'
-                                                    }} title={order.novedad}>
-                                                        <FileText size={8} strokeWidth={2} style={{ flexShrink: 0, color: '#64748B' }} />
-                                                        <span>{order.novedad}</span>
-                                                    </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                {assignedVehicle && (
+                                                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.58rem', fontWeight: '800', color: '#FFFFFF', backgroundColor: '#1E3A5F', padding: '1px 5px', borderRadius: '4px' }}>
+                                                        {assignedVehicle.plate}
+                                                    </span>
                                                 )}
+                                                {spaceLabel && (
+                                                    <span style={{ fontSize: '0.56rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px' }}>
+                                                        ESP {spaceLabel}
+                                                    </span>
+                                                )}
+                                                <span style={{
+                                                    fontSize: '0.56rem',
+                                                    fontWeight: '800',
+                                                    padding: '1px 5px',
+                                                    borderRadius: '4px',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '3px',
+                                                    backgroundColor: order.slot_type === 'manual' ? '#EFF6FF' : order.slot_type === 'profile' ? '#ECFDF5' : '#F8FAFC',
+                                                    color: order.slot_type === 'manual' ? '#1D4ED8' : order.slot_type === 'profile' ? '#065F46' : '#475569',
+                                                    border: `1px solid ${order.slot_type === 'manual' ? '#BFDBFE' : order.slot_type === 'profile' ? '#A7F3D0' : '#E2E8F0'}`
+                                                }}>
+                                                    <Clock size={9} strokeWidth={2} /> {order.display_slot}
+                                                </span>
+                                                {!order.is_b2b && order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
+                                                    <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                        <Coins size={8} strokeWidth={2} /> Por Cobrar
+                                                    </span>
+                                                )}
+                                                {order.novedad && (
+                                                    <span title={order.novedad} style={{ fontSize: '0.56rem', fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '1px 4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
+                                                        <MessageSquare size={9} strokeWidth={2} /> Nota
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', textAlign: 'right', verticalAlign: 'top', fontVariantNumeric: 'tabular-nums' }}>
+                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
+                                            <div style={{ fontSize: '0.58rem', color: '#0D7A57', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
+                                                <Package size={10} /> {orderCrates} can.
                                             </div>
                                         </td>
                                     </tr>
@@ -1134,16 +1242,67 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             </div>
 
             {/* Planning Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#374151' }}>FLOTA Y RUTAS</h3>
-                        <span style={{ fontSize: '0.65rem', backgroundColor: '#E5E7EB', color: '#4B5563', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', minWidth: 0 }}>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '14px',
+                    padding: '0.65rem 0.9rem',
+                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#0F172A' }}>FLOTA Y RUTAS</h3>
+                        <span style={{ fontSize: '0.65rem', backgroundColor: '#F1F5F9', color: '#334155', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: '800', border: '1px solid #E2E8F0' }}>
                             {Object.values(assignments).reduce((acc, curr) => acc + curr.length, 0)} ASIGNADOS
                         </span>
+                        {/* Segmented Toggle: Entrega 1->N vs Cargue LIFO */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '2px', border: '1px solid #E2E8F0' }}>
+                            <button
+                                type="button"
+                                onClick={() => setRouteViewMode('delivery')}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    fontSize: '0.64rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    backgroundColor: routeViewMode === 'delivery' ? '#1E3A5F' : 'transparent',
+                                    color: routeViewMode === 'delivery' ? '#FFFFFF' : '#475569'
+                                }}
+                                title="Ver paradas en orden de entrega (1ra parada arriba)"
+                            >
+                                Entrega 1→N
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRouteViewMode('lifo')}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    fontSize: '0.64rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    backgroundColor: routeViewMode === 'lifo' ? '#0D7A57' : 'transparent',
+                                    color: routeViewMode === 'lifo' ? '#FFFFFF' : '#475569',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                }}
+                                title="Ver orden físico de cargue LIFO en muelle (Fondo → Puerta)"
+                            >
+                                <ArrowDownUp size={10} /> Cargue LIFO
+                            </button>
+                        </div>
                     </div>
                     {!readOnly && (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <button 
                                 onClick={() => setShowSettings(!showSettings)}
                                 title="Ajustes de Optimización"
@@ -1168,10 +1327,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             onClick={handleAutoOptimize}
                             disabled={optimizing}
                             style={{ 
-                                padding: '0.4rem 1.1rem', 
+                                padding: '0.4rem 1.0rem', 
                                 borderRadius: '8px', 
-                                backgroundImage: optimizing ? 'none' : 'linear-gradient(135deg, #6366F1, #4F46E5)', 
-                                backgroundColor: optimizing ? '#94A3B8' : 'transparent', 
+                                backgroundColor: optimizing ? '#94A3B8' : '#1E3A5F', 
                                 color: 'white', 
                                 border: 'none', 
                                 fontWeight: '800', 
@@ -1179,66 +1337,93 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 gap: '0.35rem',
-                                fontSize: '0.75rem',
-                                boxShadow: optimizing ? 'none' : '0 4px 6px -1px rgba(99, 102, 241, 0.25), 0 2px 4px -1px rgba(99, 102, 241, 0.15)',
-                                transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!optimizing) {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 12px -2px rgba(99, 102, 241, 0.35), 0 3px 6px -2px rgba(99, 102, 241, 0.25)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!optimizing) {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(99, 102, 241, 0.25), 0 2px 4px -1px rgba(99, 102, 241, 0.15)';
-                                }
+                                fontSize: '0.74rem',
+                                transition: 'all 0.15s ease'
                             }}
                         >
-                            {optimizing ? 'Optimizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} strokeWidth={1.5} /> Auto-Asignar</span>}
+                            {optimizing ? 'Optimizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} strokeWidth={1.8} /> Auto-Asignar</span>}
                         </button>
-                        {optimizationSource && (
-                            <span style={{
-                                padding: '0.32rem 0.65rem',
-                                borderRadius: '8px',
-                                fontSize: '0.68rem',
-                                fontWeight: '800',
-                                backgroundColor: optimizationSource === 'google' ? '#ECFDF5' : '#FFFBEB',
-                                color: optimizationSource === 'google' ? '#065F46' : '#92400E',
-                                border: optimizationSource === 'google' ? '1px solid #A7F3D0' : '1px solid #FDE68A'
-                            }}>
-                                {optimizationSource === 'google' ? 'Google Tráfico Real' : 'Motor Local (Simulación)'}
-                            </span>
-                        )}
+                        {(() => {
+                            const totalAssigned = Object.values(assignments).reduce((s, l) => s + l.length, 0);
+                            if (optimizationSource === 'google') {
+                                return (
+                                    <span style={{
+                                        padding: '0.32rem 0.65rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: '800',
+                                        backgroundColor: '#ECFDF5',
+                                        color: '#065F46',
+                                        border: '1px solid #A7F3D0',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Navigation size={11} />
+                                        Google Tráfico Real
+                                        {theoreticalMetrics ? ` · ${formatNumber(theoreticalMetrics.distance_km, 0)} km · ${Math.round(theoreticalMetrics.duration_min)} min` : ''}
+                                    </span>
+                                );
+                            }
+                            if (optimizationSource === 'simulation') {
+                                return (
+                                    <span
+                                        title="Distancias estimadas en línea recta; verificar ETAs manualmente"
+                                        style={{
+                                            padding: '0.32rem 0.65rem',
+                                            borderRadius: '8px',
+                                            fontSize: '0.68rem',
+                                            fontWeight: '800',
+                                            backgroundColor: '#FFFBEB',
+                                            color: '#92400E',
+                                            border: '1px solid #FDE68A',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            cursor: 'help'
+                                        }}
+                                    >
+                                        <AlertTriangle size={11} /> Motor Local (Sin tráfico Google)
+                                    </span>
+                                );
+                            }
+                            if (!isOptimized && totalAssigned > 0) {
+                                return (
+                                    <span style={{
+                                        padding: '0.32rem 0.65rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: '800',
+                                        backgroundColor: '#F1F5F9',
+                                        color: '#334155',
+                                        border: '1px solid #CBD5E1',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Sliders size={11} /> Ajustado manualmente
+                                    </span>
+                                );
+                            }
+                            return null;
+                        })()}
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button 
                                 onClick={() => setShowPreConfirm(true)}
                                 disabled={loading}
                                 style={{ 
-                                    padding: '0.4rem 1.1rem', 
+                                    padding: '0.4rem 1.0rem', 
                                     borderRadius: '8px', 
-                                    backgroundColor: '#10B981', 
+                                    backgroundColor: '#0D7A57', 
                                     color: 'white', 
                                     border: 'none', 
                                     fontWeight: '800', 
                                     cursor: 'pointer',
-                                    fontSize: '0.75rem',
-                                    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.25), 0 2px 4px -1px rgba(16, 185, 129, 0.15)',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                    e.currentTarget.style.boxShadow = '0 6px 12px -2px rgba(16, 185, 129, 0.35), 0 3px 6px -2px rgba(16, 185, 129, 0.25)';
-                                    e.currentTarget.style.backgroundColor = '#059669';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(16, 185, 129, 0.25), 0 2px 4px -1px rgba(16, 185, 129, 0.15)';
-                                    e.currentTarget.style.backgroundColor = '#10B981';
+                                    fontSize: '0.74rem',
+                                    transition: 'all 0.15s ease'
                                 }}
                             >
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Check size={12} strokeWidth={1.5} /> Confirmar</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Check size={12} strokeWidth={2} /> Confirmar</span>
                             </button>
                         )}
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
@@ -1251,6 +1436,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         setIsOptimized(false);
                                         setOptimizationSource(null);
                                         setTheoreticalMetrics(null);
+                                        setStopEtas({});
+                                        setRouteStartTimes({});
                                     }
                                 }}
                                 style={{ 
@@ -1383,7 +1570,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Tiempo base de alistamiento (min)</label>
 
                                     <input 
-                                        type="number" 
+                                        type="text"
+                                        inputMode="decimal"
                                         value={params.base_setup_time ?? ''} 
                                         onChange={(e) => updateParameter('base_setup_time', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1392,7 +1580,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 <div>
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Descarga física de 10 canastillas (min)</label>
                                     <input 
-                                        type="number" 
+                                        type="text"
+                                        inputMode="decimal"
                                         value={params.time_per_10_crates_unload ?? ''} 
                                         onChange={(e) => updateParameter('time_per_10_crates_unload', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1401,7 +1590,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 <div>
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Revisión/Firma de 10 canastillas (min)</label>
                                     <input 
-                                        type="number" 
+                                        type="text"
+                                        inputMode="decimal"
                                         value={params.time_per_10_crates_delivery ?? ''} 
                                         onChange={(e) => updateParameter('time_per_10_crates_delivery', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1442,7 +1632,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 <div>
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Descanso de Conductor (minutos)</label>
                                     <input 
-                                        type="number" 
+                                        type="text"
+                                        inputMode="decimal"
                                         value={params.driver_break_mins ?? ''} 
                                         onChange={(e) => updateParameter('driver_break_mins', e.target.value)}
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1477,7 +1668,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <div>
                                         <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Alistamiento Fijo Bodega (min)</label>
                                         <input 
-                                            type="number" 
+                                            type="text"
+                                            inputMode="decimal"
                                             value={params.warehouse_base_load_time ?? ''} 
                                             onChange={(e) => updateParameter('warehouse_base_load_time', e.target.value)}
                                             style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1486,7 +1678,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     <div>
                                         <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Cargue de 10 canastillas (min)</label>
                                         <input 
-                                            type="number" 
+                                            type="text"
+                                            inputMode="decimal"
                                             value={params.warehouse_time_per_10_crates_load ?? ''} 
                                             onChange={(e) => updateParameter('warehouse_time_per_10_crates_load', e.target.value)}
                                             style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1500,7 +1693,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             </span>
                                         </div>
                                         <input 
-                                            type="number" 
+                                            type="text"
+                                            inputMode="decimal"
                                             value={params.space_capacity ?? 36} 
                                             onChange={(e) => updateParameter('space_capacity', e.target.value)}
                                             style={{ width: '100%', padding: '0.6rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700' }}
@@ -1518,356 +1712,349 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     </div>
                 )}
 
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                    gap: '1rem', 
-                    flex: 1, 
-                    overflowY: 'auto',
-                    paddingRight: '0.35rem',
-                    alignContent: 'start',
-                    scrollbarWidth: 'thin'
-                }}>
-                    {[...vehicles]
-                        .sort((a, b) => {
-                            const aOrders = assignments[a.id] || [];
-                            const bOrders = assignments[b.id] || [];
-                            
-                            // 1. Mostrar vehículos asignados primero
-                            if (aOrders.length > 0 && bOrders.length === 0) return -1;
-                            if (bOrders.length > 0 && aOrders.length === 0) return 1;
-                            
-                            // 2. Si ambos están asignados, ordenar por la ventana horaria del primer pedido (Parada 1)
-                            if (aOrders.length > 0 && bOrders.length > 0) {
-                                const getFirstOrderMin = (vId: string) => {
-                                    const firstOrderId = assignments[vId][0];
-                                    const order = orders.find(o => o.id === firstOrderId);
-                                    if (order && order.display_slot && order.display_slot !== 'Flexible') {
-                                        const startTimeStr = order.display_slot.split(' - ')[0];
-                                        const [h, m] = startTimeStr.split(':').map(Number);
-                                        return h * 60 + m;
-                                    }
-                                    return 9999; // Mandar flexibles al final
-                                };
-                                const minA = getFirstOrderMin(a.id);
-                                const minB = getFirstOrderMin(b.id);
-                                if (minA !== minB) return minA - minB;
-                            }
-                            
-                            // 3. Fallback: Orden alfabético por placa
-                            return a.plate.localeCompare(b.plate);
-                        })
-                        .map(vehicle => {
-                        const load = getVehicleLoad(vehicle.id);
-                        const cratesNeeded = Math.ceil(load / (parseFloat(params.avg_kg_per_crate) || 12.5));
-                        
-                        const kgProgress = (load / vehicle.capacity_kg) * 100;
-                        const crateProgress = vehicle.max_crates_capacity > 0 ? (cratesNeeded / vehicle.max_crates_capacity) * 100 : 0;
-                        const progress = Math.max(kgProgress, crateProgress);
-                        
-                        const assignedOrders = assignments[vehicle.id] || [];
-                        const isKgOverloaded = load > vehicle.capacity_kg;
-                        const isCrateOverloaded = vehicle.max_crates_capacity > 0 && cratesNeeded > vehicle.max_crates_capacity;
-                        const isOverloaded = isKgOverloaded || isCrateOverloaded;
+                {routeViewMode === 'lifo' && (
+                    <div style={{
+                        backgroundColor: '#ECFDF5',
+                        border: '1px solid #A7F3D0',
+                        color: '#065F46',
+                        borderRadius: '10px',
+                        padding: '0.45rem 0.85rem',
+                        fontSize: '0.70rem',
+                        fontWeight: '700',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px'
+                    }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <ArrowDownUp size={13} />
+                            <strong>Vista Cargue LIFO (Fondo → Puerta):</strong> arriba aparece lo que entra primero al fondo del furgón. Cambia a <strong>Entrega 1→N</strong> para reordenar paradas.
+                        </span>
+                    </div>
+                )}
 
-                        const isDragOver = dragOverVehicleId === vehicle.id;
-                        return (
-                            <div 
-                                key={vehicle.id} 
-                                onDragOver={(e) => { e.preventDefault(); setDragOverVehicleId(vehicle.id); }}
-                                onDragLeave={() => setDragOverVehicleId(null)}
-                                onDrop={(e) => {
-                                    handleDropOnVehicle(e, vehicle.id);
-                                    setDragOverVehicleId(null);
-                                }}
-                                style={{ 
-                                    backgroundColor: 'white', 
-                                    borderRadius: '20px', 
-                                    border: isDragOver
-                                        ? '2px dashed #06B6D4'
-                                        : (isOverloaded ? '2px solid #EF4444' : '1px solid #E5E7EB'), 
-                                    padding: '1rem',
-                                    boxShadow: isDragOver 
-                                        ? '0 10px 15px -3px rgba(6,182,212,0.1), 0 4px 6px -4px rgba(6,182,212,0.1)' 
-                                        : '0 4px 6px -1px rgba(0,0,0,0.05)',
-                                    transition: 'all 0.2s',
-                                    transform: isDragOver ? 'scale(1.01)' : 'scale(1)'
-                                }}
-                            >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.2rem' }}>
-                                    {/* Row 1: Vehicle Plate & Timings */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '0.5rem' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <span style={{ fontSize: '0.55rem', color: '#6366F1', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                <Truck size={10} strokeWidth={2.5} style={{ color: '#6366F1' }} /> Camión
-                                            </span>
-                                            <div style={{ fontWeight: '900', fontSize: '1.2rem', color: '#0F172A', lineHeight: 1.1 }}>
-                                                {vehicle.plate}
-                                            </div>
-                                        </div>
-                                        {assignedOrders.length > 0 && (() => {
-                                            const { loadStart, departure } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
-                                            return (
-                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginBottom: '2px' }}>
-                                                    <span style={{
-                                                        fontSize: '0.62rem', fontWeight: '800',
-                                                        backgroundColor: '#F0FDF4', color: '#16A34A',
-                                                        padding: '2px 5px', borderRadius: '5px',
-                                                        border: '1px solid #DCFCE7',
-                                                        display: 'inline-flex', alignItems: 'center', gap: '2px'
-                                                    }} title="Hora estimada de inicio de cargue en bodega">
-                                                        <Clock size={10} strokeWidth={2} /> {loadStart}
-                                                    </span>
-                                                    <span style={{
-                                                        fontSize: '0.62rem', fontWeight: '800',
-                                                        backgroundColor: '#EEF2FF', color: '#4F46E5',
-                                                        padding: '2px 5px', borderRadius: '5px',
-                                                        border: '1px solid #E0E7FF',
-                                                        display: 'inline-flex', alignItems: 'center', gap: '2px'
-                                                    }} title="Hora estimada de salida de bodega">
-                                                        <Truck size={10} strokeWidth={2} /> {departure}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
+                {(() => {
+                    const sortedVehicles = [...vehicles].sort((a, b) => {
+                        const aOrders = assignments[a.id] || [];
+                        const bOrders = assignments[b.id] || [];
+                        if (aOrders.length > 0 && bOrders.length === 0) return -1;
+                        if (bOrders.length > 0 && aOrders.length === 0) return 1;
+                        if (aOrders.length > 0 && bOrders.length > 0) {
+                            const getFirstOrderMin = (vId: string) => {
+                                const firstOrderId = assignments[vId][0];
+                                const order = orders.find(o => o.id === firstOrderId);
+                                if (order && order.display_slot && order.display_slot !== 'Flexible') {
+                                    const startTimeStr = order.display_slot.split(' - ')[0];
+                                    const [h, m] = startTimeStr.split(':').map(Number);
+                                    return h * 60 + m;
+                                }
+                                return 9999;
+                            };
+                            const minA = getFirstOrderMin(a.id);
+                            const minB = getFirstOrderMin(b.id);
+                            if (minA !== minB) return minA - minB;
+                        }
+                        return a.plate.localeCompare(b.plate);
+                    });
 
-                                    {/* Row 2: Driver Info */}
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <div style={{
-                                            fontSize: '0.75rem',
-                                            color: vehicle.driver_name !== 'Sin Asignar' ? '#334155' : '#94A3B8',
-                                            fontWeight: '700',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.4rem',
-                                            flex: 1,
-                                            minWidth: 0
-                                        }}>
-                                            <div style={{ 
-                                                width: '24px', 
-                                                height: '24px', 
-                                                borderRadius: '50%', 
-                                                background: vehicle.driver_name !== 'Sin Asignar' 
-                                                    ? 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)' 
-                                                    : '#E2E8F0', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center', 
-                                                color: 'white', 
-                                                fontWeight: '900', 
-                                                fontSize: '0.6rem',
-                                                flexShrink: 0
-                                            }}>
-                                                {getInitials(vehicle.driver_name || '')}
-                                            </div>
-                                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1 }} title={vehicle.driver_name}>
-                                                {vehicle.driver_name}
-                                            </span>
-                                        </div>
-                                    </div>
+                    const activeVehiclesList = sortedVehicles.filter(v => (assignments[v.id] || []).length > 0);
+                    const idleVehiclesList = sortedVehicles.filter(v => (assignments[v.id] || []).length === 0);
+                    const vehiclesToRenderMain = activeVehiclesList.length > 0 ? activeVehiclesList : sortedVehicles;
 
-                                    {/* Row 3: Capacity Progress Pills (Full Width Stack with top separator) */}
-                                    <div style={{ 
-                                        display: 'flex', 
-                                        flexDirection: 'column', 
-                                        gap: '0.35rem', 
-                                        width: '100%',
-                                        borderTop: '1px solid #F1F5F9',
-                                        paddingTop: '0.6rem'
-                                    }}>
-                                        {/* Weight Capacity Progress Pill */}
-                                        <div style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            gap: '8px', 
-                                            backgroundColor: isKgOverloaded ? '#FEF2F2' : '#F0FDFA',
-                                            border: isKgOverloaded ? '1px solid #FEE2E2' : '1px solid #CCFBF1',
-                                            padding: '3px 8px',
-                                            borderRadius: '8px',
-                                            transition: 'all 0.2s',
-                                            width: '100%'
-                                        }}>
-                                            <div style={{
-                                                fontSize: '0.62rem', fontWeight: '800',
-                                                color: isKgOverloaded ? '#EF4444' : '#0D9488',
-                                                display: 'flex', alignItems: 'center', gap: '3px',
-                                                whiteSpace: 'nowrap'
-                                            }}>
-                                                <Scale size={10} strokeWidth={2} />
-                                                <span>{load}/{vehicle.capacity_kg} kg</span>
-                                            </div>
-                                            <div style={{ flex: 1, height: '4px', backgroundColor: isKgOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
-                                                <div style={{
-                                                    width: `${Math.min(kgProgress, 100)}%`,
-                                                    height: '100%',
-                                                    backgroundColor: isKgOverloaded ? '#EF4444' : '#10B981',
-                                                    transition: 'width 0.5s ease-out'
-                                                }} />
-                                            </div>
-                                        </div>
+                    return (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
+                                {vehiclesToRenderMain.map(vehicle => {
+                                    const load = getVehicleLoad(vehicle.id);
+                                    const cratesNeeded = getVehicleCrates(vehicle.id);
+                                    const kgProgress = vehicle.capacity_kg > 0 ? (load / vehicle.capacity_kg) * 100 : 0;
+                                    const crateProgress = vehicle.max_crates_capacity > 0 ? (cratesNeeded / vehicle.max_crates_capacity) * 100 : 0;
 
-                                        {/* Crates Capacity Progress Pill */}
-                                        {vehicle.max_crates_capacity > 0 && (
-                                            <div style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                gap: '8px', 
-                                                backgroundColor: isCrateOverloaded ? '#FEF2F2' : '#F5F3FF',
-                                                border: isCrateOverloaded ? '1px solid #FEE2E2' : '1px solid #E9D5FF',
-                                                padding: '3px 8px',
-                                                borderRadius: '8px',
-                                                transition: 'all 0.2s',
-                                                width: '100%'
-                                            }}>
-                                                <div style={{
-                                                    fontSize: '0.62rem', fontWeight: '800',
-                                                    color: isCrateOverloaded ? '#EF4444' : '#6D28D9',
-                                                    display: 'flex', alignItems: 'center', gap: '3px',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    <Package size={10} strokeWidth={2} />
-                                                    <span>{cratesNeeded}/{vehicle.max_crates_capacity} und</span>
-                                                </div>
-                                                <div style={{ flex: 1, height: '4px', backgroundColor: isCrateOverloaded ? '#FEE2E2' : '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
-                                                    <div style={{
-                                                        width: `${Math.min(crateProgress, 100)}%`,
-                                                        height: '100%',
-                                                        backgroundColor: isCrateOverloaded ? '#EF4444' : '#6366F1',
-                                                        transition: 'width 0.5s ease-out'
-                                                    }} />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                    const assignedOrders = assignments[vehicle.id] || [];
+                                    const priorityInTruck = assignedOrders.filter(oid => priorityOrderIds.includes(String(oid))).length;
+                                    const isKgOverloaded = load > vehicle.capacity_kg;
+                                    const isCrateOverloaded = vehicle.max_crates_capacity > 0 && cratesNeeded > vehicle.max_crates_capacity;
+                                    const isOverloaded = isKgOverloaded || isCrateOverloaded;
+                                    const isDragOver = dragOverVehicleId === vehicle.id;
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                                    {assignedOrders.length === 0 ? (
-                                        <div style={{ 
-                                            padding: '2rem 1rem', 
-                                            border: '2px dashed #F3F4F6', 
-                                            borderRadius: '20px', 
-                                            textAlign: 'center', 
-                                            color: '#9CA3AF', 
-                                            fontSize: '0.8rem',
-                                            backgroundColor: '#F9FAFB'
-                                        }}>
-                                            Arrastra pedidos aquí...
-                                        </div>
-                                    ) : (
-                                    assignedOrders.map((oid, stopIndex) => {
-                                        const order = orders.find(o => o.id === oid);
-                                        const orderCrates = order ? Math.ceil(order.total_weight_kg / (parseFloat(params.avg_kg_per_crate) || 12.5)) : 0;
-                                        const stopNumber = stopIndex + 1;
-                                        const totalStops = assignedOrders.length;
-                                        // LIFO check: a stop in the 2nd half that is heavier than average
-                                        // signals it was loaded first (bottom of truck) but delivered last
-                                        const avgWeight = assignedOrders.reduce((sum, id) => {
-                                            const o = orders.find(x => x.id === id);
-                                            return sum + (o?.total_weight_kg || 0);
-                                        }, 0) / totalStops;
-                                        const isLifoConflict = stopIndex >= Math.floor(totalStops / 2)
-                                            && (order?.total_weight_kg || 0) > avgWeight * 1.3;
+                                    const displayOrders = routeViewMode === 'lifo' ? [...assignedOrders].reverse() : assignedOrders;
 
-                                        // Ordinal display: 1-9 use circled numbers, 10+ use plain badge
-                                        const circledNumbers = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
-                                        const ordinalLabel = stopNumber <= 9 ? circledNumbers[stopNumber - 1] : `#${stopNumber}`;
-
-                                        return (
-                                            <div 
-                                                key={oid} 
-                                                draggable={!readOnly}
-                                                onDragStart={(e) => handleDragStart(e, oid, vehicle.id, stopIndex)}
-                                                onDragOver={handleDragOver}
-                                                onDrop={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDropOnVehicle(e, vehicle.id, stopIndex);
-                                                }}
-                                                style={{ 
-                                                    padding: '0.7rem 0.8rem', 
-                                                    backgroundColor: isLifoConflict ? '#FFFBEB' : 'white', 
-                                                    borderRadius: '14px', 
-                                                    fontSize: '0.8rem', 
-                                                    fontWeight: '700', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center',
-                                                    gap: '0.6rem',
-                                                    border: isLifoConflict ? '1px solid #FCD34D' : '1px solid #E5E7EB',
-                                                    color: '#374151',
-                                                    cursor: readOnly ? 'default' : 'grab',
-                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                                                }}
-                                            >
-                                                {/* Ordinal Badge */}
-                                                <div style={{
-                                                    minWidth: '28px',
-                                                    height: '28px',
-                                                    borderRadius: '8px',
-                                                    background: isLifoConflict
-                                                        ? 'linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)'
-                                                        : 'linear-gradient(135deg, #0891B2 0%, #22D3EE 100%)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: 'white',
-                                                    fontWeight: '900',
-                                                    fontSize: stopNumber <= 9 ? '0.9rem' : '0.65rem',
-                                                    flexShrink: 0,
-                                                    boxShadow: '0 2px 6px rgba(8,145,178,0.25)'
-                                                }}>
-                                                    {ordinalLabel}
-                                                </div>
-
-                                                {/* Order info */}
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontWeight: '800', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {order?.customer_name}
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '0.6rem', color: '#6B7280' }}>
-                                                            {order?.delivery_zone} • {order?.total_weight_kg} kg
-                                                        </span>
-                                                        <span style={{ fontSize: '0.6rem', color: '#6366F1', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                                            <Package size={10} /> {orderCrates}
-                                                        </span>
-                                                        {isLifoConflict && (
-                                                            <span style={{ fontSize: '0.55rem', color: '#B45309', fontWeight: '900', backgroundColor: '#FEF3C7', padding: '1px 5px', borderRadius: '4px' }}>
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#D97706' }}><AlertTriangle size={12} strokeWidth={1.5} /> Carga primero</span>
+                                    return (
+                                        <div 
+                                            key={vehicle.id} 
+                                            onDragOver={(e) => { e.preventDefault(); setDragOverVehicleId(vehicle.id); }}
+                                            onDragLeave={() => setDragOverVehicleId(null)}
+                                            onDrop={(e) => {
+                                                handleDropOnVehicle(e, vehicle.id);
+                                                setDragOverVehicleId(null);
+                                            }}
+                                            style={{ 
+                                                backgroundColor: '#FFFFFF', 
+                                                borderRadius: '16px', 
+                                                border: isDragOver
+                                                    ? '2px dashed #0D7A57'
+                                                    : (isOverloaded ? '2px solid #EF4444' : '1px solid #E2E8F0'), 
+                                                padding: '0.9rem',
+                                                boxShadow: isDragOver 
+                                                    ? '0 10px 15px -3px rgba(13,122,87,0.12)' 
+                                                    : '0 2px 6px rgba(15,23,42,0.04)',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            {/* Vehicle Card Header (2 clean rows) */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: '900', fontSize: '1.1rem', color: '#0F172A', letterSpacing: '-0.02em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                                                {vehicle.plate}
                                                             </span>
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#334155', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: '9999px' }}>
+                                                                {assignedOrders.length} parada{assignedOrders.length === 1 ? '' : 's'}
+                                                            </span>
+                                                            {priorityInTruck > 0 && (
+                                                                <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FEF3C7', border: '1px solid #F59E0B', padding: '1px 6px', borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                                    <Star size={10} fill="#F59E0B" stroke="#B45309" strokeWidth={2} /> {priorityInTruck}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.72rem', color: vehicle.driver_name !== 'Sin Asignar' ? '#475569' : '#94A3B8', fontWeight: '700', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={vehicle.driver_name}>
+                                                            {vehicle.driver_name}
+                                                        </div>
+                                                    </div>
+                                                    {assignedOrders.length > 0 && (() => {
+                                                        const { loadStart, departure } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
+                                                        return (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
+                                                                <span style={{ fontSize: '0.60rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '6px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+                                                                    Cargue {loadStart} → Salida {departure}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+
+                                                {/* Dual Capacity Progress Bars */}
+                                                <div className="grid grid-cols-2 gap-2" style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.5rem' }}>
+                                                    <div style={{ backgroundColor: isKgOverloaded ? '#FEF2F2' : '#F8FAFC', border: `1px solid ${isKgOverloaded ? '#FECACA' : '#E2E8F0'}`, borderRadius: '8px', padding: '4px 7px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', fontWeight: '800', color: isKgOverloaded ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: isKgOverloaded ? '#DC2626' : '#0D7A57' }}>
+                                                                <Scale size={10} /> {formatNumber(load, 1)} / {formatNumber(vehicle.capacity_kg, 0)} kg
+                                                            </span>
+                                                            <span style={{ color: '#64748B' }}>{Math.round(kgProgress)}%</span>
+                                                        </div>
+                                                        <div style={{ height: '4px', backgroundColor: '#E2E8F0', borderRadius: '4px', overflow: 'hidden', marginTop: '3px' }}>
+                                                            <div style={{ width: `${Math.min(kgProgress, 100)}%`, height: '100%', backgroundColor: isKgOverloaded ? '#EF4444' : kgProgress > 85 ? '#F59E0B' : '#0D7A57' }} />
+                                                        </div>
+                                                    </div>
+                                                    {vehicle.max_crates_capacity > 0 && (
+                                                        <div style={{ backgroundColor: isCrateOverloaded ? '#FEF2F2' : '#F8FAFC', border: `1px solid ${isCrateOverloaded ? '#FECACA' : '#E2E8F0'}`, borderRadius: '8px', padding: '4px 7px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', fontWeight: '800', color: isCrateOverloaded ? '#DC2626' : '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: isCrateOverloaded ? '#DC2626' : '#1E3A5F' }}>
+                                                                    <Package size={10} /> {cratesNeeded} / {vehicle.max_crates_capacity} can.
+                                                                </span>
+                                                                <span style={{ color: '#64748B' }}>{Math.round(crateProgress)}%</span>
+                                                            </div>
+                                                            <div style={{ height: '4px', backgroundColor: '#E2E8F0', borderRadius: '4px', overflow: 'hidden', marginTop: '3px' }}>
+                                                                <div style={{ width: `${Math.min(crateProgress, 100)}%`, height: '100%', backgroundColor: isCrateOverloaded ? '#EF4444' : crateProgress > 85 ? '#F59E0B' : '#1E3A5F' }} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Stop List */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                                                {assignedOrders.length === 0 ? (
+                                                    <div style={{ 
+                                                        padding: '1.25rem', 
+                                                        border: '2px dashed #E2E8F0', 
+                                                        borderRadius: '12px', 
+                                                        textAlign: 'center', 
+                                                        color: '#94A3B8', 
+                                                        fontSize: '0.75rem',
+                                                        backgroundColor: '#F8FAFC'
+                                                    }}>
+                                                        Arrastra pedidos aquí...
+                                                    </div>
+                                                ) : (
+                                                    displayOrders.map((oid, visualIdx) => {
+                                                        const order = orders.find(o => o.id === oid);
+                                                        const realStopIndex = routeViewMode === 'lifo' ? (assignedOrders.length - 1 - visualIdx) : visualIdx;
+                                                        const stopNumber = realStopIndex + 1;
+                                                        const totalStops = assignedOrders.length;
+                                                        const loadSequence = totalStops - realStopIndex;
+                                                        const isPriority = priorityOrderIds.includes(String(oid));
+                                                        const orderCrates = getOrderCrates(order);
+                                                        const spaceLabel = order ? getOrderSpaceDisplayLabel(order) : '';
+                                                        const etaStr = stopEtas[oid];
+
+                                                        return (
+                                                            <div 
+                                                                key={oid} 
+                                                                draggable={!readOnly && routeViewMode === 'delivery'}
+                                                                onDragStart={(e) => handleDragStart(e, oid, vehicle.id, realStopIndex)}
+                                                                onDragOver={handleDragOver}
+                                                                onDrop={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (routeViewMode === 'delivery') {
+                                                                        handleDropOnVehicle(e, vehicle.id, realStopIndex);
+                                                                    }
+                                                                }}
+                                                                style={{ 
+                                                                    padding: '0.55rem 0.65rem', 
+                                                                    backgroundColor: isPriority ? '#FFFBEB' : '#FFFFFF', 
+                                                                    borderRadius: '10px', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'flex-start',
+                                                                    gap: '0.55rem',
+                                                                    border: isPriority ? '1px solid #F59E0B' : '1px solid #E2E8F0',
+                                                                    cursor: (!readOnly && routeViewMode === 'delivery') ? 'grab' : 'default'
+                                                                }}
+                                                            >
+                                                                {/* Square Monospace Sequence Badge */}
+                                                                <div style={{
+                                                                    minWidth: '26px',
+                                                                    height: '26px',
+                                                                    borderRadius: '7px',
+                                                                    backgroundColor: isPriority ? '#D97706' : '#1E3A5F',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    color: '#FFFFFF',
+                                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                    fontWeight: '900',
+                                                                    fontSize: '0.70rem',
+                                                                    flexShrink: 0,
+                                                                    marginTop: '1px'
+                                                                }}>
+                                                                    #{stopNumber}
+                                                                </div>
+
+                                                                {/* 2-Line Stop Content */}
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                                                                        {isPriority && (
+                                                                            <Star size={12} fill="#F59E0B" stroke="#B45309" strokeWidth={2} style={{ flexShrink: 0, marginTop: '2px' }} />
+                                                                        )}
+                                                                        <div className="line-clamp-2" style={{ fontSize: '0.76rem', fontWeight: '800', color: '#0F172A', lineHeight: 1.25 }}>
+                                                                            {order?.customer_name || 'Cliente'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        {etaStr && (
+                                                                            <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                ETA {etaStr}
+                                                                            </span>
+                                                                        )}
+                                                                        {order?.display_slot && order.display_slot !== 'Flexible' && (
+                                                                            <span style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                {order.display_slot}
+                                                                            </span>
+                                                                        )}
+                                                                        {spaceLabel && (
+                                                                            <span style={{ fontSize: '0.58rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                ESP {spaceLabel}
+                                                                            </span>
+                                                                        )}
+                                                                        <span style={{ fontSize: '0.60rem', color: '#475569', fontWeight: '700' }}>
+                                                                            {formatNumber(order?.total_weight_kg || 0, 1)} kg · {orderCrates} can.
+                                                                        </span>
+                                                                        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.56rem', fontWeight: '700', color: '#64748B', backgroundColor: '#F1F5F9', padding: '1px 4px', borderRadius: '4px' }}>
+                                                                            {loadSequence === 1 ? 'Carga #1 (Fondo)' : `Carga #${loadSequence}`}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {!readOnly && (
+                                                                    <button
+                                                                        type="button"
+                                                                        title="Quitar pedido del camión"
+                                                                        aria-label="Quitar pedido del camión"
+                                                                        style={{ 
+                                                                            cursor: 'pointer', 
+                                                                            color: '#EF4444',
+                                                                            backgroundColor: '#FEF2F2',
+                                                                            border: '1px solid #FECACA',
+                                                                            padding: '3px',
+                                                                            borderRadius: '6px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            flexShrink: 0
+                                                                        }} 
+                                                                        onClick={() => toggleAssignment(oid, vehicle.id)}
+                                                                    >
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {activeVehiclesList.length > 0 && idleVehiclesList.length > 0 && (
+                                <div style={{
+                                    marginTop: '0.5rem',
+                                    backgroundColor: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '14px',
+                                    padding: '0.75rem 0.9rem'
+                                }}>
+                                    <div style={{ fontSize: '0.70rem', fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
+                                        Flota Disponible Sin Asignar ({idleVehiclesList.length})
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                        {idleVehiclesList.map(vehicle => {
+                                            const isDragOver = dragOverVehicleId === vehicle.id;
+                                            return (
+                                                <div
+                                                    key={vehicle.id}
+                                                    onDragOver={(e) => { e.preventDefault(); setDragOverVehicleId(vehicle.id); }}
+                                                    onDragLeave={() => setDragOverVehicleId(null)}
+                                                    onDrop={(e) => {
+                                                        handleDropOnVehicle(e, vehicle.id);
+                                                        setDragOverVehicleId(null);
+                                                    }}
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: isDragOver ? '2px dashed #0D7A57' : '1px dashed #CBD5E1',
+                                                        borderRadius: '10px',
+                                                        padding: '0.55rem 0.75rem',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        gap: '8px'
+                                                    }}
+                                                >
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontWeight: '900', fontSize: '0.82rem', color: '#0F172A', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                                            {vehicle.plate}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.64rem', color: '#64748B', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {vehicle.driver_name}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right', fontSize: '0.62rem', fontWeight: '800', color: '#475569', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                                                        <div>{formatNumber(vehicle.capacity_kg, 0)} kg</div>
+                                                        {vehicle.max_crates_capacity > 0 && (
+                                                            <div style={{ color: '#64748B' }}>{vehicle.max_crates_capacity} can.</div>
                                                         )}
                                                     </div>
                                                 </div>
-
-                                                {/* Stop counter */}
-                                                <div style={{ fontSize: '0.55rem', color: '#94A3B8', fontWeight: '700', textAlign: 'right', flexShrink: 0 }}>
-                                                    <div style={{ color: '#374151', fontWeight: '900', fontSize: '0.65rem' }}>{stopNumber}/{totalStops}</div>
-                                                    <div>parada</div>
-                                                </div>
-
-                                                <span 
-                                                    style={{ 
-                                                        cursor: 'pointer', 
-                                                        color: '#EF4444',
-                                                        backgroundColor: '#FEF2F2',
-                                                        padding: '0.3rem 0.5rem',
-                                                        borderRadius: '8px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }} 
-                                                    onClick={() => toggleAssignment(oid, vehicle.id)}
-                                                ><X size={14} /></span>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        </div>
-                        );
-                    })}
-                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
             {/* Inject keyframes dynamically */}
             <style>{`
@@ -2071,11 +2258,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
                                     <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>PESO TOTAL</div>
                                     <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
-                                        {Object.keys(assignments).reduce((sum, vid) => {
+                                        {formatNumber(Object.keys(assignments).reduce((sum, vid) => {
                                             const oIds = assignments[vid] || [];
                                             const weight = orders.filter(o => oIds.includes(o.id)).reduce((wSum, o) => wSum + o.total_weight_kg, 0);
                                             return sum + weight;
-                                        }, 0).toLocaleString()} kg
+                                        }, 0), 1)} kg
                                     </div>
                                 </div>
                             </div>
@@ -2089,7 +2276,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         const orderIds = assignments[vid] || [];
                                         const routeOrders = orders.filter(o => orderIds.includes(o.id));
                                         const totalWeight = routeOrders.reduce((wSum, o) => wSum + o.total_weight_kg, 0);
-                                        const totalCrates = routeOrders.reduce((cSum, o) => cSum + (o.crates || 0), 0);
+                                        const totalCrates = getVehicleCrates(vid);
                                         
                                         // Porcentaje de capacidad
                                         const capPct = vehicle?.capacity_kg ? Math.round((totalWeight / vehicle.capacity_kg) * 100) : 0;
@@ -2110,7 +2297,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         fontSize: '0.75rem', fontWeight: '800',
                                                         color: capPct > 95 ? '#EF4444' : capPct > 75 ? '#F59E0B' : '#10B981'
                                                     }}>
-                                                        {capPct}% Capacidad ({totalWeight} kg / {vehicle?.capacity_kg} kg)
+                                                        {capPct}% Capacidad ({formatNumber(totalWeight, 1)} kg / {formatNumber(vehicle?.capacity_kg || 0, 0)} kg)
                                                     </span>
                                                 </div>
                                                 <div style={{ fontSize: '0.75rem', color: '#475569', display: 'flex', gap: '1rem' }}>
@@ -2249,7 +2436,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ENTREGAS / PESO</div>
-                                                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem', marginTop: '2px' }}>{route.stops_count} entregas • {route.total_kilos.toLocaleString()} kg</div>
+                                                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem', marginTop: '2px' }}>{route.stops_count} entregas • {formatNumber(route.total_kilos || 0, 1)} kg</div>
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ESPACIOS BODEGA</div>
@@ -2279,7 +2466,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                 <span style={{ fontWeight: '700', color: '#1E293B' }}>{stop.customer_name}</span>
                                                             </div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{stop.total_weight_kg} kg ({stop.crates} can.)</span>
+                                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{formatNumber(stop.total_weight_kg || 0, 1)} kg ({stop.crates} can.)</span>
                                                                 <span style={{ 
                                                                     fontSize: '0.7rem', fontWeight: '850', 
                                                                     backgroundColor: 'rgba(14, 165, 233, 0.08)', color: '#0284C7', 
@@ -2307,11 +2494,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
                                     let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
                                     confirmedManifest.forEach((r, i) => {
-                                        text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${r.total_kilos.toLocaleString()} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
+                                        text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${formatNumber(r.total_kilos || 0, 1)} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
                                         if (r.stops && r.stops.length > 0) {
                                             r.stops.forEach((stop: any, sIdx: number) => {
                                                 const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
-                                                text += `  *${sIdx+1}.* *${stop.customer_name}* (${stop.total_weight_kg} kg) -> Espacios: ${label || (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A')}\n`;
+                                                text += `  *${sIdx+1}.* *${stop.customer_name}* (${formatNumber(stop.total_weight_kg || 0, 1)} kg) -> Espacios: ${label || (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A')}\n`;
                                             });
                                         } else {
                                             text += `  (No hay detalles de paradas)\n`;
