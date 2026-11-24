@@ -217,10 +217,13 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             if (!ag) return null;
             const mm = masterModelByQuoteId.get(ag.id);
             if (mm) {
+                const agEnd = ag.valid_until ? String(ag.valid_until).split('T')[0] : '';
+                const mmEnd = mm.valid_until ? String(mm.valid_until).split('T')[0] : '';
+                const useMasterModel = Boolean(mmEnd && (!agEnd || mmEnd >= agEnd));
                 return {
                     ...ag,
-                    start_date: mm.start_date || ag.start_date,
-                    valid_until: mm.valid_until || ag.valid_until,
+                    start_date: useMasterModel ? (mm.start_date || ag.start_date) : ag.start_date,
+                    valid_until: useMasterModel ? mm.valid_until : ag.valid_until,
                     model_snapshot_name: ag.model_snapshot_name || mm.name
                 };
             }
@@ -244,138 +247,72 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
         };
         const isAgreementExpired = (ag: any) => getAgreementLifecycle(ag).isExpired;
 
-        // Candado 3: Cortocircuito Jerárquico Estricto (Nivel 1: Sucursal > Nivel 2: Matriz > Nivel 3: Lista Maestra)
-        // SPEC.md §7.5.6 & Escenario 301 (SDD v1.9.279): Si un nivel tiene acuerdo, se suprime por completo
-        // cualquier nivel inferior para erradicar split-brain tarifario.
-        let candidateAgreement: any = null;
-        let isCandidateExpired = false;
-
-        // Level 1: Branch assigned agreement (Cortocircuito Estricto)
-        if (branchId) {
-            let { data: bAg } = await supabase
-                .from('quotes')
-                .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                .eq('client_id', branchId)
-                .eq('status', 'agreement')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            if (!bAg) {
-                const { data: bExp } = await supabase
+        // Candado 3 (Enmienda Escenario 479): 2 Pasadas Globales (Pasada 1: 'agreement' en 1->2->3; Pasada 2: 'expired' en 1->2->3)
+        // Impide que un acuerdo viejo 'expired' en Nivel 1 o 2 bloquee una Lista Maestra 'agreement' vigente en Nivel 3.
+        const resolveAgreementByStatus = async (targetStatus: 'agreement' | 'expired') => {
+            const fetchClientQuote = async (cId: string) => {
+                let q = supabase
                     .from('quotes')
                     .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                    .eq('client_id', branchId)
-                    .eq('status', 'expired')
-                    .order('valid_until', { ascending: false, nullsFirst: false })
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                bAg = bExp;
-            }
-            if (bAg) {
-                const ag = enrichAgreementDates(bAg);
-                if (ag) {
-                    candidateAgreement = ag;
-                    isCandidateExpired = isAgreementExpired(ag);
+                    .eq('client_id', cId)
+                    .eq('status', targetStatus);
+                if (targetStatus === 'expired') {
+                    q = q.order('valid_until', { ascending: false, nullsFirst: false });
                 }
-            }
-        }
+                const { data } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+                return data ? enrichAgreementDates(data) : null;
+            };
 
-        // Level 2: Matrix parent assigned agreement (Solo si Nivel 1 no existe)
-        if (!candidateAgreement && parentId) {
-            let { data: mAg } = await supabase
-                .from('quotes')
-                .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                .eq('client_id', parentId)
-                .eq('status', 'agreement')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            if (!mAg) {
-                const { data: mExp } = await supabase
-                    .from('quotes')
-                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                    .eq('client_id', parentId)
-                    .eq('status', 'expired')
-                    .order('valid_until', { ascending: false, nullsFirst: false })
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                mAg = mExp;
+            // Level 1: Branch assigned agreement
+            if (branchId) {
+                const branchAg = await fetchClientQuote(branchId);
+                if (branchAg) return branchAg;
             }
-            if (mAg) {
-                const ag = enrichAgreementDates(mAg);
-                if (ag) {
-                    candidateAgreement = ag;
-                    isCandidateExpired = isAgreementExpired(ag);
+
+            // Level 2: Matrix parent assigned agreement
+            if (parentId) {
+                const parentAg = await fetchClientQuote(parentId);
+                if (parentAg) return parentAg;
+            }
+
+            // Level 3: Master shared agreement (evalua todos los candidatos en orden sin que uno muerto bloquee al siguiente)
+            const candidateMasterIds: string[] = [];
+            const pushUniqueMasterId = (id: unknown) => {
+                if (typeof id === 'string' && id.trim() && !candidateMasterIds.includes(id.trim())) {
+                    candidateMasterIds.push(id.trim());
                 }
-            }
-        }
+            };
 
-        // Level 3: Master shared agreement (Solo si Nivel 1 y 2 no existen)
-        if (!candidateAgreement) {
-            let masterId = currentProfile?.logistics_data?.active_master_agreement_id 
-                          || parentProfile?.logistics_data?.active_master_agreement_id;
-            if (!masterId && (branchId || parentId)) {
+            pushUniqueMasterId(currentProfile?.logistics_data?.active_master_agreement_id);
+            pushUniqueMasterId(parentProfile?.logistics_data?.active_master_agreement_id);
+
+            if (branchId || parentId) {
                 const targetIds = [branchId, parentId].filter(Boolean);
-                const { data: modelRow } = await supabase
+                const { data: modelRows } = await supabase
                     .from('special_agreement_model_clients')
                     .select('model_id')
-                    .in('client_id', targetIds)
-                    .limit(1)
-                    .maybeSingle();
-                if (modelRow?.model_id) {
-                    const { data: sam } = await supabase
-                        .from('special_agreement_models')
-                        .select('master_quote_id')
-                        .eq('id', modelRow.model_id)
-                        .maybeSingle();
-                    if (sam?.master_quote_id) {
-                        masterId = sam.master_quote_id;
+                    .in('client_id', targetIds);
+                if (modelRows && modelRows.length > 0) {
+                    const modelIds = Array.from(new Set(modelRows.map((r: any) => r.model_id).filter(Boolean)));
+                    if (modelIds.length > 0) {
+                        const { data: sams } = await supabase
+                            .from('special_agreement_models')
+                            .select('master_quote_id')
+                            .in('id', modelIds);
+                        (sams || []).forEach((s: any) => pushUniqueMasterId(s.master_quote_id));
                     }
                 }
-            }
 
-            if (masterId) {
-                const { data: sm } = await supabase
-                    .from('quotes')
-                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                    .eq('id', masterId)
-                    .maybeSingle();
-                if (sm) {
-                    const ag = enrichAgreementDates(sm);
-                    if (ag) {
-                        candidateAgreement = ag;
-                        isCandidateExpired = isAgreementExpired(ag);
-                    }
-                }
-            }
-
-            if (!candidateAgreement && (branchId || parentId)) {
                 const { data: sharedSettings } = await supabase
                     .from('app_settings')
                     .select('key, value')
                     .ilike('key', 'agreement_clients:%');
-                
                 if (sharedSettings) {
                     for (const item of sharedSettings) {
                         try {
                             const linkedIds: string[] = JSON.parse(item.value || '[]');
                             if (linkedIds.includes(branchId) || (parentId && linkedIds.includes(parentId))) {
-                                const quoteId = item.key.replace('agreement_clients:', '');
-                                const { data: sm } = await supabase
-                                    .from('quotes')
-                                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
-                                    .eq('id', quoteId)
-                                    .maybeSingle();
-                                if (sm) {
-                                    const ag = enrichAgreementDates(sm);
-                                    if (ag) {
-                                        candidateAgreement = ag;
-                                        isCandidateExpired = isAgreementExpired(ag);
-                                        break;
-                                    }
-                                }
+                                pushUniqueMasterId(item.key.replace('agreement_clients:', ''));
                             }
                         } catch {
                             // ignore json error
@@ -383,7 +320,25 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
                     }
                 }
             }
-        }
+
+            for (const masterId of candidateMasterIds) {
+                const { data: sm } = await supabase
+                    .from('quotes')
+                    .select('id, quote_number, start_date, valid_until, model_snapshot_name, status')
+                    .eq('id', masterId)
+                    .eq('status', targetStatus)
+                    .maybeSingle();
+                if (sm) {
+                    const enriched = enrichAgreementDates(sm);
+                    if (enriched) return enriched;
+                }
+            }
+
+            return null;
+        };
+
+        const candidateAgreement = (await resolveAgreementByStatus('agreement')) || (await resolveAgreementByStatus('expired'));
+        const isCandidateExpired = candidateAgreement ? isAgreementExpired(candidateAgreement) : false;
 
         // 4. Validity check against order date (Escenario 479: Gracia 30 días vs > 30 días Remisión $0)
         const candidateLifecycle = candidateAgreement ? getAgreementLifecycle(candidateAgreement) : null;

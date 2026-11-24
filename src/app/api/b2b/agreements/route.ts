@@ -122,12 +122,17 @@ export async function GET(request: Request) {
                         .eq('master_quote_id', masterId)
                         .maybeSingle();
 
-                    activeQuotes = masterQuotes.map(mq => ({
-                        ...mq,
-                        start_date: specialModel?.start_date || mq.start_date,
-                        valid_until: specialModel?.valid_until || mq.valid_until,
-                        model_snapshot_name: mq.model_snapshot_name || specialModel?.name || `Acuerdo ${mq.quote_number}`
-                    }));
+                    activeQuotes = masterQuotes.map(mq => {
+                        const mqEnd = mq.valid_until ? String(mq.valid_until).split('T')[0] : '';
+                        const smEnd = specialModel?.valid_until ? String(specialModel.valid_until).split('T')[0] : '';
+                        const useSpecial = Boolean(smEnd && (!mqEnd || smEnd >= mqEnd));
+                        return {
+                            ...mq,
+                            start_date: useSpecial ? (specialModel?.start_date || mq.start_date) : mq.start_date,
+                            valid_until: useSpecial ? specialModel!.valid_until : mq.valid_until,
+                            model_snapshot_name: mq.model_snapshot_name || specialModel?.name || `Acuerdo ${mq.quote_number}`
+                        };
+                    });
                 }
             }
         }
