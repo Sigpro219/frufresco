@@ -3847,6 +3847,11 @@ export default function CommercialAgreementsModule() {
         const matchesNit = String(c.nit || '').toLowerCase().includes(query);
         const matchesParent = c.parentName?.toLowerCase().includes(query);
         return Boolean(matchesName || matchesContact || matchesNit || matchesParent);
+    }).sort((a, b) => {
+        const aIsBranch = Boolean(a.parent_id);
+        const bIsBranch = Boolean(b.parent_id);
+        if (aIsBranch !== bIsBranch) return aIsBranch ? 1 : -1;
+        return (a.company_name || '').localeCompare(b.company_name || '', 'es', { sensitivity: 'base' });
     }), [b2bClients, isMultiClientMode, clientTypeFilter, clientSearchQuery, createClientStatusFilter, agreements, sharedLinks]);
 
     const toggleSort = (col: typeof sortColumn) => {
@@ -6953,6 +6958,23 @@ export default function CommercialAgreementsModule() {
                                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                         <button
                                                             type="button"
+                                                            onClick={() => setCreateClientStatusFilter('all')}
+                                                            style={{
+                                                                padding: '3px 10px',
+                                                                borderRadius: '14px',
+                                                                fontSize: '0.72rem',
+                                                                fontWeight: 'bold',
+                                                                border: createClientStatusFilter === 'all' ? '1.5px solid #0D7A57' : '1px solid #CBD5E1',
+                                                                backgroundColor: createClientStatusFilter === 'all' ? '#0D7A57' : '#FFFFFF',
+                                                                color: createClientStatusFilter === 'all' ? '#FFFFFF' : '#64748B',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s'
+                                                            }}
+                                                        >
+                                                            Ver Todos ({b2bClients.length})
+                                                        </button>
+                                                        <button
+                                                            type="button"
                                                             onClick={() => setCreateClientStatusFilter('available')}
                                                             style={{
                                                                 padding: '3px 10px',
@@ -6969,24 +6991,7 @@ export default function CommercialAgreementsModule() {
                                                                 transition: 'all 0.15s'
                                                             }}
                                                         >
-                                                            <CheckCircle2 size={12} /> Disponibles Sin Acuerdo ({clientsWithoutAgreement.length})
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setCreateClientStatusFilter('all')}
-                                                            style={{
-                                                                padding: '3px 10px',
-                                                                borderRadius: '14px',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: 'bold',
-                                                                border: createClientStatusFilter === 'all' ? '1.5px solid #64748B' : '1px solid #CBD5E1',
-                                                                backgroundColor: createClientStatusFilter === 'all' ? '#F1F5F9' : '#FFFFFF',
-                                                                color: createClientStatusFilter === 'all' ? '#0F172A' : '#64748B',
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.15s'
-                                                            }}
-                                                        >
-                                                            Ver Todos ({b2bClients.length})
+                                                            <CheckCircle2 size={12} /> Solo Sin Acuerdo ({clientsWithoutAgreement.length})
                                                         </button>
                                                         <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 4px' }} />
                                                         <button
@@ -7190,7 +7195,10 @@ export default function CommercialAgreementsModule() {
                                                                                     border: '1px solid #FCD34D' 
                                                                                 }}
                                                                             >
-                                                                                <AlertTriangle size={12} /> Acuerdo Activo #{activeAgInfo?.agreement.quote_number}
+                                                                                <AlertTriangle size={12} />{' '}
+                                                                                {activeAgInfo?.isParent
+                                                                                    ? `Hereda #${activeAgInfo.agreement.quote_number} · Tarifa exclusiva sede`
+                                                                                    : `Acuerdo #${activeAgInfo?.agreement.quote_number} · Reemplazar`}
                                                                             </span>
                                                                         ) : isSucursal ? (
                                                                             <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: '20px', backgroundColor: '#E0F2FE', color: '#0284C7', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px', border: '1px solid #BAE6FD' }}>
