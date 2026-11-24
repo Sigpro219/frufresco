@@ -4,6 +4,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
+import {
+    checkClientAgreementConflicts,
+    formatAgreementConflictPrompt,
+    cleanupConflictingAgreementsForClients
+} from '@/lib/commercial/agreementConflictGuard';
 import { useParams, useRouter } from 'next/navigation';
 import { 
     ArrowLeft, 
@@ -632,18 +637,13 @@ export default function QuoteDetailPage() {
             const formattedDate = `${d}-${m}-${y.slice(-2)}`;
             const canonicalSnapshotName = `${finalClientName} - Acuerdo ${formattedDate}`;
 
-            // 2.1 Auto-Supersede: Degradar acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6)
+            // 2.1 Portero Único de Conflictos + Limpieza Atómica Cross-Canal (Escenario 480)
             if (finalClientId) {
-                try {
-                    await supabase
-                        .from('quotes')
-                        .update({ status: 'superseded' })
-                        .eq('client_id', finalClientId)
-                        .eq('status', 'agreement')
-                        .neq('id', quote.id);
-                } catch (supErr) {
-                    console.warn('Error al degradar acuerdos previos:', supErr);
+                const conflicts = await checkClientAgreementConflicts(supabase, [finalClientId], quote.id);
+                if (conflicts.length > 0 && !window.confirm(formatAgreementConflictPrompt(conflicts, canonicalSnapshotName))) {
+                    return;
                 }
+                await cleanupConflictingAgreementsForClients(supabase, [finalClientId], { keepQuoteId: quote.id });
             }
 
             const { error: quoteErr } = await supabase

@@ -18008,7 +18008,22 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 - **2. Limpieza Atómica Cross-Canal (`cleanupConflictingAgreementsForClients`):**
   - Al confirmar reemplazo, degrada acuerdos individuales previos exclusivamente a `status = 'superseded'` (erradicando la escritura previa de `status = 'expired'` en `CommercialAgreementsModule.tsx`), limpia `active_master_agreement_id` / `special_agreement_model_id` incompatibles en `profiles.logistics_data`, elimina filas cruzadas en `special_agreement_model_clients`, y remueve los `clientId` de otras llaves `agreement_clients:*` en `app_settings`.
 - **3. Canales Cubiertos:**
-  - [`CommercialAgreementsModule.tsx`](file:///c:/Projects/frufresco/src/components/CommercialAgreementsModule.tsx) (tanto vinculación de Listas Maestras con resolución dinámica vía `special_agreement_models` como creación individual).
+  - [`CommercialAgreementsModule.tsx`](file:///c:/Projects/frufresco/src/components/CommercialAgreementsModule.tsx) (vinculación de Listas Maestras existentes, creación de nuevas Listas Maestras `isMultiClientMode`, y creación individual sin resurrección de `active_master_agreement_id` ni `special_agreement_model_id`).
   - [`quotes/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/quotes/page.tsx) (aprobación directa desde galería).
   - [`quotes/[id]/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/quotes/%5Bid%5D/page.tsx) (formalización desde detalle de cotización).
   - [`activate-agreement/route.ts`](file:///c:/Projects/frufresco/src/app/api/commercial/activate-agreement/route.ts) (endpoint backend de activación).
+
+---
+
+### Escenario 481: Paridad Canónica Modelos de Precios (`Clientes Hogar`) ↔ `pricing_model_prices`, Merma Teórica y Sincronización Server-Side sin RLS (SDD v1.9.436)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (0 errores tsc)` — Pendiente de validación final y push bajo orden del CTO.
+- **1. Endpoint Unificado Server-Side ([`sync-prices/route.ts`](file:///c:/Projects/frufresco/src/app/api/products/sync-prices/route.ts)):**
+  - `POST /api/products/sync-prices` acepta `Authorization: Bearer <access_token>` de usuarios administrativos activos (rol normalizado en minúsculas distinto de `b2c_client`, `b2b_client`, `client`, vacío o nulo) además de `CRON_SECRET`, `service_role` y `x-vercel-cron`, y acepta opcionalmente `{ productIds?: string[] }`.
+  - Exige `SUPABASE_SERVICE_ROLE_KEY` (sin fallback a `ANON_KEY`), aplica `freezeDailyCost: isMidnightCron` (solo congela costos en cron nocturno, jamás en sincronizaciones manuales), en Sandbox solo omite el cron nocturno, y al finalizar ejecuta `revalidatePath('/')` + `revalidatePath('/products')`.
+- **2. Paridad de Fórmula & Persistencia en [`settings/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/settings/page.tsx):**
+  - Selecciona `products.theoretical_shrinkage_pct` y aplica `safeShrink = Math.min(Math.max(shrinkagePct, 0), 90); effectiveCost = safeShrink > 0 ? baseCost / (1 - safeShrink / 100) : baseCost` en tabla, ordenamiento, exportación Excel y cálculo inverso de margen por precio directo.
+  - Corrige `importFromExcel`: usa `m.product_id` (antes `m.id`), guarda `margin_adjustment` absoluto (sin restar `base_margin_percent`), e incluye `deletedProductIds` en `affectedIds`.
+  - Enruta `saveMarginEdit`, `createRule`, `deleteRule`, `saveModelChanges` (cuando cambia `base_margin_percent`), `importFromExcel` y `syncPricesToCatalog` a `POST /api/products/sync-prices` con token de sesión y propagación explícita de errores (cero `.catch` silenciosos ni llamadas RLS desde navegador).
+- **3. Revalidación en [`bulk-import/route.ts`](file:///c:/Projects/frufresco/src/app/api/commercial/cost-matrix/bulk-import/route.ts) y Limpieza en [`cost-matrix/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/commercial/cost-matrix/page.tsx):**
+  - `bulk-import/route.ts` exige `SUPABASE_SERVICE_ROLE_KEY` y ejecuta `revalidatePath('/')` + `revalidatePath('/products')`.
+  - `cost-matrix/page.tsx` elimina imports muertos de `pricingUtils` y valida `res.ok` en `triggerPricingSync`.

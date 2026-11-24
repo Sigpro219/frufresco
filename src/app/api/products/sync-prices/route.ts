@@ -1,52 +1,94 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
 import { isSandboxMode } from '@/lib/sandboxGuard';
 
 const sanitize = (val?: string) => (val || '').trim().replace(/^["']|["']$/g, '');
 const supabaseUrl = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const supabaseServiceKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-function isAuthorized(request: Request): boolean {
+async function isAuthorized(request: Request, supabaseAdmin: any): Promise<boolean> {
     const { searchParams } = new URL(request.url);
     const queryToken = searchParams.get('token');
     const authHeader = request.headers.get('Authorization');
-    const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
     const token = queryToken || headerToken;
 
     const cronSecret = process.env.CRON_SECRET;
     if (cronSecret && token === cronSecret) return true;
-    if (token && token === supabaseServiceKey) return true;
-
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!cronSecret && token && token === anonKey) return true;
+    if (token && supabaseServiceKey && token === supabaseServiceKey) return true;
 
     // Soporte nativo para Vercel Cron cuando no se exige CRON_SECRET externo
     const vercelCronHeader = request.headers.get('x-vercel-cron');
     if (!cronSecret && vercelCronHeader) return true;
 
+    // Autorizar sesiones administrativas autenticadas vía Supabase Bearer JWT
+    if (headerToken && supabaseAdmin) {
+        try {
+            const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(headerToken);
+            if (!userErr && userData?.user?.id) {
+                const { data: profile } = await supabaseAdmin
+                    .from('profiles')
+                    .select('role, is_active')
+                    .eq('id', userData.user.id)
+                    .maybeSingle();
+                const normRole = String(profile?.role || '').trim().toLowerCase();
+                if (profile && profile.is_active !== false && normRole && !['b2c_client', 'b2b_client', 'client'].includes(normRole)) {
+                    return true;
+                }
+            }
+        } catch {
+            // fall through to unauthorized
+        }
+    }
+
     return false;
 }
 
 async function handleSync(request: Request) {
-    if (isSandboxMode()) {
+    const { searchParams } = new URL(request.url);
+    const isMidnightCron = searchParams.get('cron') === 'midnight' || Boolean(request.headers.get('x-vercel-cron'));
+
+    if (isSandboxMode() && isMidnightCron) {
         return NextResponse.json(
             { success: true, skipped: true, sandbox: true, reason: 'Nocturnal pricing sync disabled in Sandbox mode' },
             { status: 200 }
         );
     }
 
-    if (!isAuthorized(request)) {
+    if (!supabaseUrl || !supabaseServiceKey) {
+        return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY no configurada' }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    if (!(await isAuthorized(request, supabase))) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        const { searchParams } = new URL(request.url);
-        const isMidnightCron = searchParams.get('cron') === 'midnight' || Boolean(request.headers.get('x-vercel-cron'));
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        const result = await batchRecalculateAndSyncPrices(supabase, undefined, {
+        let productIds: string[] | undefined = undefined;
+        if (request.method === 'POST') {
+            try {
+                const body = await request.json();
+                if (Array.isArray(body?.productIds)) {
+                    const filtered = body.productIds.filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0);
+                    if (body.productIds.length > 0 && filtered.length === 0) {
+                        return NextResponse.json({ error: 'productIds inválidos' }, { status: 400 });
+                    }
+                    if (filtered.length > 0) {
+                        productIds = filtered;
+                    }
+                }
+            } catch {
+                // body opcional
+            }
+        }
+
+        const result = await batchRecalculateAndSyncPrices(supabase, productIds, {
             isMidnightCron,
-            freezeDailyCost: true
+            freezeDailyCost: isMidnightCron
         });
 
         if (!result.success) {
@@ -54,6 +96,13 @@ async function handleSync(request: Request) {
                 success: false,
                 error: result.error || 'Error sincronizando modelos de precios'
             }, { status: 500 });
+        }
+
+        try {
+            revalidatePath('/');
+            revalidatePath('/products');
+        } catch (revErr) {
+            console.warn('RevalidatePath notice in sync-prices:', revErr);
         }
 
         if (isMidnightCron) {

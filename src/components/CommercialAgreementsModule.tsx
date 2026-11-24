@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import {
+    checkClientAgreementConflicts,
+    formatAgreementConflictPrompt,
+    cleanupConflictingAgreementsForClients
+} from '@/lib/commercial/agreementConflictGuard';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
 import { 
     Search, 
@@ -725,6 +730,19 @@ export default function CommercialAgreementsModule() {
             });
             const newIds = Array.from(expandedSet);
             const removedIds = prevIds.filter(cid => !expandedSet.has(cid));
+            const addedIds = newIds.filter(cid => !prevIds.includes(cid));
+
+            // 0. Portero Único de Conflictos (Escenario 480) para nuevos clientes añadidos
+            if (addedIds.length > 0) {
+                const conflicts = await checkClientAgreementConflicts(supabase, addedIds, quoteId);
+                if (conflicts.length > 0) {
+                    const label = managingSharedAgreement.model_snapshot_name || managingSharedAgreement.client_name || 'Lista Maestra';
+                    if (!window.confirm(formatAgreementConflictPrompt(conflicts, label))) {
+                        setSavingLinkedClients(false);
+                        return;
+                    }
+                }
+            }
 
             // 1. Update app_settings y verificar error
             const { error: appSetErr } = await supabase
@@ -736,7 +754,7 @@ export default function CommercialAgreementsModule() {
                 });
             if (appSetErr) throw appSetErr;
 
-            // 1.1 Synchronize special_agreement_model_clients using canonical columns (model_id, client_id, is_default_selected)
+            // 1.1 Synchronize special_agreement_model_clients dynamically from special_agreement_models (fallback to structural map)
             const STRUCTURAL_QUOTE_TO_MODEL: Record<string, string> = {
                 'ab9c0c14-a27e-4317-9995-dfb4ba9bcb80': 'nutresa',
                 '445c8f85-f693-4e05-a1fd-7c3a74c47162': 'colsubsidio',
@@ -744,7 +762,12 @@ export default function CommercialAgreementsModule() {
                 'b5a2abae-68f1-44fe-87a3-84b1817026db': 'general_quincenal',
                 '6572e7d6-4925-4576-8960-caca64a3c47f': 'general_mensual'
             };
-            const matchedModelId = STRUCTURAL_QUOTE_TO_MODEL[quoteId];
+            const { data: samMatch } = await supabase
+                .from('special_agreement_models')
+                .select('id')
+                .eq('master_quote_id', quoteId)
+                .maybeSingle();
+            const matchedModelId = samMatch?.id || STRUCTURAL_QUOTE_TO_MODEL[quoteId];
             if (matchedModelId) {
                 const { error: delModelErr } = await supabase
                     .from('special_agreement_model_clients')
@@ -769,14 +792,12 @@ export default function CommercialAgreementsModule() {
                 }
             }
 
-            // 1.2 Marcar copias individuales antiguas como superseded para preservar Single Source of Truth (SPEC.md §7.5.6 & Escenario 237.4)
+            // 1.2 Limpieza atómica cross-canal para preservar Fuente Única de Verdad (Escenario 480)
             if (newIds.length > 0) {
-                await supabase
-                    .from('quotes')
-                    .update({ status: 'superseded' })
-                    .in('client_id', newIds)
-                    .eq('status', 'agreement')
-                    .neq('id', quoteId);
+                await cleanupConflictingAgreementsForClients(supabase, newIds, {
+                    keepQuoteId: quoteId,
+                    keepModelId: matchedModelId || null
+                });
             }
 
             // 2. Update local state
@@ -3114,6 +3135,12 @@ export default function CommercialAgreementsModule() {
                 // SINGLE MASTER SHARED AGREEMENT (1 to N Cascade Architecture)
                 const masterName = agreementName.trim() || computeDefaultAgreementName(undefined, true, startDate);
 
+                // Portero Único de Conflictos (Escenario 480) antes de crear nueva Lista Maestra
+                const conflicts = await checkClientAgreementConflicts(supabase, selectedClientIds);
+                if (conflicts.length > 0 && !window.confirm(formatAgreementConflictPrompt(conflicts, masterName))) {
+                    return;
+                }
+
                 const { data: newQuote, error: insertQErr } = await supabase
                     .from('quotes')
                     .insert({
@@ -3158,10 +3185,16 @@ export default function CommercialAgreementsModule() {
                         description: `Clientes vinculados a la lista maestra ${masterName}`
                     });
 
+                // Limpieza atómica cross-canal antes de asignar el nuevo active_master_agreement_id
+                await cleanupConflictingAgreementsForClients(supabase, selectedClientIds, {
+                    keepQuoteId: newQuote.id
+                });
+
                 // Update profiles active_master_agreement_id in background
                 for (const cId of selectedClientIds) {
                     const client = b2bClients.find(c => c.id === cId);
-                    const logData = (client as any)?.logistics_data || {};
+                    const logData = { ...((client as any)?.logistics_data || {}) };
+                    delete logData.special_agreement_model_id;
                     await supabase
                         .from('profiles')
                         .update({
@@ -3181,45 +3214,25 @@ export default function CommercialAgreementsModule() {
 
                 showToast(`Lista Maestra "${masterName}" activada exitosamente con efecto cascada para ${selectedClientIds.length} clientes (${itemsTemplate.length} SKUs)!`, 'success');
             } else {
-                // Modo Individual (1 cliente)
-                for (const client of targetClients) {
-                    // Expire any existing active agreement for this client to preserve history
-                    const { data: existing, error: existErr } = await supabase
-                        .from('quotes')
-                        .select('id')
-                        .eq('client_id', client.id)
-                        .eq('status', 'agreement');
-                        
-                    if (existErr) throw existErr;
-                    
-                    if (existing && existing.length > 0) {
-                        const quoteIds = existing.map(q => q.id);
-                        const yesterday = new Date();
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        await supabase.from('quotes')
-                            .update({ 
-                                status: 'expired', 
-                                valid_until: yesterday.toISOString().split('T')[0] 
-                            })
-                            .in('id', quoteIds);
+                // Modo Individual (1 o varios clientes): Portero Único de Conflictos (Escenario 480)
+                const targetIds = targetClients.map(c => c.id).filter(Boolean);
+                const conflicts = await checkClientAgreementConflicts(supabase, targetIds);
+                if (conflicts.length > 0) {
+                    const label = agreementName.trim() || 'Nuevo Acuerdo Comercial';
+                    if (!window.confirm(formatAgreementConflictPrompt(conflicts, label))) {
+                        return;
                     }
+                }
 
+                for (const client of targetClients) {
                     const dtoTag = agreementDiscountPct > 0 ? ` [DTO_COMERCIAL: ${agreementDiscountPct}%]` : '';
                     const rawClientName = isNameManuallyEdited && agreementName.trim()
                         ? `${agreementName.trim()} (${client.company_name})`
                         : (agreementName.trim() || `${client.company_name || client.contact_name} - ${dateSuffix}`);
                     const clientAgreementName = `${rawClientName}${dtoTag}`;
 
-                    // Candado 2: Auto-Supersede acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6 & Escenario 301)
-                    try {
-                        await supabase
-                            .from('quotes')
-                            .update({ status: 'superseded', updated_at: new Date().toISOString() })
-                            .eq('client_id', client.id)
-                            .eq('status', 'agreement');
-                    } catch (supErr) {
-                        console.warn('Error al degradar acuerdos previos en creación individual:', supErr);
-                    }
+                    // Limpieza atómica cross-canal (marca previos como 'superseded' y limpia vínculos de Lista Maestra)
+                    await cleanupConflictingAgreementsForClients(supabase, [client.id]);
 
                     const { data: newQuote, error: insertQErr } = await supabase
                         .from('quotes')
@@ -3254,11 +3267,13 @@ export default function CommercialAgreementsModule() {
                         console.warn('Advertencia desvinculando de listas masivas:', exclErr);
                     }
 
-                    // Persist discount % to client logistics_data for fast lookup & inheritance (Escenario 253)
-                    const updatedLogistics = {
+                    // Persist discount % to client logistics_data sin resucitar punteros de Lista Maestra eliminados (Escenario 480)
+                    const updatedLogistics: Record<string, any> = {
                         ...(client.logistics_data || {}),
                         agreement_discount_pct: agreementDiscountPct
                     };
+                    delete updatedLogistics.active_master_agreement_id;
+                    delete updatedLogistics.special_agreement_model_id;
                     await supabase
                         .from('profiles')
                         .update({ logistics_data: updatedLogistics })

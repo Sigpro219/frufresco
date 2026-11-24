@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment, memo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, applyProductUnitConversion } from '@/lib/pricingUtils';
+import { applyProductUnitConversion } from '@/lib/pricingUtils';
 import { 
     Search, 
     X, 
@@ -787,13 +787,17 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
 
     const triggerPricingSync = async (productId?: string, explicitCost?: number, productIds?: string[]) => {
         try {
-            await fetch('/api/commercial/cost-matrix/sync-product', {
+            const res = await fetch('/api/commercial/cost-matrix/sync-product', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ productId, explicitCost, productIds })
             });
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                console.error('Pricing sync API failed:', errJson?.error || res.statusText);
+            }
         } catch (e) {
-            console.warn('Pricing sync API error:', e);
+            console.error('Pricing sync API error:', e);
         }
     };
 

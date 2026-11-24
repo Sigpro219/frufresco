@@ -5,6 +5,11 @@ import Link from 'next/link';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trash2, Inbox, Plus, ChevronRight, ChevronDown, ChevronUp, FileText, Search, X, Filter, Handshake, Calendar, Building2, CheckCircle2, AlertCircle, Loader2, RefreshCw, Copy, ArrowUpDown, ArrowUp, ArrowDown, Clock, GitBranch, Edit3 } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+import {
+    checkClientAgreementConflicts,
+    formatAgreementConflictPrompt,
+    cleanupConflictingAgreementsForClients
+} from '@/lib/commercial/agreementConflictGuard';
 
 const getBogotaDateStr = (d: Date = new Date()): string => {
     try {
@@ -85,18 +90,14 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
             const clientName = quoteToApprove.client_name || quoteToApprove.profiles?.company_name || 'Cliente';
             const snapshotName = `${clientName} - Acuerdo ${day}-${month}-${yr}`;
 
-            // Auto-Supersede: Degradar acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6)
+            // Portero Único de Conflictos + Limpieza Atómica Cross-Canal (Escenario 480)
             if (quoteToApprove.client_id) {
-                try {
-                    await supabase
-                        .from('quotes')
-                        .update({ status: 'superseded' })
-                        .eq('client_id', quoteToApprove.client_id)
-                        .eq('status', 'agreement')
-                        .neq('id', quoteToApprove.id);
-                } catch (supErr) {
-                    console.warn('Error al degradar acuerdos previos en aprobación directa:', supErr);
+                const conflicts = await checkClientAgreementConflicts(supabase, [quoteToApprove.client_id], quoteToApprove.id);
+                if (conflicts.length > 0 && !window.confirm(formatAgreementConflictPrompt(conflicts, snapshotName))) {
+                    setApproving(false);
+                    return;
                 }
+                await cleanupConflictingAgreementsForClients(supabase, [quoteToApprove.client_id], { keepQuoteId: quoteToApprove.id });
             }
 
             const { error: updErr } = await supabase

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { cleanupConflictingAgreementsForClients } from '@/lib/commercial/agreementConflictGuard';
 
 export async function POST(req: Request) {
   try {
@@ -19,15 +20,12 @@ export async function POST(req: Request) {
 
     let activeQuoteId = quoteId;
 
-    // Candado 2: Auto-Supersede acuerdos previos del cliente para garantizar Fuente Única de Verdad (SPEC.md §7.5.6 & Escenario 301)
+    // Portero Único Cross-Canal (Escenario 480): degradar acuerdos previos a 'superseded' y limpiar Listas Maestras previas
     if (clientId) {
       try {
-        await supabaseAdmin
-          .from('quotes')
-          .update({ status: 'superseded', updated_at: new Date().toISOString() })
-          .eq('client_id', clientId)
-          .eq('status', 'agreement')
-          .neq('id', activeQuoteId || '00000000-0000-0000-0000-000000000000');
+        await cleanupConflictingAgreementsForClients(supabaseAdmin, [clientId], {
+          keepQuoteId: activeQuoteId || null
+        });
       } catch (supErr) {
         console.warn('[Activate Agreement API] Notice degrading prior agreements:', supErr);
       }

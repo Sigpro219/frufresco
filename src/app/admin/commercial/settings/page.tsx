@@ -2,7 +2,34 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
-import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices, resolveLatestProductCost, applyProductUnitConversion, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID, FAMILIA_CORTES_CORPORATIVO_ID, DEFAULT_INSTITUTIONAL_MARGIN_PCT } from '@/lib/pricingUtils';
+import { resolveLatestProductCost, applyProductUnitConversion, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID, FAMILIA_CORTES_CORPORATIVO_ID, DEFAULT_INSTITUTIONAL_MARGIN_PCT } from '@/lib/pricingUtils';
+
+const computeEffectiveCost = (baseCost: number, shrinkagePct: number): number => {
+    const safeCost = Number(baseCost) || 0;
+    const safeShrink = Math.min(Math.max(Number(shrinkagePct) || 0, 0), 90);
+    return safeShrink > 0 ? safeCost / (1 - safeShrink / 100) : safeCost;
+};
+
+const triggerServerPriceSync = async (productIds?: string[]) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+        throw new Error('Sesión expirada. Recarga la página e inicia sesión de nuevo.');
+    }
+    const res = await fetch('/api/products/sync-prices', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(productIds && productIds.length > 0 ? { productIds } : {}),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `Error sincronizando precios (HTTP ${res.status})`);
+    }
+    return json;
+};
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -308,7 +335,7 @@ export default function PricingSettingsPage({
             while (!finished) {
                 let query = supabase
                     .from('products')
-                    .select('id, name, sku, accounting_id, iva_rate, category, parent_id, utility_deviation_pct, unit_of_measure, show_on_web')
+                    .select('id, name, sku, accounting_id, iva_rate, category, parent_id, utility_deviation_pct, theoretical_shrinkage_pct, unit_of_measure, show_on_web')
                     .eq('is_active', true)
                     .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
                 
@@ -484,7 +511,8 @@ export default function PricingSettingsPage({
                     margin_adjustment: adjustment,
                     margin: absoluteMargin,
                     is_inherited: isInherited,
-                    utility_deviation_pct: prod.utility_deviation_pct || 0
+                    utility_deviation_pct: prod.utility_deviation_pct || 0,
+                    theoretical_shrinkage_pct: Number(prod.theoretical_shrinkage_pct) || 0
                 };
             });
 
@@ -1098,6 +1126,7 @@ export default function PricingSettingsPage({
                 alert('Error actualizando: ' + error.message);
             }
         } else {
+            const marginChanged = Number(editModelData.margin) !== Number(selectedModel.base_margin_percent);
             // Update local state
             const updated = { 
                 ...selectedModel, 
@@ -1118,6 +1147,14 @@ export default function PricingSettingsPage({
             });
             setModels(updatedList);
             setIsEditingModel(false);
+
+            if (marginChanged) {
+                try {
+                    await triggerServerPriceSync();
+                } catch (syncErr: any) {
+                    alert('El modelo se actualizó, pero falló la sincronización de precios: ' + (syncErr?.message || 'Error'));
+                }
+            }
         }
     };
 
@@ -1299,12 +1336,8 @@ export default function PricingSettingsPage({
                 }));
             }
 
-            // Auto-recalcular y sincronizar precios para todos los modelos y tienda web
-            await fetch('/api/commercial/cost-matrix/sync-product', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId })
-            }).catch(e => console.warn('Pricing sync error:', e));
+            // Auto-recalcular y sincronizar precios en servidor (sin bloqueo RLS)
+            await triggerServerPriceSync([productId]);
 
             setSavingMargins(prev => ({ ...prev, [productId]: 'success' }));
             setTimeout(() => {
@@ -1331,18 +1364,22 @@ export default function PricingSettingsPage({
         if (!selectedModel || matrixData.length === 0) return;
         const XLSX = await import('xlsx');
         
-        const data = matrixData.map(p => ({
-            'ID': p.accounting_id || '',
-            'SKU': p.sku || '',
-            'Producto': p.name || '',
-            'Categoría': CATEGORY_MAP[p.category] || p.category || '',
-            'Unidad': p.unit_of_measure || '',
-            'Costo Base': Math.round(p.base_cost),
-            'IVA (%)': p.iva_rate,
-            'Margen (%)': p.margin,
-            'Sugerido sin IVA': Math.round(p.base_cost * (1 + p.margin / 100)),
-            'Precio Final con IVA': Math.ceil((p.base_cost * (1 + p.margin / 100) * (1 + p.iva_rate / 100)) / 50) * 50
-        }));
+        const data = matrixData.map(p => {
+            const effCost = computeEffectiveCost(p.base_cost, p.theoretical_shrinkage_pct || 0);
+            const sugNoIva = effCost * (1 + p.margin / 100);
+            return {
+                'ID': p.accounting_id || '',
+                'SKU': p.sku || '',
+                'Producto': p.name || '',
+                'Categoría': CATEGORY_MAP[p.category] || p.category || '',
+                'Unidad': p.unit_of_measure || '',
+                'Costo Base': Math.round(p.base_cost),
+                'IVA (%)': p.iva_rate,
+                'Margen (%)': p.margin,
+                'Sugerido sin IVA': Math.round(sugNoIva),
+                'Precio Final con IVA': Math.ceil((sugNoIva * (1 + p.iva_rate / 100)) / 50) * 50
+            };
+        });
 
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
@@ -1434,7 +1471,8 @@ export default function PricingSettingsPage({
                     return undefined;
                 };
                 const matrixByIdMap = new Map<string, any>();
-                matrixData.forEach(m => { if (m?.id) matrixByIdMap.set(m.id, m); });
+                matrixData.forEach(m => { if (m?.product_id) matrixByIdMap.set(m.product_id, m); });
+                const deletedProductIds: string[] = [];
 
                 for (const row of rawData) {
                     const rawId = pickCell(row, ['ID', 'ID ERP', 'IdProducto', 'idProducto', 'id_producto', 'ID Contable', 'accounting_id', 'Codigo', 'Código']);
@@ -1476,13 +1514,14 @@ export default function PricingSettingsPage({
                                 });
                                 const matrixRow = matrixByIdMap.get(productId);
                                 const baseCost = Number(matrixRow?.base_cost || 0);
+                                const effCost = computeEffectiveCost(baseCost, Number(matrixRow?.theoretical_shrinkage_pct || 0));
                                 const rawIva = pickCell(row, ['IVA %', 'IVA (%)', 'IVA']);
                                 const ivaRate = rawIva !== undefined
                                     ? (parseFloat(String(rawIva).replace('%', '').replace(',', '.').trim()) || 0)
                                     : Number(matrixRow?.iva_rate || 0);
-                                if (baseCost > 0) {
+                                if (effCost > 0) {
                                     const priceWithoutIva = targetPrice / (1 + ivaRate / 100);
-                                    parsedMargin = ((priceWithoutIva / baseCost) - 1) * 100;
+                                    parsedMargin = ((priceWithoutIva / effCost) - 1) * 100;
                                 }
                             }
                         }
@@ -1494,18 +1533,23 @@ export default function PricingSettingsPage({
                     }
 
                     if (!isNaN(parsedMargin)) {
-                        const targetAdjustment = parsedMargin - selectedModel.base_margin_percent;
+                        const matrixRow = matrixByIdMap.get(productId);
+                        const isBaseModel = selectedModel.id === GENERAL_INSTITUCIONAL_ID;
+                        const expectedDefaultMargin = isBaseModel
+                            ? (Number(selectedModel.base_margin_percent) || 0)
+                            : (matrixRow?.is_inherited ? Number(matrixRow.margin) : (Number(selectedModel.base_margin_percent) || 0));
 
-                        if (Math.abs(targetAdjustment) < 0.001) {
+                        if (Math.abs(parsedMargin - expectedDefaultMargin) < 0.001) {
                             const existingRuleId = existingRulesMap.get(productId);
                             if (existingRuleId) {
                                 ruleIdsToDelete.push(existingRuleId);
+                                deletedProductIds.push(productId);
                             }
                         } else {
                             rulesToUpsert.push({
                                 model_id: selectedModel.id,
                                 product_id: productId,
-                                margin_adjustment: targetAdjustment
+                                margin_adjustment: parsedMargin
                             });
                         }
                     }
@@ -1540,9 +1584,9 @@ export default function PricingSettingsPage({
                     }
                 }
 
-                const affectedIds = rulesToUpsert.map(r => r.product_id);
+                const affectedIds = Array.from(new Set([...rulesToUpsert.map(r => r.product_id), ...deletedProductIds]));
                 if (affectedIds.length > 0) {
-                    await batchRecalculateAndSyncPrices(supabase, affectedIds).catch(e => console.warn('Excel pricing sync error:', e));
+                    await triggerServerPriceSync(affectedIds);
                 }
 
                 // Persist direct prices from Excel via Admin API (bypasses browser RLS on pricing_model_prices)
@@ -1607,11 +1651,11 @@ export default function PricingSettingsPage({
             return alert('Error al guardar: ' + error.message);
         }
 
-        await fetch('/api/commercial/cost-matrix/sync-product', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productId })
-        }).catch(e => console.warn('Pricing sync error:', e));
+        try {
+            await triggerServerPriceSync([productId]);
+        } catch (syncErr: any) {
+            alert('Regla guardada, pero falló la sincronización de precios: ' + (syncErr?.message || 'Error'));
+        }
 
         await fetchMatrixData(selectedModel.id);
         setShowRuleModal(false);
@@ -1621,13 +1665,17 @@ export default function PricingSettingsPage({
     };
 
     const deleteRule = async (id: string, productId?: string) => {
-        await supabase.from('pricing_rules').delete().eq('id', id);
+        const { error: delErr } = await supabase.from('pricing_rules').delete().eq('id', id);
+        if (delErr) {
+            alert('Error al eliminar regla: ' + delErr.message);
+            return;
+        }
         if (productId) {
-            await fetch('/api/commercial/cost-matrix/sync-product', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId })
-            }).catch(e => console.warn('Pricing sync error:', e));
+            try {
+                await triggerServerPriceSync([productId]);
+            } catch (syncErr: any) {
+                alert('Regla eliminada, pero falló la sincronización de precios: ' + (syncErr?.message || 'Error'));
+            }
         }
         fetchMatrixData(selectedModel.id);
     };
@@ -1647,11 +1695,10 @@ export default function PricingSettingsPage({
         try {
             console.log('Iniciando sincronización maestra de precios para modelo:', selectedModel.name);
 
-            const res = await batchRecalculateAndSyncPrices(supabase);
-            if (!res.success) throw new Error(res.error || 'Error en sincronización');
+            const res = await triggerServerPriceSync();
 
             await fetchMatrixData(selectedModel.id);
-            alert(`¡Éxito! Se han recalculado y sincronizado ${res.processed} productos en la Matriz y Catálogo.`);
+            alert(`¡Éxito! Se han recalculado y sincronizado ${res.products_processed} productos en la Matriz y Catálogo.`);
         } catch (err: any) {
             console.error('Error en Sync:', err);
             alert('Error durante la sincronización: ' + err.message);
@@ -1716,14 +1763,18 @@ export default function PricingSettingsPage({
                 return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
             }
             case 'suggested_price': {
-                const valA = (Number(a.base_cost) || 0) * (1 + (Number(a.margin) || 0) / 100);
-                const valB = (Number(b.base_cost) || 0) * (1 + (Number(b.margin) || 0) / 100);
+                const effA = computeEffectiveCost(Number(a.base_cost) || 0, Number(a.theoretical_shrinkage_pct) || 0);
+                const effB = computeEffectiveCost(Number(b.base_cost) || 0, Number(b.theoretical_shrinkage_pct) || 0);
+                const valA = effA * (1 + (Number(a.margin) || 0) / 100);
+                const valB = effB * (1 + (Number(b.margin) || 0) / 100);
                 return matrixSortOrder === 'asc' ? valA - valB : valB - valA;
             }
             case 'final_price': {
-                const priceBeforeTaxA = (Number(a.base_cost) || 0) * (1 + (Number(a.margin) || 0) / 100);
+                const effA = computeEffectiveCost(Number(a.base_cost) || 0, Number(a.theoretical_shrinkage_pct) || 0);
+                const effB = computeEffectiveCost(Number(b.base_cost) || 0, Number(b.theoretical_shrinkage_pct) || 0);
+                const priceBeforeTaxA = effA * (1 + (Number(a.margin) || 0) / 100);
                 const finalA = Math.ceil((priceBeforeTaxA * (1 + (Number(a.iva_rate) || 0) / 100)) / 50) * 50;
-                const priceBeforeTaxB = (Number(b.base_cost) || 0) * (1 + (Number(b.margin) || 0) / 100);
+                const priceBeforeTaxB = effB * (1 + (Number(b.margin) || 0) / 100);
                 const finalB = Math.ceil((priceBeforeTaxB * (1 + (Number(b.iva_rate) || 0) / 100)) / 50) * 50;
                 return matrixSortOrder === 'asc' ? finalA - finalB : finalB - finalA;
             }
@@ -2856,8 +2907,9 @@ export default function PricingSettingsPage({
                                             </thead>
                                             <tbody>
                                                 {paginatedProducts.map(p => {
-                                                    // Pricing calculations
-                                                    const priceBeforeTax = p.base_cost * (1 + p.margin / 100);
+                                                    // Pricing calculations (paridad exacta con pricingUtils.ts incluyendo merma teórica)
+                                                    const effectiveCost = computeEffectiveCost(p.base_cost, p.theoretical_shrinkage_pct || 0);
+                                                    const priceBeforeTax = effectiveCost * (1 + p.margin / 100);
                                                     const priceWithTax = priceBeforeTax * (1 + p.iva_rate / 100);
                                                     const finalPriceRounded = Math.ceil(priceWithTax / 50) * 50;
 
