@@ -5,41 +5,59 @@
  */
 
 export const OPERATIONAL_CELLS = [
-    '1. ALISTA SECO PAPAS',
-    '2. ALISTA SECO PLATANOS',
-    '3. ALISTA SECO TOMATE',
-    '5. HIERBAS Y VEGETALES',
-    '6. FRUTAS Y OTROS',
-    '7. FRESAS Y MORA',
-    '8. AGUACATES',
-    '10. PROCESADOS',
-    '11. LACTEOS CARNES FRIAS',
-    '12. HORTALIZAS SELECCIONADAS',
-    '14. FRUTA BAJA DEMANDA',
-    '15. LECHUGA BATAVIA'
+    'ALISTAMIENTO ABARROTES Y FRUTOS SECOS',
+    'ALISTAMIENTO AGUACATES',
+    'ALISTAMIENTO BATAVIA',
+    'ALISTAMIENTO FRESAS Y MORAS',
+    'ALISTAMIENTO FRUTAS DE ALTA DEMANDA',
+    'ALISTAMIENTO FRUTAS DE BAJA DEMANDA',
+    'ALISTAMIENTO HORTALIZAS',
+    'ALISTAMIENTO LACTEOS Y REFRIGERADOS',
+    'ALISTAMIENTO PAPAS Y TUBERCULOS',
+    'ALISTAMIENTO PLATANOS',
+    'ALISTAMIENTO PROCESADOS',
+    'ALISTAMIENTO TOMATES',
+    'ALISTAMIENTO VERDURAS',
 ] as const;
+
+export const LEGACY_TO_CANONICAL_CELL: Record<string, string> = {
+    '1. ALISTA SECO PAPAS': 'ALISTAMIENTO PAPAS Y TUBERCULOS',
+    '2. ALISTA SECO PLATANOS': 'ALISTAMIENTO PLATANOS',
+    '3. ALISTA SECO TOMATE': 'ALISTAMIENTO TOMATES',
+    '5. HIERBAS Y VEGETALES': 'ALISTAMIENTO VERDURAS',
+    '6. FRUTAS Y OTROS': 'ALISTAMIENTO FRUTAS DE ALTA DEMANDA',
+    '7. FRESAS Y MORA': 'ALISTAMIENTO FRESAS Y MORAS',
+    '8. AGUACATES': 'ALISTAMIENTO AGUACATES',
+    '10. PROCESADOS': 'ALISTAMIENTO PROCESADOS',
+    '11. LACTEOS CARNES FRIAS': 'ALISTAMIENTO LACTEOS Y REFRIGERADOS',
+    '12. HORTALIZAS SELECCIONADAS': 'ALISTAMIENTO HORTALIZAS',
+    '14. FRUTA BAJA DEMANDA': 'ALISTAMIENTO FRUTAS DE BAJA DEMANDA',
+    '15. LECHUGA BATAVIA': 'ALISTAMIENTO BATAVIA',
+};
 
 export const FALLBACK_CELL = '99. GENERAL / SIN CÉLULA';
 
 const CATEGORY_TO_DEFAULT_CELL: Record<string, string> = {
-    TU: '1. ALISTA SECO PAPAS',
-    VE: '5. HIERBAS Y VEGETALES',
-    HO: '12. HORTALIZAS SELECCIONADAS',
-    FR: '6. FRUTAS Y OTROS',
-    LA: '11. LACTEOS CARNES FRIAS',
-    CP: '11. LACTEOS CARNES FRIAS',
-    CO: '11. LACTEOS CARNES FRIAS',
-    PR: '10. PROCESADOS',
-    DE: '11. LACTEOS CARNES FRIAS',
+    TU: 'ALISTAMIENTO PAPAS Y TUBERCULOS',
+    VE: 'ALISTAMIENTO VERDURAS',
+    HO: 'ALISTAMIENTO HORTALIZAS',
+    FR: 'ALISTAMIENTO FRUTAS DE ALTA DEMANDA',
+    LA: 'ALISTAMIENTO LACTEOS Y REFRIGERADOS',
+    CP: 'ALISTAMIENTO LACTEOS Y REFRIGERADOS',
+    CO: 'ALISTAMIENTO LACTEOS Y REFRIGERADOS',
+    PR: 'ALISTAMIENTO PROCESADOS',
+    DE: 'ALISTAMIENTO ABARROTES Y FRUTOS SECOS',
 };
 
 /**
  * Normaliza el nombre de célula a partir de products.buying_team (1:1 con Sábana de Alistamiento)
- * con fallback determinista por código de categoría si buying_team está vacío.
+ * convergiendo nombres legados al estándar canónico y con fallback por categoría.
  */
 export function normalizeOperationalCell(buyingTeam?: string | null, categoryCode?: string | null): string {
     const clean = (buyingTeam || '').trim();
     if (clean) {
+        const legacyMapped = LEGACY_TO_CANONICAL_CELL[clean.toUpperCase()];
+        if (legacyMapped) return legacyMapped;
         const exact = OPERATIONAL_CELLS.find(c => c.toLowerCase() === clean.toLowerCase());
         if (exact) return exact;
         const partial = OPERATIONAL_CELLS.find(c =>

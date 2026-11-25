@@ -585,6 +585,7 @@ export default function ProcurementPage() {
             variant_label: gt.variant_label || '',
             product_name: prod?.name || '',
             product: prod || { name: '' },
+            purchase_unit: prod?.unit_of_measure || gt.unit,
           });
           const match = nettingByKey.get(`${gt.product_id}__${cSpec}`) || compiledNetting.find(c => c.product_id === gt.product_id);
           if (match) {
@@ -742,7 +743,8 @@ export default function ProcurementPage() {
         variant_label: item.variant_label,
         nickname: item.nickname,
         product_name: pName,
-        product: item.products || { name: pName }
+        product: item.products || { name: pName },
+        purchase_unit: item.products?.unit_of_measure || item.unit,
       });
       const norm = normalizeDemandToKg({
         quantity: Number(item.quantity) || 0,

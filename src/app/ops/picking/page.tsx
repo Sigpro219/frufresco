@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { isAbortError } from '@/lib/errorUtils';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -92,41 +92,52 @@ export default function PickingExecutionPage() {
 
     const fetchTasks = useCallback(async (signal?: AbortSignal) => {
         try {
-            let query = supabase
-                .from('orders')
-                .select(`
-                                        id, status, warehouse_spaces, crates_count, delivery_date, created_at, profile_id, logistics_data,
-                    profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
-                    order_items (
-                        id, product_id, quantity, picked_quantity, unit, selected_options, quality_status, quality_notes, nickname, variant_label,
-                        products (name, category, unit_of_measure, buying_team, accounting_id, parent_id)
-                    )
-                `)
-                .in('status', ['para_compra', 'approved', 'picking', 'in_preparation']);
-
             // Check Global Cutoff Switch
-            const { data: settings } = await supabase
+            const { data: settings, error: settingsError } = await supabase
                 .from('app_settings')
                 .select('value')
                 .eq('key', 'enable_cutoff_rules')
                 .single();
-            
-            const cutoffEnabled = settings?.value !== 'false';
 
-            if (cutoffEnabled) {
-                const targetDate = getOperationalTargetDate(20);
-                query = query.eq('delivery_date', targetDate);
-            } else {
+            if (settingsError && !isAbortError(settingsError) && settingsError.code !== 'PGRST116') {
+                console.warn('Error reading enable_cutoff_rules:', settingsError.message);
+            }
+
+            const cutoffEnabled = settings?.value !== 'false';
+            const targetDate = cutoffEnabled ? getOperationalTargetDate(20) : null;
+            if (!cutoffEnabled) {
                 console.log("Cutoff Rules DISABLED: Fetching ALL active orders for Picking.");
             }
 
-            if (signal) query = query.abortSignal(signal);
+            const { data: activeOrders, error: orderError } = await fetchAllRows<any>((from, to) => {
+                let query = supabase
+                    .from('orders')
+                    .select(`
+                        id, status, warehouse_spaces, crates_count, delivery_date, created_at, profile_id, logistics_data,
+                        profiles:profiles(id, company_name, contact_name, role, id_zr, logistics_data),
+                        order_items (
+                            id, product_id, quantity, picked_quantity, unit, selected_options, quality_status, quality_notes, nickname, variant_label,
+                            products (name, category, unit_of_measure, buying_team, accounting_id, parent_id)
+                        )
+                    `)
+                    .in('status', ['para_compra', 'approved', 'picking', 'in_preparation'])
+                    .range(from, to);
 
-            const { data: activeOrders, error: orderError } = await query;
+                if (targetDate) {
+                    query = query.eq('delivery_date', targetDate);
+                }
+                if (signal) {
+                    query = query.abortSignal(signal);
+                }
+                return query;
+            });
 
             if (orderError) {
                 if (isAbortError(orderError)) return;
-                console.error('Database Error (orders):', orderError.message);
+                const errMsg = orderError instanceof Error
+                    ? orderError.message
+                    : (orderError as { message?: string })?.message || String(orderError);
+                console.error('Database Error (orders):', errMsg);
                 return;
             }
 
@@ -137,11 +148,18 @@ export default function PickingExecutionPage() {
             const [histOrdersRes, histPqrsRes] = await Promise.all([
                 profileIds.length > 0
                     ? supabase.from('orders').select('id, profile_id, status, delivery_date, created_at, total, subtotal, logistics_data').in('profile_id', profileIds).gte('delivery_date', sixtyDaysAgo)
-                    : Promise.resolve({ data: [] }),
+                    : Promise.resolve({ data: [], error: null }),
                 profileIds.length > 0
                     ? supabase.from('customer_service_pqrs').select('id, client_id, order_id, subject, created_at, status, primary_photo_url').in('client_id', profileIds).gte('created_at', sixtyDaysAgo)
-                    : Promise.resolve({ data: [] })
+                    : Promise.resolve({ data: [], error: null })
             ]);
+
+            if (histOrdersRes.error && !isAbortError(histOrdersRes.error)) {
+                console.warn('Error fetching historical orders:', histOrdersRes.error.message);
+            }
+            if (histPqrsRes.error && !isAbortError(histPqrsRes.error)) {
+                console.warn('Error fetching historical PQRS:', histPqrsRes.error.message);
+            }
 
             const profilesByProfileId: Record<string, any> = {};
             (activeOrders || []).forEach((o: any) => {
@@ -372,9 +390,19 @@ export default function PickingExecutionPage() {
     const fetchInitialData = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
         try {
-            const { data: prods } = (await supabase.from('products').select('buying_team').abortSignal(signal as any)) as { data: { buying_team: string }[] | null };
+            const { data: prods, error: prodsError } = await fetchAllRows<{ buying_team: string | null }>((from, to) =>
+                supabase
+                    .from('products')
+                    .select('buying_team')
+                    .range(from, to)
+                    .abortSignal(signal as any)
+            );
+            if (prodsError) {
+                if (isAbortError(prodsError)) return;
+                throw prodsError;
+            }
             const normalizedSet = new Set<string>(OPERATIONAL_CELLS);
-            (prods || []).forEach((p: { buying_team?: string }) => {
+            (prods || []).forEach((p: { buying_team?: string | null }) => {
                 if (p.buying_team) normalizedSet.add(normalizeOperationalCell(p.buying_team));
             });
             const uniqueCats = Array.from(normalizedSet).filter(Boolean);

@@ -42,11 +42,12 @@ async function readShiftState(supabase: any, targetDate: string): Promise<Operat
     }
 
     // 2. Fallback resiliente en app_settings mientras corre DDL
-    const { data: settingRow } = await supabase
+    const { data: settingRow, error: settingErr } = await supabase
         .from('app_settings')
         .select('value')
         .eq('key', APP_SETTINGS_KEY)
         .maybeSingle();
+    if (settingErr) throw settingErr;
 
     if (settingRow?.value) {
         try {
@@ -88,9 +89,10 @@ async function persistShiftState(supabase: any, state: OperationalShiftState): P
     }
 
     // Fallback en app_settings
-    await supabase
+    const { error: settingsUpsertErr } = await supabase
         .from('app_settings')
         .upsert({ key: APP_SETTINGS_KEY, value: JSON.stringify(payload) }, { onConflict: 'key' });
+    if (settingsUpsertErr) throw settingsUpsertErr;
 
     return { ...payload, source: 'app_settings' };
 }
@@ -126,7 +128,7 @@ export async function GET(req: NextRequest) {
             .from('orders')
             .select('id', { count: 'exact', head: true })
             .lt('delivery_date', targetDate)
-            .in('status', ['para_compra', 'approved', 'picking', 'in_preparation', 'ready_for_dispatch', 'in_transit']);
+            .in('status', ['para_compra', 'approved', 'picking', 'in_preparation', 'ready_for_dispatch', 'in_transit', 'shipped']);
 
         return NextResponse.json({
             success: true,
@@ -187,7 +189,7 @@ export async function POST(req: NextRequest) {
         }
 
         // action === 'close_day': Cierre de la Operación del Día
-        const activeStatuses = ['para_compra', 'approved', 'picking', 'in_preparation', 'ready_for_dispatch', 'in_transit'];
+        const activeStatuses = ['para_compra', 'approved', 'picking', 'in_preparation', 'ready_for_dispatch', 'in_transit', 'shipped'];
         const { data: openOrders, error: ordErr } = await supabase
             .from('orders')
             .select('id, sequence_id, status, billing_cut_id, invoice_id, delivery_date')
@@ -239,10 +241,10 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Cerrar únicamente rutas abiertas cuyas paradas pertenezcan a pedidos con delivery_date <= targetDate
+        // Cerrar únicamente rutas abiertas cuyas paradas pertenezcan a pedidos con delivery_date <= targetDate y todas estén entregadas/fallidas
         const { data: openRoutes, error: openRoutesErr } = await supabase
             .from('routes')
-            .select('id, route_stops(orders:order_id(delivery_date))')
+            .select('id, route_stops(status, orders:order_id(delivery_date))')
             .neq('status', 'completed');
         if (openRoutesErr) throw openRoutesErr;
 
@@ -252,7 +254,8 @@ export async function POST(req: NextRequest) {
                 if (stops.length === 0) return false;
                 return stops.every((s: any) => {
                     const dDate = s?.orders?.delivery_date;
-                    return typeof dDate === 'string' && dDate <= targetDate;
+                    const isStopClosed = s?.status === 'delivered' || s?.status === 'failed';
+                    return isStopClosed && typeof dDate === 'string' && dDate <= targetDate;
                 });
             })
             .map((r: any) => r.id);

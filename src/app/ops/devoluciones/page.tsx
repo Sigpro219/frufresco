@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { fetchAllRows } from '@/lib/supabase';
 import Link from 'next/link';
 import {
     RotateCcw,
@@ -47,6 +48,7 @@ interface PendingRouteReturn {
     unit_of_measure: string;
     reported_qty: number;
     reason: string | null;
+    existing_notes: string | null;
     created_at: string;
     status: string;
 }
@@ -99,14 +101,19 @@ export default function OpsDevolucionesPage() {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [{ data: whData }, { data: prodData }] = await Promise.all([
+            const [{ data: whData, error: whErr }, { data: prodData, error: prodErr }] = await Promise.all([
                 supabase.from('warehouses').select('id').limit(1).maybeSingle(),
-                supabase
-                    .from('products')
-                    .select('id, name, accounting_id, unit_of_measure, category')
-                    .eq('is_active', true)
-                    .order('name', { ascending: true })
+                fetchAllRows<CatalogProduct>((from, to) =>
+                    supabase
+                        .from('products')
+                        .select('id, name, accounting_id, unit_of_measure, category')
+                        .eq('is_active', true)
+                        .order('name', { ascending: true })
+                        .range(from, to)
+                )
             ]);
+            if (whErr) throw whErr;
+            if (prodErr) throw prodErr;
 
             if (whData?.id) setWarehouseId(whData.id);
             setProducts((prodData as CatalogProduct[]) || []);
@@ -115,7 +122,7 @@ export default function OpsDevolucionesPage() {
             ((prodData as CatalogProduct[]) || []).forEach(p => prodMap.set(p.id, p));
 
             // 1. Fetch pending billing_returns from recent routes
-            const { data: returnsData } = await supabase
+            const { data: returnsData, error: returnsErr } = await supabase
                 .from('billing_returns')
                 .select(`
                     id, order_id, product_id, quantity_returned, reason, status, notes, created_at,
@@ -124,6 +131,7 @@ export default function OpsDevolucionesPage() {
                 .in('status', ['pending_review', 'approved'])
                 .order('created_at', { ascending: false })
                 .limit(60);
+            if (returnsErr) throw returnsErr;
 
             const formattedPending: PendingRouteReturn[] = [];
             (returnsData || []).forEach((r: Record<string, unknown>) => {
@@ -145,6 +153,7 @@ export default function OpsDevolucionesPage() {
                     unit_of_measure: prod.unit_of_measure || 'Kg',
                     reported_qty: Number(r.quantity_returned) || 0,
                     reason: r.reason ? String(r.reason) : null,
+                    existing_notes: r.notes ? String(r.notes) : null,
                     created_at: String(r.created_at || ''),
                     status: String(r.status || 'pending_review')
                 });
@@ -154,7 +163,7 @@ export default function OpsDevolucionesPage() {
             // 2. Fetch reconciled return movements for the selected balanceDate (Bogotá UTC-5)
             const startIso = `${balanceDate}T00:00:00-05:00`;
             const endIso = `${balanceDate}T23:59:59-05:00`;
-            const { data: movsData } = await supabase
+            const { data: movsData, error: movsErr } = await supabase
                 .from('inventory_movements')
                 .select('id, product_id, quantity, reference_type, notes, created_at')
                 .in('reference_type', [
@@ -164,6 +173,7 @@ export default function OpsDevolucionesPage() {
                 .gte('created_at', startIso)
                 .lte('created_at', endIso)
                 .order('created_at', { ascending: false });
+            if (movsErr) throw movsErr;
 
             const logs: ReconciledReturnLog[] = [];
             (movsData || []).forEach((m: Record<string, unknown>) => {
@@ -345,10 +355,12 @@ export default function OpsDevolucionesPage() {
             // 5. Si venía de un billing_returns pendiente, marcar su nota como conciliada en muelle
             if (selectedReturnId) {
                 const targetRet = pendingReturns.find(r => r.id === selectedReturnId);
+                const baseNote = targetRet?.existing_notes || targetRet?.reason || '';
+                const reconciledTag = `[CONCILIADO_D1_MUELLE: ${balanceDate} | Col O: +${numReported}, Col O2: -${numShortageColO2}, Col Q: -${numWaste}, Neto: +${numApprovedNetReentry}]`;
                 const { error: brNoteErr } = await supabase
                     .from('billing_returns')
                     .update({
-                        notes: `${targetRet?.reason || ''} [CONCILIADO_D1_MUELLE: ${balanceDate} | Col O: +${numReported}, Col O2: -${numShortageColO2}, Col Q: -${numWaste}, Neto: +${numApprovedNetReentry}]`
+                        notes: baseNote ? `${baseNote} | ${reconciledTag}` : reconciledTag
                     })
                     .eq('id', selectedReturnId);
                 if (brNoteErr) throw brNoteErr;

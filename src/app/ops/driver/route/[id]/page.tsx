@@ -85,23 +85,32 @@ export default function LoadVerificationPage() {
             setLoading(true);
 
             // 1. Fetch Route Header Info
-            const { data: routeInfo } = await supabase
+            const { data: routeInfo, error: routeInfoErr } = await supabase
                 .from('routes')
                 .select('id, status, is_certified_complete, vehicle_plate')
                 .eq('id', id)
                 .maybeSingle();
+
+            if (routeInfoErr) throw routeInfoErr;
 
             if (routeInfo) {
                 setRouteStatus(routeInfo.status || 'loading');
                 setIsCertified(Boolean(routeInfo.is_certified_complete || routeInfo.status === 'rectified'));
                 if (routeInfo.vehicle_plate) {
                     setRoutePlate(routeInfo.vehicle_plate);
-                    const { data: fv } = await supabase
+                    const { data: fv, error: fvErr } = await supabase
                         .from('fleet_vehicles')
-                        .select('gps_imei')
+                        .select('tracking_source, last_gps_sync, gps_imei')
                         .ilike('plate', routeInfo.vehicle_plate)
                         .maybeSingle();
-                    setHasHardwareGps(Boolean(fv?.gps_imei));
+                    if (fvErr) throw fvErr;
+                    const recentHw = Boolean(
+                        fv?.gps_imei &&
+                        fv?.tracking_source === 'hardware_gps' &&
+                        fv?.last_gps_sync &&
+                        Date.now() - new Date(fv.last_gps_sync).getTime() < 5 * 60 * 1000
+                    );
+                    setHasHardwareGps(recentHw);
                 }
             }
 
@@ -215,17 +224,16 @@ export default function LoadVerificationPage() {
             if (routeErr) throw routeErr;
 
             if (isBypass) {
-                try {
-                    await supabase.from('audit_logs').insert([{
-                        action: 'TEST_MODE_BYPASS_RECTIFICATION',
-                        module: 'TRANSPORT',
-                        collaborator_name: 'Sandbox Admin',
-                        details: {
-                            route_id: String(id),
-                            notes: 'Inicio de ruta forzado por bypass en modo sandbox'
-                        }
-                    }]);
-                } catch (_) {}
+                const { error: auditErr } = await supabase.from('audit_logs').insert([{
+                    action: 'TEST_MODE_BYPASS_RECTIFICATION',
+                    module: 'TRANSPORT',
+                    collaborator_name: 'Sandbox Admin',
+                    details: {
+                        route_id: String(id),
+                        notes: 'Inicio de ruta forzado por bypass en modo sandbox'
+                    }
+                }]);
+                if (auditErr) throw auditErr;
             }
 
             // Regla Anti-Contagio RED-16 (Escenario 477 §1):

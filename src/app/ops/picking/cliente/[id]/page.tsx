@@ -64,7 +64,7 @@ function PickingClientContent() {
                     ),
                     order_items (
                         id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
-                        products (name, category, unit_of_measure, inventory_stocks (quantity))
+                        products (name, accounting_id, category, unit_of_measure, inventory_stocks (quantity))
                     )
                 `)
                 .eq('id', orderId)
@@ -168,12 +168,14 @@ function PickingClientContent() {
                 if (deltaOverweight > 0) {
                     const [{ data: warehouseData }, { data: prodMeta }] = await Promise.all([
                         supabase.from('warehouses').select('id').limit(1).maybeSingle(),
-                        supabase.from('products').select('name, sku').eq('id', selectedItem.product_id).maybeSingle()
+                        supabase.from('products').select('name, accounting_id').eq('id', selectedItem.product_id).maybeSingle()
                     ]);
                     if (warehouseData?.id) {
-                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] SKU: ${prodMeta?.sku || selectedItem.product_name} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`;
-                        await supabase.from('inventory_movements').delete().eq('reference_id', selectedItem.id).in('reference_type', ['waste_weighing', 'additional_sale']);
-                        await supabase.from('inventory_movements').insert([{
+                        const prodTag = prodMeta?.accounting_id ? `#${prodMeta.accounting_id}` : selectedItem.product_name;
+                        const noteTag = `[EXCEDENTE BÁSCULA - CABLE PELADO FACTURACIÓN] ${prodTag} (+${deltaOverweight} ${selectedItem.unit_of_measure}) | Pedido #${orderId || selectedItem.id}`;
+                        const { error: delMovErr } = await supabase.from('inventory_movements').delete().eq('reference_id', selectedItem.id).in('reference_type', ['waste_weighing', 'additional_sale']);
+                        if (delMovErr) throw delMovErr;
+                        const { error: insMovErr } = await supabase.from('inventory_movements').insert([{
                             product_id: selectedItem.product_id,
                             warehouse_id: warehouseData.id,
                             quantity: -deltaOverweight,
@@ -183,6 +185,7 @@ function PickingClientContent() {
                             reference_type: 'waste_weighing',
                             reference_id: selectedItem.id
                         }]);
+                        if (insMovErr) throw insMovErr;
                     }
                 }
             }

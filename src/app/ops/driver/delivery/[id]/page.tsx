@@ -82,7 +82,7 @@ export default function DeliveryConfirmationPage() {
                             id, company_name, contact_name, role, needs_crates, crate_balance
                         ),
                         order_items (
-                            id, product_id, quantity, picked_quantity, nickname, variant_label, selected_options,
+                            id, product_id, quantity, picked_quantity, unit, nickname, variant_label, selected_options,
                             products (id, name, unit_of_measure, accounting_id)
                         )
                     )
@@ -146,7 +146,7 @@ export default function DeliveryConfirmationPage() {
                         quantity: item.quantity,
                         picked_quantity: item.picked_quantity !== null && item.picked_quantity !== undefined ? Number(item.picked_quantity) : Number(item.quantity),
                         returned_qty: 0,
-                        unit: item.products?.unit_of_measure || 'un',
+                        unit: item.unit || item.products?.unit_of_measure || 'un',
                         physical_instruction: physicalInst
                     };
                 });

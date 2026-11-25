@@ -116,10 +116,11 @@ export default function PickingTerminal() {
                 ));
                 const stockByProd: Record<string, number> = {};
                 if (stockLookupIds.length > 0) {
-                    const { data: stockRows } = await supabase
+                    const { data: stockRows, error: stockError } = await supabase
                         .from('inventory_stocks')
                         .select('product_id, quantity')
                         .in('product_id', stockLookupIds);
+                    if (stockError) throw stockError;
                     (stockRows || []).forEach((s: any) => {
                         stockByProd[s.product_id] = (stockByProd[s.product_id] || 0) + Number(s.quantity || 0);
                     });

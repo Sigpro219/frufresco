@@ -109,11 +109,12 @@ export default function RouteRectificationDetailPage() {
         setLoading(true);
         try {
             // 1. Cargar metadatos de la ruta
-            const { data: routeData } = await supabase
+            const { data: routeData, error: routeErr } = await supabase
                 .from('routes')
                 .select('*')
                 .eq('id', routeId)
                 .single();
+            if (routeErr) throw routeErr;
 
             if (routeData) {
                 setVehiclePlate(routeData.vehicle_plate || 'SIN PLACA');
@@ -141,7 +142,8 @@ export default function RouteRectificationDetailPage() {
                     .eq('route_id', routeId)
                     .order('sequence_number', { ascending: false });
 
-                if (!stopsError && routeStopsData && routeStopsData.length > 0) {
+                if (stopsError) throw stopsError;
+                if (routeStopsData && routeStopsData.length > 0) {
                     const allOrdersInRoute = routeStopsData.map((s: any) => s.orders).filter(Boolean);
                     loadedStops = routeStopsData.map((rs: any, idx: number) => {
                         const ord = rs.orders || {};
@@ -155,12 +157,12 @@ export default function RouteRectificationDetailPage() {
                             id: itm.id,
                             product_id: itm.product_id,
                             product_name: itm.products?.accounting_id ? `#${itm.products.accounting_id} ${itm.products?.name || 'Producto'}` : (itm.products?.name || 'Producto'),
-                            quantity: Number(itm.quantity) || 1,
+                            quantity: Number(itm.quantity ?? 0),
                             unit: itm.unit || itm.products?.unit_of_measure || 'Kg',
                             unit_price: Number(itm.unit_price) || 0,
                             checked: false,
                             is_shortage: false,
-                            actual_quantity: itm.picked_quantity !== null && itm.picked_quantity !== undefined ? Number(itm.picked_quantity) : (Number(itm.quantity) || 1),
+                            actual_quantity: itm.picked_quantity !== null && itm.picked_quantity !== undefined ? Number(itm.picked_quantity) : Number(itm.quantity ?? 0),
                             shortage_reason: ''
                         }));
 

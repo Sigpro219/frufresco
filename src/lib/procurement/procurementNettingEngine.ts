@@ -450,19 +450,19 @@ export function calculateProcurementNetting(params: {
 
         familyItems.forEach((fi, idx) => {
             const parentName = fi.parent_id ? (parentMap[fi.parent_id] || fi.product_name) : fi.product_name;
-            const requested = Math.round(fi.raw_demand_kg * 10) / 10;
+            const requested = Math.round(fi.raw_demand_kg * 100) / 100;
 
             // Stock de seguridad: únicamente amortigua la primera línea (línea base estándar)
             const safety = (idx === 0 && applySafetyStock) ? (fi.min_inventory_level || 0) : 0;
-            const grossReq = Math.round((requested + safety) * 10) / 10;
+            const grossReq = Math.round((requested + safety) * 100) / 100;
 
             // Deducir stock disponible
             const appliedStock = Math.min(runningStock, grossReq);
-            runningStock = Math.max(0, Math.round((runningStock - appliedStock) * 10) / 10);
+            runningStock = Math.max(0, Math.round((runningStock - appliedStock) * 100) / 100);
 
             // Meta de compra neta
-            const netToBuy = Math.max(0, Math.round((grossReq - appliedStock) * 10) / 10);
-            const suggestedWithMerma = Math.round(netToBuy * (1 + mermaFactor) * 10) / 10;
+            const netToBuy = Math.max(0, Math.round((grossReq - appliedStock) * 100) / 100);
+            const suggestedWithMerma = Math.round(netToBuy * (1 + mermaFactor) * 100) / 100;
 
             compiledResults.push({
                 key: `${fi.product_id}__${fi.canonical_spec}`,

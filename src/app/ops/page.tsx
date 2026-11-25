@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { 
   ShoppingBag, 
   ShoppingCart, 
@@ -95,9 +95,15 @@ export default function OpsHome() {
         async function fetchOpsData() {
             try {
                 const [stocksRes, matrixRes] = await Promise.all([
-                    supabase.from('inventory_stocks').select('quantity, product_id'),
-                    supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true)
+                    fetchAllRows<{ quantity: number; product_id: string }>((from, to) =>
+                        supabase.from('inventory_stocks').select('quantity, product_id').range(from, to)
+                    ),
+                    fetchAllRows<{ product_id: string; manual_cost: number | null }>((from, to) =>
+                        supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true).range(from, to)
+                    )
                 ]);
+                if (stocksRes.error) throw stocksRes.error;
+                if (matrixRes.error) throw matrixRes.error;
                 
                 if (!isMounted.current) return;
 
@@ -111,10 +117,11 @@ export default function OpsHome() {
                     return acc + (s.quantity * cost);
                 }, 0) || 0;
 
-                const { count } = await supabase
+                const { count, error: auditCountErr } = await supabase
                     .from('inventory_random_tasks')
                     .select('*', { count: 'exact', head: true })
                     .eq('status', 'pending');
+                if (auditCountErr) throw auditCountErr;
 
                 if (!isMounted.current) return;
 

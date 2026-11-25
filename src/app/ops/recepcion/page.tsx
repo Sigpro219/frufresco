@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { isAbortError } from '@/lib/errorUtils';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { normalizeDemandToKg } from '@/lib/procurement/procurementNettingEngine';
+import { computeLineWeightKg } from '@/lib/orders/unitConversionEngine';
 import { 
   Calendar, 
   BookOpen, 
@@ -49,6 +50,7 @@ interface Product {
     inventory_group?: string;
     image_url?: string;
     parent_id?: string | null;
+    parent_unit_of_measure?: string | null;
     weight_kg?: number | null;
     accounting_id?: number | string | null;
 }
@@ -71,6 +73,15 @@ interface Purchase {
         name: string;
     };
 }
+
+const RECEPTION_CATEGORIES = [
+    { name: "ABARROTES & LÁCTEOS", dbValue: "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" },
+    { name: "FRUTAS", dbValue: "INVENTARIO DE FRUTAS Y OTROS" },
+    { name: "FRESAS Y MORAS", dbValue: "INVENTARIO DE FRESAS Y MORAS" },
+    { name: "HORTALIZAS", dbValue: "INVENTARIO DE HORTALIZAS" },
+    { name: "PAPAS, PLÁTANO, TOMATE", dbValue: "INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" },
+    { name: "VERDURAS", dbValue: "INVENTARIO DE VERDURAS" }
+];
 
 export default function ReceptionPage() {
     const router = useRouter();
@@ -114,7 +125,7 @@ export default function ReceptionPage() {
 
     useEffect(() => {
         const allowed = [];
-        const categories = ["ABARROTES & LÁCTEOS", "FRUTAS", "HORTALIZAS", "PAPAS, PLÁTANO, TOMATE", "VERDURAS"];
+        const categories = RECEPTION_CATEGORIES.map(c => c.name);
         const allowedCats = categories.filter(c => isCategoryAllowed(c));
         if (allowedCats.length === categories.length) {
             allowed.push('Todas');
@@ -222,7 +233,24 @@ export default function ReceptionPage() {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setIncomingItems(data || []);
+            const rows = data || [];
+            const parentIds = Array.from(new Set(rows.map((r: any) => r.product?.parent_id).filter(Boolean)));
+            if (parentIds.length > 0) {
+                const { data: parentRows } = await supabase
+                    .from('products')
+                    .select('id, unit_of_measure')
+                    .in('id', parentIds);
+                const parentUomMap: Record<string, string | null> = {};
+                (parentRows || []).forEach((pr: any) => {
+                    parentUomMap[pr.id] = pr.unit_of_measure ?? null;
+                });
+                rows.forEach((r: any) => {
+                    if (r.product?.parent_id) {
+                        r.product.parent_unit_of_measure = parentUomMap[r.product.parent_id] ?? null;
+                    }
+                });
+            }
+            setIncomingItems(rows);
         } catch (err: any) {
             if (isAbortError(err)) return;
             console.error('Error fetching incoming items details:', {
@@ -443,10 +471,21 @@ export default function ReceptionPage() {
                 const targetProductId = selectedItem.product?.parent_id || selectedItem.product_id;
                 const toTargetMass = (qty: number) => {
                     if (!hasParent) return qty;
+                    const childUom = (selectedItem.product?.unit_of_measure || '').trim();
+                    const parentUom = (selectedItem.product?.parent_unit_of_measure || '').trim();
+                    if (parentUom && childUom.toLowerCase() !== parentUom.toLowerCase()) {
+                        const massKg = computeLineWeightKg({
+                            quantity: qty,
+                            billingUnit: childUom,
+                            productUnitOfMeasure: childUom,
+                            productWeightKg: selectedItem.product?.weight_kg
+                        });
+                        return Math.round(massKg * 100) / 100;
+                    }
                     const norm = normalizeDemandToKg({
                         quantity: qty,
-                        rawUnit: selectedItem.product?.unit_of_measure,
-                        productUom: selectedItem.product?.unit_of_measure,
+                        rawUnit: childUom,
+                        productUom: childUom,
                         variantLabel: selectedItem.variant_label,
                         productWeightKg: selectedItem.product?.weight_kg
                     });
@@ -585,26 +624,15 @@ export default function ReceptionPage() {
 
     const permittedIncomingItems = incomingItems.filter(item => {
         const catGroup = getInventoryGroup(item);
-        const categoryMap = [
-            { name: "ABARROTES & LÁCTEOS", dbValue: "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" },
-            { name: "FRUTAS", dbValue: "INVENTARIO DE FRUTAS Y OTROS" },
-            { name: "HORTALIZAS", dbValue: "INVENTARIO DE HORTALIZAS" },
-            { name: "PAPAS, PLÁTANO, TOMATE", dbValue: "INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" },
-            { name: "VERDURAS", dbValue: "INVENTARIO DE VERDURAS" }
-        ];
-        const matchingCat = categoryMap.find(c => c.dbValue === catGroup);
-        if (!matchingCat) return false;
+        const matchingCat = RECEPTION_CATEGORIES.find(c => c.dbValue === catGroup);
+        if (!matchingCat) {
+            return !hasCategoryRestrictions;
+        }
         return isCategoryAllowed(matchingCat.name);
     });
 
     // Category mappings for stats and filters
-    const categoryStats = [
-        { name: "ABARROTES & LÁCTEOS", dbValue: "INVENTARIO DE ABARROTES, FRUTOS SECOS, LACTEOS Y CARNES FRIAS" },
-        { name: "FRUTAS", dbValue: "INVENTARIO DE FRUTAS Y OTROS" },
-        { name: "HORTALIZAS", dbValue: "INVENTARIO DE HORTALIZAS" },
-        { name: "PAPAS, PLÁTANO, TOMATE", dbValue: "INVENTARIO DE PAPAS, PLATANO, TOMATE Y AGUACATES" },
-        { name: "VERDURAS", dbValue: "INVENTARIO DE VERDURAS" }
-    ].map(cat => {
+    const categoryStats = RECEPTION_CATEGORIES.map(cat => {
         const catItems = permittedIncomingItems.filter(i => getInventoryGroup(i) === cat.dbValue);
         const completed = catItems.filter(i => ['received_ok', 'received_review', 'received_partial'].includes(i.status)).length;
         const percentage = catItems.length > 0 ? Math.round((completed / catItems.length) * 100) : 0;
@@ -942,7 +970,7 @@ export default function ReceptionPage() {
                     >
                         {["Todas", ...categoryStats.map(s => s.name), "Rechazados"].filter(cat => {
                             if (cat === "Todas") {
-                                const categories = ["ABARROTES & LÁCTEOS", "FRUTAS", "HORTALIZAS", "PAPAS, PLÁTANO, TOMATE", "VERDURAS"];
+                                const categories = RECEPTION_CATEGORIES.map(c => c.name);
                                 return categories.every(c => isCategoryAllowed(c));
                             }
                             if (cat === "Rechazados") return true;
