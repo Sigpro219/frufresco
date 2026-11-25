@@ -232,6 +232,7 @@ export function isPhysicalReplacementReturn(r: BillingReturnLike | null | undefi
     return (
         reason.includes('reposic') ||
         reason.includes('reemplaz') ||
+        reason.includes('reprogramad') ||
         reason.includes('cambio físico') ||
         reason.includes('cambio fisico')
     );

@@ -84,6 +84,13 @@ export default function PqrAuditModal({
 }: PqrAuditModalProps) {
     const { user, profile } = useAuth();
     const auditorDisplayName = profile?.contact_name || profile?.company_name || user?.email?.split('@')[0] || 'FruFresco Admin';
+    const currentEmail = (user?.email || profile?.email || '').trim().toLowerCase();
+    const canDeletePqrs =
+        currentEmail === 'admin@frufresco.com' ||
+        currentEmail === 'angidailed94@gmail.com' ||
+        user?.id === '77ef7895-cc19-4d3d-9f0b-774e9a032c6b' ||
+        user?.id === '429f975b-0e38-47ec-8e8d-f548051be8dd';
+    const [deletingPqrs, setDeletingPqrs] = useState(false);
     const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
     const [actionLoading, setActionLoading] = useState(false);
     const [resolutionNotes, setResolutionNotes] = useState('');
@@ -2953,6 +2960,18 @@ export default function PqrAuditModal({
                         ? validPlanItems.map(it => `${it.targetQty} ${it.targetUnit} de ${it.targetProductName}`).join(', ')
                         : `${itemsToReprogram.length} ítem(s)`;
 
+                    const { data: existingRepl } = await supabase
+                        .from('orders')
+                        .select('id, sequence_id, status')
+                        .eq('logistics_data->>pqr_id', pqr.id)
+                        .neq('status', 'cancelled')
+                        .limit(1);
+                    if (existingRepl && existingRepl.length > 0) {
+                        showToast(`Ya existe un pedido de reposición (#${existingRepl[0].sequence_id}) para esta PQR.`, 'warning');
+                        setActionLoading(false);
+                        return;
+                    }
+
                     const { data: newOrder, error: newOrderErr } = await supabase
                         .from('orders')
                         .insert([{
@@ -3001,7 +3020,9 @@ export default function PqrAuditModal({
                                 .from('billing_returns')
                                 .update({
                                     status: 'approved',
-                                    reason: `${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id} (${scheduledDate} ${branchWindowLabel})${swapDescriptions.length > 0 ? ` [${swapDescriptions.join('; ')}]` : ''}`
+                                    source: 'driver_app',
+                                    calculated_amount: 0,
+                                    reason: `[REPOSICIÓN #${newOrder.sequence_id}] ${novelty.reason} - Reprogramado en Pedido #${newOrder.sequence_id} (${scheduledDate} ${branchWindowLabel})${swapDescriptions.length > 0 ? ` [${swapDescriptions.join('; ')}]` : ''}`
                                 })
                                 .eq('id', novelty.id);
                         }
@@ -3275,6 +3296,138 @@ export default function PqrAuditModal({
         }
     };
 
+    // Escenario 492: Reapertura controlada de PQR con candados fiscales/operativos y reversión atómica de Ajuste Factura
+    const handleReopenPqr = async () => {
+        if (!window.confirm('¿Reabrir esta PQR para volver a elegir la opción de resolución comercial? Si tenía Ajuste de Factura (Opción 4) y el pedido aún no está facturado, se restaurará el valor original del pedido.')) {
+            return;
+        }
+        setActionLoading(true);
+        try {
+            const shortId = pqr.id.slice(0, 8);
+            if (pqr.order_id) {
+                const { data: ord, error: ordErr } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id, billing_cut_id, invoice_id, admin_notes')
+                    .eq('id', pqr.order_id)
+                    .single();
+                if (ordErr) throw ordErr;
+                if (ord?.billing_cut_id || ord?.invoice_id) {
+                    showToast(`No se puede reabrir: el Pedido #${ord.sequence_id} ya tiene corte de facturación o factura emitida.`, 'error');
+                    return;
+                }
+
+                const { data: invs, error: invErr } = await supabase
+                    .from('billing_invoices')
+                    .select('id, invoice_number')
+                    .eq('order_id', pqr.order_id)
+                    .limit(1);
+                if (invErr) throw invErr;
+                if (invs && invs.length > 0) {
+                    showToast(`No se puede reabrir: existe factura emitida (${invs[0].invoice_number || invs[0].id}) para este pedido.`, 'error');
+                    return;
+                }
+
+                const { data: childRepls, error: replErr } = await supabase
+                    .from('orders')
+                    .select('id, sequence_id')
+                    .eq('logistics_data->>pqr_id', pqr.id)
+                    .neq('status', 'cancelled')
+                    .limit(1);
+                if (replErr) throw replErr;
+                if (childRepls && childRepls.length > 0) {
+                    showToast(`No se puede reabrir: ya existe un pedido hijo de reposición (#${childRepls[0].sequence_id}) vinculado a esta PQR.`, 'error');
+                    return;
+                }
+
+                const { data: orderRets, error: retErr } = await supabase
+                    .from('billing_returns')
+                    .select('id, status, source, reason, credit_note_number')
+                    .eq('order_id', pqr.order_id);
+                if (retErr) throw retErr;
+
+                const ncLocked = (orderRets || []).find((r: any) => r.credit_note_number || r.source === 'pqr_nota_credito');
+                if (ncLocked) {
+                    showToast(`No se puede reabrir: existe una Nota Crédito (${ncLocked.credit_note_number || 'emitida'}) asociada a este pedido.`, 'error');
+                    return;
+                }
+
+                const pqrAdjustRets = (orderRets || []).filter((r: any) =>
+                    r.source === 'pqr_ajuste_factura_net' &&
+                    String(r.reason || '').toLowerCase().includes(`#${shortId.toLowerCase()}`)
+                );
+                if (pqrAdjustRets.length > 0) {
+                    for (const ret of pqrAdjustRets) {
+                        const cleanedReason = String(ret.reason || '').replace(/^\[AJUSTE FACTURA PQR #[a-f0-9]+\]\s*/i, '').trim();
+                        const { error: revRetErr } = await supabase
+                            .from('billing_returns')
+                            .update({
+                                status: 'pending_review',
+                                source: 'driver_app',
+                                reason: cleanedReason || ret.reason
+                            })
+                            .eq('id', ret.id);
+                        if (revRetErr) throw revRetErr;
+                    }
+
+                    const { data: itemsForRecalc, error: itemsErr } = await supabase
+                        .from('order_items')
+                        .select('quantity, unit_price, products(iva_rate)')
+                        .eq('order_id', pqr.order_id);
+                    if (itemsErr) throw itemsErr;
+
+                    const recalcSubtotal = Math.round((itemsForRecalc || []).reduce((s: number, it: any) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0));
+                    const recalcTax = Math.round((itemsForRecalc || []).reduce((s: number, it: any) => {
+                        const line = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                        const iva = Number(it.products?.iva_rate || 0);
+                        return s + (line * iva) / 100;
+                    }, 0));
+                    const recalcTotal = recalcSubtotal + recalcTax;
+                    const noteRegex = new RegExp(`\\[AJUSTE FACTURA PQR #${shortId}\\]:[^\\n]*\\n?`, 'gi');
+                    const cleanedAdminNotes = String(ord?.admin_notes || '').replace(noteRegex, '').trim();
+
+                    const { error: updOrdErr } = await supabase
+                        .from('orders')
+                        .update({
+                            subtotal: recalcSubtotal,
+                            tax: recalcTax,
+                            total: recalcTotal,
+                            admin_notes: cleanedAdminNotes
+                        })
+                        .eq('id', pqr.order_id);
+                    if (updOrdErr) throw updOrdErr;
+                }
+            }
+
+            const { error: reopenErr } = await supabase
+                .from('customer_service_pqrs')
+                .update({
+                    status: 'in_progress',
+                    resolved_at: null
+                })
+                .eq('id', pqr.id);
+            if (reopenErr) throw reopenErr;
+
+            await supabase.from('audit_logs').insert({
+                action: 'REOPEN_PQR',
+                details: {
+                    module: 'CUSTOMER_SERVICE',
+                    pqr_id: pqr.id,
+                    order_id: pqr.order_id || null,
+                    actor_email: user?.email || null,
+                    reopened_at: new Date().toISOString()
+                }
+            });
+
+            showToast('PQR reabierta. Ya puedes seleccionar la nueva opción de resolución y ejecutarla.', 'success');
+            onResolved();
+            onClose();
+        } catch (e: any) {
+            showToast('Error al reabrir PQR: ' + e.message, 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     return (
         <div style={{
             position: 'fixed',
@@ -3394,6 +3547,59 @@ export default function PqrAuditModal({
                             <Printer size={13} />
                             <span>Descargar Informe PDF</span>
                         </a>
+
+                        {canDeletePqrs && (
+                            <button
+                                type="button"
+                                disabled={deletingPqrs}
+                                onClick={async () => {
+                                    if (!window.confirm(`¿Eliminar definitivamente la PQRS ${formatPqrFolio(pqr)} y sus devoluciones vinculadas? Esta acción no se puede deshacer.`)) return;
+                                    setDeletingPqrs(true);
+                                    try {
+                                        const { data: sessionData } = await supabase.auth.getSession();
+                                        const token = sessionData?.session?.access_token;
+                                        if (!token) {
+                                            showToast('Sesión expirada. Recarga e intenta nuevamente.', 'error');
+                                            return;
+                                        }
+                                        const res = await fetch(`/api/pqrs/${pqr.id}`, {
+                                            method: 'DELETE',
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
+                                        const json = await res.json();
+                                        if (!res.ok) {
+                                            showToast(json?.error || 'No se pudo eliminar la PQRS.', 'error');
+                                            return;
+                                        }
+                                        try { localStorage.removeItem(`frufresco_pqr_draft_${pqr.id}`); } catch {}
+                                        showToast('PQRS eliminada correctamente.', 'success');
+                                        onResolved();
+                                        onClose();
+                                    } catch (err: any) {
+                                        showToast('Error al eliminar PQRS: ' + (err?.message || 'Error de red'), 'error');
+                                    } finally {
+                                        setDeletingPqrs(false);
+                                    }
+                                }}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '6px 11px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#7F1D1D',
+                                    border: '1px solid #DC2626',
+                                    color: '#FEE2E2',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '800',
+                                    cursor: deletingPqrs ? 'wait' : 'pointer'
+                                }}
+                                title="Eliminar PQRS (autorizado solo para admin y angidailed)"
+                            >
+                                <Trash2 size={13} />
+                                <span>{deletingPqrs ? 'Eliminando...' : 'Eliminar PQRS'}</span>
+                            </button>
+                        )}
 
                         {!isClosedCase && isDraftRestored ? (
                             <div style={{
@@ -5162,10 +5368,31 @@ export default function PqrAuditModal({
                                     1. Concepto de Resolución Comercial
                                 </span>
 
+                                {isClosedCase && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 10px',
+                                        backgroundColor: '#FFFBEB',
+                                        border: '1px solid #FCD34D',
+                                        borderRadius: '8px',
+                                        fontSize: '0.72rem',
+                                        color: '#92400E',
+                                        fontWeight: '700'
+                                    }}>
+                                        <AlertTriangle size={14} style={{ flexShrink: 0, color: '#D97706' }} />
+                                        <span>
+                                            Caso cerrado: la rectificación solo edita Causa Raíz, Imputación y Notas RNC. Para cambiar la opción comercial o generar reposición, usa «Reabrir PQR».
+                                        </span>
+                                    </div>
+                                )}
+
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
                                     {/* Opt 1: Conforme */}
                                     <button
                                         type="button"
+                                        disabled={isClosedCase}
                                         onClick={() => {
                                             setResolutionOption('opt1');
                                             setSelectedWaTemplate('closing');
@@ -5179,7 +5406,8 @@ export default function PqrAuditModal({
                                             textAlign: 'left',
                                             backgroundColor: resolutionOption === 'opt1' ? '#EAEFEA' : 'white',
                                             border: resolutionOption === 'opt1' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                            cursor: 'pointer'
+                                            cursor: isClosedCase ? 'not-allowed' : 'pointer',
+                                            opacity: isClosedCase && resolutionOption !== 'opt1' ? 0.55 : 1
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '800', color: '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
@@ -5194,11 +5422,13 @@ export default function PqrAuditModal({
                                     {/* Opt 2: Reposición Física Configurable $0 COP */}
                                     {(() => {
                                         const isPingPongBlocked = parseRcaFromRecord(pqr).isReplacementRejection;
+                                        const isOpt2Disabled = isClosedCase || isPingPongBlocked;
                                         const d1DateStr = getBogotaFutureDate(1);
                                         const activeDateStr = replacementDeliveryDate || d1DateStr;
                                         return (
                                             <button
                                                 type="button"
+                                                disabled={isClosedCase}
                                                 onClick={() => {
                                                     if (isPingPongBlocked) {
                                                         showToast('BLOQUEADO POR REGLA ANTI PING-PONG: Este pedido ya es una reposición de garantía. Usa Nota Crédito o Ajuste de Factura.', 'warning');
@@ -5216,8 +5446,8 @@ export default function PqrAuditModal({
                                                     textAlign: 'left',
                                                     backgroundColor: isPingPongBlocked ? '#FEF2F2' : resolutionOption === 'opt2' ? '#EAEFEA' : 'white',
                                                     border: isPingPongBlocked ? '1px dashed #FCA5A5' : resolutionOption === 'opt2' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                                    cursor: isPingPongBlocked ? 'not-allowed' : 'pointer',
-                                                    opacity: isPingPongBlocked ? 0.75 : 1
+                                                    cursor: isOpt2Disabled ? 'not-allowed' : 'pointer',
+                                                    opacity: isPingPongBlocked ? 0.75 : (isClosedCase && resolutionOption !== 'opt2' ? 0.55 : 1)
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontWeight: '800', color: isPingPongBlocked ? '#991B1B' : '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
@@ -5243,6 +5473,7 @@ export default function PqrAuditModal({
                                     {/* Opt 3: Nota Crédito Financiera */}
                                     <button
                                         type="button"
+                                        disabled={isClosedCase}
                                         onClick={() => {
                                             setResolutionOption('opt3');
                                             setSelectedWaTemplate('credit_note');
@@ -5256,7 +5487,8 @@ export default function PqrAuditModal({
                                             textAlign: 'left',
                                             backgroundColor: resolutionOption === 'opt3' ? '#EAEFEA' : 'white',
                                             border: resolutionOption === 'opt3' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                            cursor: 'pointer'
+                                            cursor: isClosedCase ? 'not-allowed' : 'pointer',
+                                            opacity: isClosedCase && resolutionOption !== 'opt3' ? 0.55 : 1
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '800', color: '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
@@ -5271,6 +5503,7 @@ export default function PqrAuditModal({
                                     {/* Opt 4: Ajustar Factura */}
                                     <button
                                         type="button"
+                                        disabled={isClosedCase}
                                         onClick={() => {
                                             setResolutionOption('opt4');
                                             setSelectedWaTemplate('credit_note');
@@ -5284,7 +5517,8 @@ export default function PqrAuditModal({
                                             textAlign: 'left',
                                             backgroundColor: resolutionOption === 'opt4' ? '#EAEFEA' : 'white',
                                             border: resolutionOption === 'opt4' ? '2px solid #0D7A57' : '1px solid #CBD5E1',
-                                            cursor: 'pointer'
+                                            cursor: isClosedCase ? 'not-allowed' : 'pointer',
+                                            opacity: isClosedCase && resolutionOption !== 'opt4' ? 0.55 : 1
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '800', color: '#1A231E', fontSize: '0.75rem', marginBottom: '4px' }}>
@@ -7281,7 +7515,29 @@ export default function PqrAuditModal({
                                 )}
                             </div>
                         ) : isClosedCase ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleReopenPqr}
+                                    disabled={actionLoading}
+                                    style={{
+                                        padding: '8px 14px',
+                                        backgroundColor: '#FEF2F2',
+                                        color: '#991B1B',
+                                        borderRadius: '10px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        border: '1px solid #FECACA',
+                                        cursor: actionLoading ? 'wait' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                    title="Reabrir PQR para re-ejecutar operación comercial (si no está facturada ni tiene reposición/NC)"
+                                >
+                                    <RotateCcw size={14} />
+                                    <span>Reabrir PQR</span>
+                                </button>
                                 <a
                                     href={`/admin/customer-service/rnc/${pqr.id}/print`}
                                     target="_blank"

@@ -18255,3 +18255,24 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Eliminación de `billing_invoices` y `billing_cuts` **antes** de rebobinar el consecutivo DIAN en `app_settings` (`billing_invoice_next_number` / `billing_nc_next_number`), evitando corrupción de secuencia si un delete falla.
      - Fallback regex `/(\d+)$/` sobre `invoice_number` cuando `invoice_number_raw` sea nulo o `0`.
      - Bitácora en `audit_logs` (`action: 'REVERT_BILLING_CUT'`) con `details` enriquecido (`module: 'COMMERCIAL'`, `actor_id`, `actor_email`, `actor_name`, `cut_id`, `cut_number`, `scheduled_date`, `cut_slot`, `reason`, `rewound_consecutive`, `rewound_to`, `reverted_at`).
+
+---
+
+### Escenario 492: Blindaje de Rectificación vs Reapertura Controlada de PQRS, Idempotencia de Reposición D+1 y Cero Doble Descuento en Facturación (SDD v1.9.447)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Archivos Intervenidos:** `src/app/admin/customer-service/components/PqrAuditModal.tsx`, `src/lib/commercial/pqrAdjustmentEngine.ts`, `src/app/api/pqrs/[id]/route.ts`
+- **Alcance Contractual:**
+  1. **Bloqueo de Cambio de Opción Comercial en Modo Rectificación (`isClosedCase`):**
+     - En `PqrAuditModal.tsx`, cuando `isClosedCase === true`, los 4 botones de concepto comercial (`opt1..opt4`) quedan deshabilitados (`disabled={isClosedCase}`) con banner explícito indicando que la rectificación solo edita Causa Raíz, Imputación y Notas RNC; para cambiar la operación comercial debe usarse el botón **Reabrir PQR**.
+  2. **Idempotencia de Reposición D+1 (`opt2`) y Cero Doble Descuento en Facturación:**
+     - Guardia idempotente antes de crear el Pedido Hijo en `opt2`: consulta `orders` con `logistics_data->>'pqr_id' = pqr.id` y `status != 'cancelled'`, abortando si ya existe uno.
+     - Al actualizar `billing_returns` en `opt2`, se conserva `status = 'approved'` (respetando `billing_returns_status_check`), pero se fija `source = 'driver_app'`, `calculated_amount = 0` y prefijo `[REPOSICIÓN #<folio>]` en `reason` para evitar que `isInvoiceDeductionReturn()` vuelva a descontar en facturación.
+     - Respaldo en `src/lib/commercial/pqrAdjustmentEngine.ts`: `isPhysicalReplacementReturn()` incluye `'reprogramad'` además de `'reposic'`, `'reemplaz'` y `'cambio físico'`.
+  3. **Botón `Reabrir PQR` con Candados Fiscales/Operativos (`handleReopenPqr`):**
+     - Visible en el footer cuando `isClosedCase === true`.
+     - Bloquea reapertura si el pedido asociado ya tiene `billing_cut_id`, `invoice_id`, factura en `billing_invoices`, un pedido hijo de reposición (`logistics_data->>'pqr_id' = pqr.id`) o Nota Crédito (`credit_note_number IS NOT NULL` / `source = 'pqr_nota_credito'`).
+     - Si la PQR venía de `opt4` (`source = 'pqr_ajuste_factura_net'`), revierte `billing_returns` a `status = 'pending_review'`, `source = 'driver_app'`, recalcula `orders.subtotal`, `tax` y `total` desde `order_items` (**sin mutar `order_items.quantity`**), limpia `[AJUSTE FACTURA PQR #...]` de `orders.admin_notes`, pasa `customer_service_pqrs.status = 'in_progress'` y registra `REOPEN_PQR` en `audit_logs`.
+  4. **Saneamiento en Producción Pedido `#2255` / PQR `#c1845602` (CESNE):**
+     - Pedido `#2255` restaurado a `subtotal = 3174035`, `tax = 0`, `total = 3174035` (conservando `order_items.quantity = 70.5 Kg` intacto).
+     - `billing_returns` (`7bd8e52b...`) saneado a `status = 'approved'`, `source = 'driver_app'`, `calculated_amount = 0`, `reason = '[REPOSICIÓN D+1 #2303 | PQR #c1845602] ...'`.
+     - Pedido Hijo de Reposición **`#2303`** (`$0 COP`, `2 Kg Aguacate`, entrega `2026-11-26`) creado y vinculado a `#2255` y PQR `#c1845602`.
