@@ -594,6 +594,8 @@ export default function InventoryAdminPage() {
         initial_responsible_id: ''
     });
     const [isSavingCell, setIsSavingCell] = useState(false);
+    const [overweightThresholdCop, setOverweightThresholdCop] = useState<string>('2000');
+    const [isSavingOverweightThreshold, setIsSavingOverweightThreshold] = useState(false);
 
     const fetchData = useCallback(async (signal?: AbortSignal, silent = false) => {
         if (silent) {
@@ -636,6 +638,20 @@ export default function InventoryAdminPage() {
                     setWorkCells(loadedCells);
                 } catch (e) {
                     console.error('Error parsing work cells governance in page:', e);
+                }
+            }
+
+            // Umbral Pesada / Facturación (COP) - Escenario 488 §1
+            const { data: thresholdData, error: thresholdError } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'overweight_billing_threshold_cop')
+                .maybeSingle();
+
+            if (!thresholdError && thresholdData?.value !== null && thresholdData?.value !== undefined) {
+                const rawThreshold = String(thresholdData.value).replace(/[^\d]/g, '');
+                if (rawThreshold.length > 0) {
+                    setOverweightThresholdCop(rawThreshold);
                 }
             }
 
@@ -1170,6 +1186,35 @@ export default function InventoryAdminPage() {
             (window as any).showToast?.('Error al guardar responsable: ' + (err.message || 'Error de conexión'), 'error');
         } finally {
             setIsSavingCell(false);
+        }
+    };
+
+    const handleSaveOverweightThreshold = async () => {
+        const cleanValue = overweightThresholdCop.replace(/[^\d]/g, '');
+        if (!cleanValue || isNaN(Number(cleanValue))) {
+            (window as any).showToast?.('Ingrese un monto numérico válido en COP para el umbral.', 'error');
+            return;
+        }
+
+        setIsSavingOverweightThreshold(true);
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'overweight_billing_threshold_cop',
+                    value: cleanValue,
+                    description: 'Umbral económico (COP) para arbitraje de sobrepeso en pesada: >= umbral va a Facturación (Col M/P); < umbral se auto-absorbe en Col P.',
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' });
+
+            if (error) throw error;
+            setOverweightThresholdCop(cleanValue);
+            (window as any).showToast?.(`Umbral Pesada / Facturación guardado ($${formatNumber(cleanValue, 0)} COP).`, 'success');
+        } catch (err: any) {
+            console.error('Error al guardar umbral pesada/facturación:', err);
+            (window as any).showToast?.('Error al guardar el umbral: ' + (err.message || 'Error de conexión'), 'error');
+        } finally {
+            setIsSavingOverweightThreshold(false);
         }
     };
 
@@ -5603,6 +5648,106 @@ export default function InventoryAdminPage() {
                                             >
                                                 <Plus size={16} strokeWidth={2.5} />
                                                 <span>Nueva Célula de Trabajo</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Tarjeta Compacta: Umbral Pesada / Facturación (COP) - Escenario 488 §1 */}
+                                    <div style={{
+                                        backgroundColor: '#FFFFFF',
+                                        border: `1px solid ${THEME.colors.border}`,
+                                        borderLeft: `4px solid ${THEME.colors.primary}`,
+                                        borderRadius: '10px',
+                                        padding: '0.9rem 1.15rem',
+                                        marginBottom: '1.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '1rem',
+                                        flexWrap: 'wrap',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flex: '1 1 380px' }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '36px',
+                                                height: '36px',
+                                                borderRadius: '8px',
+                                                backgroundColor: '#ECFDF5',
+                                                color: THEME.colors.primary,
+                                                flexShrink: 0,
+                                                marginTop: '2px'
+                                            }}>
+                                                <Scale size={18} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: '800', fontSize: '0.9rem', color: THEME.colors.textMain, marginBottom: '0.2rem' }}>
+                                                    Umbral Pesada / Facturación (COP)
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.78rem', color: THEME.colors.textSecondary, lineHeight: 1.4 }}>
+                                                    Regla de arbitraje por sobrepeso: si <strong style={{ color: THEME.colors.textMain }}>Δ_COP ≥ umbral</strong> va a Facturación (<strong style={{ color: THEME.colors.textMain }}>Col M/P</strong>); si <strong style={{ color: THEME.colors.textMain }}>Δ_COP &lt; umbral</strong> se auto-absorbe en <strong style={{ color: THEME.colors.textMain }}>Col P</strong>.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <DollarSign size={14} style={{ position: 'absolute', left: '10px', color: THEME.colors.textSecondary, pointerEvents: 'none' }} />
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    aria-label="Umbral Pesada / Facturación (COP)"
+                                                    value={overweightThresholdCop}
+                                                    onChange={(e) => setOverweightThresholdCop(e.target.value.replace(/[^\d]/g, ''))}
+                                                    placeholder="2000"
+                                                    style={{
+                                                        width: '130px',
+                                                        padding: '0.48rem 2.6rem 0.48rem 1.7rem',
+                                                        borderRadius: '8px',
+                                                        border: `1px solid ${THEME.colors.border}`,
+                                                        fontSize: '0.85rem',
+                                                        fontWeight: '700',
+                                                        color: THEME.colors.textMain,
+                                                        backgroundColor: '#F8FAFC',
+                                                        textAlign: 'right',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                                <span style={{
+                                                    position: 'absolute',
+                                                    right: '10px',
+                                                    fontSize: '0.72rem',
+                                                    fontWeight: '700',
+                                                    color: THEME.colors.textSecondary,
+                                                    pointerEvents: 'none'
+                                                }}>
+                                                    COP
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveOverweightThreshold}
+                                                disabled={isSavingOverweightThreshold}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    backgroundColor: THEME.colors.primary,
+                                                    color: '#FFFFFF',
+                                                    padding: '0.5rem 0.95rem',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: '700',
+                                                    cursor: isSavingOverweightThreshold ? 'not-allowed' : 'pointer',
+                                                    opacity: isSavingOverweightThreshold ? 0.7 : 1,
+                                                    transition: 'all 0.15s ease-in-out'
+                                                }}
+                                            >
+                                                <Check size={15} strokeWidth={2.5} />
+                                                <span>{isSavingOverweightThreshold ? 'Guardando...' : 'Guardar'}</span>
                                             </button>
                                         </div>
                                     </div>

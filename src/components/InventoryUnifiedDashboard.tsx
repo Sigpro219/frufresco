@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import {
     DollarSign,
@@ -168,6 +168,8 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const [costMatrix, setCostMatrix] = useState<Record<string, number>>({});
     const [movements, setMovements] = useState<any[]>([]);
     const [quarterlyMovements, setQuarterlyMovements] = useState<any[]>([]);
+    const [orderItems, setOrderItems] = useState<any[]>([]);
+    const [paretoMode, setParetoMode] = useState<'total_leakage' | 'overweight_mp'>('total_leakage');
     const [tasks, setTasks] = useState<any[]>([]);
     const [closings, setClosings] = useState<any[]>([]);
 
@@ -243,6 +245,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 matrixRes,
                 movementsRes,
                 quarterlyMovsRes,
+                orderItemsRes,
                 tasksRes,
                 collabsRes,
                 closingsRes
@@ -251,18 +254,31 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 supabase.from('products').select('id, name, sku, accounting_id, category, inventory_group, buying_team, unit_of_measure, is_active, parent_id, theoretical_shrinkage_pct').eq('is_active', true).limit(5000),
                 supabase.from('inventory_stocks').select('id, product_id, warehouse_id, quantity, status, min_stock_level, updated_at').limit(5000),
                 supabase.from('commercial_cost_matrix').select('product_id, manual_cost').eq('is_active', true).limit(5000),
-                supabase.from('inventory_movements')
-                    .select('id, product_id, quantity, type, notes, created_at, reference_type')
-                    .not('reference_type', 'like', 'sandbox_%')
-                    .gte('created_at', startIso)
-                    .lte('created_at', endIso)
-                    .limit(10000),
-                supabase.from('inventory_movements')
-                    .select('id, product_id, quantity, type, notes, created_at, reference_type')
-                    .not('reference_type', 'like', 'sandbox_%')
-                    .gte('created_at', quarterStartIso)
-                    .lte('created_at', endIso)
-                    .limit(10000),
+                fetchAllRows<any>((from, to) =>
+                    supabase.from('inventory_movements')
+                        .select('id, product_id, quantity, type, notes, created_at, reference_type, reference_id')
+                        .not('reference_type', 'like', 'sandbox_%')
+                        .gte('created_at', startIso)
+                        .lte('created_at', endIso)
+                        .order('id', { ascending: true })
+                        .range(from, to)
+                ),
+                fetchAllRows<any>((from, to) =>
+                    supabase.from('inventory_movements')
+                        .select('id, product_id, quantity, type, notes, created_at, reference_type, reference_id')
+                        .not('reference_type', 'like', 'sandbox_%')
+                        .gte('created_at', quarterStartIso)
+                        .lte('created_at', endIso)
+                        .order('id', { ascending: true })
+                        .range(from, to)
+                ),
+                fetchAllRows<any>((from, to) =>
+                    supabase.from('order_items')
+                        .select('id, product_id, quantity, picked_quantity, unit_price, products(name, accounting_id)')
+                        .gt('picked_quantity', 0)
+                        .order('id', { ascending: true })
+                        .range(from, to)
+                ),
                 supabase.from('inventory_random_tasks')
                     .select('id, scheduled_date, items:inventory_task_items(product_id, expected_qty, actual_qty, difference_percent)')
                     .gte('scheduled_date', startIso.split('T')[0]),
@@ -305,6 +321,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             const cleanQuarterly = (quarterlyMovsRes.data || []).filter((m: any) => !m.reference_type?.startsWith('sandbox_') && !m.notes?.includes('[SANDBOX]'));
             setMovements(cleanMovements);
             setQuarterlyMovements(cleanQuarterly);
+            setOrderItems(orderItemsRes.data || []);
             setTasks(tasksRes.data || []);
             setCollaborators(collabsRes.data || []);
             setClosings(closingsRes.data || []);
@@ -542,6 +559,147 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
             topLosses
         };
     }, [currentMovements, costMatrix, products]);
+
+    // 2B. Pareto de Sobrepeso en Pesada (Col M vs Col P vs Col O — Escenario 488 §5)
+    const overweightPareto = useMemo(() => {
+        const productDict = new Map<string, any>();
+        products.forEach(p => productDict.set(p.id, p));
+
+        const colMByRefId = new Map<string, number>();
+        const colPByRefId = new Map<string, number>();
+        const colOByProduct = new Map<string, number>();
+
+        currentMovements.forEach(m => {
+            const q = Math.abs(Number(m.quantity || 0));
+            if (q <= 0) return;
+            if (m.reference_type === 'additional_sale') {
+                if (m.reference_id) {
+                    colMByRefId.set(m.reference_id, (colMByRefId.get(m.reference_id) || 0) + q);
+                }
+            } else if (m.reference_type === 'waste_weighing') {
+                if (m.reference_id) {
+                    colPByRefId.set(m.reference_id, (colPByRefId.get(m.reference_id) || 0) + q);
+                }
+            } else if (m.reference_type === 'route_return' && m.product_id) {
+                colOByProduct.set(m.product_id, (colOByProduct.get(m.product_id) || 0) + q);
+            }
+        });
+
+        const matchedRefIds = new Set<string>();
+        const byProduct = new Map<string, {
+            id: string;
+            name: string;
+            accounting_id: string;
+            deviatedKg: number;
+            deviatedCop: number;
+            colMKg: number;
+            colMCop: number;
+            colPKg: number;
+            colPCop: number;
+            colOKg: number;
+            colOCop: number;
+            unitPriceSum: number;
+            unitPriceCount: number;
+        }>();
+
+        const ensureProduct = (productId: string, prodRel?: any) => {
+            if (!byProduct.has(productId)) {
+                const prod = productDict.get(productId) || prodRel;
+                byProduct.set(productId, {
+                    id: productId,
+                    name: prod?.name || 'Producto Desconocido',
+                    accounting_id: prod?.accounting_id || '---',
+                    deviatedKg: 0,
+                    deviatedCop: 0,
+                    colMKg: 0,
+                    colMCop: 0,
+                    colPKg: 0,
+                    colPCop: 0,
+                    colOKg: 0,
+                    colOCop: 0,
+                    unitPriceSum: 0,
+                    unitPriceCount: 0
+                });
+            }
+            return byProduct.get(productId)!;
+        };
+
+        orderItems.forEach(item => {
+            if (!item?.id || !item?.product_id || !filteredProductIds.has(item.product_id)) return;
+            const mKg = colMByRefId.get(item.id) || 0;
+            const pKg = colPByRefId.get(item.id) || 0;
+            if (mKg === 0 && pKg === 0) return;
+
+            if (mKg > 0) matchedRefIds.add(item.id);
+            if (pKg > 0) matchedRefIds.add(item.id);
+
+            const prodRel = Array.isArray(item.products) ? item.products[0] : item.products;
+            const entry = ensureProduct(item.product_id, prodRel);
+            const fallbackCost = costMatrix[item.product_id] || 0;
+            const itemPrice = Number(item.unit_price || 0);
+            const unitVal = itemPrice > 0 ? itemPrice : fallbackCost;
+
+            if (itemPrice > 0) {
+                entry.unitPriceSum += itemPrice;
+                entry.unitPriceCount += 1;
+            }
+
+            const deltaKg = Math.max(0, Number(item.picked_quantity || 0) - Number(item.quantity || 0));
+            entry.deviatedKg += deltaKg > 0 ? deltaKg : (mKg + pKg);
+            entry.deviatedCop += (deltaKg > 0 ? deltaKg : (mKg + pKg)) * unitVal;
+            entry.colMKg += mKg;
+            entry.colMCop += mKg * unitVal;
+            entry.colPKg += pKg;
+            entry.colPCop += pKg * unitVal;
+        });
+
+        // Include any movements whose reference_id did not match an order_item or was null
+        currentMovements.forEach(m => {
+            if (!m.product_id || !filteredProductIds.has(m.product_id)) return;
+            const q = Math.abs(Number(m.quantity || 0));
+            if (q <= 0) return;
+            const fallbackCost = costMatrix[m.product_id] || 0;
+
+            if (m.reference_type === 'additional_sale' && (!m.reference_id || !matchedRefIds.has(m.reference_id))) {
+                const entry = ensureProduct(m.product_id);
+                entry.deviatedKg += q;
+                entry.deviatedCop += q * fallbackCost;
+                entry.colMKg += q;
+                entry.colMCop += q * fallbackCost;
+            } else if (m.reference_type === 'waste_weighing' && (!m.reference_id || !matchedRefIds.has(m.reference_id))) {
+                const entry = ensureProduct(m.product_id);
+                entry.deviatedKg += q;
+                entry.deviatedCop += q * fallbackCost;
+                entry.colPKg += q;
+                entry.colPCop += q * fallbackCost;
+            }
+        });
+
+        // Cross route_return (Col O) by product_id
+        colOByProduct.forEach((oKg, productId) => {
+            if (!filteredProductIds.has(productId) || oKg <= 0) return;
+            const entry = ensureProduct(productId);
+            const avgUnitPrice = entry.unitPriceCount > 0 ? entry.unitPriceSum / entry.unitPriceCount : (costMatrix[productId] || 0);
+            entry.colOKg += oKg;
+            entry.colOCop += oKg * avgUnitPrice;
+        });
+
+        return Array.from(byProduct.values())
+            .map(item => {
+                const resolvedCop = item.colMCop + item.colPCop;
+                const denominatorCop = Math.max(item.deviatedCop, resolvedCop);
+                const recoveryPct = denominatorCop > 0 ? Math.min(100, (item.colMCop / denominatorCop) * 100) : 0;
+                const impactCop = denominatorCop + item.colOCop;
+                return {
+                    ...item,
+                    recoveryPct,
+                    impactCop
+                };
+            })
+            .filter(item => item.deviatedKg > 0 || item.colMKg > 0 || item.colPKg > 0 || item.colOKg > 0)
+            .sort((a, b) => b.impactCop - a.impactCop || b.deviatedKg - a.deviatedKg)
+            .slice(0, 5);
+    }, [currentMovements, orderItems, filteredProductIds, costMatrix, products]);
 
     // 3. Inventory Record Accuracy (IRA %)
     const iraAccuracy = useMemo(() => {
@@ -1842,21 +2000,121 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 {/* TOP 5 PARETO DE PÉRDIDAS */}
                 <div style={{ backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm, padding: '1.4rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.15rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.15rem' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: THEME.colors.textMain, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: THEME.typography.fontFamilyMain }}>
-                                    <BarChart3 size={20} color={THEME.colors.primary} /> Pareto Top 5: Fuga Financiera ($)
+                                    <BarChart3 size={20} color={THEME.colors.primary} /> {paretoMode === 'total_leakage' ? 'Pareto Top 5: Fuga Financiera ($)' : 'Pareto Top 5: Sobrepeso Pesada (M vs P)'}
                                 </h2>
                                 <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: THEME.colors.textSecondary, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                    Los 5 productos con mayor impacto acumulado de merma, pesada y faltante.
+                                    {paretoMode === 'total_leakage'
+                                        ? 'Los 5 productos con mayor impacto acumulado de merma, pesada y faltante.'
+                                        : 'Desviación en pesada (picked - quantity): Facturado Col M, Asumido Col P y Devuelto Col O.'}
                                 </p>
                             </div>
-                            <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#334155', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px 8px', borderRadius: THEME.radius.sm, fontFamily: THEME.typography.fontFamilySecondary }}>
-                                80/20 Concentración
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'inline-flex', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: THEME.radius.sm, border: '1px solid #E2E8F0' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setParetoMode('total_leakage')}
+                                        style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '700',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontFamily: THEME.typography.fontFamilySecondary,
+                                            backgroundColor: paretoMode === 'total_leakage' ? '#FFFFFF' : 'transparent',
+                                            color: paretoMode === 'total_leakage' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                                            boxShadow: paretoMode === 'total_leakage' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
+                                        }}
+                                    >
+                                        Fuga Total
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setParetoMode('overweight_mp')}
+                                        style={{
+                                            padding: '4px 10px',
+                                            fontSize: '0.72rem',
+                                            fontWeight: '700',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontFamily: THEME.typography.fontFamilySecondary,
+                                            backgroundColor: paretoMode === 'overweight_mp' ? '#FFFFFF' : 'transparent',
+                                            color: paretoMode === 'overweight_mp' ? THEME.colors.textMain : THEME.colors.textSecondary,
+                                            boxShadow: paretoMode === 'overweight_mp' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
+                                        }}
+                                    >
+                                        Sobrepeso Pesada (M vs P)
+                                    </button>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#334155', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px 8px', borderRadius: THEME.radius.sm, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                    80/20 Concentración
+                                </span>
+                            </div>
                         </div>
 
-                        {massBalance.topLosses.length === 0 ? (
+                        {paretoMode === 'total_leakage' ? (
+                            massBalance.topLosses.length === 0 ? (
+                                <div style={{
+                                    padding: '2.5rem',
+                                    textAlign: 'center',
+                                    color: THEME.colors.textSecondary,
+                                    fontSize: '0.85rem',
+                                    backgroundColor: '#F8FAFC',
+                                    borderRadius: THEME.radius.md,
+                                    border: '1px dashed #CBD5E1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    fontFamily: THEME.typography.fontFamilySecondary
+                                }}>
+                                    <CheckCircle2 size={16} color={THEME.colors.primary} />
+                                    <span>No se registraron mermas ni ajustes negativos en el período seleccionado.</span>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                    {massBalance.topLosses.map((item, idx) => {
+                                        const maxLoss = massBalance.topLosses[0].cost || 1;
+                                        const pct = (item.cost / maxLoss) * 100;
+                                        const slateTones = ['#1E293B', '#334155', '#475569', '#64748B', '#94A3B8'];
+                                        const barColor = slateTones[idx] || '#CBD5E1';
+
+                                        return (
+                                            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, width: '16px', fontFamily: THEME.typography.fontFamilyMain }}>
+                                                            #{idx + 1}
+                                                        </span>
+                                                        <span style={{ fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            {item.name}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            {item.accounting_id && item.accounting_id !== '---' ? `(#${item.accounting_id})` : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <span style={{ fontWeight: '900', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
+                                                            {formatMoney(item.cost)}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginLeft: '6px', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            ({formatNumber(item.kg, 1)} kg)
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    <div style={{ height: '100%', width: `${pct}%`, backgroundColor: barColor, borderRadius: '3px' }}></div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )
+                        ) : overweightPareto.length === 0 ? (
                             <div style={{
                                 padding: '2.5rem',
                                 textAlign: 'center',
@@ -1872,41 +2130,65 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                 fontFamily: THEME.typography.fontFamilySecondary
                             }}>
                                 <CheckCircle2 size={16} color={THEME.colors.primary} />
-                                <span>No se registraron mermas ni ajustes negativos en el período seleccionado.</span>
+                                <span>No se registraron desviaciones de sobrepeso (M vs P) en el período seleccionado.</span>
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                {massBalance.topLosses.map((item, idx) => {
-                                    const maxLoss = massBalance.topLosses[0].cost || 1;
-                                    const pct = (item.cost / maxLoss) * 100;
-                                    const slateTones = ['#1E293B', '#334155', '#475569', '#64748B', '#94A3B8'];
-                                    const barColor = slateTones[idx] || '#CBD5E1';
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                                {overweightPareto.map((item, idx) => {
+                                    const maxImpact = overweightPareto[0].impactCop || 1;
+                                    const barTotalPct = (item.impactCop / maxImpact) * 100;
+                                    const resolvedCop = item.colMCop + item.colPCop;
+                                    const mSharePct = resolvedCop > 0 ? (item.colMCop / resolvedCop) * barTotalPct : 0;
+                                    const pSharePct = resolvedCop > 0 ? (item.colPCop / resolvedCop) * barTotalPct : 0;
 
                                     return (
-                                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', paddingBottom: '0.55rem', borderBottom: idx < overweightPareto.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                                                     <span style={{ fontWeight: '800', color: THEME.colors.textSecondary, width: '16px', fontFamily: THEME.typography.fontFamilyMain }}>
                                                         #{idx + 1}
                                                     </span>
                                                     <span style={{ fontWeight: '700', color: THEME.colors.textMain, fontFamily: THEME.typography.fontFamilySecondary }}>
                                                         {item.name}
                                                     </span>
-                                                    <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        {item.accounting_id && item.accounting_id !== '---' ? `(#${item.accounting_id})` : ''}
-                                                    </span>
+                                                    {item.accounting_id && item.accounting_id !== '---' && (
+                                                        <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                            #{item.accounting_id}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <span style={{ fontWeight: '900', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain }}>
-                                                        {formatMoney(item.cost)}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{ fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilyMain, fontSize: '0.78rem' }}>
+                                                        {formatNumber(item.deviatedKg, 2)} kg desv.
                                                     </span>
-                                                    <span style={{ fontSize: '0.7rem', color: THEME.colors.textSecondary, marginLeft: '6px', fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilySecondary }}>
-                                                        ({formatNumber(item.kg, 1)} kg)
+                                                    <span style={{
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontVariantNumeric: 'tabular-nums',
+                                                        backgroundColor: item.recoveryPct >= 50 ? '#ECFDF5' : '#FEF3C7',
+                                                        color: item.recoveryPct >= 50 ? '#065F46' : '#92400E',
+                                                        border: `1px solid ${item.recoveryPct >= 50 ? '#A7F3D0' : '#FDE68A'}`
+                                                    }}>
+                                                        {formatNumber(item.recoveryPct, 1)}% recup.
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
-                                                <div style={{ height: '100%', width: `${pct}%`, backgroundColor: barColor, borderRadius: '3px' }}></div>
+                                            <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+                                                <div style={{ height: '100%', width: `${mSharePct}%`, backgroundColor: '#059669' }} title="Facturado Col M"></div>
+                                                <div style={{ height: '100%', width: `${pSharePct}%`, backgroundColor: '#D97706' }} title="Asumido Col P"></div>
+                                            </div>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.7rem', color: THEME.colors.textSecondary, fontVariantNumeric: 'tabular-nums', fontFamily: THEME.typography.fontFamilySecondary }}>
+                                                <span>
+                                                    <strong style={{ color: '#059669' }}>Facturado Col M:</strong> {formatNumber(item.colMKg, 2)} kg · {formatMoney(item.colMCop)}
+                                                </span>
+                                                <span>
+                                                    <strong style={{ color: '#D97706' }}>Asumido Col P:</strong> {formatNumber(item.colPKg, 2)} kg · {formatMoney(item.colPCop)}
+                                                </span>
+                                                <span>
+                                                    <strong style={{ color: '#475569' }}>Devuelto Col O:</strong> {formatNumber(item.colOKg, 2)} kg · {formatMoney(item.colOCop)}
+                                                </span>
                                             </div>
                                         </div>
                                     );

@@ -7,7 +7,8 @@ import { isAbortError } from '@/lib/errorUtils';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { OPERATIONAL_CELLS, getOperationalTargetDate, normalizeOperationalCell } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
-import { CornerDownRight, CheckCircle2 } from 'lucide-react';
+import { isSandboxMode } from '@/lib/sandboxGuard';
+import { CornerDownRight, CheckCircle2, Scale } from 'lucide-react';
 
 // Types
 type PickingItem = {
@@ -69,6 +70,8 @@ export default function PickingTerminal() {
     const [tasks, setTasks] = useState<PickingItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [lastAction, setLastAction] = useState<string | null>(null);
+    const [weightInputs, setWeightInputs] = useState<Record<string, string>>({});
+    const [savingId, setSavingId] = useState<string | null>(null);
 
     // 12 Células reales (buying_team alineado 1:1 con Sábana de Alistamiento)
     const CELLS = OPERATIONAL_CELLS;
@@ -202,35 +205,137 @@ export default function PickingTerminal() {
     }, [selectedCell, loadTasks]);
 
     // Actions
-    const handlePick = async (item: PickingItem) => {
+    const handleWeightInputChange = (itemId: string, rawValue: string) => {
+        const normalized = rawValue.replace(',', '.');
+        if (normalized !== '' && !/^\d*(\.\d*)?$/.test(normalized)) {
+            return;
+        }
+        setWeightInputs(prev => ({ ...prev, [itemId]: normalized }));
+    };
+
+    const handlePick = async (item: PickingItem, customPickedQty?: number) => {
+        if (savingId === item.id) return;
+
+        const targetQty = customPickedQty !== undefined ? customPickedQty : item.quantity;
+
+        if (!Number.isFinite(targetQty)) {
+            (window as any).showToast?.('Ingresa una pesada numérica válida.', 'error');
+            return;
+        }
+
+        // Validación anti-dedo (Escenario 488 §2): <= 0 o > +25% sobre item.quantity exige confirmación explícita
+        if (targetQty <= 0) {
+            const confirmZeroOrLess = window.confirm(
+                `ALERTA ANTI-DEDO: Vas a registrar ${targetQty} ${item.unit_of_measure} (<= 0) para ${item.product_name} (pedido: ${item.quantity}).\n¿Confirmas guardar este valor?`
+            );
+            if (!confirmZeroOrLess) return;
+        } else if (item.quantity > 0 && targetQty > item.quantity * 1.25) {
+            const pctOver = (((targetQty - item.quantity) / item.quantity) * 100).toFixed(1);
+            const confirmOverweight = window.confirm(
+                `ALERTA ANTI-DEDO (+${pctOver}%): Vas a registrar ${targetQty} ${item.unit_of_measure} frente a ${item.quantity} ${item.unit_of_measure} pedidos para ${item.product_name}.\n¿Confirmas que esta pesada real es correcta?`
+            );
+            if (!confirmOverweight) return;
+        }
+
         // DT-17 Stock gate when stock is zero
-        if ((item.available_stock ?? 0) <= 0) {
-            const proceedZero = confirm(
-                `ALERTA DT-17 SIN STOCK: ${item.product_name} registra stock 0 en bodega.\n¿Confirmas que encontraste stock físico en piso para picar ${item.quantity} ${item.unit_of_measure}?`
+        if (targetQty > 0 && (item.available_stock ?? 0) <= 0) {
+            const proceedZero = window.confirm(
+                `ALERTA DT-17 SIN STOCK: ${item.product_name} registra stock 0 en bodega.\n¿Confirmas que encontraste stock físico en piso para picar ${targetQty} ${item.unit_of_measure}?`
             );
             if (!proceedZero) return;
         }
 
-        // Optimistic Remove
-        setTasks(prev => prev.filter(t => t.id !== item.id));
-        setLastAction(`Picado: ${item.product_name} (${item.quantity})`);
+        setSavingId(item.id);
+        try {
+            // DB Update on order_items.picked_quantity
+            const { error: orderItemError } = await supabase
+                .from('order_items')
+                .update({ picked_quantity: targetQty })
+                .eq('id', item.id);
 
-        // DB Update
-        const { error } = await supabase
-            .from('order_items')
-            .update({ picked_quantity: item.quantity }) // Assume full pick for speed
-            .eq('id', item.id);
+            if (orderItemError) throw orderItemError;
 
-        if (error) {
-            (window as any).showToast?.('Error al guardar. Recarga.', 'error');
-            loadTasks(selectedCell!);
+            // Sincronización de excedente en inventory_movements (sin trigger en BD sobre picked_quantity)
+            if (targetQty > item.quantity) {
+                const deltaOverweight = Number((targetQty - item.quantity).toFixed(2));
+                if (deltaOverweight > 0) {
+                    const { data: warehouseData, error: warehouseError } = await supabase
+                        .from('warehouses')
+                        .select('id')
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (warehouseError) throw warehouseError;
+                    if (!warehouseData?.id) {
+                        throw new Error('No se encontró una bodega activa para registrar el excedente de pesada.');
+                    }
+
+                    const isSandbox = isSandboxMode();
+                    const targetDate = getOperationalTargetDate(20);
+                    const refType = isSandbox ? 'sandbox_waste_weighing' : 'waste_weighing';
+                    const noteTag = `[EXCEDENTE BÁSCULA - TERMINAL PICKING] ${item.product_name} (+${deltaOverweight} ${item.unit_of_measure}) | Item #${item.id}`;
+
+                    const { error: delMovErr } = await supabase
+                        .from('inventory_movements')
+                        .delete()
+                        .eq('reference_id', item.id)
+                        .in('reference_type', ['waste_weighing', 'sandbox_waste_weighing', 'additional_sale', 'sandbox_additional_sale']);
+
+                    if (delMovErr) throw delMovErr;
+
+                    const { error: insMovErr } = await supabase
+                        .from('inventory_movements')
+                        .insert([{
+                            product_id: item.product_id,
+                            warehouse_id: warehouseData.id,
+                            quantity: -deltaOverweight,
+                            type: 'exit',
+                            status_to: 'available',
+                            notes: noteTag,
+                            reference_type: refType,
+                            reference_id: item.id,
+                            created_at: `${targetDate}T12:00:00.000Z`
+                        }]);
+
+                    if (insMovErr) throw insMovErr;
+                }
+            }
+
+            if (targetQty >= item.quantity) {
+                setTasks(prev => prev.filter(t => t.id !== item.id));
+            } else {
+                setTasks(prev => prev.map(t => t.id === item.id ? { ...t, picked_quantity: targetQty } : t));
+            }
+            setWeightInputs(prev => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+            setLastAction(`Picado: ${item.product_name} (${targetQty} ${item.unit_of_measure})`);
+            setTimeout(() => {
+                if (isMounted.current) setLastAction(null);
+            }, 3000);
+        } catch (err) {
+            console.error('Error guardando pesada en terminal de picking:', err);
+            (window as any).showToast?.('Error al guardar pesada. Recarga e intenta de nuevo.', 'error');
+            if (selectedCell) loadTasks(selectedCell);
+        } finally {
+            if (isMounted.current) setSavingId(null);
+        }
+    };
+
+    const handleWeighSubmit = (item: PickingItem) => {
+        const raw = (weightInputs[item.id] ?? '').trim();
+        if (!raw) {
+            (window as any).showToast?.('Ingresa la pesada real antes de guardar.', 'error');
             return;
         }
-
-        // Integración de Inventario: Se maneja automáticamente vía trigger de base de datos al actualizar picked_quantity.
-
-        // Auto-clear message
-        setTimeout(() => setLastAction(null), 3000);
+        const parsed = Number(raw);
+        if (Number.isNaN(parsed)) {
+            (window as any).showToast?.('Valor numérico inválido.', 'error');
+            return;
+        }
+        void handlePick(item, parsed);
     };
 
     // -- VIEW: CELL SELECTION --
@@ -291,8 +396,11 @@ export default function PickingTerminal() {
                     </div>
                 )}
 
-                {tasks.map(item => (
-                    <div key={item.id} className="bg-gray-800 rounded-lg p-4 shadow-lg border-l-4 border-yellow-500 flex justify-between items-center">
+                {tasks.map(item => {
+                    const weightValue = weightInputs[item.id] ?? '';
+                    const isSaving = savingId === item.id;
+                    return (
+                    <div key={item.id} className="bg-gray-800 rounded-lg p-4 shadow-lg border-l-4 border-yellow-500 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                         <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="text-lg font-bold text-white">{item.product_name}</h3>
@@ -313,19 +421,57 @@ export default function PickingTerminal() {
                                 </div>
                             )}
                             <div className="text-gray-400 text-sm mt-1">
-                                {item.customer_name}
+                                {item.customer_name} · Pedido: <span className="text-gray-200 font-semibold">{item.quantity} {item.unit_of_measure}</span>
+                                {item.picked_quantity > 0 && (
+                                    <span className="ml-2 text-amber-300 font-semibold">(Picado previo: {item.picked_quantity})</span>
+                                )}
                             </div>
                         </div>
 
-                        <button
-                            onClick={() => handlePick(item)}
-                            className="ml-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold h-14 w-24 rounded-lg flex flex-col items-center justify-center active:scale-90 transition-transform"
-                        >
-                            <span className="text-xs uppercase opacity-70">CONFIRMAR</span>
-                            <span className="text-xl">{item.quantity}</span>
-                        </button>
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                            <div className="flex items-center bg-gray-900 border border-gray-600 rounded-lg overflow-hidden h-14">
+                                <div className="pl-2.5 pr-1 text-gray-400 flex items-center" title="Pesada real">
+                                    <Scale className="w-4 h-4" />
+                                </div>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={weightValue}
+                                    onChange={(e) => handleWeightInputChange(item.id, e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleWeighSubmit(item);
+                                        }
+                                    }}
+                                    placeholder={String(item.quantity)}
+                                    disabled={isSaving}
+                                    aria-label={`Pesada real para ${item.product_name}`}
+                                    className="w-20 bg-transparent text-white text-center font-mono text-lg font-bold focus:outline-none placeholder:text-gray-600"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleWeighSubmit(item)}
+                                    disabled={isSaving || !weightValue.trim()}
+                                    className="h-full px-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-xs font-bold uppercase tracking-wide transition-colors"
+                                >
+                                    Pesar
+                                </button>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => handlePick(item)}
+                                disabled={isSaving}
+                                className="bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-black font-bold h-14 w-24 rounded-lg flex flex-col items-center justify-center active:scale-90 transition-transform"
+                            >
+                                <span className="text-xs uppercase opacity-80">100%</span>
+                                <span className="text-xl">{item.quantity}</span>
+                            </button>
+                        </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
 
             <div className="p-4 text-center">

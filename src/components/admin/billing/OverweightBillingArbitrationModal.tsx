@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Scale, X, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Scale, X, CheckCircle2, RefreshCw, Info } from 'lucide-react';
 
 interface OverweightItemRow {
     orderItemId: string;
@@ -12,7 +12,7 @@ interface OverweightItemRow {
     clientName: string;
     productId: string;
     productName: string;
-    productSku: string;
+    accountingId: string;
     unitOfMeasure: string;
     orderedQty: number;
     pickedQty: number;
@@ -30,7 +30,7 @@ interface RawOrderProfile {
 
 interface RawOrderItemProduct {
     name?: string | null;
-    sku?: string | null;
+    accounting_id?: string | number | null;
     unit_of_measure?: string | null;
     iva_rate?: number | null;
 }
@@ -75,9 +75,15 @@ export default function OverweightBillingArbitrationModal({
     const [loading, setLoading] = useState(false);
     const [savingId, setSavingId] = useState<string | null>(null);
     const [rows, setRows] = useState<OverweightItemRow[]>([]);
+    const [thresholdCop, setThresholdCop] = useState<number>(2000);
+    const [autoAbsorbedCount, setAutoAbsorbedCount] = useState<number>(0);
     const [dateFilter, setDateFilter] = useState<string>(
         selectedDate || new Date().toISOString().split('T')[0]
     );
+
+    const isSandbox = process.env.NEXT_PUBLIC_SANDBOX_MODE === 'true';
+    const wasteRefType = isSandbox ? 'sandbox_waste_weighing' : 'waste_weighing';
+    const additionalRefType = isSandbox ? 'sandbox_additional_sale' : 'additional_sale';
 
     useEffect(() => {
         if (selectedDate) setDateFilter(selectedDate);
@@ -86,20 +92,42 @@ export default function OverweightBillingArbitrationModal({
     const fetchOverweightItems = useCallback(async () => {
         if (!isOpen) return;
         setLoading(true);
+        setAutoAbsorbedCount(0);
         try {
-            const { data: ordersData, error } = await supabase
-                .from('orders')
-                .select(`
-                    id, sequence_id, delivery_date, status,
-                    profiles:profile_id (company_name, contact_name, razon_social),
-                    order_items (
-                        id, product_id, quantity, picked_quantity, unit_price, selected_options,
-                        products (name, sku, unit_of_measure)
-                    )
-                `)
-                .eq('delivery_date', dateFilter)
-                .neq('status', 'cancelled')
-                .order('sequence_id', { ascending: false });
+            const [{ data: thresholdSetting, error: thresholdErr }, { data: ordersData, error }] = await Promise.all([
+                supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'overweight_billing_threshold_cop')
+                    .maybeSingle(),
+                supabase
+                    .from('orders')
+                    .select(`
+                        id, sequence_id, delivery_date, status,
+                        profiles:profile_id (company_name, contact_name, razon_social),
+                        order_items (
+                            id, product_id, quantity, picked_quantity, unit_price, selected_options,
+                            products (name, accounting_id, unit_of_measure)
+                        )
+                    `)
+                    .eq('delivery_date', dateFilter)
+                    .neq('status', 'cancelled')
+                    .order('sequence_id', { ascending: false })
+            ]);
+
+            if (thresholdErr) {
+                console.warn('No se pudo leer overweight_billing_threshold_cop, usando fallback 2000:', thresholdErr.message);
+            }
+            const rawThreshold = thresholdSetting?.value;
+            const parsedThreshold = Number(rawThreshold);
+            const activeThreshold = (
+                rawThreshold !== null &&
+                rawThreshold !== undefined &&
+                String(rawThreshold).trim() !== '' &&
+                Number.isFinite(parsedThreshold) &&
+                parsedThreshold >= 0
+            ) ? parsedThreshold : 2000;
+            setThresholdCop(activeThreshold);
 
             if (error) throw error;
 
@@ -126,7 +154,7 @@ export default function OverweightBillingArbitrationModal({
                             clientName,
                             productId: oi.product_id,
                             productName: prod?.name || 'Producto',
-                            productSku: prod?.sku || '',
+                            accountingId: prod?.accounting_id !== null && prod?.accounting_id !== undefined ? String(prod.accounting_id) : '',
                             unitOfMeasure: prod?.unit_of_measure || 'Kg',
                             orderedQty: ordered,
                             pickedQty: picked,
@@ -139,12 +167,17 @@ export default function OverweightBillingArbitrationModal({
                 });
             });
 
+            let blockingItems: OverweightItemRow[] = candidateItems;
+            let absorbedCount = 0;
+
             if (itemIds.length > 0) {
-                const { data: movs } = await supabase
+                const { data: movs, error: movsErr } = await supabase
                     .from('inventory_movements')
                     .select('reference_id, reference_type')
                     .in('reference_id', itemIds)
-                    .in('reference_type', ['additional_sale', 'waste_weighing']);
+                    .in('reference_type', [additionalRefType, wasteRefType]);
+
+                if (movsErr) throw movsErr;
 
                 const movMap = new Map<string, string>();
                 const typedMovs = (movs || []) as RawMovementRecord[];
@@ -152,22 +185,77 @@ export default function OverweightBillingArbitrationModal({
                     if (m.reference_id && m.reference_type) movMap.set(m.reference_id, m.reference_type);
                 });
 
+                const autoAbsorbCandidates: OverweightItemRow[] = [];
+                const remainingItems: OverweightItemRow[] = [];
+
                 candidateItems.forEach(item => {
                     const movType = movMap.get(item.orderItemId);
-                    if (movType === 'additional_sale') item.chargeOverweight = true;
-                    else if (movType === 'waste_weighing' && item.selectedOptions._charge_overweight === undefined) {
+                    if (movType === additionalRefType) item.chargeOverweight = true;
+                    else if (movType === wasteRefType && item.selectedOptions._charge_overweight === undefined) {
                         item.chargeOverweight = false;
                     }
+
+                    const deltaCop = item.overweightDelta * item.unitPrice;
+                    if (!movMap.has(item.orderItemId) && item.unitPrice > 0 && deltaCop < activeThreshold) {
+                        autoAbsorbCandidates.push(item);
+                    } else {
+                        remainingItems.push(item);
+                    }
                 });
+
+                if (autoAbsorbCandidates.length > 0) {
+                    const { data: warehouseData, error: whErr } = await supabase
+                        .from('warehouses')
+                        .select('id')
+                        .limit(1)
+                        .maybeSingle();
+                    if (whErr) throw whErr;
+
+                    const warehouseId = warehouseData?.id;
+                    if (warehouseId) {
+                        const autoMovements = autoAbsorbCandidates.map(item => {
+                            const movementDate = (item.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(item.deliveryDate))
+                                ? item.deliveryDate
+                                : dateFilter;
+                            const idLabel = item.accountingId ? `#${item.accountingId}` : item.productName;
+                            return {
+                                product_id: item.productId,
+                                warehouse_id: warehouseId,
+                                quantity: -item.overweightDelta,
+                                type: 'exit',
+                                status_to: 'available',
+                                notes: `[MERMA POR PESADA - AUTO-ABSORBIDO < UMBRAL $${activeThreshold.toLocaleString('es-CO')} COP] ${idLabel} (+${item.overweightDelta} ${item.unitOfMeasure}) | Pedido #${item.sequenceId || item.orderId}`,
+                                reference_type: wasteRefType,
+                                reference_id: item.orderItemId,
+                                created_at: `${movementDate}T12:00:00.000Z`
+                            };
+                        });
+
+                        const { error: autoInsertErr } = await supabase
+                            .from('inventory_movements')
+                            .insert(autoMovements);
+
+                        if (autoInsertErr) {
+                            throw autoInsertErr;
+                        }
+                        absorbedCount = autoAbsorbCandidates.length;
+                        blockingItems = remainingItems;
+                    } else {
+                        blockingItems = candidateItems;
+                    }
+                } else {
+                    blockingItems = remainingItems;
+                }
             }
 
-            setRows(candidateItems);
+            setAutoAbsorbedCount(absorbedCount);
+            setRows(blockingItems);
         } catch (err) {
             console.error('Error cargando excedentes de báscula para facturación:', err);
         } finally {
             setLoading(false);
         }
-    }, [isOpen, dateFilter]);
+    }, [isOpen, dateFilter, additionalRefType, wasteRefType]);
 
     useEffect(() => {
         if (isOpen) fetchOverweightItems();
@@ -192,22 +280,24 @@ export default function OverweightBillingArbitrationModal({
             const { data: warehouseData } = await supabase.from('warehouses').select('id').limit(1).maybeSingle();
             const warehouseId = warehouseData?.id;
 
-            const targetRefType = charge ? 'additional_sale' : 'waste_weighing';
+            const targetRefType = charge ? additionalRefType : wasteRefType;
+            const idLabel = row.accountingId ? `#${row.accountingId}` : row.productName;
             const noteTag = charge
-                ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA - FACTURADO] SKU: ${row.productSku || row.productName} (+${row.overweightDelta} ${row.unitOfMeasure}) | Pedido #${row.sequenceId || row.orderId}`
-                : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] SKU: ${row.productSku || row.productName} (+${row.overweightDelta} ${row.unitOfMeasure}) | Pedido #${row.sequenceId || row.orderId}`;
+                ? `[VENTA ADICIONAL POR EXCEDENTE DE BÁSCULA - FACTURADO] ${idLabel} (+${row.overweightDelta} ${row.unitOfMeasure}) | Pedido #${row.sequenceId || row.orderId}`
+                : `[MERMA POR PESADA - TOLERANCIA NO FACTURADA] ${idLabel} (+${row.overweightDelta} ${row.unitOfMeasure}) | Pedido #${row.sequenceId || row.orderId}`;
 
-            await supabase
+            const { error: delMovErr } = await supabase
                 .from('inventory_movements')
                 .delete()
                 .eq('reference_id', row.orderItemId)
-                .in('reference_type', ['waste_weighing', 'additional_sale']);
+                .in('reference_type', [wasteRefType, additionalRefType]);
+            if (delMovErr) throw delMovErr;
 
             if (warehouseId) {
                 const movementDate = (row.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(row.deliveryDate))
                     ? row.deliveryDate
                     : (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : new Date().toISOString().slice(0, 10));
-                await supabase.from('inventory_movements').insert([{
+                const { error: insMovErr } = await supabase.from('inventory_movements').insert([{
                     product_id: row.productId,
                     warehouse_id: warehouseId,
                     quantity: -row.overweightDelta,
@@ -218,6 +308,7 @@ export default function OverweightBillingArbitrationModal({
                     reference_id: row.orderItemId,
                     created_at: `${movementDate}T12:00:00.000Z`
                 }]);
+                if (insMovErr) throw insMovErr;
             }
 
             // SDD DT-17: Recalcular liquidación financiera del pedido (orders.total / subtotal / tax) según arbitraje Col M vs Col P
@@ -418,6 +509,26 @@ export default function OverweightBillingArbitrationModal({
 
                 {/* Body */}
                 <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+                    {!loading && autoAbsorbedCount > 0 && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '0.65rem 0.9rem',
+                            marginBottom: '1rem',
+                            borderRadius: '10px',
+                            backgroundColor: '#ECFDF5',
+                            border: '1px solid #A7F3D0',
+                            color: '#065F46',
+                            fontSize: '0.78rem',
+                            fontWeight: 700
+                        }}>
+                            <Info size={16} color="#059669" style={{ flexShrink: 0 }} />
+                            <span>
+                                {autoAbsorbedCount} {autoAbsorbedCount === 1 ? 'ítem auto-absorbido' : 'ítems auto-absorbidos'} en Col P (Pesada) por estar debajo del umbral (${thresholdCop.toLocaleString('es-CO')} COP).
+                            </span>
+                        </div>
+                    )}
                     {loading ? (
                         <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B', fontWeight: 700 }}>
                             Consultando excedentes de báscula en alistamiento...
@@ -464,7 +575,9 @@ export default function OverweightBillingArbitrationModal({
                                             </td>
                                             <td style={{ padding: '0.75rem' }}>
                                                 <div style={{ fontWeight: 800, color: '#0F172A' }}>{r.productName}</div>
-                                                <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{r.productSku} • {r.unitOfMeasure}</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                                    {r.accountingId ? `#${r.accountingId} • ` : ''}{r.unitOfMeasure}
+                                                </div>
                                             </td>
                                             <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 700 }}>
                                                 {r.orderedQty.toFixed(2)} {r.unitOfMeasure}
@@ -473,7 +586,12 @@ export default function OverweightBillingArbitrationModal({
                                                 {r.pickedQty.toFixed(2)} {r.unitOfMeasure}
                                             </td>
                                             <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 900, color: '#D97706' }}>
-                                                +{r.overweightDelta.toFixed(2)} {r.unitOfMeasure}
+                                                <div>+{r.overweightDelta.toFixed(2)} {r.unitOfMeasure}</div>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: r.unitPrice <= 0 ? '#DC2626' : '#64748B' }}>
+                                                    {r.unitPrice <= 0
+                                                        ? 'Remisión $0'
+                                                        : `$${Math.round(r.overweightDelta * r.unitPrice).toLocaleString('es-CO')} COP`}
+                                                </div>
                                             </td>
                                             <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                                                 <div style={{ display: 'inline-flex', gap: '6px' }}>

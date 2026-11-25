@@ -18115,7 +18115,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 ---
 
 ### Escenario 485: Limpieza Visual & Responsive Real en Barra Superior de `InventoryDailyBalanceTab` (SDD v1.9.440)
-- **Estado del Contrato:** `🟡 EN REVISIÓN / PENDIENTE DE CIERRE`
+- **Estado del Contrato:** `🟢 CERTIFICADO Y DESPLEGADO EN SANDBOX (\`tsc --noEmit\` 0 errores)`
 - **Enmienda Acotada (`src/components/InventoryDailyBalanceTab.tsx`):**
   1. **Toolbar Responsive (`L4350-L4655`, `L5055-L5145`):** Habilitar `flexWrap: 'wrap'` en Línea 1 y en **ambos** extremos de Línea 2 (incluyendo bloque derecho `L5135` de Excel/Expandir/Inmovilizado, buscador `minWidth: '170px'` y bloque izquierdo de categorías con `minWidth: 0`), evitando desborde/recorte horizontal en pantallas `<1440px`.
   2. **Reubicación de `"Sin novedad hoy (0)"` al Modal `"Cerrar Día"` (`L5334`, `L6433+`):** Suprimir la barra fija `Checklist Cierre (X/5)` encima de la tabla para recuperar altura vertical limpia, **reubicando** el checklist compacto con los botones `"Sin novedad hoy (0)"` (`handleToggleNovedadZero` para `G`, `Q-R`, `X`) y la trazabilidad `Base Col E` dentro del modal de **`Cerrar Día`**, preservando intacto `evaluateInventoryGateStatus`.
@@ -18166,7 +18166,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 ---
 
 ### Escenario 488: Control de Sobrepeso en Pesada por Densidad Económica (`Umbral Pesada / Facturación \$2.000 COP`), Captura Híbrida (Digital + Manual) y Pareto de Desviaciones (SDD v1.9.443)
-- **Estado del Contrato:** `🟢 CONTRATO ENMENDADO (POST /GOLDFISH MODO 1 — LISTO PARA EJECUCIÓN)`
+- **Estado del Contrato:** `🟢 CERTIFICADO Y DESPLEGADO EN SANDBOX (\`tsc --noEmit\` 0 errores)`
 - **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17729`):** Autorización acotada del CTO para intervenir `src/components/InventoryDailyBalanceTab.tsx` exclusivamente en el comportamiento de **`Col M` (`VTA. ADICIONAL`)** (tooltip, botón `×` de limpieza de ajustes manuales previos, `isReadonly = true` + disparador del mini-modal de 3 pasos para carga de sobrepesos).
 - **Principio SpaceX ("The best part is no part"):** Cero columnas nuevas en la sábana de 24 columnas y cero módulos nuevos. Todo excedente de pesada (`picked_quantity > quantity`) se canaliza a las columnas existentes **`Col M` (`additional_sale`, cobrado)**, **`Col P` (`waste_weighing`, asumido)** o **`Col O` (`route_return`, devuelto)** según umbral económico configurable.
 - **Alcance Contractual:**
