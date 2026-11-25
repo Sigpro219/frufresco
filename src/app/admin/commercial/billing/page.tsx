@@ -37,6 +37,8 @@ import {
 } from '@/lib/commercial/pqrAdjustmentEngine';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GalleryOmnibox, matchesUniversalSearch } from '@/components/common/GalleryOmnibox';
+import { canCreateHistoricalBillingOrder } from '@/lib/billing/historicalBillingAuth';
+import { HistoricalBillingOrderModal } from '@/components/admin/billing/HistoricalBillingOrderModal';
 import { 
     ArrowUpDown,
     ArrowUp,
@@ -511,6 +513,25 @@ export function formatItemQuantityPresentation(item: any) {
 }
 
 export function getOrderGraceInfo(order: any, graceMinutes: number = 120, cutCloseTime: string = '17:00') {
+    // Escenario 490: Pedidos Históricos / Solo Facturación hacen bypass total de ventana de gracia
+    if (order?.status === 'billing_only') {
+        return {
+            statusType: 'ready',
+            isUnpricedNovelty: false,
+            badgeText: 'Histórico / Solo Factura',
+            badgeBg: '#EFF6FF',
+            badgeColor: '#1E40AF',
+            badgeBorder: '#BFDBFE',
+            progressBarBg: '#2563EB',
+            progressPct: 100,
+            isReadyForCut: true,
+            remainingMin: 0,
+            cutCountdownLabel: '',
+            isCutExpired: false,
+            label: 'Listo para Facturar'
+        };
+    }
+
     const activeReturns = (order.billing_returns || []).filter((r: any) => r.status !== 'rejected');
     const activePqrs = (order.customer_service_pqrs || []).filter((p: any) => p.status === 'pending' || p.status === 'in_progress');
     const hasReturn = activeReturns.length > 0 || activePqrs.length > 0;
@@ -841,7 +862,8 @@ export default function BillingDashboard() {
     };
 
     const [selectedBillingDate, setSelectedBillingDate] = useState<string>(getBogotaDate(0));
-    const { profile, loading: authLoading } = useAuth();
+    const { user, profile, loading: authLoading } = useAuth();
+    const [showHistoricalModal, setShowHistoricalModal] = useState(false);
     const [roles, setRoles] = useState<any[]>([]);
     const [permissionsLoaded, setPermissionsLoaded] = useState(false);
     const [hasInvoicingAccess, setHasInvoicingAccess] = useState(false);
@@ -1660,9 +1682,9 @@ export default function BillingDashboard() {
                 .order('created_at', { ascending: false });
 
             if (includeAllStatuses) {
-                pOrdersQuery = pOrdersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
+                pOrdersQuery = pOrdersQuery.in('status', ['delivered', 'billing_only', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
             } else {
-                pOrdersQuery = pOrdersQuery.eq('status', 'delivered');
+                pOrdersQuery = pOrdersQuery.in('status', ['delivered', 'billing_only']);
             }
 
             if (selectedBillingDate && selectedBillingDate !== 'all') {
@@ -1719,7 +1741,7 @@ export default function BillingDashboard() {
                     `)
                     .is('billing_cut_id', null)
                     .is('invoice_id', null)
-                    .in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'])
+                    .in('status', ['delivered', 'billing_only', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'])
                     .order('delivery_date', { ascending: false });
 
                 const isOrderBatchAccumulated = (o: any) => {
@@ -2296,7 +2318,7 @@ export default function BillingDashboard() {
             if (o.billing_cut_id) return false;
             const matchesDate = selectedBillingDate === 'all' || o.delivery_date === selectedBillingDate;
             if (!matchesDate) return false;
-            if (!['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'].includes(o.status)) {
+            if (!['delivered', 'billing_only', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit'].includes(o.status)) {
                 return false;
             }
             if (!isOrderEligibleForCanonicalBilling(o, parentProfilesMap)) return false;
@@ -2575,9 +2597,9 @@ export default function BillingDashboard() {
             } else {
                 ordersQuery = ordersQuery.is('billing_cut_id', null);
                 if (slot === 'PM' || includeAllStatuses) {
-                    ordersQuery = ordersQuery.in('status', ['delivered', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
+                    ordersQuery = ordersQuery.in('status', ['delivered', 'billing_only', 'shipped', 'picking', 'approved', 'para_compra', 'pending_approval', 'recibido', 'ready_for_dispatch', 'in_transit']);
                 } else {
-                    ordersQuery = ordersQuery.eq('status', 'delivered');
+                    ordersQuery = ordersQuery.in('status', ['delivered', 'billing_only']);
                 }
                 if (selectedBillingDate && selectedBillingDate !== 'all') {
                     ordersQuery = ordersQuery.eq('delivery_date', selectedBillingDate);
@@ -5740,6 +5762,31 @@ export default function BillingDashboard() {
                                                         : `Corte Mañana (AM) ${selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${pendingOrdersCount})`}`}
                                                 </span>
                                             </button>
+
+                                            {canCreateHistoricalBillingOrder(user) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowHistoricalModal(true)}
+                                                    style={{
+                                                        backgroundColor: '#EFF6FF',
+                                                        color: '#1E40AF',
+                                                        border: '1px solid #BFDBFE',
+                                                        padding: '0.28rem 0.65rem',
+                                                        borderRadius: '5px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.70rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: '0 1px 2px rgba(30, 64, 175, 0.08)'
+                                                    }}
+                                                    title="Crear pedido histórico / solo facturación (sin impacto en bodega ni rutas)"
+                                                >
+                                                    <Plus size={11} strokeWidth={2.5} />
+                                                    <span>Pedido Histórico</span>
+                                                </button>
+                                            )}
                                         </>
                                     )}
 
@@ -10810,6 +10857,14 @@ export default function BillingDashboard() {
                     </div>
                 );
             })()}
+            <HistoricalBillingOrderModal
+                isOpen={showHistoricalModal}
+                onClose={() => setShowHistoricalModal(false)}
+                onCreated={() => {
+                    setShowHistoricalModal(false);
+                    fetchData();
+                }}
+            />
         </main>
     );
 }

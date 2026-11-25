@@ -175,7 +175,7 @@ export async function POST(request: Request) {
                 .from('orders')
                 .select('id, warehouse_spaces')
                 .in('delivery_date', targetDeliveryDates)
-                .neq('status', 'cancelled')
+                .not('status', 'in', '(cancelled,billing_only)')
                 .not('warehouse_spaces', 'is', null);
             if (preErr) throw preErr;
 

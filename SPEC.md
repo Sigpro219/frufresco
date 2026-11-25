@@ -18198,3 +18198,36 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   2. **Excel 24 Cols (`handleExportOfficialExcel`, `L2863-L2898`):** En filas con `Tipo Registro === '↳ Presentación'`, exportar `'Faltantes': ''` y `'Sobrantes': ''` y omitir la inyección de fórmulas en columnas `X` y `Y` (dejándolas vacías), manteniendo las fórmulas nativas únicamente en padres consolidados y productos independientes.
   3. **Filtros y Tags (`matchSearchSegment` `L1962-L2000`, `filteredFamilies` `L2085-L2091`, `displayedFamilies` `L2252-L2293`):** En familias padre–hijo (`isFamilyMember = true`), los filtros de columna `V`/`W` y los tags `@faltante`/`@faltantes`/`@sobrante`/`@sobrantes`/`@alerta`/`@bajo`/`@critico` se evalúan exclusivamente contra `family.consolidated` (evitando mostrar familias cuadradas por desviaciones fantasma en hijos).
   4. **Cierre Diario (`handleOfficialClosing`, `L2601-L2653`):** Totalizar `totalMissing` y `totalSurplus` desde `dailyFamilies.map(f => f.isParent ? f.consolidated : f.parent)` en lugar de `dailyRows`, y alinear `snapshot_items` 1:1 con `total_missing` / `total_surplus` (guardando el valor consolidado en el `productId` del padre y `0` en los hijos de familia).
+
+---
+
+### Escenario 490: Carril Aislado de Pedidos Históricos "Solo Facturación" (`status = 'billing_only'`), Acceso Exclusivo Angied/Julissa y Cierre de Fugas Operativas (SDD v1.9.445)
+- **Estado del Contrato:** `🟢 CERTIFICADO Y DESPLEGADO EN SANDBOX (\`tsc --noEmit\` 0 errores)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17729`):** Autorización acotada del CTO para intervenir quirúrgicamente:
+  - `src/app/admin/commercial/billing/page.tsx`: únicamente los 5 filtros de estado (`L1662-1666`, `L1722`, `L2299`, `L2577-2581`), `getOrderGraceInfo` (`L518`) y el botón/modal `+ Pedido Histórico`.
+  - `src/app/admin/orders/loading/page.tsx`: únicamente excluir `'billing_only'` en `L410`, `L1404` y `L1775`.
+  - Planillas congeladas (`contingency-print`, `purchases-print`, `alistamiento-print`, `receiving-print`, `print-labels`, `orders/create`, `EmailDraftsModule`) permanecen **intactas**.
+- **Alcance Contractual:**
+  1. **Autorización Zero-Trust & API (`src/lib/billing/historicalBillingAuth.ts` + `src/app/api/commercial/billing/historical-order/route.ts`):**
+     - Allowlist estricta por `userId` y `email` normalizado (jamás aceptar `role === 'sys_admin'` ni wildcard `'*'`):
+       - Julissa: `900c3fc2-1d9d-40b4-9506-d879a7a4147e` (`e.julissaa@gmail.com`)
+       - Angied: `429f975b-0e38-47ec-8e8d-f548051be8dd` (`angidailed94@gmail.com`)
+     - `GET /api/commercial/billing/historical-order?profile_id=...`: protegido con `verifyStaffBearer` + allowlist; retorna catálogo activo (`id`, `name`, `accounting_id`, `unit_of_measure`, `iva_rate`) con tarifas resueltas estrictamente desde (1) acuerdo vigente (`quotes.status = 'agreement'` + `quote_items`), (2) `pricing_model_prices` (`profile.pricing_model_id` → `GENERAL_INSTITUCIONAL` / `CLIENTES_HOGAR`), (3) `commercial_cost_matrix` + `pricing_rules` (**prohibido `products.base_price`**).
+     - `POST /api/commercial/billing/historical-order`: protegido con `verifyStaffBearer` + allowlist; valida `delivery_date <= hoy` (Bogotá), crea `orders` con `status = 'billing_only'`, `warehouse_spaces = null`, `assigned_route_id = null`, `origin = 'Admin Panel'`, `origin_source = 'billing_historical'`, `admin_notes = '[SOLO FACTURACIÓN / HISTÓRICO — Creado por <nombre>] ...'`; inserta `order_items` estrictamente con **`picked_quantity = null`** (evitando `trigger_deduct_picking`, `InventoryUnifiedDashboard` y `OverweightBillingArbitrationModal`); registra trazabilidad con `insertAuditLogSafe`.
+  2. **Modal `+ Pedido Histórico` (`src/components/admin/billing/HistoricalBillingOrderModal.tsx`):**
+     - `'use client';` en línea 1, solo iconos `lucide-react`, `#accounting_id` (cero `SKU`), inputs Estándar `5B` (`type="text"` + `inputMode="decimal"`, cero `<input type="number">`), cero `products.base_price`.
+     - Selección de cliente, fecha real histórica (`<= hoy`), OC/nota opcional, carga de ítems manual o importación Excel/CSV vía `parseSpreadsheetWorkbook` (`src/lib/spreadsheets.ts`) emparejando por `#accounting_id` o nombre, con precio editable.
+  3. **Integración en Facturación (`src/app/admin/commercial/billing/page.tsx`):**
+     - `getOrderGraceInfo`: rama prioritaria `order.status === 'billing_only'` → `statusType: 'ready'`, `isReadyForCut: true`, `badgeText: 'Histórico / Solo Factura'` (bypass de ventana de gracia).
+     - Incluir `'billing_only'` en los 5 puntos de consulta/corte (`L1662-1666`, `L1722`, `L2299`, `L2577-2581`).
+     - Renderizar botón `+ Pedido Histórico` exclusivamente cuando `canCreateHistoricalBillingOrder(user)` sea `true`.
+  4. **Cierre de las 6 Fugas Operativas:**
+     - Excluir `'billing_only'` (`.not('status', 'in', '(cancelled,billing_only)')`) en:
+       - `src/app/admin/orders/loading/page.tsx` (`L410`, `L1404`, `L1775`)
+       - `src/components/StagingSpacesManagement.tsx` (`L114`)
+       - `src/app/api/transport/manifest/excel/route.ts` (`L70`)
+       - `src/app/ops/inventory/page.tsx` (`L392`)
+       - `src/app/admin/dashboard/page.tsx` (`L86`)
+       - `src/lib/exportRelacionDocumentosExcel.ts` (`L407`) y `src/app/api/transport/confirm/route.ts` (`L178`).
+  5. **Saneamiento Seguro de `#2269`, `#2271`, `#2272`, `#2278`:**
+     - Actualizar únicamente `status = 'billing_only'` y `warehouse_spaces = null`, **preservando intactos `billing_cut_id` e `invoice_id`** (evitando duplicar la factura ya emitida de `#2278` en Producción).

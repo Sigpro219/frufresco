@@ -83,7 +83,7 @@ export default function AdminDashboard() {
             .from('orders')
             .select('total, total_weight_kg')
             .eq('delivery_date', todayBogota)
-            .neq('status', 'cancelled');
+            .not('status', 'in', '(cancelled,billing_only)');
 
         const todayDispatchTotal = ordersToday?.reduce((acc: number, curr: { total: number }) => acc + (Number(curr.total) || 0), 0) || 0;
         const todayWeightKg = ordersToday?.reduce((acc: number, curr: { total_weight_kg?: number }) => acc + (Number(curr.total_weight_kg) || 0), 0) || 0;

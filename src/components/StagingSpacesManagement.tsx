@@ -111,7 +111,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     profiles:profile_id(id, company_name, contact_name, contact_phone, address, role),
                     order_items(id, quantity, unit, unit_price, nickname, products(name, sku, unit_of_measure, weight_kg))
                 `)
-                .neq('status', 'cancelled');
+                .not('status', 'in', '(cancelled,billing_only)');
 
             if (selectedDate) {
                 orderQuery = orderQuery.eq('delivery_date', selectedDate);

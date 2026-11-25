@@ -389,7 +389,7 @@ export default function OpsInventoryPage() {
                         .from('orders')
                         .select('id, order_items(product_id)')
                         .eq('delivery_date', todayStr)
-                        .neq('status', 'cancelled')
+                        .not('status', 'in', '(cancelled,billing_only)')
                 ]);
 
                 if (specSettingsRes.data && specSettingsRes.data.length > 0) {

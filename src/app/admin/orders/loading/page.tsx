@@ -407,7 +407,7 @@ function OrderLoadingContent() {
                 .from('orders')
                 .select('delivery_date')
                 .in('delivery_date', [yesterdayStr, todayStr, tomorrowStr])
-                .neq('status', 'cancelled');
+                .not('status', 'in', '(cancelled,billing_only)');
             if (data) {
                 let y = 0, t = 0, tm = 0;
                 data.forEach((o: any) => {
@@ -1401,7 +1401,7 @@ function OrderLoadingContent() {
                     order_items (id, product_id, quantity, unit, nickname, unit_price, total, products (id, name, sku, unit_of_measure))
                 `)
                 .neq('id', selectedOrder.id)
-                .neq('status', 'cancelled');
+                .not('status', 'in', '(cancelled,billing_only)');
 
             if (profileId) {
                 query = query.eq('profile_id', profileId);
@@ -1774,7 +1774,8 @@ useEffect(() => {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))');
+                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
+                    .not('status', 'in', '(cancelled,billing_only)');
 
 
 

@@ -67,7 +67,7 @@ export async function GET(request: Request) {
                 profile_id
             `)
             .eq('delivery_date', date)
-            .neq('status', 'cancelled')
+            .not('status', 'in', '(cancelled,billing_only)')
             .order('sequence_id', { ascending: true });
 
         if (ordErr) {

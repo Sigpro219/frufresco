@@ -404,7 +404,7 @@ export async function exportRelacionDocumentosWithPicker(options: {
                 )
             `)
             .eq('delivery_date', selectedDate)
-            .neq('status', 'cancelled')
+            .not('status', 'in', '(cancelled,billing_only)')
             .order('sequence_id', { ascending: true })
             .range(0, 4999);
 
