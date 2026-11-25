@@ -2057,6 +2057,29 @@ export default function ManualDispatchWizardModal({
 
                             {step4Confirmed ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', maxWidth: '520px' }}>
+                                    {gateStatus && gateStatus.level === 'green' && gateStatus.sourceKind === 'partial_closing' && (
+                                        <div style={{
+                                            width: '100%',
+                                            backgroundColor: '#FFFBEB',
+                                            border: '1px solid #FCD34D',
+                                            borderRadius: '10px',
+                                            padding: '8px 12px',
+                                            fontSize: '0.73rem',
+                                            color: '#92400E'
+                                        }}>
+                                            <div style={{ fontWeight: 900, marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                <span>{gateStatus.headline}</span>
+                                                <Link
+                                                    href={`/admin/commercial/inventory?date=${gateStatus.lastOperatedDate || ''}`}
+                                                    target="_blank"
+                                                    style={{ color: '#92400E', textDecoration: 'underline', fontWeight: 800, whiteSpace: 'nowrap' }}
+                                                >
+                                                    Completar Cierre Definitivo ↗
+                                                </Link>
+                                            </div>
+                                            <div style={{ fontSize: '0.69rem' }}>{gateStatus.detail}</div>
+                                        </div>
+                                    )}
                                     {gateStatus && gateStatus.level !== 'green' && (
                                         <div style={{
                                             width: '100%',

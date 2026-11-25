@@ -7,6 +7,8 @@ import {
     resolveInitialInventory,
     getDailyManualChecklistStatus,
     saveDailyNovedadZero,
+    PARTIAL_CLOSING_PREFIX,
+    isPartialClosingNote,
     type DailyChecklistStatus,
     type NovedadColumnKey,
     type InventorySourceKind
@@ -2295,9 +2297,11 @@ interface CommittedSaleData {
     );
     const isFutureBalanceDate = balanceDate > getBogotaDateString();
     const isZeroPhysicalBlocked = !isSandbox && overallTotalPhysical <= 0.0001;
+    const stripPartialPrefix = (text?: string | null) => String(text || '').replace(/^\[CIERRE_PARCIAL\]\s*/i, '').trim();
+    const isPartialClosing = Boolean(closingRecord && !closingRecord.is_locked && isPartialClosingNote(closingRecord.notes));
 
-    // Realizar Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
-    const handleOfficialClosing = async () => {
+    // Realizar Cierre Diario (Parcial Operativo o Definitivo Contable - SPEC.md Escenario 486)
+    const handleOfficialClosing = async (mode: 'partial' | 'definitive' = 'definitive') => {
         if (dailyRows.length === 0) {
             notify('No hay datos en la sábana para cerrar la jornada.', 'warning');
             return;
@@ -2306,6 +2310,9 @@ interface CommittedSaleData {
             notify('No se puede cerrar una jornada futura (posterior a hoy en hora Colombia).', 'warning');
             return;
         }
+
+        const isPartialMode = mode === 'partial';
+        const cleanUserNotes = stripPartialPrefix(closingNotes);
 
         try {
             setIsSubmittingClosing(true);
@@ -2355,12 +2362,14 @@ interface CommittedSaleData {
                     closing_date: balanceDate,
                     closed_at: new Date().toISOString(),
                     closed_by_name: profile?.contact_name || user?.email || 'Supervisor Sandbox (Pruebas)',
-                    notes: closingNotes || 'Cierre de prueba ejecutado en Modo Sandbox',
+                    notes: isPartialMode
+                        ? `${PARTIAL_CLOSING_PREFIX} ${cleanUserNotes || 'Cierre parcial Sandbox (Solo Conteo Físico)'}`
+                        : (cleanUserNotes || 'Cierre definitivo ejecutado en Modo Sandbox'),
                     total_calculated: totalCalculated,
                     total_physical: totalPhysical,
                     total_missing: totalMissing,
                     total_surplus: totalSurplus,
-                    is_locked: true,
+                    is_locked: !isPartialMode,
                     is_sandbox: true,
                     snapshot_items: snapshotItems,
                     created_at: new Date().toISOString(),
@@ -2381,7 +2390,12 @@ interface CommittedSaleData {
                 setClosingRecord(sbClosingRecord as any);
                 setIsClosingModalOpen(false);
                 setClosingNotes('');
-                notify(`Jornada Sandbox del ${balanceDate} cerrada y congelada en modo simulación.`, 'success');
+                notify(
+                    isPartialMode
+                        ? `Cierre Parcial Sandbox del ${balanceDate} guardado (Conteo Físico avalado; sábana abierta).`
+                        : `Jornada Sandbox del ${balanceDate} cerrada y congelada en modo simulación.`,
+                    'success'
+                );
                 return;
             }
 
@@ -2412,12 +2426,14 @@ interface CommittedSaleData {
                     closing_date: balanceDate,
                     closed_at: new Date().toISOString(),
                     closed_by_name: profile?.contact_name || user?.email || 'Supervisor de Operaciones',
-                    notes: closingNotes || 'Cierre oficial ejecutado desde la Sábana Diaria',
+                    notes: isPartialMode
+                        ? `${PARTIAL_CLOSING_PREFIX} ${cleanUserNotes || 'Cierre parcial operativo (Solo Conteo Físico) — Pendiente cierre contable definitivo'}`
+                        : (cleanUserNotes || 'Cierre oficial definitivo ejecutado desde la Sábana Diaria'),
                     total_calculated: totalCalculated,
                     total_physical: totalPhysical,
                     total_missing: totalMissing,
                     total_surplus: totalSurplus,
-                    is_locked: true,
+                    is_locked: !isPartialMode,
                     snapshot_items: snapshotItems,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'closing_date' })
@@ -2430,7 +2446,12 @@ interface CommittedSaleData {
             setIsClosingModalOpen(false);
             setClosingNotes('');
             getDailyManualChecklistStatus(supabase, balanceDate).then(setChecklistStatus).catch(() => {});
-            notify(`Jornada del ${balanceDate} cerrada oficialmente y congelada para contabilidad.`, 'success');
+            notify(
+                isPartialMode
+                    ? `Cierre Parcial del ${balanceDate} guardado: Conteo Físico avalado para lanzar operación. Puedes completar el cierre definitivo cuando termines.`
+                    : `Jornada del ${balanceDate} cerrada definitivamente y congelada para contabilidad.`,
+                'success'
+            );
         } catch (err: any) {
             console.error('Error al realizar cierre oficial:', err);
             notify('Error al realizar cierre oficial: ' + (err.message || err), 'error');
@@ -2455,7 +2476,7 @@ interface CommittedSaleData {
                     const updated = {
                         ...closingRecord,
                         is_locked: false,
-                        notes: `${closingRecord.notes || ''} | Reabierto en Sandbox el ${new Date().toLocaleString()}`,
+                        notes: `${stripPartialPrefix(closingRecord.notes)} | Reabierto en Sandbox el ${new Date().toLocaleString()}`.trim(),
                         updated_at: new Date().toISOString()
                     };
                     const { error: sbReopenErr } = await supabase
@@ -2478,7 +2499,7 @@ interface CommittedSaleData {
                 .from('daily_inventory_closings')
                 .update({
                     is_locked: false,
-                    notes: `${closingRecord?.notes || ''} | Reabierto el ${new Date().toLocaleString()}`,
+                    notes: `${stripPartialPrefix(closingRecord?.notes)} | Reabierto el ${new Date().toLocaleString()}`.trim(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('closing_date', balanceDate);
@@ -4291,11 +4312,12 @@ interface CommittedSaleData {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '0.65rem',
-                    flexWrap: 'nowrap'
+                    rowGap: '0.45rem',
+                    columnGap: '0.5rem',
+                    flexWrap: 'wrap'
                 }}>
                     {/* IZQUIERDA: Selector Temporal + Segmented Mode Switch (Sábana Oficial vs Hoja Manual) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', maxWidth: '100%' }}>
                         {/* Selector de Fecha */}
                         <div style={{
                             display: 'inline-flex',
@@ -4492,8 +4514,8 @@ interface CommittedSaleData {
                     {/* CENTRO: Buscador Omnibox Prominente (Protagonista de Navegación) */}
                     <div style={{
                         position: 'relative',
-                        flex: 1,
-                        minWidth: '260px',
+                        flex: '1 1 170px',
+                        minWidth: '170px',
                         maxWidth: '680px'
                     }}>
                         <div style={{
@@ -4582,7 +4604,7 @@ interface CommittedSaleData {
                     </div>
 
                     {/* DERECHA: Filtro Con Movimiento + Acciones dependientes del modo */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', maxWidth: '100%' }}>
                         {/* Segmented Control Con Movimiento / Todos */}
                         <div style={{
                             display: 'inline-flex',
@@ -4802,6 +4824,57 @@ interface CommittedSaleData {
                                     </button>
                                 )}
                             </div>
+                        ) : isPartialClosing ? (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <div
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        backgroundColor: '#FEF3C7',
+                                        border: '1px solid #D97706',
+                                        color: '#92400E',
+                                        padding: '0 0.65rem',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800',
+                                        boxShadow: '0 1px 2px rgba(217, 119, 6, 0.15)'
+                                    }}
+                                    title={`Cierre parcial guardado el ${closingRecord?.closed_at ? new Date(closingRecord.closed_at).toLocaleString() : ''} por ${closingRecord?.closed_by_name || 'Supervisor'}. Conteo Físico avalado para lanzar operación; pendiente completar cierre contable definitivo.`}
+                                >
+                                    <AlertTriangle size={12} strokeWidth={2.5} />
+                                    <span>Cierre Parcial</span>
+                                </div>
+                                {canEditSheet && sheetMode === 'manual_edit' && (
+                                    <button
+                                        type="button"
+                                        disabled={isFutureBalanceDate || isZeroPhysicalBlocked}
+                                        onClick={() => setIsClosingModalOpen(true)}
+                                        style={{
+                                            padding: '0 0.65rem',
+                                            height: '32px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            backgroundColor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? '#94A3B8' : '#16A34A',
+                                            color: '#FFFFFF',
+                                            fontSize: '0.73rem',
+                                            fontWeight: '800',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            cursor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 'not-allowed' : 'pointer',
+                                            opacity: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 0.7 : 1,
+                                            boxShadow: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 'none' : '0 1px 3px rgba(22, 163, 74, 0.3)',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        title="Completar Cierre Definitivo: Sellar contabilidad e inmovilizar la jornada."
+                                    >
+                                        <Lock size={12} strokeWidth={2.2} />
+                                        <span>Completar Cierre Definitivo</span>
+                                    </button>
+                                )}
+                            </div>
                         ) : (
                             canEditSheet && sheetMode === 'manual_edit' && (
                                 <button
@@ -4940,7 +5013,9 @@ interface CommittedSaleData {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '0.6rem',
+                    rowGap: '0.4rem',
+                    columnGap: '0.6rem',
+                    flexWrap: 'wrap',
                     paddingTop: '3px',
                     borderTop: '1px solid #F1F5F9'
                 }}>
@@ -4951,7 +5026,8 @@ interface CommittedSaleData {
                         gap: '4px',
                         overflowX: 'auto',
                         scrollbarWidth: 'none',
-                        flex: 1
+                        flex: '1 1 320px',
+                        minWidth: 0
                     }}>
                         <div style={{
                             display: 'inline-flex',
@@ -5211,84 +5287,7 @@ interface CommittedSaleData {
                 </div>
             </div>
 
-            {/* BARRA CHECKLIST DE 5 PASOS + TRAZABILIDAD DE HERENCIA (ESCENARIO 457) */}
-            {checklistStatus && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.6rem',
-                    flexWrap: 'wrap',
-                    padding: '0.45rem 0.85rem',
-                    marginBottom: '0.55rem',
-                    backgroundColor: checklistStatus.isClosingLocked ? '#F0FDF4' : '#FFFBEB',
-                    border: `1px solid ${checklistStatus.isClosingLocked ? '#BBF7D0' : '#FDE68A'}`,
-                    borderRadius: '10px',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 900, color: checklistStatus.isClosingLocked ? '#166534' : '#92400E', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={14} />
-                            <span>Checklist Cierre ({checklistStatus.completedCount}/{checklistStatus.totalSteps}):</span>
-                        </span>
-                        {[
-                            { key: 'G' as const, label: 'Col G Entradas', done: checklistStatus.counts.G > 0 || Boolean(checklistStatus.novedades.G?.marked), count: checklistStatus.counts.G, novedad: Boolean(checklistStatus.novedades.G?.marked), canZero: true },
-                            { key: 'QR' as const, label: 'Cols Q-R Desperdicio', done: checklistStatus.counts.QR > 0 || Boolean(checklistStatus.novedades.QR?.marked), count: checklistStatus.counts.QR, novedad: Boolean(checklistStatus.novedades.QR?.marked), canZero: true },
-                            { key: 'X' as const, label: 'Col X Donaciones', done: checklistStatus.counts.X > 0 || Boolean(checklistStatus.novedades.X?.marked), count: checklistStatus.counts.X, novedad: Boolean(checklistStatus.novedades.X?.marked), canZero: true },
-                            { key: 'T' as const, label: 'Col T Físico', done: checklistStatus.counts.T > 0, count: checklistStatus.counts.T, novedad: false, canZero: false },
-                            { key: 'LOCK' as const, label: 'Cierre Diario Oficial', done: checklistStatus.isClosingLocked, count: checklistStatus.isClosingLocked ? 1 : 0, novedad: false, canZero: false },
-                        ].map(step => (
-                            <div
-                                key={step.key}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '2px 8px',
-                                    borderRadius: '999px',
-                                    fontSize: '0.68rem',
-                                    fontWeight: 800,
-                                    backgroundColor: step.done ? '#DCFCE7' : '#FFFFFF',
-                                    color: step.done ? '#166534' : '#92400E',
-                                    border: `1px solid ${step.done ? '#86EFAC' : '#FCD34D'}`,
-                                }}
-                            >
-                                <span>{step.done ? '✓' : '○'} {step.label}</span>
-                                {step.count > 0 && step.key !== 'LOCK' && (
-                                    <span style={{ opacity: 0.8 }}>({step.count})</span>
-                                )}
-                                {step.novedad && (
-                                    <span style={{ fontSize: '0.62rem', backgroundColor: '#166534', color: '#FFFFFF', padding: '0 4px', borderRadius: '4px' }}>0</span>
-                                )}
-                                {canEditSheet && step.canZero && step.count === 0 && !checklistStatus.isClosingLocked && (
-                                    <button
-                                        type="button"
-                                        disabled={savingNovedadCol === step.key}
-                                        onClick={() => void handleToggleNovedadZero(step.key as NovedadColumnKey)}
-                                        style={{
-                                            border: '1px solid #CBD5E1',
-                                            backgroundColor: step.novedad ? '#166534' : '#F8FAFC',
-                                            color: step.novedad ? '#FFFFFF' : '#334155',
-                                            borderRadius: '6px',
-                                            padding: '1px 5px',
-                                            fontSize: '0.62rem',
-                                            fontWeight: 800,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        {step.novedad ? 'Quitar 0' : 'Sin novedad hoy (0)'}
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                    {initialResolutionMeta && (
-                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: initialResolutionMeta.hasConflicts ? '#B91C1C' : '#475569' }}>
-                            Base Col E: {initialResolutionMeta.sourceDate ? `${initialResolutionMeta.sourceDate} (${initialResolutionMeta.sourceKind})` : 'Sin línea base previa (0)'}
-                            {initialResolutionMeta.hasConflicts ? ` • ${initialResolutionMeta.conflictCount} conflicto(s) Col T` : ''}
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* BARRA CHECKLIST DE 5 PASOS RETIRADA POR ESCENARIO 485 (recupera altura vertical limpia) */}
 
             {/* TABLA DE 24 COLUMNAS LEAN ENTERPRISE */}
             <div style={{
@@ -6524,7 +6523,31 @@ interface CommittedSaleData {
 
                             <button
                                 type="button"
-                                onClick={handleOfficialClosing}
+                                onClick={() => handleOfficialClosing('partial')}
+                                disabled={isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked}
+                                style={{
+                                    padding: '0.7rem 1.15rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #D97706',
+                                    backgroundColor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? '#CBD5E1' : '#FEF3C7',
+                                    color: (isFutureBalanceDate || isZeroPhysicalBlocked) ? '#64748B' : '#92400E',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    cursor: (isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked) ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    opacity: (isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked) ? 0.7 : 1
+                                }}
+                                title="Avalar el Conteo Físico (Col T) para lanzar la operación sin bloquear la edición posterior de G, Q-R y X."
+                            >
+                                <AlertTriangle size={14} strokeWidth={2.4} />
+                                <span>{isSubmittingClosing ? 'Guardando...' : 'Guardar Cierre Parcial (Solo Conteo)'}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => handleOfficialClosing('definitive')}
                                 disabled={isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked}
                                 style={{
                                     padding: '0.7rem 1.4rem',
@@ -6543,7 +6566,7 @@ interface CommittedSaleData {
                                 }}
                             >
                                 <Lock size={15} strokeWidth={2.5} />
-                                <span>{isSubmittingClosing ? 'Congelando...' : 'Confirmar y Congelar Jornada'}</span>
+                                <span>{isSubmittingClosing ? 'Congelando...' : 'Confirmar Cierre Definitivo'}</span>
                             </button>
                         </div>
                     </div>

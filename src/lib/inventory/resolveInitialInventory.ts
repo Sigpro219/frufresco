@@ -27,10 +27,17 @@ export const BLIND_COUNT_REF_TYPES = [
 
 export type InventorySourceKind =
     | 'official_closing'
+    | 'partial_closing'
     | 'unclosed_counts'
     | 'reopened_closing'
     | 'excel_baseline'
     | 'none';
+
+export const PARTIAL_CLOSING_PREFIX = '[CIERRE_PARCIAL]';
+
+export function isPartialClosingNote(notes?: string | null): boolean {
+    return Boolean(notes && /^\[CIERRE_PARCIAL\]/i.test(notes.trim()));
+}
 
 export type InventoryAndonLevel = 'green' | 'amber' | 'red';
 
@@ -154,6 +161,7 @@ export function resolveInitialInventoryFromData(params: {
         closing_date: string;
         is_locked?: boolean | null;
         closed_by_name?: string | null;
+        notes?: string | null;
         snapshot_items?: ClosingSnapshotItemLike[] | null;
     } | null;
     movementDate: string | null;
@@ -213,11 +221,14 @@ export function resolveInitialInventoryFromData(params: {
             }
         }
 
+        const isPartialClosing = !isClosingLocked && isPartialClosingNote(closing.notes);
         const sourceKind: InventorySourceKind = isExcelBaseline
             ? 'excel_baseline'
             : isClosingLocked
                 ? 'official_closing'
-                : 'reopened_closing';
+                : isPartialClosing
+                    ? 'partial_closing'
+                    : 'reopened_closing';
 
         return {
             stockMap,
@@ -297,6 +308,7 @@ export async function resolveInitialInventory(params: {
         closing_date: string;
         is_locked?: boolean | null;
         closed_by_name?: string | null;
+        notes?: string | null;
         snapshot_items?: ClosingSnapshotItemLike[] | null;
     } | null = null;
 
@@ -321,6 +333,7 @@ export async function resolveInitialInventory(params: {
                     closing_date: validPast[0].date,
                     is_locked: validPast[0].val.is_locked ?? true,
                     closed_by_name: validPast[0].val.closed_by_name ?? null,
+                    notes: validPast[0].val.notes ?? null,
                     snapshot_items: validPast[0].val.snapshot_items ?? null,
                 };
             }
@@ -330,7 +343,7 @@ export async function resolveInitialInventory(params: {
     } else {
         const { data: closeData } = await supabase
             .from('daily_inventory_closings')
-            .select('closing_date, is_locked, closed_by_name, snapshot_items')
+            .select('closing_date, is_locked, closed_by_name, notes, snapshot_items')
             .lt('closing_date', targetDate)
             .order('closing_date', { ascending: false })
             .limit(1)
@@ -525,14 +538,36 @@ export async function evaluateInventoryGateStatus(params: {
         };
     }
 
+    if (
+        coversLastOperated &&
+        resolved.sourceKind === 'partial_closing' &&
+        !resolved.hasConflicts
+    ) {
+        return {
+            level: 'green',
+            targetDate,
+            lastOperatedDate,
+            sourceDate: resolved.sourceDate,
+            sourceKind: resolved.sourceKind,
+            isOfficialLocked: false,
+            hasConflicts: false,
+            conflictProductIds: [],
+            pendingColumns: checklist.pendingSteps,
+            headline: `Cierre Parcial (${shortDateLabel}) — Conteo Físico OK`,
+            detail: `Conteo físico del ${lastOperatedDate} avalado para lanzar la operación. Pendiente completar cierre contable definitivo${checklist.pendingSteps.length > 0 ? ` (${checklist.pendingSteps.join(', ')})` : ''}.`,
+        };
+    }
+
     if (coversLastOperated && resolved.sourceKind !== 'none') {
         const reasonTag = resolved.sourceKind === 'official_closing'
             ? 'Cierre oficial con columnas pendientes del checklist'
-            : resolved.sourceKind === 'reopened_closing'
-                ? 'Cierre reabierto sin volver a sellar'
-                : resolved.sourceKind === 'excel_baseline'
-                    ? 'Base Excel sin Cierre Oficial'
-                    : 'Conteo cargado sin Cierre Oficial';
+            : resolved.sourceKind === 'partial_closing'
+                ? 'Cierre parcial con conflictos en Col T'
+                : resolved.sourceKind === 'reopened_closing'
+                    ? 'Cierre reabierto sin volver a sellar'
+                    : resolved.sourceKind === 'excel_baseline'
+                        ? 'Base Excel sin Cierre Oficial'
+                        : 'Conteo cargado sin Cierre Oficial';
         return {
             level: 'amber',
             targetDate,
