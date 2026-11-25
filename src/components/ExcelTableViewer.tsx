@@ -1,20 +1,37 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     FileText, 
     Filter, 
     CheckCircle2, 
+    Check,
     Loader2, 
     AlertCircle 
 } from 'lucide-react';
+import {
+    matchItemsToExcelRows,
+    scrollChildIntoContainer,
+    type StagingAuditItemLike
+} from '@/lib/orders/stagingHighlightMatcher';
 
 interface ExcelTableViewerProps {
     file?: File | Blob | null;
     fileUrl?: string | null;
+    auditItems?: StagingAuditItemLike[];
+    activeItemKey?: string | null;
+    reviewedItemKeys?: Set<string>;
+    onSelectItemKey?: (itemKey: string) => void;
 }
 
-export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProps) {
+export default function ExcelTableViewer({
+    file,
+    fileUrl,
+    auditItems,
+    activeItemKey,
+    reviewedItemKeys,
+    onSelectItemKey
+}: ExcelTableViewerProps) {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [sheetsData, setSheetsData] = useState<any[]>([]);
@@ -22,6 +39,30 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
     const [filterOnlyWithQty, setFilterOnlyWithQty] = useState<boolean>(false);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [zoomLevel, setZoomLevel] = useState<number>(100);
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+
+    const activeSheetForMatch = sheetsData[selectedSheetIndex] || sheetsData[0];
+    const excelAuditMatch = useMemo(
+        () => matchItemsToExcelRows(auditItems || [], activeSheetForMatch?.rows || []),
+        [auditItems, activeSheetForMatch]
+    );
+    const activeRowIndex = activeItemKey ? (excelAuditMatch.itemKeyToRowIndex.get(activeItemKey) ?? null) : null;
+    const reviewedRowIndices = useMemo(() => {
+        const set = new Set<number>();
+        if (reviewedItemKeys) {
+            reviewedItemKeys.forEach((k) => {
+                const rIdx = excelAuditMatch.itemKeyToRowIndex.get(k);
+                if (rIdx !== undefined) set.add(rIdx);
+            });
+        }
+        return set;
+    }, [reviewedItemKeys, excelAuditMatch]);
+
+    useEffect(() => {
+        if (activeRowIndex === null || !tableContainerRef.current) return;
+        const targetEl = tableContainerRef.current.querySelector(`[data-excel-row-index="${activeRowIndex}"]`) as HTMLElement | null;
+        scrollChildIntoContainer(tableContainerRef.current, targetEl);
+    }, [activeRowIndex]);
 
     useEffect(() => {
         let isMounted = true;
@@ -341,6 +382,23 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
 
                 {/* Filter & Zoom Controls */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {auditItems && auditItems.length > 0 && (
+                        <span style={{
+                            padding: '4px 9px',
+                            borderRadius: '6px',
+                            backgroundColor: '#ECFDF5',
+                            border: '1px solid #A7F3D0',
+                            color: '#065F46',
+                            fontSize: '0.70rem',
+                            fontWeight: 800,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                        }}>
+                            <Check size={12} color="#059669" />
+                            {reviewedItemKeys?.size || 0} / {auditItems.length} revisadas
+                        </span>
+                    )}
                     <button
                         type="button"
                         onClick={() => setFilterOnlyWithQty(prev => !prev)}
@@ -400,7 +458,7 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
             </div>
 
             {/* Modern Google Sheets Table */}
-            <div style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC' }}>
+            <div ref={tableContainerRef} style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC' }}>
                 <table style={{
                     borderCollapse: 'collapse',
                     width: '100%',
@@ -413,17 +471,36 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
                             const isRowHeader = r.isHeader;
                             const isRowMeta = r.isMeta;
                             const hasRowQty = r.hasQty;
+                            const matchedKey = excelAuditMatch.rowIndexToItemKey.get(r.rowIndex);
+                            const isAuditActive = activeRowIndex !== null && r.rowIndex === activeRowIndex;
+                            const isAuditReviewed = !isAuditActive && reviewedRowIndices.has(r.rowIndex);
 
                             return (
                                 <tr
-                                    key={rowIdx}
+                                    key={r.rowIndex ?? rowIdx}
+                                    data-excel-row-index={r.rowIndex}
+                                    onClick={() => { if (matchedKey && onSelectItemKey) onSelectItemKey(matchedKey); }}
                                     style={{
-                                        backgroundColor: isRowHeader 
-                                            ? '#E2E8F0' 
-                                            : (hasRowQty ? '#ECFDF5' : (isRowMeta ? '#F8FAFC' : (rowIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'))),
-                                        fontWeight: isRowHeader ? 800 : (hasRowQty ? 700 : 500),
-                                        color: isRowHeader ? '#0F172A' : (hasRowQty ? '#065F46' : '#334155'),
-                                        borderBottom: hasRowQty ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
+                                        backgroundColor: isAuditActive
+                                            ? '#FEF3C7'
+                                            : isAuditReviewed
+                                                ? '#D1FAE5'
+                                                : isRowHeader
+                                                    ? '#E2E8F0'
+                                                    : (hasRowQty ? '#ECFDF5' : (isRowMeta ? '#F8FAFC' : (rowIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'))),
+                                        fontWeight: isAuditActive ? 800 : (isRowHeader ? 800 : (hasRowQty ? 700 : 500)),
+                                        color: isAuditActive ? '#78350F' : (isRowHeader ? '#0F172A' : (hasRowQty ? '#065F46' : '#334155')),
+                                        borderBottom: isAuditActive
+                                            ? '1.5px solid #F59E0B'
+                                            : isAuditReviewed
+                                                ? '1.5px solid #6EE7B7'
+                                                : (hasRowQty ? '1.5px solid #86EFAC' : '1px solid #E2E8F0'),
+                                        boxShadow: isAuditActive
+                                            ? 'inset 4px 0 0 #D97706, inset 0 1.5px 0 #F59E0B'
+                                            : isAuditReviewed
+                                                ? 'inset 4px 0 0 #10B981, inset 0 1px 0 #6EE7B7'
+                                                : 'none',
+                                        cursor: matchedKey && onSelectItemKey ? 'pointer' : 'default',
                                         transition: 'background-color 0.15s'
                                     }}
                                 >
@@ -431,15 +508,18 @@ export default function ExcelTableViewer({ file, fileUrl }: ExcelTableViewerProp
                                     <td style={{
                                         padding: '4px 8px',
                                         textAlign: 'center',
-                                        backgroundColor: isRowHeader ? '#CBD5E1' : '#F1F5F9',
-                                        color: '#64748B',
+                                        backgroundColor: isAuditActive ? '#FDE68A' : isAuditReviewed ? '#A7F3D0' : (isRowHeader ? '#CBD5E1' : '#F1F5F9'),
+                                        color: isAuditActive ? '#92400E' : isAuditReviewed ? '#065F46' : '#64748B',
                                         borderRight: '1px solid #CBD5E1',
                                         borderBottom: '1px solid #E2E8F0',
                                         fontSize: '0.65rem',
                                         userSelect: 'none',
-                                        width: '32px'
+                                        width: '38px'
                                     }}>
-                                        {r.rowIndex}
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                                            {isAuditReviewed && <Check size={10} color="#059669" />}
+                                            {r.rowIndex}
+                                        </span>
                                     </td>
 
                                     {/* Cells */}

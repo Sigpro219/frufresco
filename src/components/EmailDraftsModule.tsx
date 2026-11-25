@@ -24,6 +24,12 @@ import { useAuth } from '@/lib/authContext';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
 import { fetchPendingDraftsComplete, fetchDraftsByStatusPage, fetchDraftTabCounts, searchOrderDraftsServer, detectPoSubjectMismatch, type DraftTabCounts } from '@/lib/orders/draftInboxQuery';
 import {
+    matchItemsToTextLines,
+    matchItemsToExcelRows,
+    scrollChildIntoContainer,
+    type StagingAuditItemLike
+} from '@/lib/orders/stagingHighlightMatcher';
+import {
     normalizeCanonicalUnit,
     hasExplicitLibraWord,
     hasExplicitUnitWord,
@@ -616,19 +622,40 @@ const ImageZoomViewer = ({ src, alt }: { src: string; alt: string }) => {
 const GmailMessageViewer = ({
   draft,
   metadata,
-  onSwitchToAttachment
+  onSwitchToAttachment,
+  auditItems,
+  activeItemKey,
+  reviewedItemKeys,
+  onSelectItemKey
 }: {
   draft: any;
   metadata: any;
   onSwitchToAttachment?: (index?: number) => void;
+  auditItems?: StagingAuditItemLike[];
+  activeItemKey?: string | null;
+  reviewedItemKeys?: Set<string>;
+  onSelectItemKey?: (itemKey: string) => void;
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const plainBodyScrollRef = useRef<HTMLDivElement>(null);
   const senderEmail = draft.source_email || 'desconocido';
   const clientName = draft.client_detected_name || 'Cliente';
   const subject = cleanSubject(draft.email_subject);
   const rawHtml = metadata?.emailHtml || draft?.extracted_items?.debug_payload?.html || null;
   const rawPlain = draft?.email_body || draft?.extracted_items?.debug_payload?.plain || null;
   const attachments = metadata?.attachments || [];
+
+  const plainLineMatch = useMemo(
+    () => (!rawHtml && rawPlain ? matchItemsToTextLines(auditItems || [], rawPlain) : { itemKeyToLineIndex: new Map<string, number>(), lineIndexToItemKey: new Map<number, string>() }),
+    [rawHtml, rawPlain, auditItems]
+  );
+  const activePlainLineIndex = activeItemKey ? (plainLineMatch.itemKeyToLineIndex.get(activeItemKey) ?? null) : null;
+
+  useEffect(() => {
+    if (activePlainLineIndex === null || !plainBodyScrollRef.current) return;
+    const targetEl = plainBodyScrollRef.current.querySelector(`[data-mail-line="${activePlainLineIndex}"]`) as HTMLElement | null;
+    scrollChildIntoContainer(plainBodyScrollRef.current, targetEl);
+  }, [activePlainLineIndex]);
 
   // Generate avatar initial and color
   const initial = (clientName || senderEmail || 'U').charAt(0).toUpperCase();
@@ -851,9 +878,41 @@ const GmailMessageViewer = ({
       })()}
 
       {/* Gmail Message Body Area */}
-      <div className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
+      <div ref={plainBodyScrollRef} className="premium-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', backgroundColor: '#FFFFFF' }}>
         {resolvedHtml ? (
           <div style={{ width: '100%', minHeight: '260px' }}>
+            {(() => {
+              const activeItem = activeItemKey ? (auditItems || []).find((it) => it.key === activeItemKey) : null;
+              if (!activeItem) return null;
+              return (
+                <div style={{
+                  marginBottom: '10px',
+                  padding: '8px 12px',
+                  backgroundColor: '#FEF3C7',
+                  border: '1.5px solid #F59E0B',
+                  borderLeft: '4px solid #D97706',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.74rem', color: '#78350F', fontWeight: 800 }}>
+                    <span style={{ backgroundColor: '#FDE68A', padding: '2px 6px', borderRadius: '4px', fontSize: '0.66rem', textTransform: 'uppercase' }}>
+                      Auditando ahora
+                    </span>
+                    <span>{activeItem.label || activeItem.productName || 'Ítem'}</span>
+                    {activeItem.accountingId && (
+                      <span style={{ color: '#92400E', fontWeight: 700 }}>#{activeItem.accountingId}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.70rem', fontWeight: 800, color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '5px', border: '1px solid #6EE7B7' }}>
+                    {reviewedItemKeys?.size || 0} / {(auditItems || []).length} revisadas
+                  </span>
+                </div>
+              );
+            })()}
             <iframe
               srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#202124;line-height:1.6;margin:0;padding:12px;background:#FFFFFF;}table,div,p,span{max-width:100% !important;box-sizing:border-box !important;}img{max-width:100% !important;width:auto !important;height:auto !important;object-fit:contain !important;display:block !important;margin:8px auto !important;border-radius:4px !important;box-shadow:0 1px 3px rgba(0,0,0,0.08);}.img-broken-notice{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:6px;font-size:11px;color:#64748B;font-family:sans-serif;margin:4px 0;}</style><script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("img").forEach(function(img){img.addEventListener("error",function(){if(!this.dataset.handled){this.dataset.handled="true";var span=document.createElement("div");span.className="img-broken-notice";span.innerHTML=" <span>[Imagen inline no disponible]</span>";this.parentNode.insertBefore(span,this);this.style.display="none";}});});});</script></head><body>${resolvedHtml}</body></html>`}
               style={{ width: '100%', minHeight: '380px', border: 'none', backgroundColor: 'transparent' }}
@@ -861,8 +920,40 @@ const GmailMessageViewer = ({
             />
           </div>
         ) : rawPlain ? (
-          <div style={{ fontSize: '0.86rem', color: '#1E293B', lineHeight: '1.7', whiteSpace: 'pre-wrap', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-            {rawPlain}
+          <div style={{ fontSize: '0.84rem', color: '#1E293B', lineHeight: '1.6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            {rawPlain.split('\n').map((line: string, lineIdx: number) => {
+              const matchedKey = plainLineMatch.lineIndexToItemKey.get(lineIdx);
+              const isActiveLine = Boolean(matchedKey && activeItemKey === matchedKey);
+              const isReviewedLine = Boolean(matchedKey && !isActiveLine && reviewedItemKeys?.has(matchedKey));
+
+              return (
+                <div
+                  key={lineIdx}
+                  data-mail-line={lineIdx}
+                  onClick={() => { if (matchedKey && onSelectItemKey) onSelectItemKey(matchedKey); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    minHeight: '1.4em',
+                    padding: '2px 8px',
+                    marginBottom: '2px',
+                    borderRadius: '6px',
+                    whiteSpace: 'pre-wrap',
+                    cursor: matchedKey && onSelectItemKey ? 'pointer' : 'default',
+                    backgroundColor: isActiveLine ? '#FEF3C7' : isReviewedLine ? '#ECFDF5' : 'transparent',
+                    border: isActiveLine ? '1.5px solid #F59E0B' : isReviewedLine ? '1px solid #A7F3D0' : '1px solid transparent',
+                    borderLeft: isActiveLine ? '4px solid #D97706' : isReviewedLine ? '4px solid #10B981' : '4px solid transparent',
+                    fontWeight: isActiveLine ? 700 : 400,
+                    color: isActiveLine ? '#78350F' : isReviewedLine ? '#065F46' : '#1E293B',
+                    transition: 'background-color 0.15s, border-color 0.15s'
+                  }}
+                >
+                  {isReviewedLine && <Check size={12} color="#059669" style={{ flexShrink: 0 }} />}
+                  <span style={{ flex: 1 }}>{line || ' '}</span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '0.85rem' }}>
@@ -1343,6 +1434,59 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [loadingAttachment, setLoadingAttachment] = useState(false);
   const [isReparsingDraft, setIsReparsingDraft] = useState(false);
 
+  // Escenario 494: Sincronización Visual de Auditoría Lado a Lado (Fondo + Borde + Rastro de Revisadas)
+  const [activeDraftAuditKey, setActiveDraftAuditKey] = useState<string | null>(null);
+  const [reviewedDraftAuditKeys, setReviewedDraftAuditKeys] = useState<Set<string>>(new Set());
+  const draftExcelScrollRef = useRef<HTMLDivElement>(null);
+
+  const markDraftAuditReviewed = (key: string) => {
+    if (!key) return;
+    setReviewedDraftAuditKeys(prev => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  };
+
+  const focusDraftRowByAuditKey = (key: string) => {
+    setActiveDraftAuditKey(key);
+    const targetRow = document.querySelector(`[data-draft-audit-key="${key}"]`) as HTMLElement | null;
+    const container = targetRow?.closest('.premium-scrollbar') as HTMLElement | null;
+    scrollChildIntoContainer(container, targetRow);
+  };
+
+  const draftAuditItems = useMemo<StagingAuditItemLike[]>(() => {
+    return editableItems
+      .map((item: any, origIdx: number) => ({ item, origIdx }))
+      .filter(({ item }) => item && !item.isDeleted && !item.isMetadata)
+      .map(({ item, origIdx }) => {
+        const matchedProd = item.matched_product_id ? productByIdMap.get(item.matched_product_id) : undefined;
+        return {
+          key: item.id || String(origIdx),
+          label: item.originalName || item.name || item.producto || item.item || '',
+          quantity: item.originalQuantity !== undefined && item.originalQuantity !== null ? item.originalQuantity : item.quantity,
+          accountingId: matchedProd?.accounting_id || null,
+          productName: matchedProd?.name || null
+        };
+      });
+  }, [editableItems, productByIdMap]);
+
+  const activeDraftSheetForMatch = excelSheetsData[selectedExcelSheetIndex] || excelSheetsData[0];
+  const draftExcelMatch = useMemo(
+    () => matchItemsToExcelRows(draftAuditItems, activeDraftSheetForMatch?.rows || []),
+    [draftAuditItems, activeDraftSheetForMatch]
+  );
+  const activeDraftExcelRowIndex = activeDraftAuditKey
+    ? (draftExcelMatch.itemKeyToRowIndex.get(activeDraftAuditKey) ?? null)
+    : null;
+
+  useEffect(() => {
+    if (activeDraftExcelRowIndex === null || !draftExcelScrollRef.current) return;
+    const targetEl = draftExcelScrollRef.current.querySelector(`[data-draft-excel-row="${activeDraftExcelRowIndex}"]`) as HTMLElement | null;
+    scrollChildIntoContainer(draftExcelScrollRef.current, targetEl);
+  }, [activeDraftExcelRowIndex, activeTab]);
+
   const [aiHealth, setAiHealth] = useState<{ ok: boolean; status: string; message?: string; code?: string } | null>(null);
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
 
@@ -1370,6 +1514,11 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState<number>(0);
+
+  useEffect(() => {
+    setActiveDraftAuditKey(null);
+    setReviewedDraftAuditKeys(new Set());
+  }, [selectedDraft?.id, selectedAttachmentIndex]);
   const [variantConfigProduct, setVariantConfigProduct] = useState<any | null>(null);
   const [manageConversionsProduct, setManageConversionsProduct] = useState<any | null>(null);
 
@@ -9959,19 +10108,51 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           );
                         };
 
-                        const wrapContent = (content: React.ReactNode) => (
-                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0, height: '100%' }}>
-                            {renderSelector()}
-                            {content}
-                          </div>
-                        );
+                        const wrapContent = (content: React.ReactNode, showAuditBand = false) => {
+                          const activeBandItem = showAuditBand && activeDraftAuditKey
+                            ? draftAuditItems.find(it => it.key === activeDraftAuditKey)
+                            : null;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0, height: '100%' }}>
+                              {renderSelector()}
+                              {activeBandItem && (
+                                <div style={{
+                                  padding: '7px 12px',
+                                  backgroundColor: '#FEF3C7',
+                                  borderBottom: '1.5px solid #F59E0B',
+                                  borderLeft: '4px solid #D97706',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '8px',
+                                  flexWrap: 'wrap'
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.73rem', color: '#78350F', fontWeight: 800 }}>
+                                    <span style={{ backgroundColor: '#FDE68A', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', textTransform: 'uppercase' }}>
+                                      Auditando ahora
+                                    </span>
+                                    <span>{activeBandItem.label || activeBandItem.productName || 'Ítem'}</span>
+                                    {activeBandItem.accountingId && (
+                                      <span style={{ color: '#92400E', fontWeight: 700 }}>#{activeBandItem.accountingId}</span>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: '0.69rem', fontWeight: 800, color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '5px', border: '1px solid #6EE7B7' }}>
+                                    {reviewedDraftAuditKeys.size} / {draftAuditItems.length} revisadas
+                                  </span>
+                                </div>
+                              )}
+                              {content}
+                            </div>
+                          );
+                        };
 
                         // PDF
                         if (ext === 'pdf') {
                           return wrapContent(
                             <div style={{ flex: 1, backgroundColor: '#F8FAFC', position: 'relative', overflow: 'hidden', minHeight: 0, height: '100%' }}>
                               <PdfCanvasViewer file={null} fileUrl={currentUrl} />
-                            </div>
+                            </div>,
+                            true
                           );
                         }
 
@@ -10081,6 +10262,24 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                       }}
                                     />
 
+                                    {draftAuditItems.length > 0 && (
+                                      <span style={{
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#ECFDF5',
+                                        border: '1px solid #A7F3D0',
+                                        color: '#065F46',
+                                        fontSize: '0.69rem',
+                                        fontWeight: 800,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}>
+                                        <Check size={11} color="#059669" />
+                                        {reviewedDraftAuditKeys.size} / {draftAuditItems.length} revisadas
+                                      </span>
+                                    )}
+
                                     <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '6px', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
                                       <button
                                         type="button"
@@ -10100,7 +10299,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                 </div>
 
                                 {/* Modern Google Sheets Table */}
-                                <div className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', minHeight: 0 }}>
+                                <div ref={draftExcelScrollRef} className="premium-scrollbar" style={{ flex: 1, overflow: 'auto', backgroundColor: '#F8FAFC', minHeight: 0 }}>
                                   <table style={{
                                     borderCollapse: 'collapse',
                                     width: '100%',
@@ -10113,17 +10312,36 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                         const isRowHeader = r.isHeader;
                                         const isRowMeta = r.isMeta;
                                         const hasRowQty = r.hasQty;
+                                        const matchedKey = draftExcelMatch.rowIndexToItemKey.get(r.rowIndex);
+                                        const isAuditActive = activeDraftExcelRowIndex !== null && r.rowIndex === activeDraftExcelRowIndex;
+                                        const isAuditReviewed = Boolean(!isAuditActive && matchedKey && reviewedDraftAuditKeys.has(matchedKey));
 
                                         return (
                                           <tr
-                                            key={rowIdx}
+                                            key={r.rowIndex ?? rowIdx}
+                                            data-draft-excel-row={r.rowIndex}
+                                            onClick={() => { if (matchedKey) focusDraftRowByAuditKey(matchedKey); }}
                                             style={{
-                                              backgroundColor: isRowHeader 
-                                                ? '#E2E8F0' 
-                                                : (hasRowQty ? '#ECFDF5' : (isRowMeta ? '#F8FAFC' : (rowIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'))),
-                                              fontWeight: isRowHeader ? 800 : (hasRowQty ? 700 : 500),
-                                              color: isRowHeader ? '#0F172A' : (hasRowQty ? '#065F46' : '#334155'),
-                                              borderBottom: hasRowQty ? '1.5px solid #86EFAC' : '1px solid #E2E8F0',
+                                              backgroundColor: isAuditActive
+                                                ? '#FEF3C7'
+                                                : isAuditReviewed
+                                                  ? '#D1FAE5'
+                                                  : isRowHeader 
+                                                    ? '#E2E8F0' 
+                                                    : (hasRowQty ? '#ECFDF5' : (isRowMeta ? '#F8FAFC' : (rowIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'))),
+                                              fontWeight: isAuditActive ? 800 : (isRowHeader ? 800 : (hasRowQty ? 700 : 500)),
+                                              color: isAuditActive ? '#78350F' : (isRowHeader ? '#0F172A' : (hasRowQty ? '#065F46' : '#334155')),
+                                              borderBottom: isAuditActive
+                                                ? '1.5px solid #F59E0B'
+                                                : isAuditReviewed
+                                                  ? '1.5px solid #6EE7B7'
+                                                  : (hasRowQty ? '1.5px solid #86EFAC' : '1px solid #E2E8F0'),
+                                              boxShadow: isAuditActive
+                                                ? 'inset 4px 0 0 #D97706, inset 0 1.5px 0 #F59E0B'
+                                                : isAuditReviewed
+                                                  ? 'inset 4px 0 0 #10B981, inset 0 1px 0 #6EE7B7'
+                                                  : 'none',
+                                              cursor: matchedKey ? 'pointer' : 'default',
                                               transition: 'background-color 0.15s'
                                             }}
                                           >
@@ -10131,15 +10349,18 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                                             <td style={{
                                               padding: '4px 8px',
                                               textAlign: 'center',
-                                              backgroundColor: isRowHeader ? '#CBD5E1' : '#F1F5F9',
-                                              color: '#64748B',
+                                              backgroundColor: isAuditActive ? '#FDE68A' : isAuditReviewed ? '#A7F3D0' : (isRowHeader ? '#CBD5E1' : '#F1F5F9'),
+                                              color: isAuditActive ? '#92400E' : isAuditReviewed ? '#065F46' : '#64748B',
                                               borderRight: '1px solid #CBD5E1',
                                               borderBottom: '1px solid #E2E8F0',
                                               fontSize: '0.65rem',
                                               userSelect: 'none',
-                                              width: '32px'
+                                              width: '38px'
                                             }}>
-                                              {r.rowIndex}
+                                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                                                {isAuditReviewed && <Check size={10} color="#059669" />}
+                                                {r.rowIndex}
+                                              </span>
                                             </td>
 
                                             {/* Cells */}
@@ -10393,6 +10614,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                         <GmailMessageViewer
                           draft={selectedDraft}
                           metadata={metadata}
+                          auditItems={draftAuditItems}
+                          activeItemKey={activeDraftAuditKey}
+                          reviewedItemKeys={reviewedDraftAuditKeys}
+                          onSelectItemKey={focusDraftRowByAuditKey}
                           onSwitchToAttachment={(idx) => {
                             if (typeof idx === 'number') {
                               setSelectedAttachmentIndex(idx);
@@ -10636,22 +10861,28 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                       return visibleRows.map(({ item, origIdx }, visIdx: number) => {
                       const matchedProd = item.matched_product_id ? productByIdMap.get(item.matched_product_id) : undefined;
                       const isConfidenceHigh = !!matchedProd && !item.isDeleted;
-                      const isActiveRow = activeDropdownRowIndex === origIdx || focusedRowIndex === origIdx;
+                      const auditKey = item.id || String(origIdx);
+                      const isActiveRow = activeDropdownRowIndex === origIdx || focusedRowIndex === origIdx || activeDraftAuditKey === auditKey;
+                      const isReviewedRow = !isActiveRow && reviewedDraftAuditKeys.has(auditKey);
                       const isApprovedDraft = selectedDraft ? (selectedDraft.status === 'approved' || Boolean(getDraftMetadata(selectedDraft).orderId)) : false;
 
                       return (
                         <tr 
                           key={item.id || origIdx} 
                           id={`draft-row-${origIdx}`}
+                          data-draft-audit-key={auditKey}
+                          onClick={() => setActiveDraftAuditKey(auditKey)}
+                          onFocusCapture={() => setActiveDraftAuditKey(auditKey)}
+                          onBlurCapture={() => markDraftAuditReviewed(auditKey)}
                           style={{ 
                             borderBottom: '1px solid #F1F5F9',
                             backgroundColor: isActiveRow 
-                              ? '#FFFFFF' 
-                              : (item.isConfirmed ? '#F0FDF4' : (matchedProd ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
+                              ? '#FFFBEB' 
+                              : (item.isConfirmed || isReviewedRow ? '#ECFDF5' : (matchedProd ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
                             transform: isActiveRow ? 'scale(1.02)' : 'scale(1)',
                             transformOrigin: 'left center',
-                            boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
-                            borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent',
+                            boxShadow: isActiveRow ? '0 10px 25px -4px rgba(217, 119, 6, 0.16), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
+                            borderLeft: isActiveRow ? '4px solid #D97706' : (isReviewedRow ? '4px solid #10B981' : '4px solid transparent'),
                             zIndex: isActiveRow ? 20 : 1,
                             position: 'relative',
                             transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)'

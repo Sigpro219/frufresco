@@ -11,6 +11,11 @@ import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import Link from 'next/link';
 import { resolvePhysicalInstruction, buildDualUnitMetadata, cleanPhysicalInstruction, getStructuredSpecKey, isColsubsidioProfile } from '@/lib/orderUtils';
 import {
+    matchItemsToTextLines,
+    scrollChildIntoContainer,
+    type StagingAuditItemLike
+} from '@/lib/orders/stagingHighlightMatcher';
+import {
     resolveCanonicalConversion,
     computeLineWeightKg,
     getSafeProductMinSaleKg,
@@ -838,6 +843,28 @@ function CreateOrderContent() {
     const skipNextStagedBlurRef = useRef(false);
     const skipNextStagedQtyBlurRef = useRef<string | null>(null);
 
+    // Escenario 494: Sincronización Visual de Auditoría Lado a Lado (Fondo + Borde + Rastro de Revisadas)
+    const [activeAuditItemKey, setActiveAuditItemKey] = useState<string | null>(null);
+    const [reviewedAuditItemKeys, setReviewedAuditItemKeys] = useState<Set<string>>(new Set());
+    const whatsappPreviewScrollRef = useRef<HTMLDivElement>(null);
+
+    const markAuditItemReviewed = (key: string) => {
+        if (!key) return;
+        setReviewedAuditItemKeys(prev => {
+            if (prev.has(key)) return prev;
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+        });
+    };
+
+    const focusRightStagedRowByKey = (key: string) => {
+        setActiveAuditItemKey(key);
+        const container = document.getElementById('staged-table-scroll-container');
+        const targetRow = container?.querySelector(`[data-staged-key="${key}"]`) as HTMLElement | null;
+        scrollChildIntoContainer(container, targetRow);
+    };
+
     const getScoredProductsForQuery = (query: string) => {
         let raw = (query || '').trim();
         let extractedId = '';
@@ -1236,6 +1263,43 @@ function CreateOrderContent() {
     const [digestionModel, setDigestionModel] = useState<string | null>(null);
     const [aiInputTab, setAiInputTab] = useState<'file' | 'text'>('file');
     const [whatsappInputText, setWhatsappInputText] = useState<string>('');
+
+    useEffect(() => {
+        setActiveAuditItemKey(null);
+        setReviewedAuditItemKeys(new Set());
+    }, [uploadedFileUrl, whatsappInputText]);
+
+    useEffect(() => {
+        if (stagedItems.length === 0) {
+            setActiveAuditItemKey(null);
+            setReviewedAuditItemKeys(new Set());
+        }
+    }, [stagedItems.length]);
+
+    const stagingAuditItems = useMemo<StagingAuditItemLike[]>(() => {
+        return stagedItems.map((it: any) => ({
+            key: it.id,
+            label: it.originalName || it.rawText || it.productName || it.suggestedProduct?.name || '',
+            quantity: it.originalQtyInFile ?? it.quantity,
+            accountingId: it.suggestedProduct?.accounting_id || null,
+            productName: it.suggestedProduct?.name || null
+        }));
+    }, [stagedItems]);
+
+    const whatsappLineMatch = useMemo(
+        () => matchItemsToTextLines(stagingAuditItems, whatsappInputText || ''),
+        [stagingAuditItems, whatsappInputText]
+    );
+
+    const activeAuditLineIndex = activeAuditItemKey
+        ? (whatsappLineMatch.itemKeyToLineIndex.get(activeAuditItemKey) ?? null)
+        : null;
+
+    useEffect(() => {
+        if (activeAuditLineIndex === null || !whatsappPreviewScrollRef.current) return;
+        const targetLine = whatsappPreviewScrollRef.current.querySelector(`[data-wa-line="${activeAuditLineIndex}"]`) as HTMLElement | null;
+        scrollChildIntoContainer(whatsappPreviewScrollRef.current, targetLine);
+    }, [activeAuditLineIndex]);
 
     // Global keyboard shortcuts: Alt+E → Editar Equivalencias, Alt+V → Editar Variantes, ESC → cerrar modales
     useEffect(() => {
@@ -8510,8 +8574,47 @@ ${primaryAdminNotes}`.trim();
                                                         </a>
                                                     </div>
                                                     <div style={{ flex: 1, minHeight: '560px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
+                                                        {!isExcel && (() => {
+                                                            const activeItem = activeAuditItemKey ? stagedItems.find((it: any) => it.id === activeAuditItemKey) : null;
+                                                            if (!activeItem) return null;
+                                                            return (
+                                                                <div style={{
+                                                                    padding: '8px 12px',
+                                                                    backgroundColor: '#FEF3C7',
+                                                                    borderBottom: '1.5px solid #F59E0B',
+                                                                    borderLeft: '4px solid #D97706',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'space-between',
+                                                                    gap: '8px',
+                                                                    flexWrap: 'wrap'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.74rem', color: '#78350F', fontWeight: 800 }}>
+                                                                        <span style={{ backgroundColor: '#FDE68A', padding: '2px 6px', borderRadius: '4px', fontSize: '0.66rem', textTransform: 'uppercase' }}>
+                                                                            Auditando ahora
+                                                                        </span>
+                                                                        <span>{activeItem.originalName || activeItem.suggestedProduct?.name || 'Ítem'}</span>
+                                                                        {activeItem.suggestedProduct?.accounting_id && (
+                                                                            <span style={{ color: '#92400E', fontWeight: 700 }}>
+                                                                                #{activeItem.suggestedProduct.accounting_id}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.70rem', fontWeight: 800, color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '5px', border: '1px solid #6EE7B7' }}>
+                                                                        {reviewedAuditItemKeys.size} / {stagedItems.length} revisadas
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                         {isExcel ? (
-                                                            <ExcelTableViewer file={uploadedFile} fileUrl={uploadedFileUrl} />
+                                                            <ExcelTableViewer
+                                                                file={uploadedFile}
+                                                                fileUrl={uploadedFileUrl}
+                                                                auditItems={stagingAuditItems}
+                                                                activeItemKey={activeAuditItemKey}
+                                                                reviewedItemKeys={reviewedAuditItemKeys}
+                                                                onSelectItemKey={focusRightStagedRowByKey}
+                                                            />
                                                         ) : isImg ? (
                                                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '10px' }}>
                                                                 <img src={uploadedFileUrl} alt="Documento Original" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }} />
@@ -8535,32 +8638,86 @@ ${primaryAdminNotes}`.trim();
                                                 display: 'flex', 
                                                 flexDirection: 'column' 
                                             }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '6px', flexWrap: 'wrap' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <MessageSquare size={15} color="#16A34A" /> Mensaje Original de WhatsApp / Chat
                                                     </span>
-                                                    <span style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: '700', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
-                                                        {whatsappInputText.trim().split('\n').filter(Boolean).length} líneas
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        {stagedItems.length > 0 && (
+                                                            <span style={{ fontSize: '0.70rem', color: '#065F46', fontWeight: '800', backgroundColor: '#D1FAE5', padding: '3px 8px', borderRadius: '6px', border: '1px solid #6EE7B7', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Check size={11} color="#059669" />
+                                                                {reviewedAuditItemKeys.size} / {stagedItems.length} revisadas
+                                                            </span>
+                                                        )}
+                                                        <span style={{ fontSize: '0.72rem', color: '#15803D', fontWeight: '700', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                                                            {whatsappInputText.trim().split('\n').filter(Boolean).length} líneas
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div style={{ 
-                                                    flex: 1, 
-                                                    minHeight: '520px', 
-                                                    maxHeight: '580px', 
-                                                    overflowY: 'auto', 
-                                                    borderRadius: '12px', 
-                                                    border: '1.5px solid #BBF7D0', 
-                                                    backgroundColor: '#FFFFFF', 
-                                                    padding: '1.2rem', 
-                                                    fontSize: '0.86rem', 
-                                                    lineHeight: '1.65', 
-                                                    color: '#0F172A', 
-                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
-                                                    whiteSpace: 'pre-wrap', 
-                                                    wordBreak: 'break-word',
-                                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)'
-                                                }}>
-                                                    {whatsappInputText}
+                                                <div
+                                                    ref={whatsappPreviewScrollRef}
+                                                    style={{ 
+                                                        flex: 1, 
+                                                        minHeight: '520px', 
+                                                        maxHeight: '580px', 
+                                                        overflowY: 'auto', 
+                                                        borderRadius: '12px', 
+                                                        border: '1.5px solid #BBF7D0', 
+                                                        backgroundColor: '#FFFFFF', 
+                                                        padding: '0.85rem', 
+                                                        fontSize: '0.84rem', 
+                                                        lineHeight: '1.55', 
+                                                        color: '#0F172A', 
+                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
+                                                        wordBreak: 'break-word',
+                                                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)'
+                                                    }}
+                                                >
+                                                    {whatsappInputText.split('\n').map((line, lineIdx) => {
+                                                        const matchedKey = whatsappLineMatch.lineIndexToItemKey.get(lineIdx);
+                                                        const isActiveLine = Boolean(matchedKey && activeAuditItemKey === matchedKey);
+                                                        const isReviewedLine = Boolean(matchedKey && !isActiveLine && reviewedAuditItemKeys.has(matchedKey));
+
+                                                        return (
+                                                            <div
+                                                                key={lineIdx}
+                                                                data-wa-line={lineIdx}
+                                                                onClick={() => { if (matchedKey) focusRightStagedRowByKey(matchedKey); }}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '6px',
+                                                                    minHeight: '1.45em',
+                                                                    padding: '3px 8px',
+                                                                    marginBottom: '2px',
+                                                                    borderRadius: '6px',
+                                                                    whiteSpace: 'pre-wrap',
+                                                                    cursor: matchedKey ? 'pointer' : 'default',
+                                                                    backgroundColor: isActiveLine
+                                                                        ? '#FEF3C7'
+                                                                        : isReviewedLine
+                                                                            ? '#ECFDF5'
+                                                                            : 'transparent',
+                                                                    border: isActiveLine
+                                                                        ? '1.5px solid #F59E0B'
+                                                                        : isReviewedLine
+                                                                            ? '1px solid #A7F3D0'
+                                                                            : '1px solid transparent',
+                                                                    borderLeft: isActiveLine
+                                                                        ? '4px solid #D97706'
+                                                                        : isReviewedLine
+                                                                            ? '4px solid #10B981'
+                                                                            : '4px solid transparent',
+                                                                    fontWeight: isActiveLine ? 700 : 400,
+                                                                    color: isActiveLine ? '#78350F' : isReviewedLine ? '#065F46' : '#0F172A',
+                                                                    transition: 'background-color 0.15s, border-color 0.15s'
+                                                                }}
+                                                            >
+                                                                {isReviewedLine && <Check size={12} color="#059669" style={{ flexShrink: 0 }} />}
+                                                                <span style={{ flex: 1 }}>{line || ' '}</span>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -8686,21 +8843,26 @@ ${primaryAdminNotes}`.trim();
                                                     ).map((item, idx) => {
                                                         const isConfidenceHigh = item.confidence === 'HIGH' || (item.confidenceScore && item.confidenceScore >= 90);
                                                         const isConfidenceMed = item.confidence === 'MEDIUM' || (item.confidenceScore && item.confidenceScore >= 70 && item.confidenceScore < 90);
-                                                        const isActiveRow = activeDropdownRowIndex === idx;
+                                                        const isActiveRow = activeDropdownRowIndex === idx || activeAuditItemKey === item.id;
+                                                        const isReviewedRow = !isActiveRow && reviewedAuditItemKeys.has(item.id);
 
                                                         return (
                                                             <tr 
                                                                 key={item.id} 
                                                                 id={`staged-row-${idx}`}
+                                                                data-staged-key={item.id}
+                                                                onClick={() => setActiveAuditItemKey(item.id)}
+                                                                onFocusCapture={() => setActiveAuditItemKey(item.id)}
+                                                                onBlurCapture={() => markAuditItemReviewed(item.id)}
                                                                 style={{ 
                                                                     borderBottom: '1px solid #F1F5F9',
                                                                     backgroundColor: isActiveRow 
-                                                                        ? '#FFFFFF' 
-                                                                        : (item.isConfirmed ? '#F0FDF4' : (item.suggestedProduct ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
+                                                                        ? '#FFFBEB' 
+                                                                        : (item.isConfirmed || isReviewedRow ? '#ECFDF5' : (item.suggestedProduct ? (isConfidenceHigh ? 'white' : '#FEFCE8') : '#FFF7ED')),
                                                                     transform: isActiveRow ? 'scale(1.01)' : 'scale(1)',
                                                                     transformOrigin: 'left center',
-                                                                    boxShadow: isActiveRow ? '0 10px 25px -4px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
-                                                                    borderLeft: isActiveRow ? '4px solid #2563EB' : '4px solid transparent',
+                                                                    boxShadow: isActiveRow ? '0 10px 25px -4px rgba(217, 119, 6, 0.16), 0 2px 6px rgba(0, 0, 0, 0.04)' : 'none',
+                                                                    borderLeft: isActiveRow ? '4px solid #D97706' : (isReviewedRow ? '4px solid #10B981' : '4px solid transparent'),
                                                                     zIndex: isActiveRow ? 20 : 1,
                                                                     position: 'relative',
                                                                     transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)'
@@ -8713,6 +8875,7 @@ ${primaryAdminNotes}`.trim();
                                                                         onChange={(e) => {
                                                                             if (e.target.checked) {
                                                                                 setSelectedStagedIds(prev => [...prev, item.id]);
+                                                                                markAuditItemReviewed(item.id);
                                                                             } else {
                                                                                 setSelectedStagedIds(prev => prev.filter(id => id !== item.id));
                                                                             }

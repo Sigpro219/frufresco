@@ -18329,3 +18329,26 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - **Cero datos mock ni ocultamiento de fallos:** Ante cualquier error de Google (`HTTP 503`, timeout, credenciales, `INVALID_ARGUMENT` o caída de red), `RoutePlanner.tsx` debe renderizar un **banner de error persistente y visible** (descartable manualmente, nunca solo un toast pasajero) mostrando el motivo exacto devuelto por la API y sugiriendo explícitamente **asignar y ordenar las rutas manualmente** en las tarjetas.
      - **Visibilidad de excluidos y omitidos:** Los pedidos en `excluded_no_gps_order_ids` y `skipped_orders` (con la razón exacta devuelta por Google) deben mostrarse en alerta persistente en pantalla para asignación manual o corrección de GPS.
      - **Cero métricas ni polilíneas sintéticas:** Si una ruta fue editada manualmente o no cuenta con polilínea real de Google, `RouteSpaghettiMapModal.tsx` declara explícitamente el estado manual sin inventar distancias, tiempos ni trazos falsos.
+
+---
+
+### Escenario 494: Sincronización Visual de Auditoría Lado a Lado (Fondo + Borde + Rastro de Revisadas) en Todos los Mecanismos de Captura de Pedidos (SDD v1.9.449)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17723-17725`):** Autorización acotada del CTO para intervenir `src/app/admin/orders/create/page.tsx` y `src/components/EmailDraftsModule.tsx` **exclusivamente en la capa visual de auditoría lado a lado**, sin alterar lógica de parseo, precios, cantidades ni persistencia.
+- **Archivos del Alcance:**
+  1. `src/lib/orders/stagingHighlightMatcher.ts` *(nuevo)*
+  2. `src/components/ExcelTableViewer.tsx`
+  3. `src/app/admin/orders/create/page.tsx`
+  4. `src/components/EmailDraftsModule.tsx`
+- **Alcance Contractual:**
+  1. **Matcher Puro 1-a-1 (`src/lib/orders/stagingHighlightMatcher.ts`):**
+     - `matchItemsToTextLines` y `matchItemsToExcelRows`: emparejan cada ítem de la tabla derecha consumiendo ocurrencias 1-a-1 (normalización NFD sin tildes, tokens significativos con desempate por cobertura y cantidad, excluyendo `isHeader`/`isMeta` y líneas vacías).
+     - `scrollChildIntoContainer`: scroll encapsulado con `container.scrollTo({ top, behavior: 'smooth' })` (prohibido `scrollIntoView` para no arrastrar el viewport principal).
+  2. **Estados Visuales Unificados (Solo Fondo + Borde + Iconos Lucide, Cero Tachado y Cero `onMouseEnter`):**
+     - **Activo (clic o foco en fila derecha):** Fondo `#FEF3C7`, borde `#F59E0B` y barra izquierda `4px solid #D97706` con prioridad absoluta.
+     - **Ya revisado (al salir del foco, editar o marcar checkbox):** Fondo `#D1FAE5`/`#ECFDF5`, borde `#6EE7B7`/`#A7F3D0`, barra izquierda `4px solid #10B981` e ícono `Check` de `lucide-react` + contador `X / N revisadas` en cabecera.
+     - Claves estables (`item.id` en `orders/create`, `item.id || String(origIdx)` en `EmailDraftsModule`, `r.rowIndex` en Excel), inmunes al ordenamiento `A→Z` y filtros, con reset automático al cambiar de borrador/adjunto/documento/texto.
+  3. **Cobertura por Mecanismo:**
+     - **WhatsApp / Chat** (`orders/create/page.tsx`) y **Correo texto plano** (`GmailMessageViewer` en `EmailDraftsModule.tsx`): resaltado línea por línea + clic bidireccional.
+     - **Excel / ODS / CSV** (`ExcelTableViewer.tsx` y visor inline de `EmailDraftsModule.tsx`): resaltado por fila `<tr>` + `Check` en la celda `#` + clic bidireccional.
+     - **PDF / Imagen / Correo HTML:** banda fija superior `"Auditando ahora"` con el texto original, `#accounting_id` (jamás `SKU`) y progreso `X / N revisadas`.
