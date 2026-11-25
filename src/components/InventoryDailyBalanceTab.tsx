@@ -175,6 +175,7 @@ export interface InventoryDailyRow {
     colL_unshipped: number;
     // M: Venta adicional cliente (-)
     colM_additionalSales: number;
+    colM_additionalTooltip?: string;
     // N: Venta adicional empleado (-)
     colN_employeeSales: number;
     // O: Devoluciones (+)
@@ -360,13 +361,17 @@ export default function InventoryDailyBalanceTab({
     // Modo Consola Focus Fullscreen (SPEC.md §8.8.7)
     const [isFullscreen, setIsFullscreen] = useState<boolean>(initialFullscreen);
 
-    // Escucha de tecla Escape para desmaximizar
+    // Escucha de tecla Escape para desmaximizar (sin cerrar Focus si se está editando una celda o input)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && isFullscreen) {
-                setIsFullscreen(false);
-                if (onExitFullscreen) onExitFullscreen();
+            if (e.key !== 'Escape' || !isFullscreen || e.defaultPrevented) return;
+            const target = e.target as HTMLElement | null;
+            if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) {
+                target.blur();
+                return;
             }
+            setIsFullscreen(false);
+            if (onExitFullscreen) onExitFullscreen();
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
@@ -693,7 +698,7 @@ interface CommittedSaleData {
     const [products, setProducts] = useState<ProductItem[]>([]);
     const [movements, setMovements] = useState<RawMovement[]>([]);
     const [committedSalesMap, setCommittedSalesMap] = useState<Map<string, CommittedSaleData>>(new Map());
-    const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number }>>(new Map());
+    const [postCutoffSalesMap, setPostCutoffSalesMap] = useState<Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number; details: Array<{ orderSeq: number | null; clientName: string; kg: number }> }>>(new Map());
     const [costMatrixMap, setCostMatrixMap] = useState<Map<string, number>>(new Map());
 
     // Modales de apoyo
@@ -1075,7 +1080,7 @@ interface CommittedSaleData {
                     supabase.from('app_settings').select('key, value').in('key', ['cutoff_hour_admin', 'enable_cutoff_rules']),
                     supabase
                         .from('orders')
-                        .select('id, created_at')
+                        .select('id, sequence_id, created_at, profiles(company_name, contact_name)')
                         .eq('delivery_date', balanceDate)
                         .in('status', [...OPERATIONAL_STATUSES])
                         .range(0, 4999)
@@ -1092,17 +1097,23 @@ interface CommittedSaleData {
                 const dMinus1Str = `${dMinus1Utc.getUTCFullYear()}-${String(dMinus1Utc.getUTCMonth() + 1).padStart(2, '0')}-${String(dMinus1Utc.getUTCDate()).padStart(2, '0')}`;
                 const cutoffTimestampMs = new Date(`${dMinus1Str}T${String(cutoffHour).padStart(2, '0')}:00:00-05:00`).getTime();
 
-                const launchedOrderIds = (launchedOrders || []).map(o => o.id);
+                const launchedOrderIds = (launchedOrders || []).map((o: any) => o.id);
+                const launchedOrderMeta = new Map<string, { seq: number | null; client: string }>(
+                    (launchedOrders || []).map((o: any) => {
+                        const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                        return [o.id, { seq: o.sequence_id ?? null, client: prof?.company_name || prof?.contact_name || 'Cliente' }];
+                    })
+                );
                 const postCutoffOrderIdsSet = new Set<string>(
                     enableCutoffRules
                         ? (launchedOrders || [])
-                            .filter(o => o.created_at && new Date(o.created_at).getTime() > cutoffTimestampMs)
-                            .map(o => o.id)
+                            .filter((o: any) => o.created_at && new Date(o.created_at).getTime() > cutoffTimestampMs)
+                            .map((o: any) => o.id)
                         : []
                 );
 
                 const salesMap = new Map<string, CommittedSaleData>();
-                const postCutoffMap = new Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number }>();
+                const postCutoffMap = new Map<string, { pureKg: number; totalUnits: number; totalUnitWeightKg: number; details: Array<{ orderSeq: number | null; clientName: string; kg: number }> }>();
 
                 if (launchedOrderIds.length > 0) {
                     const batchSize = 40;
@@ -1184,7 +1195,8 @@ interface CommittedSaleData {
                                 }
 
                                 if (isPostCutoff) {
-                                    const prevPost = postCutoffMap.get(it.product_id) || { pureKg: 0, totalUnits: 0, totalUnitWeightKg: 0 };
+                                    const prevPost = postCutoffMap.get(it.product_id) || { pureKg: 0, totalUnits: 0, totalUnitWeightKg: 0, details: [] };
+                                    let addedKg = rawQty;
                                     if (isUnit) {
                                         const u = extractedUnits > 0 ? extractedUnits : rawQty;
                                         let w = (unitStr === 'kg' && rawQty > 0) ? rawQty : 0;
@@ -1197,8 +1209,13 @@ interface CommittedSaleData {
                                         }
                                         prevPost.totalUnits += u;
                                         prevPost.totalUnitWeightKg += w;
+                                        addedKg = w;
                                     } else {
                                         prevPost.pureKg += rawQty;
+                                    }
+                                    const meta = launchedOrderMeta.get(it.order_id);
+                                    if (meta) {
+                                        prevPost.details.push({ orderSeq: meta.seq, clientName: meta.client, kg: addedKg });
                                     }
                                     postCutoffMap.set(it.product_id, prevPost);
                                     return;
@@ -1311,6 +1328,7 @@ interface CommittedSaleData {
             let k_shortage = 0;
             let l_unshipped = 0;
             let m_additionalSales = 0;
+            const m_additionalDetails: string[] = [];
             let n_employeeSales = 0;
             let o_returns = 0;
             let o2_returnShortage = 0;
@@ -1416,6 +1434,12 @@ interface CommittedSaleData {
                 // M: Venta adicional cliente (-)
                 else if (ref === INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE) {
                     m_additionalSales += rawQty;
+                    const cleanNote = (m.notes || '').replace(/^\[SANDBOX\]\s*/i, '').trim();
+                    m_additionalDetails.push(
+                        cleanNote
+                            ? `Manual (${formatNumber(rawQty, 2)} kg): ${cleanNote}`
+                            : `Manual: ${formatNumber(rawQty, 2)} kg`
+                    );
                 }
                 // N: Venta adicional empleado (-)
                 else if (ref === INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE) {
@@ -1466,7 +1490,15 @@ interface CommittedSaleData {
                 const postCutoffUnitKg = postCutoffData.totalUnitWeightKg > 0
                     ? postCutoffData.totalUnitWeightKg
                     : postCutoffData.totalUnits * fallbackUnitWeightKg;
-                m_additionalSales += postCutoffData.pureKg + postCutoffUnitKg;
+                const postKg = postCutoffData.pureKg + postCutoffUnitKg;
+                m_additionalSales += postKg;
+                if (postCutoffData.details.length > 0) {
+                    postCutoffData.details.forEach(d => {
+                        m_additionalDetails.push(`Pedido #${d.orderSeq ?? '?'} · ${d.clientName}: ${formatNumber(d.kg, 2)} kg`);
+                    });
+                } else if (postKg > 0) {
+                    m_additionalDetails.push(`Pedidos post-corte: ${formatNumber(postKg, 2)} kg`);
+                }
             }
 
             // Inventario Inicial (Col E):
@@ -1524,6 +1556,7 @@ interface CommittedSaleData {
                 colK_shortage: k_shortage,
                 colL_unshipped: l_unshipped,
                 colM_additionalSales: m_additionalSales,
+                colM_additionalTooltip: m_additionalDetails.length > 0 ? m_additionalDetails.join('\n') : undefined,
                 colN_employeeSales: n_employeeSales,
                 colO_returns: o_returns,
                 colO2_returnShortage: o2_returnShortage,
@@ -1626,6 +1659,7 @@ interface CommittedSaleData {
                 colK_shortage: row.colK_shortage + children.reduce((s, c) => s + c.colK_shortage, 0),
                 colL_unshipped: row.colL_unshipped + children.reduce((s, c) => s + c.colL_unshipped, 0),
                 colM_additionalSales: row.colM_additionalSales + children.reduce((s, c) => s + c.colM_additionalSales, 0),
+                colM_additionalTooltip: [row.colM_additionalTooltip, ...children.map(c => c.colM_additionalTooltip)].filter(Boolean).join('\n') || undefined,
                 colN_employeeSales: row.colN_employeeSales + children.reduce((s, c) => s + c.colN_employeeSales, 0),
                 colO_returns: row.colO_returns + children.reduce((s, c) => s + c.colO_returns, 0),
                 colO2_returnShortage: row.colO2_returnShortage + children.reduce((s, c) => s + c.colO2_returnShortage, 0),
@@ -2768,11 +2802,24 @@ interface CommittedSaleData {
         try {
             const supervisorSignature = profile?.contact_name || user?.email || 'Jefatura de Inventarios';
 
+            let effectiveNewVal = newVal;
+            if (colKey === 'M') {
+                const postData = postCutoffSalesMap.get(productId);
+                if (postData) {
+                    const pObj = products.find(pr => pr.id === productId);
+                    const isUomUnit = (pObj?.unit_of_measure || '').toLowerCase().startsWith('un');
+                    const fallbackU = Number(pObj?.weight_kg) || (isUomUnit ? 1 : 0.16);
+                    const postUnitKg = postData.totalUnitWeightKg > 0 ? postData.totalUnitWeightKg : postData.totalUnits * fallbackU;
+                    const autoPostKg = postData.pureKg + postUnitKg;
+                    effectiveNewVal = Math.max(0, Number((newVal - autoPostKg).toFixed(2)));
+                }
+            }
+
             let movType: 'entry' | 'exit' | 'adjustment' = 'adjustment';
             let refType: string = INVENTORY_MOVEMENT_SUBTYPES.CORRECTION;
-            let qty = newVal;
+            let qty = effectiveNewVal;
             const formulaAudit = (currentValue.trim() !== String(newVal) && /[+\-*/xX=]/.test(currentValue)) ? ` (Fórmula: ${currentValue.trim()})` : '';
-            let noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna ${colKey}: ${formatNumber(newVal, 2)}${formulaAudit}`;
+            let noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna ${colKey}: ${formatNumber(effectiveNewVal, 2)}${formulaAudit}`;
 
             if (colKey === 'E' || colKey === 'F') {
                 movType = 'adjustment';
@@ -2802,7 +2849,8 @@ interface CommittedSaleData {
             } else if (colKey === 'M') {
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE;
-                qty = -newVal;
+                qty = -effectiveNewVal;
+                noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Columna M (manual): ${formatNumber(effectiveNewVal, 2)}${formulaAudit}`;
             } else if (colKey === 'N') {
                 movType = 'exit';
                 refType = INVENTORY_MOVEMENT_SUBTYPES.EMPLOYEE_SALE;
@@ -2858,19 +2906,19 @@ interface CommittedSaleData {
                 noteDesc = `[AJUSTE AUTORIZADO - ${supervisorSignature}] Cruce a ciegas fin de turno | Contado: ${formatNumber(newVal, 2)} [BLIND_COUNT_META: ${supMeta}]`;
             }
 
-            // Actualización optimista inmediata en memoria para recálculo instantáneo
+            // Actualización optimista inmediata en memoria usando rango Bogotá (evita duplicados post-7PM COT)
+            const { startUtcIso: dayStartUtcIso, endUtcIso: dayEndUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
+            const inCurrentBogotaDay = (createdAt?: string | null) => {
+                if (!createdAt) return false;
+                const ms = new Date(createdAt).getTime();
+                return ms >= new Date(dayStartUtcIso).getTime() && ms <= new Date(dayEndUtcIso).getTime();
+            };
             const optimisticId = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            if (Math.abs(newVal) < 0.0001) {
-                setMovements(prev => prev.filter(m => {
-                    const mDate = (m.created_at || '').split('T')[0];
-                    return !(m.product_id === productId && m.reference_type === refType && mDate === balanceDate);
-                }));
+            if (Math.abs(effectiveNewVal) < 0.0001) {
+                setMovements(prev => prev.filter(m => !(m.product_id === productId && m.reference_type === refType && inCurrentBogotaDay(m.created_at))));
             } else {
                 setMovements(prev => {
-                    const existingIdx = prev.findIndex(m => {
-                        const mDate = (m.created_at || '').split('T')[0];
-                        return m.product_id === productId && m.reference_type === refType && mDate === balanceDate;
-                    });
+                    const existingIdx = prev.findIndex(m => m.product_id === productId && m.reference_type === refType && inCurrentBogotaDay(m.created_at));
                     if (existingIdx >= 0) {
                         const updated = [...prev];
                         updated[existingIdx] = {
@@ -2879,7 +2927,7 @@ interface CommittedSaleData {
                             type: movType,
                             notes: noteDesc
                         };
-                        return updated;
+                        return updated.filter((m, idx) => idx === existingIdx || !(m.product_id === productId && m.reference_type === refType && inCurrentBogotaDay(m.created_at)));
                     } else {
                         const newOptMov: RawMovement = {
                             id: optimisticId,
@@ -2902,8 +2950,7 @@ interface CommittedSaleData {
             const effectiveRefType = isSandbox ? `sandbox_${refType}` : refType;
             const effectiveNote = isSandbox ? `[SANDBOX] ${noteDesc}` : noteDesc;
 
-            const { startUtcIso: dayStartUtcIso, endUtcIso: dayEndUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
-            if (Math.abs(newVal) < 0.0001) {
+            if (Math.abs(effectiveNewVal) < 0.0001) {
                 const { error: delErr } = await supabase
                     .from('inventory_movements')
                     .delete()
@@ -3111,7 +3158,8 @@ interface CommittedSaleData {
         style: React.CSSProperties = {},
         decimals: number = 2,
         isReadonly: boolean = false,
-        extraChildren?: React.ReactNode
+        extraChildren?: React.ReactNode,
+        customTitle?: string
     ) => {
         const isActiveCell = editingCell?.rowKey === rowKey && editingCell?.colKey === colKey;
         const isEditing = !isReadonly && canEditSheet && sheetMode === 'manual_edit' && !closingRecord?.is_locked && isActiveCell;
@@ -3144,6 +3192,7 @@ interface CommittedSaleData {
                 handleCommitCellEditAndNavigate('up');
             } else if (e.key === 'Escape') {
                 e.preventDefault();
+                e.stopPropagation();
                 setEditingCell(null);
             }
         };
@@ -3232,7 +3281,7 @@ interface CommittedSaleData {
                         backgroundColor: 'rgba(13, 122, 87, 0.10)'
                     } : {})
                 }}
-                title={sheetMode === 'view' ? 'Navegación tipo Excel: Usa las flechas (↑ ↓ ← →), Enter o Tab para desplazarte (Solo Lectura)' : (effectiveReadonly ? 'Celda calculada de solo lectura • Usa las flechas para desplazarte' : 'Clic para editar este valor')}
+                title={customTitle || (sheetMode === 'view' ? 'Navegación tipo Excel: Usa las flechas (↑ ↓ ← →), Enter o Tab para desplazarse (Solo Lectura)' : (effectiveReadonly ? 'Celda calculada de solo lectura • Usa las flechas para desplazarte' : 'Clic para editar este valor'))}
             >
                 <div style={{ display: 'flex', flexDirection: extraChildren ? 'column' : 'row', alignItems: 'flex-end', justifyContent: 'flex-end', gap: '2px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
@@ -3858,7 +3907,7 @@ interface CommittedSaleData {
                         J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { ...getColStyle('J', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, true),
                         K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { ...getColStyle('K', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
-                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
+                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false, undefined, row.colM_additionalTooltip),
                         N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { ...getColStyle('N', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
                         O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, {
                             ...getColStyle('O', colIdx),
