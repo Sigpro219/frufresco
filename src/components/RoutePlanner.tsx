@@ -5,6 +5,12 @@ import { supabase } from '@/lib/supabase';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
+import {
+    classifyOrderGps,
+    resolveOrderDisplayWindow,
+    buildGoogleMapsDirectionChunks
+} from '@/lib/transport/gpsHygiene';
+import { RouteSpaghettiMapModal } from '@/components/RouteSpaghettiMapModal';
 import { 
     Calendar, 
     Scale, 
@@ -37,7 +43,10 @@ import {
     ArrowDown,
     Printer,
     MessageSquare,
-    Navigation
+    Navigation,
+    Route,
+    ExternalLink,
+    Info
 } from 'lucide-react';
 
 interface Order {
@@ -174,14 +183,28 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         fleet_end_time: '19:00',
         optimization_strategy: 'balanced',
         warehouse_base_load_time: 15,
-        warehouse_time_per_10_crates_load: 5
+        warehouse_time_per_10_crates_load: 5,
+        b2b_default_window_start: '06:00',
+        b2b_default_window_end: '10:00',
+        b2c_default_window_start: '10:00',
+        b2c_default_window_end: '14:00'
     });
+    const [windowSettingsError, setWindowSettingsError] = useState<string | null>(null);
     const [assignments, setAssignments] = useState<Record<string, string[]>>({}); 
     const [routeStartTimes, setRouteStartTimes] = useState<Record<string, string>>({});
     const [stopEtas, setStopEtas] = useState<Record<string, string>>({});
     const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
     const [showPreConfirm, setShowPreConfirm] = useState(false);
     const [optimizationSource, setOptimizationSource] = useState<'google' | null>(null);
+    const [routePolylines, setRoutePolylines] = useState<Record<string, string>>({});
+    const [routeMetrics, setRouteMetrics] = useState<Record<string, { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number }>>({});
+    const [stopLegMetrics, setStopLegMetrics] = useState<Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean }>>({});
+    const [trafficMode, setTrafficMode] = useState<'live_predictive' | 'weekday_projected' | null>(null);
+    const [optimizerErrorBanner, setOptimizerErrorBanner] = useState<string | null>(null);
+    const [excludedNoGpsIds, setExcludedNoGpsIds] = useState<string[]>([]);
+    const [skippedWarnings, setSkippedWarnings] = useState<Array<{ orderId: string; reasons: any[] }>>([]);
+    const [spaghettiOpen, setSpaghettiOpen] = useState<boolean>(false);
+    const [spaghettiVehicleId, setSpaghettiVehicleId] = useState<string | null>(null);
 
     const isMounted = useRef(true);
 
@@ -392,6 +415,18 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         if (savedData.theoreticalMetrics) {
                             setTheoreticalMetrics(savedData.theoreticalMetrics);
                         }
+                        if (savedData.routeMetrics && typeof savedData.routeMetrics === 'object') {
+                            setRouteMetrics(savedData.routeMetrics);
+                        }
+                        if (savedData.stopLegMetrics && typeof savedData.stopLegMetrics === 'object') {
+                            setStopLegMetrics(savedData.stopLegMetrics);
+                        }
+                        if (savedData.trafficMode === 'live_predictive' || savedData.trafficMode === 'weekday_projected') {
+                            setTrafficMode(savedData.trafficMode);
+                        }
+                        if (savedData.routePolylines && typeof savedData.routePolylines === 'object') {
+                            setRoutePolylines(savedData.routePolylines);
+                        }
                         if (savedData.aiReportText) {
                             setAiReportText(savedData.aiReportText);
                         }
@@ -409,37 +444,55 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     };
 
     const [isOptimized, setIsOptimized] = useState(false);
-    const [theoreticalMetrics, setTheoreticalMetrics] = useState<{distance_km: number, duration_min: number} | null>(null);
+    const [theoreticalMetrics, setTheoreticalMetrics] = useState<{distance_km: number, travel_min?: number, duration_min: number} | null>(null);
     const [dragOverVehicleId, setDragOverVehicleId] = useState<string | null>(null);
     const [dragOverSidebar, setDragOverSidebar] = useState<boolean>(false);
 
     // Guardar automáticamente el borrador en localStorage cuando cambie la asignación
     useEffect(() => {
         if (loading) return;
+        const targetDate = selectedDeliveryDate || getOperationalTargetDate(20);
+        const baseDraft = {
+            targetDate,
+            assignments,
+            isOptimized,
+            optimizationSource,
+            stopEtas,
+            routeStartTimes,
+            theoreticalMetrics,
+            routeMetrics,
+            stopLegMetrics,
+            trafficMode,
+            aiReportText
+        };
         try {
-            const targetDate = selectedDeliveryDate || getOperationalTargetDate(20);
-            
-            const draftData = {
-                targetDate,
-                assignments,
-                isOptimized,
-                optimizationSource,
-                stopEtas,
-                routeStartTimes,
-                theoreticalMetrics,
-                aiReportText
+            const draftWithPolylines = {
+                ...baseDraft,
+                routePolylines
             };
-            localStorage.setItem('frufresco_route_planner_draft', JSON.stringify(draftData));
+            const serialized = JSON.stringify(draftWithPolylines);
+            if (serialized.length < 200000) {
+                localStorage.setItem('frufresco_route_planner_draft', serialized);
+            } else {
+                localStorage.setItem('frufresco_route_planner_draft', JSON.stringify(baseDraft));
+            }
         } catch (e) {
-            console.error("Error al guardar borrador en localStorage:", e);
+            try {
+                localStorage.setItem('frufresco_route_planner_draft', JSON.stringify(baseDraft));
+            } catch (fallbackErr) {
+                console.error("Error al guardar borrador en localStorage:", fallbackErr);
+            }
         }
-    }, [assignments, isOptimized, optimizationSource, stopEtas, routeStartTimes, theoreticalMetrics, aiReportText, loading, selectedDeliveryDate]);
+    }, [assignments, isOptimized, optimizationSource, stopEtas, routeStartTimes, theoreticalMetrics, routeMetrics, stopLegMetrics, trafficMode, routePolylines, aiReportText, loading, selectedDeliveryDate]);
 
     const handleAutoOptimize = async () => {
         if (readOnly) return;
         try {
             setOptimizing(true);
             setOptimizationError(null);
+            setOptimizerErrorBanner(null);
+            setExcludedNoGpsIds([]);
+            setSkippedWarnings([]);
             
             const response = await fetch('/api/transport/optimize', {
                 method: 'POST',
@@ -463,19 +516,16 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 setAssignments(result.routes);
                 setOptimizationSource('google');
                 setIsOptimized(true);
-                if (result.route_start_times) {
-                    setRouteStartTimes(result.route_start_times);
-                }
-                if (result.stop_etas) {
-                    setStopEtas(result.stop_etas);
-                }
-                if (result.theoretical_metrics) {
-                    setTheoreticalMetrics(result.theoretical_metrics);
-                } else {
-                    setTheoreticalMetrics(null);
-                }
+                setRouteStartTimes(result.route_start_times || {});
+                setStopEtas(result.stop_etas || {});
+                setTheoreticalMetrics(result.theoretical_metrics || null);
+                setRoutePolylines(result.route_polylines || {});
+                setRouteMetrics(result.route_metrics || {});
+                setStopLegMetrics(result.stop_leg_metrics || {});
+                setTrafficMode(result.traffic_mode || null);
             }
-
+            setExcludedNoGpsIds(Array.isArray(result.excluded_no_gps_order_ids) ? result.excluded_no_gps_order_ids.map(String) : []);
+            setSkippedWarnings(Array.isArray(result.skipped_orders) ? result.skipped_orders : []);
 
             if (result.explanation) {
                 setAiReportText(result.explanation);
@@ -486,6 +536,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             console.error('Optimization failed:', err);
             const msg = err?.message || 'Ocurrió un error al procesar las rutas.';
             setOptimizationError(msg);
+            setOptimizerErrorBanner(msg);
         } finally {
             setOptimizing(false);
         }
@@ -601,6 +652,13 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
             setAssignments({});
             setStopEtas({});
+            setTheoreticalMetrics(null);
+            setRoutePolylines({});
+            setRouteMetrics({});
+            setStopLegMetrics({});
+            setTrafficMode(null);
+            setOptimizationSource(null);
+            setIsOptimized(false);
             setPriorityOrderIds([]);
             await fetchInitialData();
 
@@ -646,9 +704,45 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         'b2c_kg_min'
     ]);
 
+    const WINDOW_PARAM_IDS = new Set([
+        'b2b_default_window_start',
+        'b2b_default_window_end',
+        'b2c_default_window_start',
+        'b2c_default_window_end'
+    ]);
+
+    const clearGoogleRouteTelemetry = () => {
+        setIsOptimized(false);
+        setOptimizationSource(null);
+        setTheoreticalMetrics(null);
+        setStopEtas({});
+        setRoutePolylines({});
+        setRouteMetrics({});
+        setStopLegMetrics({});
+        setTrafficMode(null);
+    };
+
     const updateParameter = async (id: string, value: any) => {
         if (readOnly) return;
-        setParams(prev => ({ ...prev, [id]: value }));
+        const nextParams = { ...params, [id]: value };
+        setParams(nextParams);
+
+        if (WINDOW_PARAM_IDS.has(id)) {
+            const timeRegex = /^\d{2}:\d{2}$/;
+            const isB2B = id.startsWith('b2b_');
+            const startVal = String(isB2B ? nextParams.b2b_default_window_start : nextParams.b2c_default_window_start || '');
+            const endVal = String(isB2B ? nextParams.b2b_default_window_end : nextParams.b2c_default_window_end || '');
+            if (!timeRegex.test(startVal) || !timeRegex.test(endVal) || startVal >= endVal) {
+                setWindowSettingsError(
+                    `Ventana ${isB2B ? 'Institucional (B2B)' : 'Hogar (B2C)'} inválida: usa formato HH:MM con inicio menor que fin.`
+                );
+                return;
+            }
+            setWindowSettingsError(null);
+            await supabase.from('logistic_parameters').upsert({ id, value: String(value) });
+            return;
+        }
+
         if (NUMERIC_PARAM_IDS.has(id)) {
             const norm = String(value ?? '').replace(',', '.').trim();
             if (!norm || norm.endsWith('.')) return;
@@ -662,10 +756,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     const toggleAssignment = (orderId: string, vehicleId: string) => {
         if (readOnly) return;
-        setIsOptimized(false); // If manual change happens, reset optimized flag
-        setOptimizationSource(null);
-        setTheoreticalMetrics(null);
-        setStopEtas({});
+        clearGoogleRouteTelemetry();
         const currentOrders = assignments[vehicleId] || [];
         if (currentOrders.includes(orderId)) {
             setAssignments({ ...assignments, [vehicleId]: currentOrders.filter(id => id !== orderId) });
@@ -720,10 +811,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             cleaned[targetVehicleId] = targetList;
             return cleaned;
         });
-        setIsOptimized(false);
-        setOptimizationSource(null);
-        setTheoreticalMetrics(null);
-        setStopEtas({});
+        clearGoogleRouteTelemetry();
     };
 
     const handleSidebarDrop = (e: React.DragEvent) => {
@@ -738,10 +826,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 });
                 return cleaned;
             });
-            setIsOptimized(false);
-            setOptimizationSource(null);
-            setTheoreticalMetrics(null);
-            setStopEtas({});
+            clearGoogleRouteTelemetry();
         }
     };
 
@@ -1110,6 +1195,33 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     </div>
                 </div>
 
+                {/* Banner resumen de Higiene GPS antes de Auto-Asignar */}
+                {(() => {
+                    const invalidGpsOrders = orders.filter(o => classifyOrderGps(o.latitude, o.longitude).status !== 'valid');
+                    if (invalidGpsOrders.length === 0) return null;
+                    return (
+                        <div style={{
+                            backgroundColor: '#FEF2F2',
+                            borderBottom: '1px solid #FECACA',
+                            padding: '0.45rem 0.85rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            fontSize: '0.72rem',
+                            fontWeight: '700',
+                            color: '#991B1B'
+                        }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertTriangle size={14} color="#DC2626" />
+                                <span>
+                                    <strong>{invalidGpsOrders.length}</strong> {invalidGpsOrders.length === 1 ? 'pedido sin GPS válido' : 'pedidos sin GPS válido'} (Sin GPS / GPS Genérico) — serán excluidos del ruteo automático de Google y requieren asignación manual o corrección de coordenadas.
+                                </span>
+                            </span>
+                        </div>
+                    );
+                })()}
+
                 {/* Tabla sin overflow-y interno para permitir sticky nativo de ventana */}
                 <div style={{ overflow: 'visible', padding: 0 }}>
                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.74rem' }}>
@@ -1275,20 +1387,54 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                 <span style={{ fontWeight: '800', color: isAssigned ? '#334155' : '#0F172A', lineHeight: 1.25 }}>
                                                     {order.customer_name}
                                                 </span>
-                                                <span style={{
-                                                    fontSize: '0.60rem',
-                                                    fontWeight: '800',
-                                                    padding: '1px 6px',
-                                                    borderRadius: '4px',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '3px',
-                                                    backgroundColor: order.slot_type === 'manual' ? '#EFF6FF' : order.slot_type === 'profile' ? '#ECFDF5' : '#F8FAFC',
-                                                    color: order.slot_type === 'manual' ? '#1D4ED8' : order.slot_type === 'profile' ? '#065F46' : '#475569',
-                                                    border: `1px solid ${order.slot_type === 'manual' ? '#BFDBFE' : order.slot_type === 'profile' ? '#A7F3D0' : '#E2E8F0'}`
-                                                }}>
-                                                    <Clock size={9} strokeWidth={2} /> {order.display_slot || 'Flexible'}
-                                                </span>
+                                                {(() => {
+                                                    const resolvedWin = resolveOrderDisplayWindow(order, params);
+                                                    return (
+                                                        <span style={{
+                                                            fontSize: '0.60rem',
+                                                            fontWeight: '800',
+                                                            padding: '1px 6px',
+                                                            borderRadius: '4px',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px',
+                                                            backgroundColor: resolvedWin.slotType === 'manual' ? '#EFF6FF' : resolvedWin.slotType === 'profile' ? '#ECFDF5' : '#F8FAFC',
+                                                            color: resolvedWin.slotType === 'manual' ? '#1D4ED8' : resolvedWin.slotType === 'profile' ? '#065F46' : '#475569',
+                                                            border: `1px solid ${resolvedWin.slotType === 'manual' ? '#BFDBFE' : resolvedWin.slotType === 'profile' ? '#A7F3D0' : '#E2E8F0'}`
+                                                        }}>
+                                                            <Clock size={9} strokeWidth={2} /> {resolvedWin.displayLabel}
+                                                        </span>
+                                                    );
+                                                })()}
+                                                {(() => {
+                                                    const gps = classifyOrderGps(order.latitude, order.longitude);
+                                                    if (gps.status === 'valid') return null;
+                                                    const badgeText = gps.status === 'generic_centroid'
+                                                        ? 'GPS Genérico'
+                                                        : gps.status === 'out_of_bounds'
+                                                            ? 'GPS Fuera Zona'
+                                                            : 'Sin GPS';
+                                                    return (
+                                                        <span
+                                                            title={gps.reason || 'Sin coordenadas GPS válidas'}
+                                                            style={{
+                                                                fontSize: '0.58rem',
+                                                                fontWeight: '800',
+                                                                backgroundColor: '#FEF2F2',
+                                                                color: '#B91C1C',
+                                                                border: '1px solid #FECACA',
+                                                                padding: '1px 5px',
+                                                                borderRadius: '4px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px'
+                                                            }}
+                                                        >
+                                                            <AlertTriangle size={9} />
+                                                            {badgeText}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 {!order.is_b2b && order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
                                                     <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
                                                         <Coins size={8} strokeWidth={2} /> Por Cobrar
@@ -1467,9 +1613,35 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         >
                             {optimizing ? 'Optimizando...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Sparkles size={12} strokeWidth={1.8} /> Auto-Asignar</span>}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSpaghettiVehicleId(null);
+                                setSpaghettiOpen(true);
+                            }}
+                            title="Abrir Mapa Espagueti de Rutas"
+                            style={{
+                                padding: '0.4rem 0.75rem',
+                                borderRadius: '8px',
+                                backgroundColor: '#FFFFFF',
+                                color: '#0F172A',
+                                border: '1px solid #CBD5E1',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                fontSize: '0.72rem'
+                            }}
+                        >
+                            <Route size={13} color="#2563EB" /> Mapa Espagueti
+                        </button>
                         {(() => {
                             const totalAssigned = Object.values(assignments).reduce((s, l) => s + l.length, 0);
                             if (optimizationSource === 'google') {
+                                const displayMin = theoreticalMetrics
+                                    ? Math.round(theoreticalMetrics.travel_min ?? theoreticalMetrics.duration_min ?? 0)
+                                    : 0;
                                 return (
                                     <span style={{
                                         padding: '0.32rem 0.65rem',
@@ -1485,7 +1657,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     }}>
                                         <Navigation size={11} />
                                         Google Tráfico Real
-                                        {theoreticalMetrics ? ` · ${formatNumber(theoreticalMetrics.distance_km, 0)} km · ${Math.round(theoreticalMetrics.duration_min)} min` : ''}
+                                        {theoreticalMetrics ? ` · ${formatNumber(theoreticalMetrics.distance_km, 1)} km · ${displayMin} min` : ''}
+                                        {trafficMode === 'weekday_projected' && (
+                                            <span style={{ fontSize: '0.60rem', fontWeight: '700', color: '#B45309', marginLeft: '2px' }}>
+                                                (Proyectado mismo día)
+                                            </span>
+                                        )}
                                     </span>
                                 );
                             }
@@ -1535,11 +1712,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
                                         setAssignments({});
                                         setPriorityOrderIds([]);
-                                        setIsOptimized(false);
-                                        setOptimizationSource(null);
-                                        setTheoreticalMetrics(null);
-                                        setStopEtas({});
+                                        clearGoogleRouteTelemetry();
                                         setRouteStartTimes({});
+                                        setExcludedNoGpsIds([]);
+                                        setSkippedWarnings([]);
+                                        setOptimizerErrorBanner(null);
                                     }
                                 }}
                                 style={{ 
@@ -1567,33 +1744,105 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     )}
                 </div>
 
-                {/* Alertas de error en tiempo real sin modal bloqueante */}
-                {(optimizationError || confirmationError) && (
+                {/* Banner persistente Zero-Mock ante error del optimizador */}
+                {(optimizerErrorBanner || optimizationError || confirmationError) && (
                     <div style={{
-                        marginTop: '0.65rem',
-                        marginBottom: '0.5rem',
-                        backgroundColor: '#FEE2E2',
+                        marginTop: '0.35rem',
+                        backgroundColor: '#FEF2F2',
                         border: '1px solid #FCA5A5',
-                        borderRadius: '8px',
-                        padding: '0.5rem 0.85rem',
+                        borderRadius: '10px',
+                        padding: '0.65rem 0.9rem',
                         color: '#991B1B',
                         fontSize: '0.76rem',
                         fontWeight: 700,
                         display: 'flex',
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
                         justifyContent: 'space-between',
-                        gap: '8px'
+                        gap: '10px'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <AlertTriangle size={14} />
-                            <span>{optimizationError ? `Error de Optimización: ${optimizationError}` : `Error al Confirmar: ${confirmationError}`}</span>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            <AlertTriangle size={16} color="#DC2626" style={{ flexShrink: 0, marginTop: '1px' }} />
+                            <div>
+                                <div>
+                                    {(optimizerErrorBanner || optimizationError)
+                                        ? `Error del optimizador: ${optimizerErrorBanner || optimizationError}`
+                                        : `Error al Confirmar: ${confirmationError}`}
+                                </div>
+                                {(optimizerErrorBanner || optimizationError) && (
+                                    <div style={{ fontSize: '0.70rem', fontWeight: 600, color: '#7F1D1D', marginTop: '3px' }}>
+                                        No se generaron rutas simuladas. Puedes asignar y ordenar las rutas manualmente arrastrando los pedidos o usando el selector de camión en la tabla.
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <button
                             type="button"
-                            onClick={() => { setOptimizationError(null); setConfirmationError(null); }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', padding: 0 }}
+                            aria-label="Cerrar aviso de error"
+                            onClick={() => {
+                                setOptimizerErrorBanner(null);
+                                setOptimizationError(null);
+                                setConfirmationError(null);
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', padding: '2px', flexShrink: 0 }}
                         >
-                            <X size={14} />
+                            <X size={15} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Alerta persistente de pedidos excluidos sin GPS u omitidos por Google */}
+                {(excludedNoGpsIds.length > 0 || skippedWarnings.length > 0) && (
+                    <div style={{
+                        backgroundColor: '#FFFBEB',
+                        border: '1px solid #FDE68A',
+                        borderRadius: '10px',
+                        padding: '0.65rem 0.9rem',
+                        color: '#92400E',
+                        fontSize: '0.74rem',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: '10px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1 }}>
+                            <Info size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '1px' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {excludedNoGpsIds.length > 0 && (
+                                    <div>
+                                        <strong>Excluidos por GPS inválido ({excludedNoGpsIds.length}):</strong>{' '}
+                                        {excludedNoGpsIds.map(oid => orders.find(o => String(o.id) === String(oid))?.customer_name || oid).join(', ')}. Asígnalos manualmente o corrige sus coordenadas.
+                                    </div>
+                                )}
+                                {skippedWarnings.length > 0 && (
+                                    <div>
+                                        <strong>Omitidos por Google Route Optimization ({skippedWarnings.length}):</strong>
+                                        <ul style={{ margin: '2px 0 0 1.1rem', padding: 0 }}>
+                                            {skippedWarnings.map((sw, idx) => {
+                                                const name = orders.find(o => String(o.id) === String(sw.orderId))?.customer_name || sw.orderId;
+                                                const reasonStr = Array.isArray(sw.reasons) && sw.reasons.length > 0
+                                                    ? sw.reasons.map((r: any) => typeof r === 'string' ? r : (r?.code || r?.description || JSON.stringify(r))).join(', ')
+                                                    : 'Sin razón especificada';
+                                                return (
+                                                    <li key={idx}>
+                                                        <strong>{name}:</strong> {reasonStr}
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            aria-label="Cerrar alerta de excluidos"
+                            onClick={() => {
+                                setExcludedNoGpsIds([]);
+                                setSkippedWarnings([]);
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400E', padding: '2px', flexShrink: 0 }}
+                        >
+                            <X size={15} />
                         </button>
                     </div>
                 )}
@@ -1718,6 +1967,70 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                             style={{ width: '100%', padding: '0.5rem', borderRadius: '12px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.8rem' }}
                                         />
                                     </div>
+                                </div>
+                                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '900', color: '#1E3A5F', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Clock size={14} /> Ventanas Horarias por Segmento
+                                    </span>
+                                    <div>
+                                        <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
+                                            Ventana Institucional (B2B)
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                                            <input
+                                                type="time"
+                                                aria-label="Ventana Institucional B2B Inicio"
+                                                value={params.b2b_default_window_start || '06:00'}
+                                                onChange={(e) => updateParameter('b2b_default_window_start', e.target.value)}
+                                                style={{ width: '100%', padding: '0.45rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.78rem' }}
+                                            />
+                                            <input
+                                                type="time"
+                                                aria-label="Ventana Institucional B2B Fin"
+                                                value={params.b2b_default_window_end || '10:00'}
+                                                onChange={(e) => updateParameter('b2b_default_window_end', e.target.value)}
+                                                style={{ width: '100%', padding: '0.45rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.78rem' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.68rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
+                                            Ventana Hogar (B2C)
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                                            <input
+                                                type="time"
+                                                aria-label="Ventana Hogar B2C Inicio"
+                                                value={params.b2c_default_window_start || '10:00'}
+                                                onChange={(e) => updateParameter('b2c_default_window_start', e.target.value)}
+                                                style={{ width: '100%', padding: '0.45rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.78rem' }}
+                                            />
+                                            <input
+                                                type="time"
+                                                aria-label="Ventana Hogar B2C Fin"
+                                                value={params.b2c_default_window_end || '14:00'}
+                                                onChange={(e) => updateParameter('b2c_default_window_end', e.target.value)}
+                                                style={{ width: '100%', padding: '0.45rem', borderRadius: '10px', border: '1px solid #E5E7EB', fontWeight: '700', fontSize: '0.78rem' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    {windowSettingsError && (
+                                        <div style={{
+                                            backgroundColor: '#FEF2F2',
+                                            border: '1px solid #FECACA',
+                                            color: '#B91C1C',
+                                            borderRadius: '8px',
+                                            padding: '0.45rem 0.6rem',
+                                            fontSize: '0.68rem',
+                                            fontWeight: '700',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px'
+                                        }}>
+                                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                            <span>{windowSettingsError}</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#6B7280', display: 'block', marginBottom: '0.4rem' }}>Estrategia de Optimización</label>
@@ -1845,10 +2158,12 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             const getFirstOrderMin = (vId: string) => {
                                 const firstOrderId = assignments[vId][0];
                                 const order = orders.find(o => o.id === firstOrderId);
-                                if (order && order.display_slot && order.display_slot !== 'Flexible') {
-                                    const startTimeStr = order.display_slot.split(' - ')[0];
-                                    const [h, m] = startTimeStr.split(':').map(Number);
-                                    return h * 60 + m;
+                                if (order) {
+                                    const win = resolveOrderDisplayWindow(order, params);
+                                    if (win.startTime && /^\d{2}:\d{2}$/.test(win.startTime)) {
+                                        const [h, m] = win.startTime.split(':').map(Number);
+                                        return h * 60 + m;
+                                    }
                                 }
                                 return 9999;
                             };
@@ -1926,11 +2241,95 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     </div>
                                                     {assignedOrders.length > 0 && (() => {
                                                         const { loadStart, departure } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
+                                                        const validStopsForMaps = assignedOrders
+                                                            .map(oid => orders.find(o => o.id === oid))
+                                                            .filter((o): o is Order => Boolean(o))
+                                                            .filter(o => classifyOrderGps(o.latitude, o.longitude).status === 'valid')
+                                                            .map(o => ({
+                                                                lat: Number(o.latitude),
+                                                                lng: Number(o.longitude),
+                                                                label: o.customer_name
+                                                            }));
+                                                        const mapChunks = buildGoogleMapsDirectionChunks(validStopsForMaps);
+                                                        const vMetrics = routeMetrics[vehicle.id];
                                                         return (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', flexShrink: 0 }}>
                                                                 <span style={{ fontSize: '0.60rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '6px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
                                                                     Cargue {loadStart} → Salida {departure}
                                                                 </span>
+                                                                {vMetrics && (
+                                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#1E3A5F', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap' }}>
+                                                                        {formatNumber(vMetrics.distance_km, 1)} km · {Math.round(vMetrics.travel_min)} min
+                                                                    </span>
+                                                                )}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSpaghettiVehicleId(vehicle.id);
+                                                                            setSpaghettiOpen(true);
+                                                                        }}
+                                                                        title={`Ver ${vehicle.plate} en Mapa Espagueti`}
+                                                                        style={{
+                                                                            fontSize: '0.58rem',
+                                                                            fontWeight: '800',
+                                                                            color: '#1D4ED8',
+                                                                            backgroundColor: '#EFF6FF',
+                                                                            border: '1px solid #BFDBFE',
+                                                                            borderRadius: '5px',
+                                                                            padding: '2px 6px',
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '3px'
+                                                                        }}
+                                                                    >
+                                                                        <Route size={10} /> Mapa
+                                                                    </button>
+                                                                    {mapChunks.length === 1 && (
+                                                                        <a
+                                                                            href={mapChunks[0].url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            style={{
+                                                                                fontSize: '0.58rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#FFFFFF',
+                                                                                backgroundColor: '#0F172A',
+                                                                                borderRadius: '5px',
+                                                                                padding: '2px 6px',
+                                                                                textDecoration: 'none',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px'
+                                                                            }}
+                                                                        >
+                                                                            <ExternalLink size={9} /> Abrir en Google Maps
+                                                                        </a>
+                                                                    )}
+                                                                    {mapChunks.length > 1 && mapChunks.map((chunk, cIdx) => (
+                                                                        <a
+                                                                            key={cIdx}
+                                                                            href={chunk.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            style={{
+                                                                                fontSize: '0.58rem',
+                                                                                fontWeight: '800',
+                                                                                color: '#FFFFFF',
+                                                                                backgroundColor: '#0F172A',
+                                                                                borderRadius: '5px',
+                                                                                padding: '2px 6px',
+                                                                                textDecoration: 'none',
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '3px'
+                                                                            }}
+                                                                        >
+                                                                            <ExternalLink size={9} /> Google Maps · Tramo {cIdx + 1}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         );
                                                     })()}
@@ -2056,15 +2455,16 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                             </span>
                                                                         )}
                                                                         {(() => {
-                                                                            const slotText = order?.display_slot || 'Flexible';
-                                                                            const isFlex = slotText === 'Flexible';
+                                                                            const resolvedWin = order ? resolveOrderDisplayWindow(order, params) : null;
+                                                                            const slotText = resolvedWin?.displayLabel || 'Flexible';
+                                                                            const isManualOrProfile = resolvedWin?.slotType === 'manual' || resolvedWin?.slotType === 'profile';
                                                                             return (
                                                                                 <span style={{
                                                                                     fontSize: '0.58rem',
                                                                                     fontWeight: '800',
-                                                                                    backgroundColor: isFlex ? '#F1F5F9' : '#EFF6FF',
-                                                                                    color: isFlex ? '#475569' : '#1D4ED8',
-                                                                                    border: isFlex ? '1px solid #CBD5E1' : '1px solid #BFDBFE',
+                                                                                    backgroundColor: isManualOrProfile ? '#EFF6FF' : '#F1F5F9',
+                                                                                    color: isManualOrProfile ? '#1D4ED8' : '#475569',
+                                                                                    border: isManualOrProfile ? '1px solid #BFDBFE' : '1px solid #CBD5E1',
                                                                                     padding: '1px 5px',
                                                                                     borderRadius: '4px',
                                                                                     display: 'inline-flex',
@@ -2077,25 +2477,22 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                             );
                                                                         })()}
                                                                         {(() => {
-                                                                            const lat = Number(order?.latitude);
-                                                                            const lng = Number(order?.longitude);
-                                                                            const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
-                                                                            const isGenericBogota = hasCoords && (
-                                                                                (Math.abs(lat - 4.7109886) < 0.0005 && Math.abs(lng - (-74.072092)) < 0.0005) ||
-                                                                                (Math.abs(lat - 4.6097) < 0.0005 && Math.abs(lng - (-74.0817)) < 0.0005)
+                                                                            const gps = classifyOrderGps(order?.latitude, order?.longitude);
+                                                                            if (gps.status === 'valid') return null;
+                                                                            const badgeText = gps.status === 'generic_centroid'
+                                                                                ? 'GPS Genérico'
+                                                                                : gps.status === 'out_of_bounds'
+                                                                                    ? 'GPS Fuera Zona'
+                                                                                    : 'Sin GPS';
+                                                                            return (
+                                                                                <span
+                                                                                    title={gps.reason || 'Cliente sin coordenadas GPS válidas'}
+                                                                                    style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                                                >
+                                                                                    <AlertTriangle size={9} />
+                                                                                    {badgeText}
+                                                                                </span>
                                                                             );
-                                                                            if (!hasCoords || isGenericBogota) {
-                                                                                return (
-                                                                                    <span
-                                                                                        title={isGenericBogota ? 'Coordenada coincide con centroide genérico de Bogotá — verificar pin del cliente' : 'Cliente sin coordenadas GPS válidas'}
-                                                                                        style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                                                                    >
-                                                                                        <AlertTriangle size={9} />
-                                                                                        {isGenericBogota ? 'GPS Genérico' : 'Sin GPS'}
-                                                                                    </span>
-                                                                                );
-                                                                            }
-                                                                            return null;
                                                                         })()}
                                                                         {spaceLabel && (
                                                                             <span style={{ fontSize: '0.58rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px' }}>
@@ -2746,6 +3143,22 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     </div>
                 </div>
             )}
+            <RouteSpaghettiMapModal
+                isOpen={spaghettiOpen}
+                onClose={() => {
+                    setSpaghettiOpen(false);
+                    setSpaghettiVehicleId(null);
+                }}
+                vehicles={vehicles}
+                orders={orders}
+                assignments={assignments}
+                routePolylines={routePolylines}
+                routeMetrics={routeMetrics}
+                stopLegMetrics={stopLegMetrics}
+                stopEtas={stopEtas}
+                trafficMode={trafficMode}
+                initialVehicleId={spaghettiVehicleId}
+            />
             </div>
             <style>{`
                 @media print {

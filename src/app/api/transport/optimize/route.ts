@@ -15,6 +15,11 @@ import path from 'path';
 import crypto from 'crypto';
 import { verifySessionAndPermission } from '@/lib/auth';
 import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
+import {
+    classifyOrderGps,
+    resolveOrderDisplayWindow,
+    BODEGA_CENTRAL,
+} from '@/lib/transport/gpsHygiene';
 
 const OptimizeRequestSchema = z.object({
     orders: z.array(z.any()).min(1, 'Se requiere al menos un pedido para optimizar rutas'),
@@ -69,6 +74,10 @@ export async function POST(request: Request) {
         let optimization_strategy = parameters?.optimization_strategy || 'balanced';
         let avg_kg_per_crate = parameters?.avg_kg_per_crate || 12.5;
         let driver_break_mins = parameters?.driver_break_mins || 45;
+        let b2b_default_window_start = parameters?.b2b_default_window_start || '06:00';
+        let b2b_default_window_end = parameters?.b2b_default_window_end || '10:00';
+        let b2c_default_window_start = parameters?.b2c_default_window_start || '10:00';
+        let b2c_default_window_end = parameters?.b2c_default_window_end || '14:00';
 
         const { data: dbParams } = await supabase.from('logistic_parameters').select('*');
         if (dbParams) {
@@ -82,11 +91,22 @@ export async function POST(request: Request) {
             optimization_strategy = dbParams.find(p => p.id === 'optimization_strategy')?.value || optimization_strategy;
             avg_kg_per_crate = parseFloat(dbParams.find(p => p.id === 'avg_kg_per_crate')?.value || String(avg_kg_per_crate));
             driver_break_mins = parseFloat(dbParams.find(p => p.id === 'driver_break_mins')?.value || String(driver_break_mins));
+            b2b_default_window_start = dbParams.find(p => p.id === 'b2b_default_window_start')?.value || b2b_default_window_start;
+            b2b_default_window_end = dbParams.find(p => p.id === 'b2b_default_window_end')?.value || b2b_default_window_end;
+            b2c_default_window_start = dbParams.find(p => p.id === 'b2c_default_window_start')?.value || b2c_default_window_start;
+            b2c_default_window_end = dbParams.find(p => p.id === 'b2c_default_window_end')?.value || b2c_default_window_end;
         }
+
+        const windowParams = {
+            b2b_default_window_start,
+            b2b_default_window_end,
+            b2c_default_window_start,
+            b2c_default_window_end,
+        };
 
         let vehicleFixedCost = 500; // default balanced
         if (optimization_strategy === 'minimize_vehicles') {
-            vehicleFixedCost = 100000;
+            vehicleFixedCost = 10000;
         } else if (optimization_strategy === 'minimize_time') {
             vehicleFixedCost = 0;
         }
@@ -102,34 +122,28 @@ export async function POST(request: Request) {
         
         const targetDate = orders[0]?.delivery_date ? orders[0].delivery_date.split('T')[0] : new Date().toISOString().split('T')[0];
 
+        // Proyección en múltiplos de 7 días si la ventana de salida ya pasó (mantiene día de semana en America/Bogota)
+        const fleetStartMs = new Date(`${targetDate}T${fleet_start}:00-05:00`).getTime();
+        const isFutureWindow = Number.isFinite(fleetStartMs) && fleetStartMs > Date.now() + 5 * 60_000;
+        let shiftDays = 0;
+        if (!isFutureWindow && Number.isFinite(fleetStartMs)) {
+            const weeks = Math.ceil((Date.now() + 5 * 60_000 - fleetStartMs) / (7 * 86_400_000));
+            shiftDays = Math.max(1, weeks) * 7;
+        }
+        const trafficMode: 'live_predictive' | 'weekday_projected' = isFutureWindow ? 'live_predictive' : 'weekday_projected';
+        const addDaysToDateStr = (dateStr: string, days: number): string => {
+            if (!days) return dateStr;
+            const base = new Date(`${dateStr}T12:00:00-05:00`);
+            if (isNaN(base.getTime())) return dateStr;
+            base.setUTCDate(base.getUTCDate() + days);
+            return base.toISOString().split('T')[0];
+        };
+        const gcpDate = addDaysToDateStr(targetDate, shiftDays);
+
         const getOrderTimeWindow = (o: any, datePart: string) => {
-            const isB2B = !!o.is_b2b || (o.type?.toLowerCase().includes('b2b') ?? false) || o.profiles?.role === 'b2b_client' || o.profiles?.role === 'b2b';
-
-            let startLocal = fleet_start;
-            let endLocal = fleet_end;
-
-            if (o.is_manual_delivery && o.manual_delivery_time) {
-                const margin = Number(o.manual_delivery_margin) || 60;
-                const [mh, mm] = String(o.manual_delivery_time).split(':').map(Number);
-                if (!isNaN(mh) && !isNaN(mm)) {
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    const sM = Math.max(0, mh * 60 + mm - margin);
-                    const eM = Math.min(1439, mh * 60 + mm + margin);
-                    startLocal = `${pad(Math.floor(sM / 60))}:${pad(sM % 60)}`;
-                    endLocal = `${pad(Math.floor(eM / 60))}:${pad(eM % 60)}`;
-                }
-            } else if (isB2B) {
-                // Scenario 1: Manual Override (takes precedence for B2B)
-                if (o.is_manual_delivery && o.logistics_data?.windows?.[0]) {
-                    startLocal = o.logistics_data.windows[0].startTime || o.logistics_data.windows[0].start || startLocal;
-                    endLocal = o.logistics_data.windows[0].endTime || o.logistics_data.windows[0].end || endLocal;
-                } 
-                // Scenario 2: Client Profile Default
-                else if (o.profiles?.logistics_data?.windows?.[0]) {
-                    startLocal = o.profiles.logistics_data.windows[0].startTime || o.profiles.logistics_data.windows[0].start || startLocal;
-                    endLocal = o.profiles.logistics_data.windows[0].endTime || o.profiles.logistics_data.windows[0].end || endLocal;
-                }
-            }
+            const resolved = resolveOrderDisplayWindow(o, windowParams);
+            const startLocal = resolved.startTime;
+            const endLocal = resolved.endTime;
 
             const minFleetMins = parseTimeStr(fleet_start);
             const maxFleetMins = parseTimeStr(fleet_end);
@@ -184,23 +198,22 @@ export async function POST(request: Request) {
                 .map((item: any) => item.order_id)
         );
 
-        // Helper to compute vehicle break schedule (mid-shift window)
-        const getVehicleBreakRule = (datePart: string, fleetStart: string, breakMins: number) => {
+        // Helper to compute vehicle break schedule (mid-shift window after B2B critical window)
+        const getVehicleBreakRule = (datePart: string, fleetStart: string, breakMins: number, b2bWindowEnd: string) => {
             if (breakMins <= 0) return undefined;
-            const [h, m] = fleetStart.split(':').map(Number);
-            
-            // Earliest break window is 4 hours after start
-            let eh = h + 4;
-            let em = m;
-            if (eh >= 24) { eh = 23; em = 59; }
-            const earliestTimeStr = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`;
-            
-            // Latest break window is 6 hours after start
-            let lh = h + 6;
-            let lm = m;
-            if (lh >= 24) { lh = 23; lm = 59; }
-            const latestTimeStr = `${lh.toString().padStart(2, '0')}:${lm.toString().padStart(2, '0')}`;
-            
+            const fleetStartMins = parseTimeStr(fleetStart);
+            const b2bEndMins = parseTimeStr(b2bWindowEnd);
+            const baseEarliestMins = Number.isFinite(fleetStartMins) ? fleetStartMins + 240 : 8 * 60 + 30;
+            const earliestMins = Math.min(
+                23 * 60 + 59,
+                Number.isFinite(b2bEndMins) ? Math.max(baseEarliestMins, b2bEndMins) : baseEarliestMins
+            );
+            const latestMins = Math.min(23 * 60 + 59, earliestMins + 120);
+
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const earliestTimeStr = `${pad(Math.floor(earliestMins / 60))}:${pad(earliestMins % 60)}`;
+            const latestTimeStr = `${pad(Math.floor(latestMins / 60))}:${pad(latestMins % 60)}`;
+
             try {
                 return {
                     breakRequests: [
@@ -236,7 +249,8 @@ export async function POST(request: Request) {
         });
 
         const rawPrioritySet = new Set<string>(priorityOrderIds.map((id: string) => String(id)));
-        const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string }> = [];
+        const excludedNoGpsOrderIds: string[] = [];
+        const geocodingWarnings: Array<{ orderId: string; customerName: string; reason: string; status?: string }> = [];
 
         const normalizeTextKey = (val?: string | null) =>
             String(val || '')
@@ -271,10 +285,32 @@ export async function POST(request: Request) {
 
         const routingUnits: RoutingUnit[] = orders
             .filter((o: any) => !splitChildIds.has(String(o.id)))
-            .map((parent: any) => {
+            .flatMap((parent: any): RoutingUnit[] => {
                 const children = splitChildrenByParent.get(String(parent.id)) || [];
                 const memberOrders = [parent, ...children];
                 const memberOrderIds = memberOrders.map(m => String(m.id));
+
+                // Higiene GPS (§5): excluir pedidos sin GPS válido en Bogotá/Sabana (prohibido enviarlos a Corabastos)
+                const gpsCheck = classifyOrderGps(
+                    parent.latitude ?? parent.profiles?.latitude,
+                    parent.longitude ?? parent.profiles?.longitude
+                );
+                if (gpsCheck.status !== 'valid') {
+                    memberOrders.forEach(m => {
+                        const idStr = String(m.id);
+                        excludedNoGpsOrderIds.push(idStr);
+                        geocodingWarnings.push({
+                            orderId: idStr,
+                            customerName: m.customer_name || m.profiles?.full_name || 'Cliente',
+                            reason: gpsCheck.reason || 'Coordenadas GPS ausentes o inválidas; excluido de ruteo automático',
+                            status: gpsCheck.status,
+                        });
+                    });
+                    return [];
+                }
+
+                const validLat = gpsCheck.lat as number;
+                const validLng = gpsCheck.lng as number;
 
                 const rawSumKg = memberOrders.reduce((acc, m) => {
                     const w = parseFloat(m.total_weight_kg);
@@ -293,11 +329,11 @@ export async function POST(request: Request) {
                 );
 
                 // Intersect split member windows if valid, else fallback to parent window so 10A+10B never split
-                const parentWin = getOrderTimeWindow(parent, targetDate);
+                const parentWin = getOrderTimeWindow(parent, gcpDate);
                 let interStartMs = new Date(parentWin.startTime).getTime();
                 let interEndMs = new Date(parentWin.endTime).getTime();
                 for (const child of children) {
-                    const cw = getOrderTimeWindow(child, targetDate);
+                    const cw = getOrderTimeWindow(child, gcpDate);
                     const cs = new Date(cw.startTime).getTime();
                     const ce = new Date(cw.endTime).getTime();
                     if (Math.max(interStartMs, cs) < Math.min(interEndMs, ce)) {
@@ -310,38 +346,15 @@ export async function POST(request: Request) {
                     endTime: new Date(interEndMs).toISOString()
                 };
 
-                // Poka-Yoke coordinates (Bogotá, Sabana & Melgar/Girardot box) + warnings per real orderId
-                let rawLat = parseFloat(parent.latitude || parent.profiles?.latitude);
-                let rawLng = parseFloat(parent.longitude || parent.profiles?.longitude);
-                const hasValidCoords = !(isNaN(rawLat) || isNaN(rawLng) || rawLat === 0 || rawLng === 0 || rawLat < 3.5 || rawLat > 6.0 || rawLng < -75.5 || rawLng > -73.0);
-
-                if (!hasValidCoords) {
-                    memberOrders.forEach(m => {
-                        geocodingWarnings.push({
-                            orderId: String(m.id),
-                            customerName: m.customer_name || m.profiles?.full_name || 'Cliente',
-                            reason: 'Coordenadas GPS ausentes o fuera de Bogotá/Sabana; asignado temporalmente a bodega central'
-                        });
-                    });
-                    rawLat = 4.633653;
-                    rawLng = -74.160647;
-                }
-
-                // Strict composite siteKey (never group unrelated invalid-coords orders at Bodega Central)
                 const dateKey = String(parent.delivery_date || targetDate).split('T')[0];
                 const rawAddrNorm = normalizeTextKey(parent.shipping_address || parent.address);
                 const normAddr = rawAddrNorm === 'sin direccion' ? '' : rawAddrNorm;
                 const normName = normalizeTextKey(parent.customer_name || parent.profiles?.company_name || parent.profiles?.contact_name);
 
-                let siteKey = `order:${parent.id}`;
-                if (hasValidCoords) {
-                    const clientPart = parent.profile_id ? String(parent.profile_id) : (normName ? `name:${normName}` : `order:${parent.id}`);
-                    siteKey = `${dateKey}|${clientPart}|${rawLat.toFixed(4)},${rawLng.toFixed(4)}|${normAddr}`;
-                } else if (parent.profile_id && normAddr) {
-                    siteKey = `${dateKey}|${parent.profile_id}|nogps|${normAddr}`;
-                }
+                const clientPart = parent.profile_id ? String(parent.profile_id) : (normName ? `name:${normName}` : `order:${parent.id}`);
+                const siteKey = `${dateKey}|${clientPart}|${validLat.toFixed(4)},${validLng.toFixed(4)}|${normAddr}`;
 
-                return {
+                return [{
                     leaderId: String(parent.id),
                     memberOrders,
                     memberOrderIds,
@@ -354,10 +367,10 @@ export async function POST(request: Request) {
                     startMs: interStartMs,
                     endMs: interEndMs,
                     timeWindow: unitWindow,
-                    lat: rawLat,
-                    lng: rawLng,
+                    lat: validLat,
+                    lng: validLng,
                     siteKey
-                };
+                }];
             });
 
         // Fase 2: Consolidación Same-Site Co-Routing con FFD, intersección horaria estricta y límites de cadena de frío
@@ -460,47 +473,101 @@ export async function POST(request: Request) {
 
         const hasPriorityOrders = consolidatedClusters.some(c => c.isPriority);
 
-        // Expansión hermética: devuelve únicamente orderIds reales en routes y stop_etas
-        const expandClusterAssignments = (rawAssign: Record<string, string[]>, rawEtas: Record<string, string>) => {
+        // Cortocircuito antes de OAuth2/Google si no quedan clústeres con GPS válido
+        if (consolidatedClusters.length === 0) {
+            const emptyAssignments: Record<string, string[]> = {};
+            const emptyStartTimes: Record<string, string> = {};
+            vehicles.forEach((v: any) => {
+                emptyAssignments[v.id] = [];
+                emptyStartTimes[v.id] = fleet_start || '04:30';
+            });
+            const deterministicExplanation = [
+                '### Sin Pedidos con GPS Válido para Ruteo Automático',
+                `- **Excluidos por GPS:** **${excludedNoGpsOrderIds.length}** pedido(s) no tienen coordenadas válidas en Bogotá/Sabana y fueron excluidos del motor de Google.`,
+                '- **Acción recomendada:** Corrige las coordenadas del cliente o asigna estos pedidos manualmente en las tarjetas de vehículos.'
+            ].join('\n');
+
+            return NextResponse.json({
+                message: 'No hay pedidos con coordenadas GPS válidas para optimizar automáticamente',
+                routes: emptyAssignments,
+                route_start_times: emptyStartTimes,
+                stop_etas: {},
+                theoretical_metrics: { distance_km: 0, travel_min: 0, duration_min: 0 },
+                route_polylines: {},
+                route_metrics: {},
+                stop_leg_metrics: {},
+                skipped_orders: [],
+                excluded_no_gps_order_ids: excludedNoGpsOrderIds,
+                geocoding_warnings: geocodingWarnings,
+                traffic_mode: trafficMode,
+                simulation: false,
+                explanation: deterministicExplanation
+            }, { status: 200, headers: { 'x-request-id': requestId } });
+        }
+
+        // Expansión hermética: devuelve únicamente orderIds reales en routes, stop_etas y stop_leg_metrics
+        const expandClusterAssignments = (
+            rawAssign: Record<string, string[]>,
+            rawEtas: Record<string, string>,
+            rawLegMetrics: Record<string, { distance_km: number; travel_min: number }>
+        ) => {
             const expandedAssignments: Record<string, string[]> = {};
             const expandedStopEtas: Record<string, string> = {};
+            const expandedStopLegMetrics: Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean }> = {};
             Object.entries(rawAssign).forEach(([vid, clusterIds]) => {
                 const expanded: string[] = [];
                 clusterIds.forEach(cid => {
                     const cluster = clusterById.get(String(cid));
                     const memberIds = cluster ? cluster.memberOrderIds : [String(cid)];
                     const etaVal = rawEtas[cid];
-                    memberIds.forEach(realId => {
+                    const legVal = rawLegMetrics[cid];
+                    memberIds.forEach((realId, idx) => {
                         expanded.push(realId);
                         if (etaVal) expandedStopEtas[realId] = etaVal;
+                        if (legVal) {
+                            if (idx === 0) {
+                                expandedStopLegMetrics[realId] = {
+                                    distance_km: legVal.distance_km,
+                                    travel_min: legVal.travel_min,
+                                };
+                            } else {
+                                expandedStopLegMetrics[realId] = {
+                                    distance_km: 0,
+                                    travel_min: 0,
+                                    is_same_site_followup: true,
+                                };
+                            }
+                        }
                     });
                 });
                 expandedAssignments[vid] = expanded;
             });
-            return { expandedAssignments, expandedStopEtas };
+            return { expandedAssignments, expandedStopEtas, expandedStopLegMetrics };
         };
 
         const gcpRequest = {
-            timeout: "15s",
+            timeout: "12s",
+            searchMode: "CONSUME_ALL_AVAILABLE_TIME",
+            populatePolylines: true,
             model: {
-                globalStartTime: new Date(`${targetDate}T00:00:00-05:00`).toISOString(),
-                globalEndTime: new Date(`${targetDate}T23:59:59-05:00`).toISOString(),
+                globalStartTime: new Date(`${gcpDate}T00:00:00-05:00`).toISOString(),
+                globalEndTime: new Date(`${gcpDate}T23:59:59-05:00`).toISOString(),
                 shipments: consolidatedClusters.map((cluster) => {
                     const cashDwellDelta = cluster.isCashOnDelivery ? 5 : 0;
                     const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cluster.crates) + cashDwellDelta;
-                    const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 60));
+                    const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 180));
 
                     let shipmentTimeWindow: Record<string, any> = cluster.timeWindow;
                     if (cluster.isPriority) {
                         const startMs = cluster.startMs;
                         const endMs = cluster.endMs;
-                        const fleetStartMs = new Date(`${targetDate}T${fleet_start}:00-05:00`).getTime();
+                        const gcpFleetStartMs = new Date(`${gcpDate}T${fleet_start}:00-05:00`).getTime();
                         const targetSoftMs = Math.min(
                             endMs,
                             Math.max(
                                 startMs,
                                 Math.min(
-                                    fleetStartMs + 180 * 60000,
+                                    gcpFleetStartMs + 180 * 60000,
                                     startMs + Math.round((endMs - startMs) * 0.35)
                                 )
                             )
@@ -537,7 +604,7 @@ export async function POST(request: Request) {
                             }
                         ],
                         loadDemands: demands,
-                        penaltyCost: cluster.isPriority ? 2000000 : (cluster.isB2B ? 500000 : 1000),
+                        penaltyCost: cluster.isPriority ? 2000000 : (cluster.isB2B ? 500000 : 250000),
                         label: cluster.clusterId
                     };
                 }),
@@ -545,7 +612,7 @@ export async function POST(request: Request) {
                     // Suppress mandatory pause on morning sprint routes (< 4h) to avoid dropping restaurant breakfast windows
                     const shiftDurationMins = parseTimeStr(fleet_end) - parseTimeStr(fleet_start);
                     const effectiveBreakMins = shiftDurationMins < 240 ? 0 : driver_break_mins;
-                    const breakRule = getVehicleBreakRule(targetDate, fleet_start, effectiveBreakMins);
+                    const breakRule = getVehicleBreakRule(gcpDate, fleet_start, effectiveBreakMins, b2b_default_window_end);
 
                     const limits: Record<string, { maxLoad?: string; softMaxLoad?: string; costPerUnitAboveSoftMax?: number }> = {
                         "weight": { "maxLoad": String(v.capacity_kg) },
@@ -565,20 +632,23 @@ export async function POST(request: Request) {
                     }
 
                     const vehicleObj: any = {
-                        startLocation: { latitude: 4.633653, longitude: -74.160647 },
-                        endLocation: { latitude: 4.633653, longitude: -74.160647 },
+                        startLocation: { latitude: BODEGA_CENTRAL.lat, longitude: BODEGA_CENTRAL.lng },
+                        endLocation: { latitude: BODEGA_CENTRAL.lat, longitude: BODEGA_CENTRAL.lng },
                         loadLimits: limits,
                         fixedCost: vehicleFixedCost,
+                        costPerKilometer: 2.0,
+                        costPerHour: 40.0,
+                        costPerTraveledHour: 20.0,
                         startTimeWindows: [
                             {
-                                startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
-                                endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
+                                startTime: new Date(`${gcpDate}T${fleet_start}:00-05:00`).toISOString(),
+                                endTime: new Date(`${gcpDate}T${fleet_end}:00-05:00`).toISOString()
                             }
                         ],
                         endTimeWindows: [
                             {
-                                startTime: new Date(`${targetDate}T${fleet_start}:00-05:00`).toISOString(),
-                                endTime: new Date(`${targetDate}T${fleet_end}:00-05:00`).toISOString()
+                                startTime: new Date(`${gcpDate}T${fleet_start}:00-05:00`).toISOString(),
+                                endTime: new Date(`${gcpDate}T${fleet_end}:00-05:00`).toISOString()
                             }
                         ],
                         displayName: v.plate,
@@ -592,7 +662,6 @@ export async function POST(request: Request) {
                     return vehicleObj;
                 })
             },
-            // Standard fast heuristic mode (<5s) to avoid Vercel serverless function timeouts
             considerRoadTraffic: true
         };
 
@@ -746,7 +815,7 @@ export async function POST(request: Request) {
         }
 
         const gcpController = new AbortController();
-        const gcpTimeout = setTimeout(() => gcpController.abort(), 18000);
+        const gcpTimeout = setTimeout(() => gcpController.abort(), 20000);
         let gcpResponse: Response | null = null;
         let gcpFetchError: any = null;
 
@@ -759,7 +828,7 @@ export async function POST(request: Request) {
             });
         } catch (fetchErr: any) {
             gcpFetchError = fetchErr;
-            console.error(`[Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 18s' : fetchErr.message}). RequestId: ${requestId}`);
+            console.error(`[Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 20s' : fetchErr.message}). RequestId: ${requestId}`);
         } finally {
             clearTimeout(gcpTimeout);
         }
@@ -772,7 +841,7 @@ export async function POST(request: Request) {
                 status: 503,
                 code: isTimeout ? 'GCP_TIMEOUT' : 'GCP_UPSTREAM_ERROR',
                 detail: isTimeout
-                    ? 'Google Route Optimization tardó más de 18 segundos en responder. No se generaron rutas simuladas; reintenta o asigna manualmente.'
+                    ? 'Google Route Optimization tardó más de 20 segundos en responder. No se generaron rutas simuladas; reintenta o asigna manualmente.'
                     : `Error de conexión con Google Route Optimization (${gcpFetchError?.message || 'Network error'}). No se generaron rutas simuladas.`,
                 requestId
             }, { status: 503, headers: { 'x-request-id': requestId } });
@@ -793,10 +862,30 @@ export async function POST(request: Request) {
 
         const gcpData = await gcpResponse.json();
 
+        const parseGcpDurationSeconds = (rawDur: any): number => {
+            if (typeof rawDur === 'string') {
+                return parseInt(rawDur.replace(/s$/i, ''), 10) || 0;
+            }
+            if (rawDur && typeof rawDur === 'object' && rawDur.seconds !== undefined) {
+                return Number(rawDur.seconds) || 0;
+            }
+            return 0;
+        };
+
         // Transform Google's assigned routes back to assignments map { vehicleId: [orderIds] }
         const assignments: Record<string, string[]> = {};
         const routeStartTimes: Record<string, string> = {};
         const stopEtas: Record<string, string> = {};
+        const clusterLegMetrics: Record<string, { distance_km: number; travel_min: number }> = {};
+        const routePolylines: Record<string, string> = {};
+        const routeMetrics: Record<string, {
+            distance_km: number;
+            travel_min: number;
+            total_min: number;
+            wait_min: number;
+            break_min: number;
+        }> = {};
+
         vehicles.forEach((v: any) => {
             assignments[v.id] = [];
             routeStartTimes[v.id] = fleet_start || '04:30';
@@ -806,9 +895,22 @@ export async function POST(request: Request) {
             gcpData.routes.forEach((route: any) => {
                 const vehicleId = route.vehicleLabel; // We set this as v.id in gcpRequest
                 if (vehicleId && assignments[vehicleId]) {
+                    if (route.routePolyline?.points) {
+                        routePolylines[vehicleId] = route.routePolyline.points;
+                    }
+                    if (route.metrics) {
+                        routeMetrics[vehicleId] = {
+                            distance_km: Math.round(((Number(route.metrics.travelDistanceMeters) || 0) / 1000) * 10) / 10,
+                            travel_min: Math.round(parseGcpDurationSeconds(route.metrics.travelDuration) / 60),
+                            total_min: Math.round(parseGcpDurationSeconds(route.metrics.totalDuration) / 60),
+                            wait_min: Math.round(parseGcpDurationSeconds(route.metrics.waitDuration) / 60),
+                            break_min: Math.round(parseGcpDurationSeconds(route.metrics.breakDuration) / 60),
+                        };
+                    }
+
                     const visitOrderIds = (route.visits || [])
-                        .filter((vst: any) => !vst.isPickup)
-                        .map((vst: any) => {
+                        .map((vst: any, visitIdx: number) => {
+                            if (vst.isPickup) return null;
                             const clusterId = vst.shipmentLabel || consolidatedClusters[vst.shipmentIndex ?? 0]?.clusterId;
                             if (clusterId && vst.startTime) {
                                 try {
@@ -819,9 +921,16 @@ export async function POST(request: Request) {
                                     stopEtas[clusterId] = `${h}:${m}`;
                                 } catch (_) {}
                             }
+                            const transition = route.transitions?.[visitIdx];
+                            if (clusterId && transition) {
+                                clusterLegMetrics[clusterId] = {
+                                    distance_km: Math.round(((Number(transition.travelDistanceMeters) || 0) / 1000) * 10) / 10,
+                                    travel_min: Math.round(parseGcpDurationSeconds(transition.travelDuration) / 60),
+                                };
+                            }
                             return clusterId;
                         })
-                        .filter(Boolean);
+                        .filter(Boolean) as string[];
 
                     assignments[vehicleId] = visitOrderIds;
 
@@ -862,7 +971,11 @@ export async function POST(request: Request) {
         });
 
         // Expand consolidated clusters hermetically to real orderIds only
-        const { expandedAssignments: finalAssignments, expandedStopEtas: finalStopEtas } = expandClusterAssignments(assignments, stopEtas);
+        const {
+            expandedAssignments: finalAssignments,
+            expandedStopEtas: finalStopEtas,
+            expandedStopLegMetrics: finalStopLegMetrics,
+        } = expandClusterAssignments(assignments, stopEtas, clusterLegMetrics);
         const assignedOrderIds = new Set(Object.values(finalAssignments).flat());
         const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
         const explanation = await generateAiExplanation(orders, vehicles, finalAssignments, unassignedOrders, {
@@ -880,24 +993,28 @@ export async function POST(request: Request) {
             geocodingWarnings
         });
 
+        const aggMetrics = gcpData.metrics?.aggregatedRouteMetrics || {};
+        const aggDistMeters = Number(aggMetrics.travelDistanceMeters ?? gcpData.metrics?.totalDistanceMeters ?? 0);
+        const aggTravelSecs = parseGcpDurationSeconds(aggMetrics.travelDuration);
+        const aggTotalSecs = parseGcpDurationSeconds(aggMetrics.totalDuration ?? gcpData.metrics?.totalDuration);
+
         return NextResponse.json({
             message: "Optimization generated by REAL Google Engine",
             routes: finalAssignments,
             route_start_times: routeStartTimes,
             stop_etas: finalStopEtas,
-            theoretical_metrics: (() => {
-                const rawDur = gcpData.metrics?.totalDuration;
-                const durSeconds = typeof rawDur === 'string'
-                    ? (parseInt(rawDur.replace(/s$/i, ''), 10) || 0)
-                    : (Number(rawDur?.seconds) || 0);
-                return {
-                    distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
-                    duration_min: Math.round(durSeconds / 60)
-                };
-            })(),
+            theoretical_metrics: {
+                distance_km: Math.round((aggDistMeters / 1000) * 10) / 10,
+                travel_min: Math.round(aggTravelSecs / 60),
+                duration_min: Math.round(aggTotalSecs / 60),
+            },
+            route_polylines: routePolylines,
+            route_metrics: routeMetrics,
+            stop_leg_metrics: finalStopLegMetrics,
             skipped_orders: skippedOrders,
+            excluded_no_gps_order_ids: excludedNoGpsOrderIds,
             geocoding_warnings: geocodingWarnings,
-            gcp_raw: gcpData,
+            traffic_mode: trafficMode,
             simulation: false,
             explanation: explanation
         }, { status: 200, headers: { 'x-request-id': requestId } });

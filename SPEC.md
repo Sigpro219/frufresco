@@ -18276,3 +18276,56 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Pedido `#2255` restaurado a `subtotal = 3174035`, `tax = 0`, `total = 3174035` (conservando `order_items.quantity = 70.5 Kg` intacto).
      - `billing_returns` (`7bd8e52b...`) saneado a `status = 'approved'`, `source = 'driver_app'`, `calculated_amount = 0`, `reason = '[REPOSICIÓN D+1 #2303 | PQR #c1845602] ...'`.
      - Pedido Hijo de Reposición **`#2303`** (`$0 COP`, `2 Kg Aguacate`, entrega `2026-11-26`) creado y vinculado a `#2255` y PQR `#c1845602`.
+
+
+---
+
+### Escenario 490: Blindaje Pre-Lanzamiento de Producción (`frufresco.co`) — Seguridad, SEO, OpenGraph y Marco Legal Colombia (SDD v1.9.445)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (0 errores tsc)`
+- **Alcance Contractual:**
+  1. **Eliminación de Rutas Debug/SQL Expuestas:** Removidos los directorios `src/app/api/run-sql`, `src/app/api/run-temp-sql`, `src/app/api/run-learning-sql`, `src/app/test-db` y `src/app/admin/test-db`.
+  2. **SEO, OpenGraph y Sesión ([`src/app/layout.tsx`](file:///c:/Projects/frufresco/src/app/layout.tsx)):** Configurado `metadataBase: new URL('https://frufresco.co')`, `alternates.canonical`, `openGraph` (imagen `/hero_fresh_produce.png`) y `twitter` card; corregido el token key de limpieza de sesión al proyecto actual (`sb-csqurhdykbalvlnpowcz-auth-token`).
+  3. **Indexación Controlada ([`src/app/robots.ts`](file:///c:/Projects/frufresco/src/app/robots.ts), [`src/app/sitemap.ts`](file:///c:/Projects/frufresco/src/app/sitemap.ts)):** Bloqueo explícito a `/admin/`, `/ops/`, `/api/`, `/login`, `/register`, `/payments/`, `/checkout`, `/b2b/dashboard`, `/b2b/agreements`, `/docs/`, `/quotes/`, `/track/`; sitemap canónico sobre `https://frufresco.co`.
+  4. **Páginas Legales Colombia & Footer ([`src/app/privacidad/page.tsx`](file:///c:/Projects/frufresco/src/app/privacidad/page.tsx), [`src/app/terminos/page.tsx`](file:///c:/Projects/frufresco/src/app/terminos/page.tsx), [`src/components/Footer.tsx`](file:///c:/Projects/frufresco/src/components/Footer.tsx)):** Creadas rutas públicas `/privacidad` (Ley 1581 de 2012) y `/terminos` (Ley 1480 de 2011), y actualizado el Footer con los correos oficiales `pedidos@frufresco.co` y `contacto@frufresco.co` más enlaces legales.
+
+---
+
+### Escenario 493: Motor de Ruteo Óptimo Grado MercadoLibre (`optimizeTours` v1 con Costos Reales + Tráfico Predictivo), Ventanas Persistentes B2B/B2C, Mapa Espagueti y Higiene GPS (SDD v1.9.448)
+- **Estado del Contrato:** `🟢 CERTIFICADO Y DESPLEGADO EN SANDBOX (\`tsc --noEmit\` 0 errores)`
+- **Archivos del Alcance (Todos libres de `READ-ONLY LOCK`, 0 migraciones SQL):**
+  1. `src/lib/transport/gpsHygiene.ts` *(nuevo — helper compartido: `classifyOrderGps`, `resolveOrderDisplayWindow`, decoder puro JS de polilíneas Google, builder de URLs Google Maps con chunking `<= 10` paradas únicas)*
+  2. `src/app/api/transport/optimize/route.ts`
+  3. `src/components/RouteSpaghettiMapModal.tsx` *(nuevo — modal interactivo reutilizando `<APIProvider>` global de `src/app/providers.tsx`, sin montar un segundo provider)*
+  4. `src/components/RoutePlanner.tsx`
+- **Alcance Contractual:**
+  1. **Función de Costo Real & Búsqueda Óptima (`src/app/api/transport/optimize/route.ts`):**
+     - Inyectar en cada `vehicleObj`: `costPerKilometer: 2.0`, `costPerHour: 40.0` (fuerza salida *just-in-time* eliminando esperas en vacío) y `costPerTraveledHour: 20.0` (penaliza congestión).
+     - Recalibrar `penaltyCost` por shipment (`B2C: 250000`, `B2B: 500000`, `Prioritario: 2000000`) y `vehicleFixedCost` (`balanced: 500`, `minimize_vehicles: 10000`, `minimize_time: 0`) para compactar flota sin jamás descartar pedidos B2C factibles.
+     - Configurar `searchMode: 'CONSUME_ALL_AVAILABLE_TIME'` con `timeout: '12s'` (dentro del `AbortController` de `20s`, `maxDuration = 60`) para que OR-Tools refine localmente hasta convergencia óptima (no solo la primera heurística factible).
+     - Elevar el techo máximo de descarga por parada en `optimize/route.ts` de `60` a **`180` min** (`Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 180))`) para reflejar pedidos institucionales grandes (ej. >60 canastillas).
+  2. **Tráfico Real sin Fallos en Ventanas Pasadas (`traffic_mode`):**
+     - Mantener `considerRoadTraffic: true`. Evaluar `isFutureWindow = new Date(\`${targetDate}T${fleet_start}:00-05:00\`).getTime() > Date.now() + 5 * 60_000`.
+     - Si `!isFutureWindow`, proyectar las timestamps enviadas a Google en **múltiplos de 7 días** (`weeks = Math.ceil((Date.now() + 5 * 60_000 - fleetStartMs) / (7 * 86_400_000))`, `shiftDays = Math.max(1, weeks) * 7`) hasta caer en el futuro próximo manteniendo el mismo día de la semana en `America/Bogota`, extrayendo `HH:mm` en `America/Bogota` al parsear ETAs y reportando `traffic_mode: 'live_predictive' | 'weekday_projected'`.
+     - Ubicar `breakRule` (`driver_break_mins`, cuando turno `>= 4h`) con `earliestStartTime = max(fleet_start + 4h, b2b_default_window_end)` y ventana `[+0h, +2h]` para no cortar la franja crítica B2B.
+  3. **Ventanas Persistentes por Segmento (`logistic_parameters` + UI reactiva):**
+     - Nuevos parámetros persistentes en `logistic_parameters` (KV existente, 0 DDL):
+       - `b2b_default_window_start` (default `'06:00'`) y `b2b_default_window_end` (default `'10:00'`).
+       - `b2c_default_window_start` (default `'10:00'`) y `b2c_default_window_end` (default `'14:00'`).
+     - Jerarquía canónica única (`resolveOrderDisplayWindow` compartida entre `RoutePlanner.tsx` y `optimize/route.ts`): (1) `is_manual_delivery && manual_delivery_time`, (2) `is_manual_delivery && logistics_data.windows[0]`, (3) `profiles.logistics_data.windows[0]` (B2B y B2C), (4) ventana persistente del segmento (`b2b_default_window_*` o `b2c_default_window_*`).
+     - Validación `HH:MM` (`/^\d{2}:\d{2}$/`) y `start < end` antes de persistir en `updateParameter`, con actualización reactiva inmediata en tabla y tarjetas.
+  4. **Métricas Reales Google v1 & Payload Compacto (Cero `gcp_raw`):**
+     - Leer `gcpData.metrics.aggregatedRouteMetrics.{travelDistanceMeters, travelDuration, totalDuration}` (corrigiendo el `0 km · 0 min`), `route.metrics` por camión y `route.transitions[k]` por tramo (`transitions[0]` = Bodega → Parada #1).
+     - En clústeres `same-site` de $N > 1$ pedidos, asignar `distance_km` y `travel_min` solo al primer `orderId` y `{ distance_km: 0, travel_min: 0, is_same_site_followup: true }` a los hermanos.
+     - Activar únicamente `populatePolylines: true` (jamás `populateTransitionPolylines`), **eliminar `gcp_raw`** del JSON HTTP, y devolver `route_polylines`, `route_metrics`, `stop_leg_metrics` y `theoretical_metrics` (`distance_km`, `travel_min`, `duration_min`). En `localStorage`, guardar `routePolylines` solo si el payload serializado `< 200 KB` con `try/catch` de respaldo.
+  5. **Higiene GPS Real (`gpsHygiene.ts`):**
+     - `classifyOrderGps(lat, lng)` clasifica `'valid' | 'missing' | 'generic_centroid' | 'out_of_bounds'` (incluyendo centroides genéricos de Bogotá `4.7109886,-74.072092` y `4.6097,-74.0817` ±`0.0005°`).
+     - Mostrar badge `Sin GPS` / `GPS Genérico` en la tabla superior de `RoutePlanner.tsx` + banner de conteo antes de `Auto-Asignar`.
+     - **Excluir** pedidos con GPS no `'valid'` de `gcpRequest.model.shipments` (prohibido teletransportarlos a Corabastos); devolverlos en `excluded_no_gps_order_ids` + `geocoding_warnings` manteniéndolos asignables manualmente. Si tras excluirlos `consolidatedClusters.length === 0`, cortocircuitar **antes** de OAuth2/Google retornando HTTP `200` con `routes` vacíos, métricas en `0` y `explanation` determinista (evitando `400 INVALID_ARGUMENT` de `shipments: []`).
+     - Al mutar manualmente (`toggleAssignment`, `handleDropOnVehicle`, `handleSidebarDrop`) o confirmar (`handleConfirmRoutes`) en `RoutePlanner.tsx`, limpiar `routePolylines`, `routeMetrics` y `stopLegMetrics` junto con `theoreticalMetrics` y `stopEtas`.
+  6. **Mapa Espagueti Interactivo & Enlace Google Maps con Chunking:**
+     - `RouteSpaghettiMapModal.tsx`: dibuja polilíneas reales calle por calle (`new google.maps.Polyline` con cleanup `setMap(null)`) usando decoder puro JS, paleta de alto contraste por camión, pines numerados `#1..#N`, filtro por camión y tabla de `km` + `min` reales por tramo.
+     - Botón **"Abrir en Google Maps"** por camión deduplicando `same-site` y omitiendo sin GPS, usando `origin=4.633653,-74.160647` y `destination=<última parada>`, y particionando automáticamente en tramos encadenados de máximo **10 paradas únicas** si el camión supera 10 paradas.
+  7. **Zero-Mock & Visibilidad Total de Errores (Fail-Fast Honesto):**
+     - **Cero datos mock ni ocultamiento de fallos:** Ante cualquier error de Google (`HTTP 503`, timeout, credenciales, `INVALID_ARGUMENT` o caída de red), `RoutePlanner.tsx` debe renderizar un **banner de error persistente y visible** (descartable manualmente, nunca solo un toast pasajero) mostrando el motivo exacto devuelto por la API y sugiriendo explícitamente **asignar y ordenar las rutas manualmente** en las tarjetas.
+     - **Visibilidad de excluidos y omitidos:** Los pedidos en `excluded_no_gps_order_ids` y `skipped_orders` (con la razón exacta devuelta por Google) deben mostrarse en alerta persistente en pantalla para asignación manual o corrección de GPS.
+     - **Cero métricas ni polilíneas sintéticas:** Si una ruta fue editada manualmente o no cuenta con polilínea real de Google, `RouteSpaghettiMapModal.tsx` declara explícitamente el estado manual sin inventar distancias, tiempos ni trazos falsos.
