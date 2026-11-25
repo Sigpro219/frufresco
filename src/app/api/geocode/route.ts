@@ -62,7 +62,30 @@ export async function GET(request: Request) {
         const response = await fetch(url, { signal: controller.signal });
         const data = await response.json();
 
-        return NextResponse.json(data, {
+        // Additive precision metadata (preserves status & results untouched for READ-ONLY LOCK callers)
+        const firstResult = data?.status === 'OK' && Array.isArray(data?.results) ? data.results[0] : null;
+        const locationType: string | null = firstResult?.geometry?.location_type || null;
+        const lat = Number(firstResult?.geometry?.location?.lat);
+        const lng = Number(firstResult?.geometry?.location?.lng);
+        const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+        const isGenericCentroid = hasCoords && (
+            (Math.abs(lat - 4.7109886) < 0.0005 && Math.abs(lng - (-74.072092)) < 0.0005) ||
+            (Math.abs(lat - 4.6097) < 0.0005 && Math.abs(lng - (-74.0817)) < 0.0005)
+        );
+        const isApproximate = locationType === 'APPROXIMATE';
+        const precisionWarning = isGenericCentroid
+            ? 'Coordenada coincide con centroide genérico de Bogotá; verificar ubicación exacta manualmente.'
+            : isApproximate
+                ? 'Google Geocoding devolvió precisión aproximada (APPROXIMATE); validar pin en mapa.'
+                : null;
+
+        return NextResponse.json({
+            ...data,
+            location_type: locationType,
+            is_approximate: isApproximate,
+            is_generic_centroid: isGenericCentroid,
+            precision_warning: precisionWarning
+        }, {
             headers: { 'x-request-id': requestId }
         });
     } catch (error: any) {

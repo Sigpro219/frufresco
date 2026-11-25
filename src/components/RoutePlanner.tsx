@@ -32,6 +32,9 @@ import {
     Search,
     Sliders,
     ArrowDownUp,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
     Printer,
     MessageSquare,
     Navigation
@@ -116,6 +119,25 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [tableSearch, setTableSearch] = useState<string>('');
     const [tableFilter, setTableFilter] = useState<'all' | 'pending' | 'priority'>('all');
+    const [sortField, setSortField] = useState<'type' | 'customer' | 'esp' | 'load' | null>(null);
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const toggleSort = (field: 'type' | 'customer' | 'esp' | 'load') => {
+        if (sortField !== field) {
+            setSortField(field);
+            setSortDir('asc');
+        } else if (sortDir === 'asc') {
+            setSortDir('desc');
+        } else {
+            setSortField(null);
+            setSortDir('asc');
+        }
+    };
+    const renderSortIcon = (field: 'type' | 'customer' | 'esp' | 'load') => {
+        if (sortField !== field) return <ArrowUpDown size={11} style={{ opacity: 0.45 }} />;
+        return sortDir === 'asc'
+            ? <ArrowUp size={11} color="#0D7A57" />
+            : <ArrowDown size={11} color="#0D7A57" />;
+    };
     const [routeViewMode, setRouteViewMode] = useState<'delivery' | 'lifo'>('delivery');
     const [loading, setLoading] = useState(true);
     const [optimizing, setOptimizing] = useState(false);
@@ -918,186 +940,206 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     return (
         <>
             <div className="rp-layout">
-            {/* Orders Sidebar */}
-            <div 
+            {/* SECCIÓN 1: PEDIDOS PICKING (Relevo Sticky nativo Perfil B: Línea 2 top:133px + Línea 3 thead top:181px) */}
+            <section
                 onDragOver={(e) => { e.preventDefault(); setDragOverSidebar(true); }}
                 onDragLeave={() => setDragOverSidebar(false)}
                 onDrop={(e) => { handleSidebarDrop(e); setDragOverSidebar(false); }}
-                className="rp-sidebar"
-                style={{ 
-                    backgroundColor: dragOverSidebar ? '#ECFDF5' : '#FFFFFF', 
-                    borderRadius: '16px', 
-                    border: dragOverSidebar ? '2px dashed #0D7A57' : '1px solid #E2E8F0', 
+                style={{
+                    backgroundColor: dragOverSidebar ? '#ECFDF5' : '#FFFFFF',
+                    borderRadius: '14px',
+                    border: dragOverSidebar ? '2px dashed #0D7A57' : '1px solid #E2E8F0',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    overflow: 'hidden',
-                    zIndex: 20,
-                    minHeight: '420px',
-                    transition: 'all 0.2s'
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'visible',
+                    transition: 'border-color 0.2s, background-color 0.2s'
                 }}
             >
-                <div style={{ padding: '1rem 1.2rem', borderBottom: '1px solid #F3F4F6', backgroundColor: '#F9FAFB' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#1F2937', letterSpacing: '-0.02em' }}>PEDIDOS PICKING</h3>
-                            <div style={{ fontSize: '0.62rem', color: '#6B7280', fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    backgroundColor: '#FFFFFF',
-                                    border: '1px solid #D1D5DB',
-                                    borderRadius: '6px',
-                                    padding: '2px 6px'
-                                }}>
-                                    <Calendar size={12} color="#6B7280" />
-                                    <span style={{ fontSize: '0.62rem', fontWeight: '800', color: '#4B5563' }}>Despacho:</span>
-                                    <input
-                                        type="date"
-                                        value={selectedDeliveryDate}
-                                        disabled={showAllDates}
-                                        onChange={(e) => setSelectedDeliveryDate(e.target.value)}
-                                        style={{
-                                            border: 'none',
-                                            background: 'transparent',
-                                            fontSize: '0.68rem',
-                                            fontWeight: '800',
-                                            color: showAllDates ? '#9CA3AF' : '#111827',
-                                            outline: 'none',
-                                            cursor: showAllDates ? 'not-allowed' : 'pointer'
-                                        }}
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAllDates(prev => !prev)}
-                                    style={{
-                                        border: '1px solid #E5E7EB',
-                                        borderRadius: '6px',
-                                        padding: '2px 6px',
-                                        fontSize: '0.60rem',
-                                        fontWeight: '800',
-                                        backgroundColor: showAllDates ? '#EDE9FE' : '#FFFFFF',
-                                        color: showAllDates ? '#6D28D9' : '#6B7280',
-                                        cursor: 'pointer'
-                                    }}
-                                    title={showAllDates ? "Filtrar por fecha específica" : "Mostrar todos los pedidos sin filtro de fecha"}
-                                >
-                                    {showAllDates ? "Ver Solo Fecha" : "Ver Todos"}
-                                </button>
-                                <span style={{ color: '#E5E7EB' }}>•</span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#0D9488' }}>
-                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
-                                    Flota Conectada
-                                </span>
-                            </div>
-                            <div style={{ fontSize: '0.62rem', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#F1F5F9', color: '#475569', padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #E2E8F0', fontWeight: '800' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Scale size={12} strokeWidth={1.5} /> Carga:</span> {formatNumber(orders.reduce((acc, curr) => acc + curr.total_weight_kg, 0), 1)} kg
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#E6FFFA', color: '#0D9488', padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #CCFBF1', fontWeight: '800' }}>
-                                    <Package size={12} strokeWidth={1.5} /> Canastillas: {orders.reduce((acc, curr) => acc + curr.crates, 0)} und
-                                </span>
-                                {(() => {
-                                    const unassignedOrders = orders.filter(o => !Object.values(assignments).some(ids => ids.includes(o.id)));
-                                    if (unassignedOrders.length < orders.length) {
-                                        const unassignedWeight = unassignedOrders.reduce((acc, curr) => acc + curr.total_weight_kg, 0);
-                                        return (
-                                            <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: '700' }}>
-                                                ({formatNumber(unassignedWeight, 1)} kg sin asignar)
-                                            </span>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {priorityOrderIds.length > 0 && (
-                                <span style={{ fontSize: '0.62rem', backgroundColor: '#FFFBEB', color: '#B45309', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    <Star size={11} fill="#F59E0B" stroke="#B45309" strokeWidth={2} />
-                                    {priorityOrderIds.length} prioritario{priorityOrderIds.length > 1 ? 's' : ''}
-                                </span>
-                            )}
-                            <span style={{ fontSize: '0.62rem', backgroundColor: '#F1F5F9', color: '#0F172A', padding: '0.25rem 0.6rem', borderRadius: '20px', fontWeight: '800', border: '1px solid #CBD5E1' }}>
-                                {orders.length} pedidos
-                            </span>
-                        </div>
+                {/* Línea 2 Sticky Bar: 48px exactos -> 133 + 48 = 181px (0px gap bleed con thead) */}
+                <div style={{
+                    position: 'sticky',
+                    top: '133px',
+                    height: '48px',
+                    boxSizing: 'border-box',
+                    zIndex: 40,
+                    backgroundColor: '#FFFFFF',
+                    borderBottom: '1px solid #E2E8F0',
+                    borderTopLeftRadius: '13px',
+                    borderTopRightRadius: '13px',
+                    padding: '0 0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none'
+                }}>
+                    <h3 style={{ margin: 0, fontSize: '0.78rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        PEDIDOS PICKING
+                    </h3>
+
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '7px',
+                        padding: '3px 7px',
+                        flexShrink: 0
+                    }}>
+                        <Calendar size={12} color="#64748B" />
+                        <input
+                            type="date"
+                            value={selectedDeliveryDate}
+                            disabled={showAllDates}
+                            onChange={(e) => setSelectedDeliveryDate(e.target.value)}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '0.70rem',
+                                fontWeight: '800',
+                                color: showAllDates ? '#94A3B8' : '#0F172A',
+                                outline: 'none',
+                                cursor: showAllDates ? 'not-allowed' : 'pointer'
+                            }}
+                        />
                     </div>
-                    {/* Compact Search + Filter Pills */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <Search size={13} style={{ position: 'absolute', left: '9px', color: '#64748B', pointerEvents: 'none' }} />
-                            <input
-                                type="text"
-                                value={tableSearch}
-                                onChange={(e) => setTableSearch(e.target.value)}
-                                placeholder="Buscar cliente, dirección o ESP..."
-                                style={{
-                                    width: '100%',
-                                    padding: '5px 26px 5px 28px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #CBD5E1',
-                                    backgroundColor: '#FFFFFF',
-                                    fontSize: '0.70rem',
-                                    fontWeight: '600',
-                                    color: '#0F172A',
-                                    outline: 'none'
-                                }}
-                            />
-                            {tableSearch && (
-                                <button
-                                    type="button"
-                                    onClick={() => setTableSearch('')}
-                                    aria-label="Limpiar búsqueda"
-                                    style={{ position: 'absolute', right: '6px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px', display: 'flex' }}
-                                >
-                                    <X size={12} />
-                                </button>
-                            )}
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                            {(() => {
-                                const pendingCount = orders.filter(o => !Object.values(assignments).some(ids => ids.includes(o.id))).length;
-                                const pills: Array<{ id: 'all' | 'pending' | 'priority'; label: string }> = [
-                                    { id: 'all', label: `Todos (${orders.length})` },
-                                    { id: 'pending', label: `Pendientes (${pendingCount})` },
-                                    { id: 'priority', label: `★ Prioritarios (${priorityOrderIds.length})` }
-                                ];
-                                return pills.map(p => {
-                                    const active = tableFilter === p.id;
-                                    return (
-                                        <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => setTableFilter(p.id)}
-                                            style={{
-                                                padding: '3px 8px',
-                                                borderRadius: '9999px',
-                                                fontSize: '0.62rem',
-                                                fontWeight: '800',
-                                                border: active ? '1px solid #0D7A57' : '1px solid #E2E8F0',
-                                                backgroundColor: active ? '#ECFDF5' : '#FFFFFF',
-                                                color: active ? '#065F46' : '#475569',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {p.label}
-                                        </button>
-                                    );
-                                });
-                            })()}
-                        </div>
+
+                    <button
+                        type="button"
+                        onClick={() => setShowAllDates(prev => !prev)}
+                        style={{
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '7px',
+                            padding: '4px 8px',
+                            fontSize: '0.66rem',
+                            fontWeight: '800',
+                            backgroundColor: showAllDates ? '#ECFDF5' : '#FFFFFF',
+                            color: showAllDates ? '#065F46' : '#475569',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                        }}
+                        title={showAllDates ? 'Filtrar por fecha específica' : 'Mostrar todos los pedidos sin filtro de fecha'}
+                    >
+                        {showAllDates ? 'Solo Fecha' : 'Ver Todos'}
+                    </button>
+
+                    {/* Buscador elástico */}
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: '1 1 180px', minWidth: '150px' }}>
+                        <Search size={13} style={{ position: 'absolute', left: '9px', color: '#64748B', pointerEvents: 'none' }} />
+                        <input
+                            type="text"
+                            value={tableSearch}
+                            onChange={(e) => setTableSearch(e.target.value)}
+                            placeholder="Buscar cliente, dirección o ESP..."
+                            style={{
+                                width: '100%',
+                                padding: '5px 24px 5px 27px',
+                                borderRadius: '8px',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
+                                fontSize: '0.72rem',
+                                fontWeight: '600',
+                                color: '#0F172A',
+                                outline: 'none'
+                            }}
+                        />
+                        {tableSearch && (
+                            <button
+                                type="button"
+                                onClick={() => setTableSearch('')}
+                                aria-label="Limpiar búsqueda"
+                                style={{ position: 'absolute', right: '6px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '2px', display: 'flex' }}
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Píldoras de filtro */}
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        {(() => {
+                            const pendingCount = orders.filter(o => !Object.values(assignments).some(ids => ids.includes(o.id))).length;
+                            const pills: Array<{ id: 'all' | 'pending' | 'priority'; label: string }> = [
+                                { id: 'all', label: `Todos (${orders.length})` },
+                                { id: 'pending', label: `Pendientes (${pendingCount})` },
+                                { id: 'priority', label: `Prioritarios (${priorityOrderIds.length})` }
+                            ];
+                            return pills.map(p => {
+                                const active = tableFilter === p.id;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => setTableFilter(p.id)}
+                                        style={{
+                                            padding: '4px 9px',
+                                            borderRadius: '9999px',
+                                            fontSize: '0.66rem',
+                                            fontWeight: '800',
+                                            border: active ? '1px solid #0D7A57' : '1px solid #E2E8F0',
+                                            backgroundColor: active ? '#ECFDF5' : '#FFFFFF',
+                                            color: active ? '#065F46' : '#475569',
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '3px'
+                                        }}
+                                    >
+                                        {p.id === 'priority' && <Star size={10} fill={active ? '#F59E0B' : 'none'} stroke={active ? '#B45309' : '#64748B'} />}
+                                        {p.label}
+                                    </button>
+                                );
+                            });
+                        })()}
+                    </div>
+
+                    {/* KPIs compactos */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#F1F5F9', color: '#0F172A', padding: '4px 8px', borderRadius: '7px', border: '1px solid #E2E8F0', fontSize: '0.66rem', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                            <Scale size={11} strokeWidth={2} />
+                            {formatNumber(orders.reduce((acc, curr) => acc + curr.total_weight_kg, 0) / 1000, 2)} t
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#ECFDF5', color: '#065F46', padding: '4px 8px', borderRadius: '7px', border: '1px solid #A7F3D0', fontSize: '0.66rem', fontWeight: '800', whiteSpace: 'nowrap' }}>
+                            <Package size={11} strokeWidth={2} />
+                            {orders.reduce((acc, curr) => acc + getOrderCrates(curr), 0)} can
+                        </span>
                     </div>
                 </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0', scrollbarWidth: 'thin' }}>
-                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.7rem' }}>
+
+                {/* Tabla sin overflow-y interno para permitir sticky nativo de ventana */}
+                <div style={{ overflow: 'visible', padding: 0 }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.74rem' }}>
                         <thead>
                             <tr>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1', width: '56px' }}>TIPO</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.45rem', borderBottom: '2px solid #CBD5E1' }}>CLIENTE &amp; LOGÍSTICA</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'right', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1', width: '74px' }}>CARGA</th>
+                                <th style={{ position: 'sticky', top: '181px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.75rem', borderBottom: '2px solid #CBD5E1', width: '92px' }}>
+                                    <button type="button" onClick={() => toggleSort('type')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', font: 'inherit', color: 'inherit' }}>
+                                        TIPO {renderSortIcon('type')}
+                                    </button>
+                                </th>
+                                <th style={{ position: 'sticky', top: '181px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'left', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1' }}>
+                                    <button type="button" onClick={() => toggleSort('customer')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', font: 'inherit', color: 'inherit' }}>
+                                        CLIENTE &amp; LOGÍSTICA {renderSortIcon('customer')}
+                                    </button>
+                                </th>
+                                <th style={{ position: 'sticky', top: '181px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'center', padding: '0.55rem 0.55rem', borderBottom: '2px solid #CBD5E1', width: '98px' }}>
+                                    <button type="button" onClick={() => toggleSort('esp')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', font: 'inherit', color: 'inherit' }}>
+                                        ESP {renderSortIcon('esp')}
+                                    </button>
+                                </th>
+                                <th style={{ position: 'sticky', top: '181px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'right', padding: '0.55rem 0.65rem', borderBottom: '2px solid #CBD5E1', width: '110px' }}>
+                                    <button type="button" onClick={() => toggleSort('load')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', font: 'inherit', color: 'inherit', marginLeft: 'auto' }}>
+                                        CARGA {renderSortIcon('load')}
+                                    </button>
+                                </th>
+                                {!readOnly && (
+                                    <th style={{ position: 'sticky', top: '181px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', textAlign: 'right', padding: '0.55rem 0.75rem', borderBottom: '2px solid #CBD5E1', width: '150px' }}>
+                                        CAMIÓN
+                                    </th>
+                                )}
                             </tr>
                         </thead>
                         <tbody>
@@ -1116,13 +1158,51 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     return true;
                                 })
                                 .sort((a, b) => {
-                                    const aAssigned = Object.values(assignments).some(ids => ids.includes(a.id));
-                                    const bAssigned = Object.values(assignments).some(ids => ids.includes(b.id));
-                                    if (aAssigned && !bAssigned) return 1;
-                                    if (!aAssigned && bAssigned) return -1;
-                                    const aPrio = priorityOrderIds.includes(String(a.id)) ? 1 : 0;
-                                    const bPrio = priorityOrderIds.includes(String(b.id)) ? 1 : 0;
-                                    if (aPrio !== bPrio) return bPrio - aPrio;
+                                    const tieBreak = () => {
+                                        const cmpName = String(a.customer_name || '').localeCompare(String(b.customer_name || ''), 'es', { sensitivity: 'base', numeric: true });
+                                        return cmpName !== 0 ? cmpName : String(a.id).localeCompare(String(b.id));
+                                    };
+                                    if (!sortField) {
+                                        const aAssigned = Object.values(assignments).some(ids => ids.includes(a.id));
+                                        const bAssigned = Object.values(assignments).some(ids => ids.includes(b.id));
+                                        if (aAssigned && !bAssigned) return 1;
+                                        if (!aAssigned && bAssigned) return -1;
+                                        const aPrio = priorityOrderIds.includes(String(a.id)) ? 1 : 0;
+                                        const bPrio = priorityOrderIds.includes(String(b.id)) ? 1 : 0;
+                                        if (aPrio !== bPrio) return bPrio - aPrio;
+                                        return 0;
+                                    }
+                                    const mult = sortDir === 'asc' ? 1 : -1;
+                                    if (sortField === 'type') {
+                                        const aType = a.is_b2b ? 'B2B' : 'B2C';
+                                        const bType = b.is_b2b ? 'B2B' : 'B2C';
+                                        const cmp = aType.localeCompare(bType);
+                                        return cmp !== 0 ? cmp * mult : tieBreak();
+                                    }
+                                    if (sortField === 'customer') {
+                                        return tieBreak() * mult;
+                                    }
+                                    if (sortField === 'esp') {
+                                        const aNums = Array.isArray(a.warehouse_spaces) ? a.warehouse_spaces.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
+                                        const bNums = Array.isArray(b.warehouse_spaces) ? b.warehouse_spaces.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
+                                        const aHas = aNums.length > 0;
+                                        const bHas = bNums.length > 0;
+                                        // S/A siempre al final tanto en asc como en desc
+                                        if (!aHas && !bHas) return tieBreak();
+                                        if (!aHas) return 1;
+                                        if (!bHas) return -1;
+                                        const aMin = Math.min(...aNums);
+                                        const bMin = Math.min(...bNums);
+                                        if (aMin !== bMin) return (aMin - bMin) * mult;
+                                        const aLabel = getOrderSpaceDisplayLabel(a) || '';
+                                        const bLabel = getOrderSpaceDisplayLabel(b) || '';
+                                        const cmpLabel = aLabel.localeCompare(bLabel, 'es', { numeric: true });
+                                        return cmpLabel !== 0 ? cmpLabel * mult : tieBreak();
+                                    }
+                                    if (sortField === 'load') {
+                                        const diff = (Number(a.total_weight_kg) || 0) - (Number(b.total_weight_kg) || 0);
+                                        return diff !== 0 ? diff * mult : tieBreak();
+                                    }
                                     return 0;
                                 })
                                 .map(order => {
@@ -1146,8 +1226,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = rowHoverBg}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = rowBg}
                                     >
-                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', borderLeft: isAssigned ? '3px solid #10B981' : '3px solid transparent', verticalAlign: 'top' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #E2E8F0', borderLeft: isAssigned ? '3px solid #10B981' : '3px solid transparent', verticalAlign: 'middle' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                 <button
                                                     type="button"
                                                     disabled={readOnly}
@@ -1179,39 +1259,26 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     />
                                                 </button>
                                                 <div style={{ 
-                                                    width: '24px', height: '22px', borderRadius: '6px', 
+                                                    width: '28px', height: '22px', borderRadius: '6px', 
                                                     backgroundColor: order.is_b2b ? '#E0F2FE' : '#F1F5F9', 
                                                     color: order.is_b2b ? '#0369A1' : '#334155', 
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontWeight: '900', fontSize: '0.58rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#CBD5E1'}`,
+                                                    fontWeight: '900', fontSize: '0.60rem', border: `1px solid ${order.is_b2b ? '#BAE6FD' : '#CBD5E1'}`,
                                                     flexShrink: 0
                                                 }}>
                                                     {order.is_b2b ? 'B2B' : 'B2C'}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '0.5rem 0.45rem', borderBottom: '1px solid #E2E8F0', maxWidth: '260px', verticalAlign: 'top' }}>
-                                            <div className="line-clamp-2" style={{ fontWeight: '800', color: isAssigned ? '#334155' : '#0F172A', lineHeight: 1.25 }}>
-                                                {order.customer_name}
-                                            </div>
-                                            <div style={{ fontSize: '0.60rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} strokeWidth={1.5} /> {order.address}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                                {assignedVehicle && (
-                                                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.58rem', fontWeight: '800', color: '#FFFFFF', backgroundColor: '#1E3A5F', padding: '1px 5px', borderRadius: '4px' }}>
-                                                        {assignedVehicle.plate}
-                                                    </span>
-                                                )}
-                                                {spaceLabel && (
-                                                    <span style={{ fontSize: '0.56rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px' }}>
-                                                        ESP {spaceLabel}
-                                                    </span>
-                                                )}
+                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', verticalAlign: 'middle' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: '800', color: isAssigned ? '#334155' : '#0F172A', lineHeight: 1.25 }}>
+                                                    {order.customer_name}
+                                                </span>
                                                 <span style={{
-                                                    fontSize: '0.56rem',
+                                                    fontSize: '0.60rem',
                                                     fontWeight: '800',
-                                                    padding: '1px 5px',
+                                                    padding: '1px 6px',
                                                     borderRadius: '4px',
                                                     display: 'inline-flex',
                                                     alignItems: 'center',
@@ -1220,26 +1287,72 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                     color: order.slot_type === 'manual' ? '#1D4ED8' : order.slot_type === 'profile' ? '#065F46' : '#475569',
                                                     border: `1px solid ${order.slot_type === 'manual' ? '#BFDBFE' : order.slot_type === 'profile' ? '#A7F3D0' : '#E2E8F0'}`
                                                 }}>
-                                                    <Clock size={9} strokeWidth={2} /> {order.display_slot}
+                                                    <Clock size={9} strokeWidth={2} /> {order.display_slot || 'Flexible'}
                                                 </span>
                                                 {!order.is_b2b && order.payment_method === 'contra_entrega' && order.payment_status !== 'Pagado' && (
-                                                    <span style={{ fontSize: '0.56rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
                                                         <Coins size={8} strokeWidth={2} /> Por Cobrar
                                                     </span>
                                                 )}
                                                 {order.novedad && (
-                                                    <span title={order.novedad} style={{ fontSize: '0.56rem', fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '1px 4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
+                                                    <span title={order.novedad} style={{ fontSize: '0.58rem', fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                         <MessageSquare size={9} strokeWidth={2} /> Nota
                                                     </span>
                                                 )}
                                             </div>
+                                            <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <MapPin size={10} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+                                                <span>{order.address}</span>
+                                            </div>
                                         </td>
-                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', textAlign: 'right', verticalAlign: 'top', fontVariantNumeric: 'tabular-nums' }}>
-                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.55rem', color:'#64748B'}}>kg</span></div>
-                                            <div style={{ fontSize: '0.58rem', color: '#0D7A57', fontWeight: '800', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
+                                        <td style={{ padding: '0.5rem 0.55rem', borderBottom: '1px solid #E2E8F0', textAlign: 'center', verticalAlign: 'middle' }}>
+                                            {spaceLabel ? (
+                                                <span style={{ fontSize: '0.64rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '2px 7px', borderRadius: '5px', whiteSpace: 'nowrap' }}>
+                                                    ESP {spaceLabel}
+                                                </span>
+                                            ) : (
+                                                <span style={{ fontSize: '0.62rem', fontWeight: '700', color: '#94A3B8' }}>S/A</span>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: '0.5rem 0.65rem', borderBottom: '1px solid #E2E8F0', textAlign: 'right', verticalAlign: 'middle', fontVariantNumeric: 'tabular-nums' }}>
+                                            <div style={{ fontWeight: '900', color: '#0F172A' }}>{formatNumber(order.total_weight_kg, 1)} <span style={{fontSize:'0.60rem', color:'#64748B'}}>kg</span></div>
+                                            <div style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: '800', marginTop: '1px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
                                                 <Package size={10} /> {orderCrates} can.
                                             </div>
                                         </td>
+                                        {!readOnly && (
+                                            <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #E2E8F0', textAlign: 'right', verticalAlign: 'middle' }}>
+                                                <select
+                                                    aria-label={`Asignar camión para ${order.customer_name}`}
+                                                    value={assignedVehicleId || ''}
+                                                    onChange={(e) => {
+                                                        const targetVid = e.target.value;
+                                                        if (!targetVid) {
+                                                            if (assignedVehicleId) toggleAssignment(order.id, assignedVehicleId);
+                                                        } else if (targetVid !== assignedVehicleId) {
+                                                            toggleAssignment(order.id, targetVid);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '4px 6px',
+                                                        borderRadius: '7px',
+                                                        border: assignedVehicle ? '1px solid #1E3A5F' : '1px solid #CBD5E1',
+                                                        backgroundColor: assignedVehicle ? '#EFF6FF' : '#FFFFFF',
+                                                        color: assignedVehicle ? '#1E3A5F' : '#475569',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        outline: 'none'
+                                                    }}
+                                                >
+                                                    <option value="">Sin asignar</option>
+                                                    {vehicles.map(v => (
+                                                        <option key={v.id} value={v.id}>{v.plate}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}
@@ -1247,21 +1360,24 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     </table>
                 </div>
 
-            </div>
+            </section>
 
-            {/* Planning Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', minWidth: 0 }}>
+            {/* SECCIÓN 2: FLOTA Y RUTAS (Toma el relevo sticky en top:133px al pasar el último pedido) */}
+            <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', minWidth: 0, overflow: 'visible' }}>
                 <div style={{
+                    position: 'sticky',
+                    top: '133px',
+                    zIndex: 40,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '0.5rem',
                     backgroundColor: '#FFFFFF',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '14px',
-                    padding: '0.65rem 0.9rem',
-                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '12px',
+                    padding: '0.55rem 0.9rem',
+                    boxShadow: '0 4px 12px -4px rgba(15, 23, 42, 0.08)'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <h3 style={{ margin: 0, fontSize: '0.85rem', fontWeight: '900', color: '#0F172A' }}>FLOTA Y RUTAS</h3>
@@ -2084,26 +2200,15 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         </>
                     );
                 })()}
-            </div>
+            </section>
             {/* Inject keyframes dynamically */}
             <style>{`
                 .rp-layout {
                     max-width: 1600px;
                     margin: 0 auto;
-                    display: grid;
-                    grid-template-columns: 1fr;
-                    gap: 1.25rem;
-                    align-items: start;
-                }
-                @media (min-width: 1024px) {
-                    .rp-layout {
-                        grid-template-columns: 420px minmax(0, 1fr);
-                    }
-                    .rp-sidebar {
-                        position: sticky;
-                        top: 136px;
-                        max-height: calc(100vh - 152px);
-                    }
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
                 }
                 .rp-fleet-grid {
                     display: grid;

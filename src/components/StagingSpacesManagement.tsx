@@ -7,7 +7,8 @@ import {
     allocateStagingSpacesGeographically,
     calculateCratesAndSpaces,
     formatSpaceLabel,
-    adjustSpacesWithCascadingShift
+    adjustSpacesWithCascadingShift,
+    resolveOrderWeightKg
 } from '@/lib/stagingSpaceAllocator';
 import { 
     Grid, 
@@ -101,14 +102,14 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                 if (avg) setAvgKgPerCrate(parseFloat(avg) || 12.5);
             }
 
-            // 2. Cargar pedidos con items y perfiles
+            // 2. Cargar pedidos con items y perfiles (incluye total_weight_kg, logistics_data y order_items.unit para paridad exacta)
             let orderQuery = supabase
                 .from('orders')
                 .select(`
-                    id, sequence_id, status, total, delivery_date, created_at,
-                    shipping_address, warehouse_spaces, profile_id, admin_notes, type, origin_source,
+                    id, sequence_id, status, total, total_weight_kg, delivery_date, created_at,
+                    shipping_address, warehouse_spaces, profile_id, admin_notes, type, origin_source, logistics_data,
                     profiles:profile_id(id, company_name, contact_name, contact_phone, address, role),
-                    order_items(id, quantity, unit_price, nickname, products(name, sku, unit_of_measure, weight_kg))
+                    order_items(id, quantity, unit, unit_price, nickname, products(name, sku, unit_of_measure, weight_kg))
                 `)
                 .neq('status', 'cancelled');
 
@@ -142,14 +143,12 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         }
     };
 
-    // Formatear pedidos para el motor de asignación
+    const [draftSpaceInputs, setDraftSpaceInputs] = useState<Record<string, string>>({});
+
+    // Formatear pedidos para el motor de asignación (paridad 1:1 con stagingSpaceAllocator.resolveOrderWeightKg)
     const preparedOrders: OrderStagingInput[] = useMemo(() => {
         return orders.map((o: any) => {
-            const totalKg = (o.order_items || []).reduce((sum: number, it: any) => {
-                const qty = Number(it.quantity) || 0;
-                const unitWeight = Number(it.products?.weight_kg) || 1;
-                return sum + (qty * unitWeight);
-            }, 0);
+            const totalKg = resolveOrderWeightKg(o);
 
             // Detección estricta de Cliente Hogar vs Institucional
             const pRole = o.profiles?.role;
@@ -197,18 +196,73 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         });
     }, [orders, manualSpacesMap]);
 
+    // Capacidad nominal 120 con crecimiento elástico 121+
+    const elasticMaxSpaces = useMemo(() => {
+        let maxSlot = 120;
+        Object.values(manualSpacesMap).forEach(arr => {
+            if (Array.isArray(arr)) {
+                arr.forEach(n => {
+                    if (Number.isFinite(n) && n > maxSlot) maxSlot = n;
+                });
+            }
+        });
+        return maxSlot;
+    }, [manualSpacesMap]);
+
     // Calcular asignación automática inicial o sugerida
     const autoAllocation = useMemo(() => {
         return allocateStagingSpacesGeographically(preparedOrders, {
             avg_kg_per_crate: avgKgPerCrate,
             space_capacity: spaceCapacity,
-            max_spaces: 150
+            max_spaces: Math.max(elasticMaxSpaces, 300)
         });
-    }, [preparedOrders, avgKgPerCrate, spaceCapacity]);
+    }, [preparedOrders, avgKgPerCrate, spaceCapacity, elasticMaxSpaces]);
 
-    // Aplicar cálculo automático al estado manual
+    // Aplicar cálculo automático protegiendo espacios congelados existentes
     const handleApplyAutoClustering = () => {
         if (readOnly) return;
+        const existingFrozenCount = Object.values(manualSpacesMap).filter(arr => Array.isArray(arr) && arr.length > 0).length;
+        const missingOrders = preparedOrders.filter(o => !(manualSpacesMap[o.id]?.length > 0));
+
+        if (existingFrozenCount > 0 && missingOrders.length > 0) {
+            const usedSlots = new Set<number>();
+            Object.values(manualSpacesMap).forEach(arr => (arr || []).forEach(s => usedSlots.add(s)));
+            const nextMap: Record<string, number[]> = { ...manualSpacesMap };
+            let cursor = 1;
+            const takeContiguous = (count: number) => {
+                while (true) {
+                    let ok = true;
+                    for (let k = 0; k < count; k++) {
+                        if (usedSlots.has(cursor + k)) { ok = false; break; }
+                    }
+                    if (ok) {
+                        const res: number[] = [];
+                        for (let k = 0; k < count; k++) {
+                            usedSlots.add(cursor + k);
+                            res.push(cursor + k);
+                        }
+                        cursor += count;
+                        return res;
+                    }
+                    cursor++;
+                }
+            };
+            missingOrders.forEach(o => {
+                const { spaces } = calculateCratesAndSpaces(o.total_weight_kg, avgKgPerCrate, spaceCapacity);
+                nextMap[o.id] = takeContiguous(Math.max(1, spaces));
+            });
+            setManualSpacesMap(nextMap);
+            setSaveSuccess(false);
+            return;
+        }
+
+        if (existingFrozenCount > 0) {
+            const ok = window.confirm(
+                `Ya existen ${existingFrozenCount} pedidos con bahías asignadas/congeladas (impresas en remisiones). ¿Seguro que deseas recalcular TODAS las bahías desde 1?`
+            );
+            if (!ok) return;
+        }
+
         const newMap: Record<string, number[]> = {};
         autoAllocation.forEach(a => {
             newMap[a.order_id] = a.assigned_spaces;
@@ -231,17 +285,17 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         let spaces: number[] = [];
 
         if (cleaned.includes('-')) {
-            const parts = cleaned.split('-').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
-            if (parts.length === 2 && parts[0] <= parts[1]) {
+            const parts = cleaned.split('-').map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p));
+            if (parts.length === 2 && parts[0] >= 1 && parts[0] <= parts[1] && (parts[1] - parts[0]) <= 30) {
                 for (let i = parts[0]; i <= parts[1]; i++) {
-                    if (i >= 1 && i <= 150) spaces.push(i);
+                    spaces.push(i);
                 }
             }
         } else if (cleaned.includes(',')) {
-            spaces = cleaned.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p >= 1 && p <= 150);
+            spaces = cleaned.split(',').map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p >= 1);
         } else {
-            const num = parseInt(cleaned);
-            if (!isNaN(num) && num >= 1 && num <= 150) {
+            const num = parseInt(cleaned, 10);
+            if (!isNaN(num) && num >= 1) {
                 spaces = [num];
             }
         }
@@ -261,20 +315,23 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
         setSaveError(null);
         try {
             // 1. Guardar parámetros si cambiaron
-            await supabase.from('logistic_parameters').upsert([
+            const { error: paramErr } = await supabase.from('logistic_parameters').upsert([
                 { id: 'space_capacity', value: spaceCapacity.toString(), description: 'Capacidad de canastillas por espacio' },
                 { id: 'avg_kg_per_crate', value: avgKgPerCrate.toString(), description: 'Peso promedio estimado por canastilla' }
             ]);
+            if (paramErr) throw paramErr;
 
-            // 2. Guardar warehouse_spaces en orders
-            const updates = Object.entries(manualSpacesMap).map(([orderId, spaces]) => {
-                return supabase
-                    .from('orders')
-                    .update({ warehouse_spaces: spaces })
-                    .eq('id', orderId);
-            });
-
-            await Promise.all(updates);
+            // 2. Guardar warehouse_spaces en orders verificando cada error
+            const results = await Promise.all(
+                Object.entries(manualSpacesMap).map(([orderId, spaces]) =>
+                    supabase
+                        .from('orders')
+                        .update({ warehouse_spaces: spaces })
+                        .eq('id', orderId)
+                )
+            );
+            const firstErr = results.find(r => r.error)?.error;
+            if (firstErr) throw firstErr;
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 4000);
         } catch (err: any) {
@@ -297,7 +354,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             const totalAssigned = assigned.length;
 
             assigned.forEach((slot, idx) => {
-                if (slot >= 1 && slot <= 150) {
+                if (slot >= 1) {
                     const slotCrates = totalAssigned > 1
                         ? Math.max(1, Math.round(crates / totalAssigned))
                         : crates;
@@ -320,14 +377,14 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             });
         });
 
-        return Array.from({ length: 150 }, (_, i) => {
+        return Array.from({ length: elasticMaxSpaces }, (_, i) => {
             const slotNum = i + 1;
             return {
                 slotNum,
                 occupiedBy: slots[slotNum] || null
             };
         });
-    }, [preparedOrders, manualSpacesMap, avgKgPerCrate, spaceCapacity]);
+    }, [preparedOrders, manualSpacesMap, avgKgPerCrate, spaceCapacity, elasticMaxSpaces]);
 
     // Detección reactiva de descalce entre bahías asignadas y capacidad configurada
     const mismatchedOrders = useMemo(() => {
@@ -372,16 +429,13 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             
-            {/* Header Superior con Storytelling Operativo - Sticky */}
+            {/* Header Superior con Storytelling Operativo (sin sticky colisionante con Línea 1 Tabs) */}
             <div style={{ 
-                position: 'sticky',
-                top: '86px',
-                zIndex: 40,
                 backgroundColor: THEME.colors.surface, 
                 padding: '1.1rem 1.5rem', 
                 borderRadius: THEME.radius.xl, 
                 border: `1px solid ${THEME.colors.border}`, 
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)' 
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.04)' 
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
@@ -390,7 +444,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                 <Grid size={18} />
                             </div>
                             <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: THEME.colors.textMain, letterSpacing: '-0.02em' }}>
-                                Centro de Mando de Espacios &amp; Bahías en Suelo (1 a 150)
+                                Centro de Mando de Espacios &amp; Bahías en Suelo (1 a {elasticMaxSpaces})
                             </h2>
                         </div>
                         <p style={{ margin: 0, fontSize: '0.78rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
@@ -569,20 +623,24 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     </div>
                     <div style={{ backgroundColor: THEME.colors.background, padding: '8px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 800, color: THEME.colors.textSecondary, textTransform: 'uppercase' }}>Espacios Ocupados</div>
-                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: stats.occupiedSlotsCount > 150 ? '#DC2626' : THEME.colors.textMain }}>
-                            {stats.occupiedSlotsCount} / 150
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, color: stats.occupiedSlotsCount > 120 ? '#D97706' : THEME.colors.textMain }}>
+                            {stats.occupiedSlotsCount} / {elasticMaxSpaces}
                         </div>
                     </div>
-                    {/* Parámetros Editables */}
+                    {/* Parámetros Editables (Estándar 5B) */}
                     <div style={{ backgroundColor: THEME.colors.background, padding: '6px 12px', borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: '185px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.64rem', fontWeight: 700, color: THEME.colors.textSecondary }}>
                             <span>Cubicaje/Bahía:</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <input 
-                                    type="number" 
+                                    type="text"
+                                    inputMode="numeric"
                                     disabled={readOnly}
                                     value={spaceCapacity} 
-                                    onChange={e => setSpaceCapacity(parseFloat(e.target.value) || 36)}
+                                    onChange={e => {
+                                        const v = parseFloat(e.target.value.replace(',', '.'));
+                                        if (Number.isFinite(v) && v > 0) setSpaceCapacity(v);
+                                    }}
                                     style={{ width: '58px', padding: '3px 4px', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', borderRadius: '5px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
                                 />
                                 <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>can.</span>
@@ -592,11 +650,14 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             <span>Kg/Canastilla:</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <input 
-                                    type="number" 
-                                    step="0.1"
+                                    type="text"
+                                    inputMode="decimal"
                                     disabled={readOnly}
                                     value={avgKgPerCrate} 
-                                    onChange={e => setAvgKgPerCrate(parseFloat(e.target.value) || 12.5)}
+                                    onChange={e => {
+                                        const v = parseFloat(e.target.value.replace(',', '.'));
+                                        if (Number.isFinite(v) && v > 0) setAvgKgPerCrate(v);
+                                    }}
                                     style={{ width: '58px', padding: '3px 4px', fontSize: '0.78rem', fontWeight: 800, textAlign: 'center', borderRadius: '5px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white' }}
                                 />
                                 <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>kg</span>
@@ -941,16 +1002,38 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                             </span>
                         </div>
 
-                        <div style={{ maxHeight: '680px', overflowY: 'auto', paddingRight: '4px' }}>
+                        <div style={{ paddingRight: '4px' }}>
                             {preparedOrders.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '2rem 1rem', color: THEME.colors.textSecondary, fontSize: '0.8rem' }}>
                                     No hay pedidos registrados para esta fecha de entrega.
                                 </div>
                             ) : (
-                                preparedOrders.map(order => {
+                                [...preparedOrders]
+                                    .sort((a, b) => {
+                                        const aSp = (manualSpacesMap[a.id] || []).filter(n => Number.isFinite(n) && n > 0);
+                                        const bSp = (manualSpacesMap[b.id] || []).filter(n => Number.isFinite(n) && n > 0);
+                                        const aMin = aSp.length > 0 ? Math.min(...aSp) : Number.POSITIVE_INFINITY;
+                                        const bMin = bSp.length > 0 ? Math.min(...bSp) : Number.POSITIVE_INFINITY;
+                                        if (aMin !== bMin) return aMin - bMin;
+                                        const cmpName = String(a.company_name || '').localeCompare(String(b.company_name || ''), 'es', { sensitivity: 'base', numeric: true });
+                                        return cmpName !== 0 ? cmpName : String(a.id).localeCompare(String(b.id));
+                                    })
+                                    .map(order => {
                                     const assigned = manualSpacesMap[order.id] || [];
                                     const { crates, spaces } = calculateCratesAndSpaces(order.total_weight_kg, avgKgPerCrate, spaceCapacity);
                                     const label = formatSpaceLabel(assigned);
+                                    const draftVal = draftSpaceInputs[order.id];
+                                    const inputDisplay = draftVal !== undefined ? draftVal : (label === 'S/A' ? '' : label);
+                                    const commitDraft = () => {
+                                        const raw = draftSpaceInputs[order.id];
+                                        if (raw === undefined) return;
+                                        handleManualSpaceChange(order.id, raw);
+                                        setDraftSpaceInputs(prev => {
+                                            const copy = { ...prev };
+                                            delete copy[order.id];
+                                            return copy;
+                                        });
+                                    };
 
                                     return (
                                         <div
@@ -1043,9 +1126,13 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                                                 <input
                                                     type="text"
                                                     disabled={readOnly}
-                                                    value={label === 'S/A' ? '' : label}
+                                                    value={inputDisplay}
                                                     placeholder="Ej: 4-5"
-                                                    onChange={e => handleManualSpaceChange(order.id, e.target.value)}
+                                                    onChange={e => setDraftSpaceInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                    onBlur={commitDraft}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') e.currentTarget.blur();
+                                                    }}
                                                     style={{
                                                         width: '58px',
                                                         padding: '3px 5px',

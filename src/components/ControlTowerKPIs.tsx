@@ -168,28 +168,29 @@ function EfficiencyRow({ label, magic, manual, unit }: { label: string, magic: s
     const isMagicBetter = parseFloat(magic) > parseFloat(manual);
     
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', alignItems: 'center', padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}`, position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 76px', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1.25rem', borderBottom: `1px solid ${THEME.colors.border}` }}>
             <div style={{ fontWeight: '500', color: THEME.colors.textMain }}>{label}</div>
-            <div style={{ textAlign: 'center', fontWeight: '700', color: THEME.colors.primary }}>{magic} <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>{unit}</span></div>
-            <div style={{ textAlign: 'center', fontWeight: '500', color: THEME.colors.textSecondary }}>{manual} <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>{unit}</span></div>
-            {isMagicBetter && (
-                <div style={{ 
-                    position: 'absolute', 
-                    right: '1.25rem', 
-                    fontSize: '0.65rem', 
-                    backgroundColor: THEME.colors.primaryLight, 
-                    color: THEME.colors.primary, 
-                    padding: '0.2rem 0.5rem', 
-                    borderRadius: THEME.radius.sm, 
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '2px'
-                }}>
-                    <ArrowUpRight size={10} strokeWidth={1.5} />
-                    <span>MEJOR</span>
-                </div>
-            )}
+            <div style={{ textAlign: 'center', fontWeight: '700', color: THEME.colors.primary, fontVariantNumeric: 'tabular-nums' }}>{magic} <span style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary }}>{unit}</span></div>
+            <div style={{ textAlign: 'center', fontWeight: '500', color: THEME.colors.textSecondary, fontVariantNumeric: 'tabular-nums' }}>{manual} <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>{unit}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {isMagicBetter && (
+                    <div style={{ 
+                        fontSize: '0.65rem', 
+                        backgroundColor: THEME.colors.primaryLight, 
+                        color: THEME.colors.primary, 
+                        padding: '0.2rem 0.5rem', 
+                        borderRadius: THEME.radius.sm, 
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '2px',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        <ArrowUpRight size={10} strokeWidth={1.5} />
+                        <span>MEJOR</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

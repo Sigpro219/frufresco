@@ -623,7 +623,7 @@ export default function TransportControlTower() {
     return (
         <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, color: THEME.colors.textMain, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
-            <div style={{ maxWidth: '100%', margin: '0 auto', padding: '0.85rem 1.5rem 1.5rem' }}>
+            <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 1.25rem 1.5rem' }}>
                 {!canEdit && (
                     <div style={{
                         padding: '10px 14px',
@@ -643,25 +643,28 @@ export default function TransportControlTower() {
                     </div>
                 )}
                 
-                {/* ── UNIFIED STICKY FROSTED CONTROL BAR ── */}
+                {/* ── LÍNEA 1: STICKY TABS BAR (85px + 48px = 133px exactos, sólido anti-bleed) ── */}
                 <div style={{ 
                     position: 'sticky',
-                    top: '82px',
-                    zIndex: 40,
-                    backgroundColor: 'rgba(255, 255, 255, 0.94)', 
-                    padding: '0.4rem 0.65rem', 
-                    borderRadius: '14px', 
-                    boxShadow: '0 8px 24px -6px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04)', 
-                    border: `1px solid ${THEME.colors.border}`,
+                    top: '85px',
+                    height: '48px',
+                    boxSizing: 'border-box',
+                    zIndex: 45,
+                    backgroundColor: '#FFFFFF', 
+                    padding: '0 0.65rem', 
+                    borderRadius: '0 0 12px 12px', 
+                    boxShadow: '0 4px 12px -4px rgba(15, 23, 42, 0.08)', 
+                    borderLeft: `1px solid ${THEME.colors.border}`,
+                    borderRight: `1px solid ${THEME.colors.border}`,
+                    borderBottom: `1px solid ${THEME.colors.border}`,
                     display: 'flex',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    marginBottom: '0.75rem',
-                    gap: '0.6rem',
-                    backdropFilter: 'blur(12px)'
+                    marginBottom: '0.65rem',
+                    gap: '0.5rem'
                 }}>
-                    <div style={{ display: 'flex', gap: '0.25rem', overflowX: 'auto', scrollbarWidth: 'none', flex: '1 1 360px', minWidth: 0, maxWidth: '100%' }}>
+                    <div style={{ display: 'flex', gap: '0.2rem', overflowX: 'auto', scrollbarWidth: 'none', flex: '1 1 auto', minWidth: 0 }}>
                         {[
                             { id: 'map', label: 'Monitor Global', icon: <Globe size={14} strokeWidth={2} /> },
                             { id: 'planner', label: 'Planeación', icon: <Compass size={14} strokeWidth={2} /> },
@@ -678,12 +681,13 @@ export default function TransportControlTower() {
                                     key={tab.id}
                                     onClick={() => handleSelectTab(tab.id as TransportTab)}
                                     style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.42rem 0.72rem', borderRadius: '8px', border: 'none',
+                                        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.38rem 0.68rem', borderRadius: '8px', border: 'none',
                                         backgroundColor: isActive ? THEME.colors.primary : 'transparent',
                                         color: isActive ? '#FFFFFF' : THEME.colors.textSecondary,
                                         fontSize: '0.74rem', fontWeight: '800', cursor: 'pointer', transition: 'all 0.16s ease',
                                         boxShadow: isActive ? '0 2px 6px rgba(13, 122, 87, 0.25)' : 'none',
-                                        whiteSpace: 'nowrap'
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isActive) {
@@ -705,53 +709,57 @@ export default function TransportControlTower() {
                         })}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, flexWrap: 'wrap' }}>
-                        {/* Compact Live Telemetry Pills */}
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain }}>
-                            <Truck size={12} color={THEME.colors.primary} />
-                            <span>{formatNumber(stats.totalActive)} activas</span>
-                        </div>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain }}>
-                            <Scale size={12} color="#D97706" />
-                            <span>{formatNumber(stats.totalKilos)} kg</span>
-                        </div>
-                        {stats.totalNovedades > 0 && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.28rem 0.55rem', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: '#B91C1C' }}>
-                                <AlertTriangle size={12} />
-                                <span>{formatNumber(stats.totalNovedades)}</span>
-                            </div>
-                        )}
-                        {gpsSyncMessage && (
-                            <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.25rem 0.55rem', borderRadius: '6px' }}>
-                                {gpsSyncMessage}
-                            </span>
-                        )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, flexWrap: 'nowrap' }}>
+                        {activeTab === 'map' && (
+                            <>
+                                {/* Compact Live Telemetry Pills (Monitor Global only) */}
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.25rem 0.5rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain, whiteSpace: 'nowrap' }}>
+                                    <Truck size={12} color={THEME.colors.primary} />
+                                    <span>{formatNumber(stats.totalActive)} activas</span>
+                                </div>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '0.25rem 0.5rem', borderRadius: '8px', backgroundColor: '#F8FAFC', border: `1px solid ${THEME.colors.border}`, fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: THEME.colors.textMain, whiteSpace: 'nowrap' }}>
+                                    <Scale size={12} color="#D97706" />
+                                    <span>{formatNumber(stats.totalKilos)} kg</span>
+                                </div>
+                                {stats.totalNovedades > 0 && (
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '0.25rem 0.5rem', borderRadius: '8px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', fontSize: '0.7rem', fontWeight: '800', fontVariantNumeric: 'tabular-nums', color: '#B91C1C', whiteSpace: 'nowrap' }}>
+                                        <AlertTriangle size={12} />
+                                        <span>{formatNumber(stats.totalNovedades)}</span>
+                                    </div>
+                                )}
+                                {gpsSyncMessage && (
+                                    <span style={{ fontSize: '0.68rem', fontWeight: '800', color: THEME.colors.primary, backgroundColor: THEME.colors.primaryLight, padding: '0.22rem 0.5rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                                        {gpsSyncMessage}
+                                    </span>
+                                )}
 
-                        <button 
-                            onClick={handleSyncGps}
-                            disabled={isSyncingGps || loading}
-                            title="Sincronizar telemetría con apps-360.online"
-                            style={{ 
-                                padding: '0.42rem 0.78rem', borderRadius: '8px', border: `1px solid ${THEME.colors.primary}`, backgroundColor: isSyncingGps ? THEME.colors.primaryLight : '#0D7A57',
-                                color: isSyncingGps ? THEME.colors.primary : 'white', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                                transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.22)'
-                            }}
-                        >
-                            {isSyncingGps ? (
-                                <><Loader2 size={12} className="animate-spin" /> Sync...</>
-                            ) : (
-                                <><Navigation size={12} strokeWidth={2.5} /> Sync GPS</>
-                            )}
-                        </button>
+                                <button 
+                                    onClick={handleSyncGps}
+                                    disabled={isSyncingGps || loading}
+                                    title="Sincronizar telemetría con apps-360.online"
+                                    style={{ 
+                                        padding: '0.36rem 0.72rem', borderRadius: '8px', border: `1px solid ${THEME.colors.primary}`, backgroundColor: isSyncingGps ? THEME.colors.primaryLight : '#0D7A57',
+                                        color: isSyncingGps ? THEME.colors.primary : 'white', fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                                        transition: 'all 0.15s', boxShadow: '0 2px 6px rgba(13, 122, 87, 0.22)', whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {isSyncingGps ? (
+                                        <><Loader2 size={12} className="animate-spin" /> Sync...</>
+                                    ) : (
+                                        <><Navigation size={12} strokeWidth={2.5} /> Sync GPS</>
+                                    )}
+                                </button>
+                            </>
+                        )}
 
                         <button 
                             onClick={() => fetchTransportData()}
                             disabled={loading}
                             title="Actualizar datos"
                             style={{ 
-                                padding: '0.42rem 0.65rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
+                                padding: '0.36rem 0.62rem', borderRadius: '8px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white',
                                 color: THEME.colors.textMain, fontWeight: '800', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                                transition: 'all 0.15s'
+                                transition: 'all 0.15s', whiteSpace: 'nowrap'
                             }}
                         >
                             <RefreshCw size={12} strokeWidth={2} className={loading ? 'animate-spin' : ''} />

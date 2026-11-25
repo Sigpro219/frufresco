@@ -6008,13 +6008,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
             if (data.status === 'OK' && data.results && data.results[0]) {
                 const { lat, lng } = data.results[0].geometry.location;
+                const needsManualReview = Boolean(data.is_generic_centroid || data.is_approximate);
                 setFormData(prev => ({
                     ...prev,
                     latitude: lat.toFixed(7),
                     longitude: lng.toFixed(7),
-                    geocoding_status: 'verified'
+                    geocoding_status: needsManualReview ? 'pending' : 'verified'
                 }));
-                window.showToast?.('¡Ubicación detectada con éxito en mapa!', 'success');
+                window.showToast?.(
+                    needsManualReview
+                        ? (data.precision_warning || 'Ubicación aproximada o centroide genérico. Mueve el pin manualmente para confirmar.')
+                        : '¡Ubicación detectada con éxito en mapa!',
+                    needsManualReview ? 'info' : 'success'
+                );
                 return true;
             } else if (data.status === 'ZERO_RESULTS') {
                 const simplerAddress = `${rawAddr.split('#')[0].trim()}, ${formData.municipality || 'Bogotá'}, Colombia`;
@@ -6023,13 +6029,19 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
 
                 if (d2.status === 'OK' && d2.results && d2.results[0]) {
                     const { lat, lng } = d2.results[0].geometry.location;
+                    const needsManualReview2 = Boolean(d2.is_generic_centroid || d2.is_approximate);
                     setFormData(prev => ({
                         ...prev,
                         latitude: lat.toFixed(7),
                         longitude: lng.toFixed(7),
-                        geocoding_status: 'verified'
+                        geocoding_status: needsManualReview2 ? 'pending' : 'verified'
                     }));
-                    window.showToast?.('Ubicación aproximada detectada en mapa', 'info');
+                    window.showToast?.(
+                        needsManualReview2
+                            ? (d2.precision_warning || 'Ubicación aproximada/genérica. Verifica y ajusta el pin manualmente en el mapa.')
+                            : 'Ubicación aproximada detectada en mapa',
+                        'info'
+                    );
                     return true;
                 } else {
                     window.showToast?.('No se encontró la dirección exacta. Puedes mover el pin rojo en el mapa manualmente.', 'info');
