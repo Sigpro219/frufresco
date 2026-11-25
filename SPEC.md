@@ -18115,13 +18115,13 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 ---
 
 ### Escenario 485: Limpieza Visual & Responsive Real en Barra Superior de `InventoryDailyBalanceTab` (SDD v1.9.440)
-- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL`
+- **Estado del Contrato:** `🟡 EN REVISIÓN / PENDIENTE DE CIERRE`
 - **Enmienda Acotada (`src/components/InventoryDailyBalanceTab.tsx`):**
-  1. **Toolbar Responsive (`L4289-L4585`, `L4939-L4957`):** Habilitar `flexWrap: 'wrap'` en Línea 1 y Línea 2 (con buscador `minWidth: '170px'` y bloque izquierdo de categorías con `minWidth: 0`), evitando desborde/recorte horizontal de `Cerrar Día`, *Refresh*, `Salir Focus` e `Inmovilizado` en pantallas `<1440px`.
-  2. **Retiro de Barra Fija `Checklist Cierre` (`L5218`):** Suprimir la fila informativa `Checklist Cierre (X/5)` encima de la tabla para recuperar altura vertical limpia en la sábana diaria (sin alterar la lógica de `Cerrar Día`).
-  3. **Columna `M` (`VTA. ADICIONAL`) Trazable & Solo-Lectura (`L1077-1204`, `L1430-1658`, `L2799-2915`, `L3892`):**
+  1. **Toolbar Responsive (`L4350-L4655`, `L5055-L5145`):** Habilitar `flexWrap: 'wrap'` en Línea 1 y en **ambos** extremos de Línea 2 (incluyendo bloque derecho `L5135` de Excel/Expandir/Inmovilizado, buscador `minWidth: '170px'` y bloque izquierdo de categorías con `minWidth: 0`), evitando desborde/recorte horizontal en pantallas `<1440px`.
+  2. **Reubicación de `"Sin novedad hoy (0)"` al Modal `"Cerrar Día"` (`L5334`, `L6433+`):** Suprimir la barra fija `Checklist Cierre (X/5)` encima de la tabla para recuperar altura vertical limpia, **reubicando** el checklist compacto con los botones `"Sin novedad hoy (0)"` (`handleToggleNovedadZero` para `G`, `Q-R`, `X`) y la trazabilidad `Base Col E` dentro del modal de **`Cerrar Día`**, preservando intacto `evaluateInventoryGateStatus`.
+  3. **Columna `M` (`VTA. ADICIONAL`) Trazable & Solo-Lectura (`L1077-1204`, `L1430-1658`, `L2799-2915`, `L3905`):**
      - Mostrar `title`/tooltip enriquecido con el desglose exacto de soporte (`Pedido #seq · Cliente: XX,XX kg` de `postCutoffSalesMap` y movimientos `additional_sale`).
-     - Hacer la celda `M` **`isReadonly = true`** en la sábana (`L3892`, igual que `Col H` y `Col J`) para exigir que toda venta adicional esté soportada por un pedido real post-corte (cero salidas manuales huérfanas); y mantener en `persistCellChange` + estado optimista la guarda por rango `America/Bogota` (`getBogotaDayRangeUtcIso`) y descuento de `autoPostKg`.
+     - Hacer la celda `M` **`isReadonly = true`** en la sábana (`L3905`), manteniendo `'M'` dentro de `EDITABLE_COLUMNS` (`L2154`) para navegación fluida por flechas/Tab; e incluir en `Modo Edición` (cuando exista un `additional_sale` manual sin soporte de pedido y `!closingRecord?.is_locked`) un botón discreto **`×` (`Limpiar ajuste manual`)** con confirmación para purgar registros manuales previos sin generar doble descuento.
 
 ---
 
@@ -18155,3 +18155,34 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - [`src/app/api/orders/email-drafts/approve/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/email-drafts/approve/route.ts): Exige `verifyStaffBearer`, estampa `created_by_id`, `created_by_name`, `created_by_email` en `orders.logistics_data` y registra `INSERT_orders` en `audit_logs`.
      - [`src/app/api/orders/update/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/update/route.ts): Exige `verifyStaffBearer`.
      - [`src/app/api/audit/log/route.ts`](file:///c:/Projects/frufresco/src/app/api/audit/log/route.ts): Exige `verifyStaffBearer`, deriva `collaborator_name` del JWT (`auth.actorName`) ignorando spoofing del body y persiste vía `insertAuditLogSafe`.
+
+---
+
+### Escenario 488: Paridad 1:1 Pantalla ↔ Excel 24 Cols en Familias de Inventario (`Base / Estándar`) (SDD v1.9.443)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (0 errores tsc)`
+- **Enmienda Acotada ([`src/components/InventoryDailyBalanceTab.tsx`](file:///c:/Projects/frufresco/src/components/InventoryDailyBalanceTab.tsx#L2590-L2623) — `handleExportOfficialExcel`):**
+  - Para cada familia (`f.isParent`), además de la fila consolidada (`Tipo Registro = 'Familia'`), exportar como primera fila hija (`Tipo Registro = '↳ Presentación'`) el producto base `f.parent` rotulado `    ↳ ${p.colD_productName} (Base / Estándar)` antes de iterar `f.children`, garantizando paridad 1:1 con la pantalla y cierre aritmético exacto entre las presentaciones hijas y su fila consolidada, sin alterar `SUMIF(..., "<>↳ Presentación", ...)` en `TOTALES GENERALES`.
+
+---
+
+### Escenario 488: Control de Sobrepeso en Pesada por Densidad Económica (`Umbral Pesada / Facturación \$2.000 COP`), Captura Híbrida (Digital + Manual) y Pareto de Desviaciones (SDD v1.9.443)
+- **Estado del Contrato:** `🟢 CONTRATO ENMENDADO (POST /GOLDFISH MODO 1 — LISTO PARA EJECUCIÓN)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17729`):** Autorización acotada del CTO para intervenir `src/components/InventoryDailyBalanceTab.tsx` exclusivamente en el comportamiento de **`Col M` (`VTA. ADICIONAL`)** (tooltip, botón `×` de limpieza de ajustes manuales previos, `isReadonly = true` + disparador del mini-modal de 3 pasos para carga de sobrepesos).
+- **Principio SpaceX ("The best part is no part"):** Cero columnas nuevas en la sábana de 24 columnas y cero módulos nuevos. Todo excedente de pesada (`picked_quantity > quantity`) se canaliza a las columnas existentes **`Col M` (`additional_sale`, cobrado)**, **`Col P` (`waste_weighing`, asumido)** o **`Col O` (`route_return`, devuelto)** según umbral económico configurable.
+- **Alcance Contractual:**
+  1. **Variable Gobernable (`src/app/admin/commercial/inventory/page.tsx`, pestaña `Gobernanza`):**
+     - Tarjeta compacta **`Umbral Pesada / Facturación (COP)`** con input Estándar `5B` (`type="text"`, `inputMode="numeric"`) inicializado en **`2000`** (`\$2.000 COP`) y persistido en `app_settings` (`key = 'overweight_billing_threshold_cop'`).
+  2. **Entrada 1 — Modo Digital (`src/app/ops/picking/terminal/page.tsx`):**
+     - Conservar el botón rápido `100%` (`picked_quantity = item.quantity`) y añadir **input numérico de pesada real** para registrar excedentes (ej. `20.6 kg`) en `order_items.picked_quantity` con validación anti-dedo (alerta confirmatoria si supera `+25%` o `<= 0`).
+     - *(Sin trigger en BD sobre `picked_quantity`)*: si `picked_quantity > item.quantity`, sincronizar el delta en `inventory_movements` (`reference_type = 'waste_weighing'`, `reference_id = item.id`, **`created_at = ${targetDate}T12:00:00.000Z`**) para mantener paridad de Kardex inmediata en `Col P` hasta arbitraje en Facturación.
+  3. **Entrada 2 — Modo Manual desde Balance 24h (`src/components/InventoryDailyBalanceTab.tsx`):**
+     - En `Modo Edición` sobre `Col M` (`isReadonly = true`, manteniendo `'M'` en `EDITABLE_COLUMNS`), disparar vía botón/acción dedicada en celda un **mini-modal guiado de 3 pasos** (sin abrir `<input>` libre) para cargar sobrepesos de remisiones en papel:
+       - Listar exclusivamente pedidos **lanzados** del `balanceDate` (`para_compra`, `in_preparation`, `picking`, `shipped`, `delivered`; **excluyendo `'pending_approval'`**) que contengan ese producto.
+       - Digitar **Peso real enviado (`kg`)** actualizando `order_items.picked_quantity`, anclando `created_at = ${balanceDate}T12:00:00.000Z` y aplicando la regla del umbral `overweight_billing_threshold_cop` con guarda **`unit_price > 0`**:
+         - Si `unit_price <= 0` (ej. `Remisión $0`) o `Δ_COP = (picked - quantity) × unit_price >= umbral` → elegir **Cobrar al cliente (`Col M`, `additional_sale`, `reference_id = order_item.id`)** o **Asumir en merma (`Col P`, `waste_weighing`, `reference_id = order_item.id`)**.
+         - Si `unit_price > 0 && Δ_COP < umbral` → auto-registrar directamente en **`Col P` (`waste_weighing`, `reference_id = order_item.id`)** sin desgaste en Facturación.
+  4. **Árbitro de Sobrepeso (`src/components/admin/billing/OverweightBillingArbitrationModal.tsx`):**
+     - Leer `overweight_billing_threshold_cop` de `app_settings` (fallback `2000`): únicamente cuando **`!movMap.has(orderItemId) && unit_price > 0 && Δ_COP < umbral`** (idempotencia estricta, sin sobreescribir decisiones previas ni auto-absorber ítems `$0`), auto-clasificar hacia **`Col P` (`waste_weighing` / `sandbox_waste_weighing` en Sandbox, `reference_id = order_item.id`, `created_at = ${deliveryDate}T12:00:00.000Z`)** sin bloquear Facturación; ítems con `unit_price <= 0` o `Δ_COP >= umbral` permanecen obligatorios en el modal hasta decisión (`Col M` cobrado o `Col P` asumido).
+  5. **Pareto de Desviaciones en Dashboard (`src/components/InventoryUnifiedDashboard.tsx`):**
+     - Migrar las consultas de movimientos y `order_items` a **`fetchAllRows`** (eliminando el truncado silencioso `.limit(10000)` → `1.000` de PostgREST) incluyendo `reference_id`.
+     - Integrar en el card **`Pareto Top 5`** un selector **`Fuga Total | Sobrepeso Pesada (M vs P)`** mostrando por producto (`#accounting_id`): `kg` desviados (`picked - quantity`), resolución desglosada (**Facturado `Col M`** y **Asumido `Col P`** cruzados por `reference_id = order_item.id`, más **Devuelto `Col O`** `route_return` cruzado por `product_id`) en `kg` y `\$ COP`, y `%` de recuperación financiera.

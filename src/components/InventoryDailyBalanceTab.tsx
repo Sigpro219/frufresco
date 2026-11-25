@@ -73,7 +73,8 @@ import {
     RotateCcw,
     GripVertical,
     ArrowUpAZ,
-    ArrowDownZA
+    ArrowDownZA,
+    Circle
 } from 'lucide-react';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { WorkCell } from '@/types/workCells';
@@ -176,6 +177,7 @@ export interface InventoryDailyRow {
     // M: Venta adicional cliente (-)
     colM_additionalSales: number;
     colM_additionalTooltip?: string;
+    hasManualAdditionalSale?: boolean;
     // N: Venta adicional empleado (-)
     colN_employeeSales: number;
     // O: Devoluciones (+)
@@ -615,6 +617,240 @@ export default function InventoryDailyBalanceTab({
             notify('Error guardando estado sin novedad: ' + (err?.message || err), 'error');
         } finally {
             setSavingNovedadCol(null);
+        }
+    };
+
+    // Escenario 488 §3: Estado y handlers del mini-modal guiado de 3 pasos para sobrepesos en Col M
+    interface OverweightOrderCandidate {
+        orderItemId: string;
+        orderId: string;
+        sequenceId: number | null;
+        clientName: string;
+        quantity: number;
+        pickedQuantity: number | null;
+        unitPrice: number;
+        unit: string;
+        status: string;
+    }
+
+    const [overweightModalProduct, setOverweightModalProduct] = useState<{
+        productId: string;
+        productName: string;
+        accountingId: number | string;
+        unitOfMeasure: string;
+    } | null>(null);
+    const [overweightStep, setOverweightStep] = useState<1 | 2 | 3>(1);
+    const [overweightLoadingOrders, setOverweightLoadingOrders] = useState(false);
+    const [overweightOrderItems, setOverweightOrderItems] = useState<OverweightOrderCandidate[]>([]);
+    const [selectedOverweightItem, setSelectedOverweightItem] = useState<OverweightOrderCandidate | null>(null);
+    const [overweightPickedInput, setOverweightPickedInput] = useState('');
+    const [overweightThresholdCop, setOverweightThresholdCop] = useState<number>(2000);
+    const [overweightSubmitting, setOverweightSubmitting] = useState(false);
+
+    const openOverweightModal = async (row: InventoryDailyRow) => {
+        if (!canEditSheet || closingRecord?.is_locked) return;
+        setOverweightModalProduct({
+            productId: row.productId,
+            productName: row.colD_productName,
+            accountingId: row.colB_idProducto,
+            unitOfMeasure: row.unit_of_measure || 'Kg',
+        });
+        setOverweightStep(1);
+        setSelectedOverweightItem(null);
+        setOverweightPickedInput('');
+        setOverweightOrderItems([]);
+        setOverweightLoadingOrders(true);
+
+        try {
+            const launchedStatuses = ['para_compra', 'in_preparation', 'picking', 'shipped', 'delivered'];
+            const [{ data: ordersData, error: ordersErr }, { data: thresholdSetting, error: thresholdErr }] = await Promise.all([
+                supabase
+                    .from('orders')
+                    .select('id, sequence_id, status, profiles(company_name, contact_name)')
+                    .eq('delivery_date', balanceDate)
+                    .in('status', launchedStatuses)
+                    .order('sequence_id', { ascending: true })
+                    .range(0, 999),
+                supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'overweight_billing_threshold_cop')
+                    .maybeSingle(),
+            ]);
+
+            if (ordersErr) throw ordersErr;
+            if (thresholdErr) throw thresholdErr;
+
+            const parsedThreshold = Number(thresholdSetting?.value);
+            setOverweightThresholdCop(Number.isFinite(parsedThreshold) && parsedThreshold > 0 ? parsedThreshold : 2000);
+
+            const orderIds = (ordersData || []).map((o: any) => o.id);
+            if (orderIds.length === 0) {
+                setOverweightOrderItems([]);
+                return;
+            }
+
+            const orderMeta = new Map<string, { sequenceId: number | null; clientName: string; status: string }>(
+                (ordersData || []).map((o: any) => {
+                    const prof = Array.isArray(o.profiles) ? o.profiles[0] : o.profiles;
+                    return [
+                        o.id,
+                        {
+                            sequenceId: o.sequence_id ?? null,
+                            clientName: prof?.company_name || prof?.contact_name || 'Cliente',
+                            status: o.status || '',
+                        },
+                    ];
+                })
+            );
+
+            const { data: itemsData, error: itemsErr } = await supabase
+                .from('order_items')
+                .select('id, order_id, quantity, picked_quantity, unit_price, unit')
+                .eq('product_id', row.productId)
+                .in('order_id', orderIds)
+                .range(0, 999);
+
+            if (itemsErr) throw itemsErr;
+
+            const candidates: OverweightOrderCandidate[] = (itemsData || []).map((it: any) => {
+                const meta = orderMeta.get(it.order_id);
+                return {
+                    orderItemId: it.id,
+                    orderId: it.order_id,
+                    sequenceId: meta?.sequenceId ?? null,
+                    clientName: meta?.clientName || 'Cliente',
+                    quantity: Number(it.quantity) || 0,
+                    pickedQuantity: it.picked_quantity !== null && it.picked_quantity !== undefined ? Number(it.picked_quantity) : null,
+                    unitPrice: Number(it.unit_price) || 0,
+                    unit: it.unit || row.unit_of_measure || 'Kg',
+                    status: meta?.status || '',
+                };
+            });
+
+            setOverweightOrderItems(candidates);
+        } catch (err: any) {
+            console.error('Error cargando pedidos para sobrepeso:', err);
+            notify('Error cargando pedidos lanzados: ' + (err?.message || err), 'error');
+        } finally {
+            setOverweightLoadingOrders(false);
+        }
+    };
+
+    const handleSubmitOverweight = async (targetCol: 'M' | 'P') => {
+        if (!overweightModalProduct || !selectedOverweightItem || overweightSubmitting) return;
+        const parsedPicked = parseFloat(overweightPickedInput.replace(',', '.'));
+        if (!Number.isFinite(parsedPicked) || parsedPicked <= 0) {
+            notify('Ingresa un peso real enviado válido mayor a 0.', 'error');
+            return;
+        }
+
+        const deltaKg = Number((parsedPicked - selectedOverweightItem.quantity).toFixed(3));
+        setOverweightSubmitting(true);
+        try {
+            const { error: itemUpdErr } = await supabase
+                .from('order_items')
+                .update({ picked_quantity: parsedPicked })
+                .eq('id', selectedOverweightItem.orderItemId);
+            if (itemUpdErr) throw itemUpdErr;
+
+            const refTypesToClear = isSandbox
+                ? [`sandbox_${INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE}`, `sandbox_${INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING}`]
+                : [INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE, INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING];
+
+            const { error: delPrevErr } = await supabase
+                .from('inventory_movements')
+                .delete()
+                .eq('reference_id', selectedOverweightItem.orderItemId)
+                .in('reference_type', refTypesToClear);
+            if (delPrevErr) throw delPrevErr;
+
+            if (deltaKg > 0.0001) {
+                const { data: whData, error: whErr } = await supabase
+                    .from('warehouses')
+                    .select('id')
+                    .limit(1)
+                    .maybeSingle();
+                if (whErr) throw whErr;
+
+                const baseRefType = targetCol === 'M'
+                    ? INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE
+                    : INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING;
+                const effectiveRefType = isSandbox ? `sandbox_${baseRefType}` : baseRefType;
+                const notePrefix = isSandbox ? '[SANDBOX] ' : '';
+
+                const { error: insErr } = await supabase
+                    .from('inventory_movements')
+                    .insert({
+                        product_id: overweightModalProduct.productId,
+                        warehouse_id: whData?.id || null,
+                        type: 'exit',
+                        quantity: -deltaKg,
+                        reference_type: effectiveRefType,
+                        reference_id: selectedOverweightItem.orderItemId,
+                        notes: `${notePrefix}Sobrepeso remisión #${selectedOverweightItem.sequenceId ?? '?'} · ${selectedOverweightItem.clientName}: +${formatNumber(deltaKg, 2)} kg`,
+                        created_at: `${balanceDate}T12:00:00.000Z`,
+                    });
+                if (insErr) throw insErr;
+
+                notify(
+                    `Sobrepeso (+${formatNumber(deltaKg, 2)} kg) registrado en Col ${targetCol} (${targetCol === 'M' ? 'Cobrar al cliente' : 'Pesada / Merma'}).`,
+                    'success'
+                );
+            } else {
+                notify('Peso real enviado actualizado sin excedente sobre lo pedido.', 'info');
+            }
+
+            setOverweightModalProduct(null);
+            await loadDailyData(true);
+        } catch (err: any) {
+            console.error('Error guardando sobrepeso:', err);
+            notify('Error guardando sobrepeso: ' + (err?.message || err), 'error');
+        } finally {
+            setOverweightSubmitting(false);
+        }
+    };
+
+    const handleClearManualAdditionalSale = async (productId: string, productName: string) => {
+        if (!canEditSheet || closingRecord?.is_locked) return;
+        const confirmed = window.confirm(
+            `¿Limpiar los ajustes manuales de Columna M para "${productName}" en ${balanceDate}? Los pedidos post-corte y sobrepesos anclados a pedidos no se eliminarán.`
+        );
+        if (!confirmed) return;
+
+        try {
+            const { startUtcIso, endUtcIso } = getBogotaDayRangeUtcIso(balanceDate);
+            const effectiveRefType = isSandbox
+                ? `sandbox_${INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE}`
+                : INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE;
+
+            const { error: delErr } = await supabase
+                .from('inventory_movements')
+                .delete()
+                .eq('product_id', productId)
+                .eq('reference_type', effectiveRefType)
+                .is('reference_id', null)
+                .gte('created_at', startUtcIso)
+                .lte('created_at', endUtcIso);
+
+            if (delErr) throw delErr;
+
+            const startMs = new Date(startUtcIso).getTime();
+            const endMs = new Date(endUtcIso).getTime();
+            setMovements(prev => prev.filter(m => {
+                const ref = (m.reference_type || '').toLowerCase();
+                const ms = new Date(m.created_at).getTime();
+                const isTargetMov = m.product_id === productId
+                    && ref === effectiveRefType.toLowerCase()
+                    && !m.reference_id
+                    && ms >= startMs
+                    && ms <= endMs;
+                return !isTargetMov;
+            }));
+            notify('Ajuste manual de Columna M eliminado.', 'info');
+        } catch (err: any) {
+            console.error('Error limpiando ajuste manual Col M:', err);
+            notify('Error limpiando ajuste manual: ' + (err?.message || err), 'error');
         }
     };
 
@@ -1385,6 +1621,7 @@ interface CommittedSaleData {
             }
 
             let hasManualOrSheetPurchaseOverride = false;
+            let hasManualAdditionalSale = false;
 
             dayMovs.forEach(m => {
                 const rawQty = Math.abs(Number(m.quantity) || 0);
@@ -1432,8 +1669,11 @@ interface CommittedSaleData {
                     l_unshipped += rawQty;
                 }
                 // M: Venta adicional cliente (-)
-                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE) {
+                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE || (isSandbox && ref === `sandbox_${INVENTORY_MOVEMENT_SUBTYPES.ADDITIONAL_SALE}`)) {
                     m_additionalSales += rawQty;
+                    if (!m.reference_id) {
+                        hasManualAdditionalSale = true;
+                    }
                     const cleanNote = (m.notes || '').replace(/^\[SANDBOX\]\s*/i, '').trim();
                     m_additionalDetails.push(
                         cleanNote
@@ -1454,7 +1694,7 @@ interface CommittedSaleData {
                     o2_returnShortage += rawQty;
                 }
                 // P: Pesada (-)
-                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING) {
+                else if (ref === INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING || (isSandbox && ref === `sandbox_${INVENTORY_MOVEMENT_SUBTYPES.WASTE_WEIGHING}`)) {
                     p_weighingWaste += rawQty;
                 }
                 // Q: Desperdicio (-)
@@ -1557,6 +1797,7 @@ interface CommittedSaleData {
                 colL_unshipped: l_unshipped,
                 colM_additionalSales: m_additionalSales,
                 colM_additionalTooltip: m_additionalDetails.length > 0 ? m_additionalDetails.join('\n') : undefined,
+                hasManualAdditionalSale,
                 colN_employeeSales: n_employeeSales,
                 colO_returns: o_returns,
                 colO2_returnShortage: o2_returnShortage,
@@ -2587,15 +2828,19 @@ interface CommittedSaleData {
                     'Banco de alimentos': Number(rowObj.colX_foodBank.toFixed(2))
                 });
 
-                // Si tiene presentaciones hijas, exportar cada una anidada
+                // Si tiene presentaciones hijas, exportar primero la base (Base / Estándar) y luego cada hija anidada (paridad 1:1 pantalla)
                 if (f.isParent) {
-                    f.children.forEach(ch => {
+                    const presentationRows = [
+                        { row: p, label: `    ↳ ${p.colD_productName} (Base / Estándar)` },
+                        ...f.children.map(ch => ({ row: ch, label: `    ↳ ${ch.colD_productName}` }))
+                    ];
+                    presentationRows.forEach(({ row: ch, label }) => {
                         rowsForExcel.push({
                             'Fecha inventario': ch.colA_date,
                             'idProducto': ch.colB_idProducto,
                             'Lista de Inventario': ch.colC_inventoryGroup,
                             'Tipo Registro': '↳ Presentación',
-                            'Producto': `    ↳ ${ch.colD_productName}`,
+                            'Producto': label,
                             'Inventario inicial': Number(ch.colE_initialStock.toFixed(2)),
                             'Corrección de inventario': Number(ch.colF_corrections.toFixed(2)),
                             'Compra del día': Number(ch.colG_purchases.toFixed(2)),
@@ -3907,7 +4152,68 @@ interface CommittedSaleData {
                         J: (colIdx) => renderEditableCell(key, row.productId, 'J', row.colJ_weightSalesUnits, { ...getColStyle('J', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colJ_weightSalesUnits > 0 ? '#1E40AF' : '#94A3B8', fontWeight: isParent ? '800' : '700', borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2, true),
                         K: (colIdx) => renderEditableCell(key, row.productId, 'K', row.colK_shortage, { ...getColStyle('K', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colK_shortage > 0 ? '#DC2626' : '#94A3B8', fontWeight: isParent ? '800' : (row.colK_shortage > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2),
                         L: (colIdx) => renderEditableCell(key, row.productId, 'L', row.colL_unshipped, { ...getColStyle('L', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colL_unshipped > 0 ? '#059669' : '#94A3B8', fontWeight: isParent ? '800' : '400', borderBottom: cellBorderBottom }, 2),
-                        M: (colIdx) => renderEditableCell(key, row.productId, 'M', row.colM_additionalSales, { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false, undefined, row.colM_additionalTooltip),
+                        M: (colIdx) => renderEditableCell(
+                            key,
+                            row.productId,
+                            'M',
+                            row.colM_additionalSales,
+                            { ...getColStyle('M', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colM_additionalSales > 0 ? '#7E22CE' : '#94A3B8', fontWeight: isParent ? '800' : (row.colM_additionalSales > 0 ? '700' : '400'), borderBottom: cellBorderBottom },
+                            2,
+                            true,
+                            (canEditSheet && sheetMode === 'manual_edit' && !closingRecord?.is_locked) ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openOverweightModal(row);
+                                        }}
+                                        title="Cargar sobrepeso de remisión física (3 pasos)"
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '17px',
+                                            height: '17px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #C084FC',
+                                            backgroundColor: '#FAF5FF',
+                                            color: '#7E22CE',
+                                            cursor: 'pointer',
+                                            padding: 0
+                                        }}
+                                    >
+                                        <Plus size={11} strokeWidth={2.6} />
+                                    </button>
+                                    {row.hasManualAdditionalSale && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleClearManualAdditionalSale(row.productId, row.colD_productName);
+                                            }}
+                                            title="Limpiar ajuste manual"
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '17px',
+                                                height: '17px',
+                                                borderRadius: '4px',
+                                                border: '1px solid #FCA5A5',
+                                                backgroundColor: '#FEF2F2',
+                                                color: '#DC2626',
+                                                cursor: 'pointer',
+                                                padding: 0
+                                            }}
+                                        >
+                                            <X size={11} strokeWidth={2.6} />
+                                        </button>
+                                    )}
+                                </div>
+                            ) : undefined,
+                            row.colM_additionalTooltip
+                        ),
                         N: (colIdx) => renderEditableCell(key, row.productId, 'N', row.colN_employeeSales, { ...getColStyle('N', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colN_employeeSales > 0 ? '#2563EB' : '#94A3B8', fontWeight: isParent ? '800' : (row.colN_employeeSales > 0 ? '700' : '400'), borderRight: '2px solid #E2E8F0', borderBottom: cellBorderBottom }, 2),
                         O: (colIdx) => renderEditableCell(key, row.productId, 'O', row.colO_returns, {
                             ...getColStyle('O', colIdx),
@@ -5137,20 +5443,21 @@ interface CommittedSaleData {
                     </div>
 
                     {/* DERECHA: Herramientas de Archivo Excel (Modo Edición), Telemetría & Vista */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', maxWidth: '100%' }}>
                         {/* Botones de Operación Excel (Solo en Modo Edición) */}
                         {sheetMode === 'manual_edit' && (
                             <>
                                 <div style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
+                                    flexWrap: 'wrap',
                                     backgroundColor: '#FFFFFF',
                                     borderRadius: '6px',
                                     border: '1px solid #CBD5E1',
                                     padding: '2px',
                                     gap: '2px',
                                     boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                    height: '28px',
+                                    minHeight: '28px',
                                     boxSizing: 'border-box'
                                 }}>
                                     <button
@@ -6491,9 +6798,9 @@ interface CommittedSaleData {
                             display: 'grid',
                             gridTemplateColumns: '1fr 1fr',
                             gap: '0.75rem',
-                            marginBottom: '1.2rem',
+                            marginBottom: '0.9rem',
                             backgroundColor: '#F8FAFC',
-                            padding: '1rem',
+                            padding: '0.85rem 1rem',
                             borderRadius: '12px',
                             border: '1px solid #E2E8F0'
                         }}>
@@ -6523,6 +6830,122 @@ interface CommittedSaleData {
                                 <div style={{ fontSize: '1rem', fontWeight: '800', color: '#2563EB' }}>
                                     {formatNumber(columnTotals.totalW)} <span style={{ fontSize: '0.75rem' }}>Kg</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Trazabilidad Base Col E (Reubicada por Escenario 485) */}
+                        {initialResolutionMeta && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '0.5rem',
+                                padding: '0.55rem 0.85rem',
+                                marginBottom: '0.85rem',
+                                borderRadius: '10px',
+                                backgroundColor: initialResolutionMeta.hasConflicts ? '#FFFBEB' : '#F8FAFC',
+                                border: `1px solid ${initialResolutionMeta.hasConflicts ? '#FDE68A' : '#E2E8F0'}`,
+                                fontSize: '0.75rem',
+                                color: '#334155'
+                            }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
+                                    <Database size={14} color="#0D7A57" />
+                                    <span>Base Col E:</span>
+                                    <span style={{ color: '#0F172A' }}>
+                                        {initialResolutionMeta.sourceKind === 'official_closing' ? 'Cierre Oficial'
+                                            : initialResolutionMeta.sourceKind === 'partial_closing' ? 'Cierre Parcial'
+                                                : initialResolutionMeta.sourceKind === 'reopened_closing' ? 'Cierre Reabierto'
+                                                    : initialResolutionMeta.sourceKind === 'unclosed_counts' ? 'Conteo Físico sin Cierre'
+                                                        : initialResolutionMeta.sourceKind === 'excel_baseline' ? 'Línea Base Excel'
+                                                            : 'Sin cierre previo (0,00 kg)'}
+                                    </span>
+                                    {initialResolutionMeta.sourceDate && (
+                                        <span style={{ color: '#64748B', fontWeight: '600' }}>({initialResolutionMeta.sourceDate})</span>
+                                    )}
+                                </div>
+                                {initialResolutionMeta.hasConflicts && (
+                                    <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '700',
+                                        color: '#B45309',
+                                        backgroundColor: '#FEF3C7',
+                                        padding: '2px 7px',
+                                        borderRadius: '6px'
+                                    }}>
+                                        <AlertTriangle size={12} />
+                                        {initialResolutionMeta.conflictCount} conflicto(s) Col T
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Checklist Compacto de Cierre + "Sin novedad hoy (0)" (Reubicado por Escenario 485) */}
+                        <div style={{
+                            marginBottom: '0.95rem',
+                            padding: '0.7rem 0.85rem',
+                            borderRadius: '10px',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #E2E8F0'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                    Checklist de Cierre ({checklistStatus?.completedCount ?? 0}/{checklistStatus?.totalSteps ?? 5})
+                                </span>
+                                <span style={{ fontSize: '0.7rem', fontWeight: '600', color: '#64748B' }}>
+                                    Conteo Col T: {(checklistStatus?.counts?.T ?? 0) > 0 ? 'Registrado' : 'Pendiente'}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                {([
+                                    { key: 'G' as NovedadColumnKey, label: 'Entradas (Col G)', count: checklistStatus?.counts?.G ?? 0 },
+                                    { key: 'QR' as NovedadColumnKey, label: 'Desperdicio / Basura (Col Q-R)', count: checklistStatus?.counts?.QR ?? 0 },
+                                    { key: 'X' as NovedadColumnKey, label: 'Donaciones (Col X)', count: checklistStatus?.counts?.X ?? 0 },
+                                ]).map(item => {
+                                    const isMarkedZero = Boolean(checklistStatus?.novedades?.[item.key]?.marked);
+                                    const isDone = item.count > 0 || isMarkedZero;
+                                    const isSaving = savingNovedadCol === item.key;
+                                    return (
+                                        <div key={item.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.76rem' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: isDone ? '#0F172A' : '#64748B', fontWeight: isDone ? '700' : '600' }}>
+                                                {isDone
+                                                    ? <CheckCircle2 size={14} color="#16A34A" strokeWidth={2.4} />
+                                                    : <Circle size={14} color="#94A3B8" strokeWidth={2} />}
+                                                <span>{item.label}</span>
+                                            </div>
+                                            {item.count > 0 ? (
+                                                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#0D7A57', backgroundColor: '#ECFDF5', padding: '2px 7px', borderRadius: '6px' }}>
+                                                    {item.count} mov(s)
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    disabled={!canEditSheet || isSaving}
+                                                    onClick={() => handleToggleNovedadZero(item.key)}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '6px',
+                                                        border: isMarkedZero ? '1px solid #86EFAC' : '1px solid #CBD5E1',
+                                                        backgroundColor: isMarkedZero ? '#DCFCE7' : '#FFFFFF',
+                                                        color: isMarkedZero ? '#166534' : '#475569',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: '700',
+                                                        cursor: (!canEditSheet || isSaving) ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                >
+                                                    {isMarkedZero && <Check size={11} strokeWidth={2.6} />}
+                                                    <span>{isSaving ? 'Guardando...' : (isMarkedZero ? 'Sin novedad (0)' : 'Sin novedad hoy (0)')}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -6635,6 +7058,332 @@ interface CommittedSaleData {
                     notify('Planilla física procesada y aplicada a la sábana con éxito.', 'success');
                 }}
             />
+
+            {/* Escenario 488 §3: Mini-modal guiado de 3 pasos para cargar sobrepesos de remisiones físicas desde Col M */}
+            {overweightModalProduct && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 99999,
+                    padding: '1rem',
+                    backdropFilter: 'blur(3px)'
+                }}>
+                    <div style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '16px',
+                        padding: '1.4rem',
+                        width: '100%',
+                        maxWidth: '520px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #CBD5E1'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#FAF5FF',
+                                    border: '1px solid #E9D5FF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#7E22CE'
+                                }}>
+                                    <Scale size={18} strokeWidth={2.4} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: '#0F172A' }}>
+                                        Sobrepeso de Remisión Física (Col M / P)
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: '0.76rem', color: '#64748B', fontWeight: '600' }}>
+                                        #{overweightModalProduct.accountingId} · {overweightModalProduct.productName} · {balanceDate}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => !overweightSubmitting && setOverweightModalProduct(null)}
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Indicador de pasos 1 -> 2 -> 3 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '1rem', fontSize: '0.72rem', fontWeight: '700' }}>
+                            {[
+                                { step: 1, label: '1. Pedido' },
+                                { step: 2, label: '2. Peso real (kg)' },
+                                { step: 3, label: '3. Destino (M / P)' },
+                            ].map(s => (
+                                <span
+                                    key={s.step}
+                                    style={{
+                                        padding: '3px 9px',
+                                        borderRadius: '999px',
+                                        backgroundColor: overweightStep === s.step ? '#7E22CE' : (overweightStep > s.step ? '#DCFCE7' : '#F1F5F9'),
+                                        color: overweightStep === s.step ? '#FFFFFF' : (overweightStep > s.step ? '#166534' : '#64748B')
+                                    }}
+                                >
+                                    {s.label}
+                                </span>
+                            ))}
+                        </div>
+
+                        {/* PASO 1: Seleccionar pedido lanzado del balanceDate */}
+                        {overweightStep === 1 && (
+                            <div>
+                                <p style={{ fontSize: '0.78rem', color: '#475569', marginTop: 0, marginBottom: '0.75rem' }}>
+                                    Selecciona el pedido lanzado de <strong>{balanceDate}</strong> al que corresponde el sobrepeso de la remisión física:
+                                </p>
+                                {overweightLoadingOrders ? (
+                                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>
+                                        Buscando pedidos lanzados...
+                                    </div>
+                                ) : overweightOrderItems.length === 0 ? (
+                                    <div style={{ padding: '1.25rem', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.8rem' }}>
+                                        No hay pedidos lanzados con este producto para {balanceDate}.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                                        {overweightOrderItems.map(item => (
+                                            <button
+                                                key={item.orderItemId}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedOverweightItem(item);
+                                                    setOverweightPickedInput(String(item.pickedQuantity ?? item.quantity));
+                                                    setOverweightStep(2);
+                                                }}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: '0.75rem',
+                                                    padding: '0.65rem 0.85rem',
+                                                    borderRadius: '10px',
+                                                    border: '1px solid #E2E8F0',
+                                                    backgroundColor: '#F8FAFC',
+                                                    cursor: 'pointer',
+                                                    textAlign: 'left'
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#0F172A' }}>
+                                                        Pedido #{item.sequenceId ?? '?'} · {item.clientName}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.73rem', color: '#64748B', marginTop: '2px' }}>
+                                                        Pedido: <strong>{formatNumber(item.quantity, 2)} {item.unit}</strong> · Tarifa: <strong>{item.unitPrice > 0 ? `$${formatMoney(item.unitPrice)} COP` : '$0 (Sin tarifa)'}</strong>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight size={16} color="#7E22CE" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* PASO 2: Digitar peso real enviado (kg) */}
+                        {overweightStep === 2 && selectedOverweightItem && (() => {
+                            const parsedPicked = parseFloat(overweightPickedInput.replace(',', '.'));
+                            const isValid = Number.isFinite(parsedPicked) && parsedPicked > 0;
+                            const deltaKg = isValid ? Number((parsedPicked - selectedOverweightItem.quantity).toFixed(3)) : 0;
+                            const deltaCop = isValid && deltaKg > 0 ? Math.round(deltaKg * selectedOverweightItem.unitPrice) : 0;
+                            const isAutoColP = isValid && deltaKg > 0 && selectedOverweightItem.unitPrice > 0 && deltaCop < overweightThresholdCop;
+
+                            return (
+                                <div>
+                                    <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', marginBottom: '0.9rem', fontSize: '0.78rem' }}>
+                                        <div style={{ fontWeight: '800', color: '#0F172A' }}>
+                                            Pedido #{selectedOverweightItem.sequenceId ?? '?'} · {selectedOverweightItem.clientName}
+                                        </div>
+                                        <div style={{ color: '#64748B', marginTop: '3px' }}>
+                                            Cantidad pedida: <strong>{formatNumber(selectedOverweightItem.quantity, 2)} {selectedOverweightItem.unit}</strong> · Precio unitario: <strong>{selectedOverweightItem.unitPrice > 0 ? `$${formatMoney(selectedOverweightItem.unitPrice)} COP` : '$0 COP'}</strong>
+                                        </div>
+                                    </div>
+
+                                    <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: '700', color: '#334155', marginBottom: '0.35rem' }}>
+                                        Peso real enviado (kg)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        autoFocus
+                                        value={overweightPickedInput}
+                                        onChange={e => setOverweightPickedInput(e.target.value)}
+                                        placeholder="Ej: 20.6"
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.65rem 0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #7E22CE',
+                                            fontSize: '0.95rem',
+                                            fontWeight: '700',
+                                            color: '#0F172A',
+                                            outline: 'none',
+                                            boxSizing: 'border-box',
+                                            marginBottom: '0.75rem'
+                                        }}
+                                    />
+
+                                    {isValid && (
+                                        <div style={{
+                                            padding: '0.65rem 0.8rem',
+                                            borderRadius: '8px',
+                                            backgroundColor: isAutoColP ? '#FFFBEB' : '#FAF5FF',
+                                            border: `1px solid ${isAutoColP ? '#FDE68A' : '#E9D5FF'}`,
+                                            fontSize: '0.75rem',
+                                            color: '#334155',
+                                            marginBottom: '1rem'
+                                        }}>
+                                            <div>
+                                                Diferencia: <strong>{deltaKg >= 0 ? '+' : ''}{formatNumber(deltaKg, 2)} kg</strong>
+                                                {deltaKg > 0 && selectedOverweightItem.unitPrice > 0 && (
+                                                    <> · Valorización: <strong>${formatMoney(deltaCop)} COP</strong> (Umbral: ${formatMoney(overweightThresholdCop)})</>
+                                                )}
+                                            </div>
+                                            {isAutoColP && (
+                                                <div style={{ marginTop: '4px', color: '#92400E', fontWeight: '700' }}>
+                                                    El delta económico es menor al umbral (${formatMoney(overweightThresholdCop)} COP): se auto-registrará directamente en Col P (Pesada / Merma).
+                                                </div>
+                                            )}
+                                            {deltaKg > 0 && selectedOverweightItem.unitPrice <= 0 && (
+                                                <div style={{ marginTop: '4px', color: '#7E22CE', fontWeight: '700' }}>
+                                                    Ítem con tarifa $0: podrás elegir en el Paso 3 si se cobra al cliente (Col M) o se asume en merma (Col P).
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.6rem' }}>
+                                        <button
+                                            type="button"
+                                            disabled={overweightSubmitting}
+                                            onClick={() => setOverweightStep(1)}
+                                            style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer' }}
+                                        >
+                                            Atrás
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={!isValid || overweightSubmitting}
+                                            onClick={() => {
+                                                if (!isValid) return;
+                                                if (deltaKg <= 0.0001 || isAutoColP) {
+                                                    handleSubmitOverweight('P');
+                                                } else {
+                                                    setOverweightStep(3);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '0.6rem 1.15rem',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: !isValid ? '#CBD5E1' : (isAutoColP ? '#D97706' : '#7E22CE'),
+                                                color: '#FFFFFF',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '800',
+                                                cursor: (!isValid || overweightSubmitting) ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            {overweightSubmitting
+                                                ? 'Guardando...'
+                                                : (deltaKg <= 0.0001 ? 'Guardar peso real' : (isAutoColP ? 'Auto-registrar en Col P' : 'Continuar al Paso 3'))}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* PASO 3: Decidir Col M (Cobrar) vs Col P (Merma) */}
+                        {overweightStep === 3 && selectedOverweightItem && (() => {
+                            const parsedPicked = parseFloat(overweightPickedInput.replace(',', '.')) || 0;
+                            const deltaKg = Number((parsedPicked - selectedOverweightItem.quantity).toFixed(3));
+                            const deltaCop = Math.round(deltaKg * selectedOverweightItem.unitPrice);
+                            return (
+                                <div>
+                                    <div style={{ padding: '0.8rem', borderRadius: '10px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', marginBottom: '1rem', fontSize: '0.78rem' }}>
+                                        <div style={{ fontWeight: '800', color: '#0F172A', marginBottom: '4px' }}>
+                                            Pedido #{selectedOverweightItem.sequenceId ?? '?'} · {selectedOverweightItem.clientName}
+                                        </div>
+                                        <div style={{ color: '#475569' }}>
+                                            Excedente: <strong>+{formatNumber(deltaKg, 2)} kg</strong> · Valorización: <strong>{selectedOverweightItem.unitPrice > 0 ? `$${formatMoney(deltaCop)} COP` : '$0 (Sin tarifa)'}</strong>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                                        <button
+                                            type="button"
+                                            disabled={overweightSubmitting}
+                                            onClick={() => handleSubmitOverweight('M')}
+                                            style={{
+                                                padding: '0.85rem',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #7E22CE',
+                                                backgroundColor: '#FAF5FF',
+                                                color: '#6B21A8',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '800',
+                                                cursor: overweightSubmitting ? 'not-allowed' : 'pointer',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            <div>Cobrar al cliente</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '600', color: '#7E22CE', marginTop: '3px' }}>
+                                                Registra en Col M (additional_sale)
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            disabled={overweightSubmitting}
+                                            onClick={() => handleSubmitOverweight('P')}
+                                            style={{
+                                                padding: '0.85rem',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #D97706',
+                                                backgroundColor: '#FFFBEB',
+                                                color: '#92400E',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '800',
+                                                cursor: overweightSubmitting ? 'not-allowed' : 'pointer',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            <div>Asumir en merma</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: '600', color: '#B45309', marginTop: '3px' }}>
+                                                Registra en Col P (waste_weighing)
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                        <button
+                                            type="button"
+                                            disabled={overweightSubmitting}
+                                            onClick={() => setOverweightStep(2)}
+                                            style={{ padding: '0.55rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                                        >
+                                            Atrás
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
 
             {/* Popover Desplegable Universal de Filtro y Ordenamiento por Columna (Alto Contraste WCAG AAA) */}
             {activeFilterPopover && (
