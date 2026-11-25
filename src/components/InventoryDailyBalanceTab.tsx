@@ -1959,7 +1959,7 @@ interface CommittedSaleData {
             .replace(/[\u0300-\u036f]/g, '')
             .trim();
 
-    const matchSearchSegment = (row: InventoryDailyRow, segment: string): boolean => {
+    const matchSearchSegment = (row: InventoryDailyRow, segment: string, isFamilyMember = false): boolean => {
         const trimmed = segment.trim();
         if (!trimmed) return true;
 
@@ -1987,7 +1987,7 @@ interface CommittedSaleData {
 
         const matchesTags = tags.every(tag => {
             if (tag === 'alerta' || tag === 'bajo' || tag === 'critico') {
-                return row.colV_missing > 0;
+                return isFamilyMember ? false : row.colV_missing > 0;
             }
             if (tag === 'disponible' || tag === 'ok' || tag === 'positivo' || tag === 'constock' || tag === 'con_stock') {
                 return (row.colS_calculated || 0) > 0;
@@ -1995,8 +1995,8 @@ interface CommittedSaleData {
             if (tag === 'agotado' || tag === 'cero' || tag === 'sin_stock' || tag === 'sinstock') {
                 return (row.colS_calculated || 0) <= 0;
             }
-            if (tag === 'sobrante' || tag === 'sobrantes') return row.colW_surplus > 0;
-            if (tag === 'faltante' || tag === 'faltantes') return row.colV_missing > 0;
+            if (tag === 'sobrante' || tag === 'sobrantes') return isFamilyMember ? false : row.colW_surplus > 0;
+            if (tag === 'faltante' || tag === 'faltantes') return isFamilyMember ? false : row.colV_missing > 0;
             if (tag === 'merma' || tag === 'desperdicio') return (row.colQ_damageWaste > 0 || row.colR_cleaningWaste > 0 || row.colP_weighingWaste > 0);
             
             // Filtros de Jerarquía 1:1 con Maestro SKU
@@ -2083,10 +2083,12 @@ interface CommittedSaleData {
             // Filtro por búsqueda inteligente avanzada (exclusivo sobre nombre de producto, SKU e ID)
             if (segments.length > 0) {
                 const parentMatches = segments.some(seg =>
-                    matchSearchSegment(family.parent, seg) || matchSearchSegment(family.consolidated, seg)
+                    family.isParent
+                        ? (matchSearchSegment(family.parent, seg, true) || matchSearchSegment(family.consolidated, seg, false))
+                        : matchSearchSegment(family.parent, seg, false)
                 );
                 const matchingChildren = family.children.filter(child =>
-                    segments.some(seg => matchSearchSegment(child, seg))
+                    segments.some(seg => matchSearchSegment(child, seg, true))
                 );
 
                 if (!parentMatches && matchingChildren.length === 0) {
@@ -2249,7 +2251,7 @@ interface CommittedSaleData {
 
             if (activeFilters.length === 0) return true;
 
-            const testRow = (row: InventoryDailyRow): boolean => {
+            const testRow = (row: InventoryDailyRow, isFamilyMember = false): boolean => {
                 return activeFilters.every(([colKey, filterStr]) => {
                     switch (colKey) {
                         case 'A':
@@ -2278,8 +2280,8 @@ interface CommittedSaleData {
                         case 'S': return matchNumericFilter(row.colS_calculated, filterStr);
                         case 'T': return matchNumericFilter(row.colT_physicalCount ?? 0, filterStr);
                         case 'U': return matchNumericFilter(row.colU_bodegaPost10am ?? 0, filterStr);
-                        case 'V': return matchNumericFilter(row.colV_missing, filterStr);
-                        case 'W': return matchNumericFilter(row.colW_surplus, filterStr);
+                        case 'V': return isFamilyMember ? false : matchNumericFilter(row.colV_missing, filterStr);
+                        case 'W': return isFamilyMember ? false : matchNumericFilter(row.colW_surplus, filterStr);
                         case 'X': return matchNumericFilter(row.colX_foodBank, filterStr);
                         default: return true;
                     }
@@ -2287,9 +2289,9 @@ interface CommittedSaleData {
             };
 
             if (family.isParent) {
-                return testRow(family.consolidated) || testRow(family.parent) || family.children.some(testRow);
+                return testRow(family.consolidated, false) || testRow(family.parent, true) || family.children.some(ch => testRow(ch, true));
             }
-            return testRow(family.parent);
+            return testRow(family.parent, false);
         });
 
         if (!columnSort) return filtered;
@@ -2598,38 +2600,55 @@ interface CommittedSaleData {
                 notify('No se puede cerrar la jornada oficial con Conteo Físico en 0. Carga primero la Columna T (Conteo Físico).', 'warning');
                 return;
             }
-            const totalMissing = dailyRows.reduce((acc, r) => acc + (r.colV_missing || 0), 0);
-            const totalSurplus = dailyRows.reduce((acc, r) => acc + (r.colW_surplus || 0), 0);
+            const closingConsolidatedRows = dailyFamilies.map(f => f.isParent ? f.consolidated : f.parent);
+            const totalMissing = closingConsolidatedRows.reduce((acc, r) => acc + (r.colV_missing || 0), 0);
+            const totalSurplus = closingConsolidatedRows.reduce((acc, r) => acc + (r.colW_surplus || 0), 0);
 
-            // Generar Snapshot inmutable de las 24 columnas
-            const snapshotItems = dailyRows.map(r => ({
-                productId: r.productId,
-                sku: r.sku,
-                accountingId: r.colB_idProducto,
-                inventoryGroup: r.colC_inventoryGroup,
-                productName: r.colD_productName,
-                initialStock: r.colE_initialStock,
-                corrections: r.colF_corrections,
-                purchases: r.colG_purchases,
-                salesKg: r.colH_salesKg,
-                salesUnits: r.colI_salesUnits,
-                weightSalesUnits: r.colJ_weightSalesUnits,
-                shortage: r.colK_shortage,
-                unshipped: r.colL_unshipped,
-                additionalSales: r.colM_additionalSales,
-                employeeSales: r.colN_employeeSales,
-                returns: r.colO_returns,
-                returnShortage: r.colO2_returnShortage,
-                weighingWaste: r.colP_weighingWaste,
-                damageWaste: r.colQ_damageWaste,
-                cleaningWaste: r.colR_cleaningWaste,
-                calculatedStock: r.colS_calculated,
-                physicalCount: r.colT_physicalCount,
-                bodegaPost10am: r.colU_bodegaPost10am,
-                missing: r.colV_missing,
-                surplus: r.colW_surplus,
-                foodBank: r.colX_foodBank
-            }));
+            const familyConcMap = new Map<string, { missing: number; surplus: number }>();
+            const familyChildIds = new Set<string>();
+            dailyFamilies.forEach(f => {
+                if (f.isParent) {
+                    familyConcMap.set(f.parent.productId, {
+                        missing: f.consolidated.colV_missing,
+                        surplus: f.consolidated.colW_surplus
+                    });
+                    f.children.forEach(c => familyChildIds.add(c.productId));
+                }
+            });
+
+            // Generar Snapshot inmutable de las 24 columnas (con conciliación de faltantes/sobrantes exclusiva en padre)
+            const snapshotItems = dailyRows.map(r => {
+                const concOverride = familyConcMap.get(r.productId);
+                const isFamilyChild = familyChildIds.has(r.productId);
+                return {
+                    productId: r.productId,
+                    sku: r.sku,
+                    accountingId: r.colB_idProducto,
+                    inventoryGroup: r.colC_inventoryGroup,
+                    productName: r.colD_productName,
+                    initialStock: r.colE_initialStock,
+                    corrections: r.colF_corrections,
+                    purchases: r.colG_purchases,
+                    salesKg: r.colH_salesKg,
+                    salesUnits: r.colI_salesUnits,
+                    weightSalesUnits: r.colJ_weightSalesUnits,
+                    shortage: r.colK_shortage,
+                    unshipped: r.colL_unshipped,
+                    additionalSales: r.colM_additionalSales,
+                    employeeSales: r.colN_employeeSales,
+                    returns: r.colO_returns,
+                    returnShortage: r.colO2_returnShortage,
+                    weighingWaste: r.colP_weighingWaste,
+                    damageWaste: r.colQ_damageWaste,
+                    cleaningWaste: r.colR_cleaningWaste,
+                    calculatedStock: r.colS_calculated,
+                    physicalCount: r.colT_physicalCount,
+                    bodegaPost10am: r.colU_bodegaPost10am,
+                    missing: concOverride ? concOverride.missing : (isFamilyChild ? 0 : r.colV_missing),
+                    surplus: concOverride ? concOverride.surplus : (isFamilyChild ? 0 : r.colW_surplus),
+                    foodBank: r.colX_foodBank
+                };
+            });
 
             if (isSandbox) {
                 const sbClosingRecord = {
@@ -2859,8 +2878,8 @@ interface CommittedSaleData {
                             'Inventario calculado': Number(ch.colS_calculated.toFixed(2)),
                             'Inventario agregado bodega': ch.colT_physicalCount !== null ? Number(ch.colT_physicalCount.toFixed(2)) : '',
                             'Inventario en bodega': ch.colU_bodegaPost10am !== null ? Number(ch.colU_bodegaPost10am.toFixed(2)) : '',
-                            'Faltantes': ch.colV_missing > 0 ? Number(ch.colV_missing.toFixed(2)) : 0,
-                            'Sobrantes': ch.colW_surplus > 0 ? Number(ch.colW_surplus.toFixed(2)) : 0,
+                            'Faltantes': '',
+                            'Sobrantes': '',
                             'Banco de alimentos': Number(ch.colX_foodBank.toFixed(2))
                         });
                     });
@@ -2882,13 +2901,19 @@ interface CommittedSaleData {
                 const post10Formula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), "", V${rNum})`;
                 ws[`W${rNum}`] = { t: 'n', f: post10Formula, v: rowsForExcel[i]['Inventario en bodega'] };
 
-                // Col X: Faltantes (Si V < U => U - V)
-                const missingFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}<U${rNum}, U${rNum}-V${rNum}, 0))`;
-                ws[`X${rNum}`] = { t: 'n', f: missingFormula, v: rowsForExcel[i]['Faltantes'] };
+                const isPresentationRow = rowsForExcel[i]['Tipo Registro'] === '↳ Presentación';
+                if (isPresentationRow) {
+                    ws[`X${rNum}`] = { t: 's', v: '' };
+                    ws[`Y${rNum}`] = { t: 's', v: '' };
+                } else {
+                    // Col X: Faltantes (Si V < U => U - V)
+                    const missingFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}<U${rNum}, U${rNum}-V${rNum}, 0))`;
+                    ws[`X${rNum}`] = { t: 'n', f: missingFormula, v: rowsForExcel[i]['Faltantes'] };
 
-                // Col Y: Sobrantes (Si V > U => V - U)
-                const surplusFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}>U${rNum}, V${rNum}-U${rNum}, 0))`;
-                ws[`Y${rNum}`] = { t: 'n', f: surplusFormula, v: rowsForExcel[i]['Sobrantes'] };
+                    // Col Y: Sobrantes (Si V > U => V - U)
+                    const surplusFormula = `IF(OR(ISBLANK(V${rNum}), V${rNum}=""), 0, IF(V${rNum}>U${rNum}, V${rNum}-U${rNum}, 0))`;
+                    ws[`Y${rNum}`] = { t: 'n', f: surplusFormula, v: rowsForExcel[i]['Sobrantes'] };
+                }
             }
 
             // Agregar Fila de Totales Matemáticos al pie
@@ -4261,8 +4286,8 @@ interface CommittedSaleData {
                         }, 2, true),
                         T: (colIdx) => renderEditableCell(key, row.productId, 'T', row.colT_physicalCount, { ...getColStyle('T', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.hasPhysicalCount ? '#0D7A57' : '#94A3B8', borderBottom: cellBorderBottom }, 2),
                         U: (colIdx) => renderEditableCell(key, row.productId, 'U', row.colU_bodegaPost10am, { ...getColStyle('U', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: isParent ? '#1E1B4B' : '#0F172A', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }, 2, true),
-                        V: (colIdx) => renderEditableCell(key, row.productId, 'V', row.colV_missing > 0 ? row.colV_missing : null, { ...getColStyle('V', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colV_missing > 0 ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }, 2, true),
-                        W: (colIdx) => renderEditableCell(key, row.productId, 'W', row.colW_surplus > 0 ? row.colW_surplus : null, { ...getColStyle('W', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: row.colW_surplus > 0 ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }, 2, true),
+                        V: (colIdx) => renderEditableCell(key, row.productId, 'V', (!isChild && row.colV_missing > 0) ? row.colV_missing : null, { ...getColStyle('V', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: (!isChild && row.colV_missing > 0) ? '#DC2626' : '#94A3B8', borderBottom: cellBorderBottom }, 2, true),
+                        W: (colIdx) => renderEditableCell(key, row.productId, 'W', (!isChild && row.colW_surplus > 0) ? row.colW_surplus : null, { ...getColStyle('W', colIdx), padding: '6px 8px', textAlign: 'right', fontWeight: '800', color: (!isChild && row.colW_surplus > 0) ? '#059669' : '#94A3B8', borderRight: '2px solid #CBD5E1', borderBottom: cellBorderBottom }, 2, true),
                         X: (colIdx) => renderEditableCell(key, row.productId, 'X', row.colX_foodBank, { ...getColStyle('X', colIdx), padding: '6px 8px', textAlign: 'right', color: row.colX_foodBank > 0 ? '#EC4899' : '#94A3B8', fontWeight: isParent ? '800' : (row.colX_foodBank > 0 ? '700' : '400'), borderBottom: cellBorderBottom }, 2, false,
                             row.evidencePhotosX?.length > 0 ? (
                                 <button

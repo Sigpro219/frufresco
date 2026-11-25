@@ -18186,3 +18186,15 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   5. **Pareto de Desviaciones en Dashboard (`src/components/InventoryUnifiedDashboard.tsx`):**
      - Migrar las consultas de movimientos y `order_items` a **`fetchAllRows`** (eliminando el truncado silencioso `.limit(10000)` → `1.000` de PostgREST) incluyendo `reference_id`.
      - Integrar en el card **`Pareto Top 5`** un selector **`Fuga Total | Sobrepeso Pesada (M vs P)`** mostrando por producto (`#accounting_id`): `kg` desviados (`picked - quantity`), resolución desglosada (**Facturado `Col M`** y **Asumido `Col P`** cruzados por `reference_id = order_item.id`, más **Devuelto `Col O`** `route_return` cruzado por `product_id`) en `kg` y `\$ COP`, y `%` de recuperación financiera.
+
+
+---
+
+### Escenario 489: Conciliación de Faltantes y Sobrantes Exclusiva en Padre Consolidado (Pantalla, Excel 24 Cols, Filtros y Cierre Diario) (SDD v1.9.444)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y DESPLEGADO (0 errores tsc)`
+- **Principio Físico (Conservación de Masa en Bodega):** En familias padre–hijo donde múltiples presentaciones comparten la misma masa física (ej. compra en `sin pelar`, venta en `Base / Estándar` y conteo físico unificado), calcular `Faltantes` y `Sobrantes` en cada fila hija produce desviaciones fantasma que se compensan en el consolidado familiar.
+- **Enmienda Acotada ([`src/components/InventoryDailyBalanceTab.tsx`](file:///c:/Projects/frufresco/src/components/InventoryDailyBalanceTab.tsx)):**
+  1. **Pantalla UI (`V` / `W`, `L4271-L4272`):** En filas hijas (`isChild === true`), renderizar `Faltantes` y `Sobrantes` en blanco (`null` / `—`), conservando el cálculo en filas padre (`Consolidado`) y productos independientes (`!isChild`).
+  2. **Excel 24 Cols (`handleExportOfficialExcel`, `L2863-L2898`):** En filas con `Tipo Registro === '↳ Presentación'`, exportar `'Faltantes': ''` y `'Sobrantes': ''` y omitir la inyección de fórmulas en columnas `X` y `Y` (dejándolas vacías), manteniendo las fórmulas nativas únicamente en padres consolidados y productos independientes.
+  3. **Filtros y Tags (`matchSearchSegment` `L1962-L2000`, `filteredFamilies` `L2085-L2091`, `displayedFamilies` `L2252-L2293`):** En familias padre–hijo (`isFamilyMember = true`), los filtros de columna `V`/`W` y los tags `@faltante`/`@faltantes`/`@sobrante`/`@sobrantes`/`@alerta`/`@bajo`/`@critico` se evalúan exclusivamente contra `family.consolidated` (evitando mostrar familias cuadradas por desviaciones fantasma en hijos).
+  4. **Cierre Diario (`handleOfficialClosing`, `L2601-L2653`):** Totalizar `totalMissing` y `totalSurplus` desde `dailyFamilies.map(f => f.isParent ? f.consolidated : f.parent)` en lugar de `dailyRows`, y alinear `snapshot_items` 1:1 con `total_missing` / `total_surplus` (guardando el valor consolidado en el `productId` del padre y `0` en los hijos de familia).
