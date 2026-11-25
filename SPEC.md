@@ -18093,3 +18093,12 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   3. **Candado 2 (Prohibido cerrar en ceros en Oficial):** Evaluar `overallTotalPhysical <= 0.0001` sobre `dailyRows` completo (sin filtros, jamás `columnTotals.totalT`) únicamente cuando `!isSandbox`, deshabilitando toolbar/modal y validando en `handleOfficialClosing`.
   4. **Candado 3 (Trazabilidad Real de Usuario):** Guardar `closed_by_name: profile?.contact_name || user?.email || 'Supervisor de Operaciones'` en `L2399` (y en Sandbox `L2342`).
   5. **Saneamiento BD `2026-11-25`:** Eliminar el cierre vacío accidental `880779be-687e-452f-80ae-43dd2dc8a5ac` (`closing_date = '2026-11-25'`, `total_physical = 0`) sin sobrescribir `2026-11-24`, preservando intactos los `122` conteos físicos (`8.695,52 kg`) del `24/11` para su cierre limpio.
+
+---
+
+### Escenario 484: Cierre de Hallazgos /tirano en Planillas Operativas (`physical-count-print`, Compuerta Andon `ManualDispatchWizardModal` y Neteo Visual `/ops/compras`) (SDD v1.9.439)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y DESPLEGADO (0 errores tsc)`
+- **Alcance Aislado (3 archivos en `src/` — sin tocar `loading/page.tsx` que tiene WIP paralelo de Transporte):**
+  1. [`src/app/admin/inventory/physical-count-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/inventory/physical-count-print/page.tsx): Reemplazar la lectura legada de `inventory_stocks` (`L68-80`) por `resolveInitialInventory({ supabase, targetDate: selectedDate })` y recargar `fetchProducts()` cuando cambie `selectedDate`, para que el filtro `"Existencias"` refleje el inventario inicial canónico de la jornada.
+  2. [`src/components/ManualDispatchWizardModal.tsx`](file:///c:/Projects/frufresco/src/components/ManualDispatchWizardModal.tsx): En `L99`, evaluar `evaluateInventoryGateStatus({ supabase, targetDate: deliveryDate || getBogotaDateString() })` con dependencias `[isOpen, deliveryDate]` para que al lanzar el corte nocturno de `D+1` audite correctamente si el día `D` (`24/11`) ya fue cerrado oficialmente. *(Nota: el mirror `loading/page.tsx:272` queda diferido al cierre del WIP paralelo de Transporte en ese archivo).*
+  3. [`src/app/ops/compras/page.tsx`](file:///c:/Projects/frufresco/src/app/ops/compras/page.tsx): En tarjetas agrupadas sin variantes (`L2315-2336`) y en la vista `@media print` (`L2088`), usar la meta neteada (`meta_neteo ?? total_requested`) para `Meta`, `Faltante` y barra de progreso, y exhibir `Stock: X` cuando `applied_stock > 0`.

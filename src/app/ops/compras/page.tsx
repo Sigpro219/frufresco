@@ -2085,7 +2085,7 @@ export default function ProcurementPage() {
                   <td>{task.variant_label || "-"}</td>
                   <td>{task.category}</td>
                   <td>
-                    {(task.total_requested - task.total_purchased).toFixed(2)}
+                    {Math.max(0, (task.meta_neteo ?? task.total_requested) - task.total_purchased).toFixed(2)}
                   </td>
                   <td>{task.unit}</td>
                 </tr>
@@ -2312,44 +2312,53 @@ export default function ProcurementPage() {
                   </div>
 
                   {/* Overall progress bar */}
-                  <div style={{ width: "100%", height: "6px", backgroundColor: "var(--ops-border)", borderRadius: "3px", overflow: "hidden" }}>
-                    <div style={{
-                      width: `${Math.min(100, (group.total_purchased / group.total_requested) * 100)}%`,
-                      height: "100%",
-                      backgroundColor: isDone ? "var(--ops-primary)" : "#F59E0B",
-                      transition: "width 0.4s ease"
-                    }} />
-                  </div>
+                  {(() => {
+                    const groupNetTarget = group.items.reduce((acc, it) => acc + Number(it.meta_neteo ?? it.total_requested ?? 0), 0);
+                    const groupAppliedStock = group.items.reduce((acc, it) => acc + Number(it.applied_stock || 0), 0);
+                    const netProgressPct = groupNetTarget > 0 ? Math.min(100, (group.total_purchased / groupNetTarget) * 100) : 100;
+                    return (
+                      <>
+                        <div style={{ width: "100%", height: "6px", backgroundColor: "var(--ops-border)", borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{
+                            width: `${netProgressPct}%`,
+                            height: "100%",
+                            backgroundColor: isDone ? "var(--ops-primary)" : "#F59E0B",
+                            transition: "width 0.4s ease"
+                          }} />
+                        </div>
 
-                  {/* Summary of quantities */}
-                  <div style={{ display: "flex", justifyContent: "flex-start", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--ops-text-muted)" }}>
-                    <span>
-                      Meta: <strong style={{ color: "var(--ops-text)" }}>{group.total_requested.toFixed(0)} {group.unit}</strong> | Comprado: <strong style={{ color: "var(--ops-text)" }}>{group.total_purchased.toFixed(0)} {group.unit}</strong> | Faltante: <strong style={{ color: isDone ? "#10B981" : "#F59E0B" }}>{Math.max(0, group.total_requested - group.total_purchased).toFixed(0)} {group.unit}</strong>
-                    </span>
-                    {group.total_purchased > group.total_requested && (
-                      <span style={{
-                        color: "#3B82F6", fontWeight: "800", backgroundColor: "rgba(59, 130, 246, 0.15)",
-                        padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(59, 130, 246, 0.3)"
-                      }}>
-                        +{ (group.total_purchased - group.total_requested).toFixed(0) } {group.unit} EXCEDENTE
-                      </span>
-                    )}
-                    {group.hasRejection && (
-                      <span style={{
-                        color: "#EF4444", fontWeight: "800", backgroundColor: "rgba(239, 68, 68, 0.15)",
-                        padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(239, 68, 68, 0.3)"
-                      }}>
-                        {/* Calculate rejection sum in base unit */}
-                        {(() => {
-                          const rejQty = group.items.reduce((acc, item) => {
-                            const itemNovs = novelties.filter(n => n.task_id === item.id && n.novelty_type === 'rejection');
-                            return acc + itemNovs.reduce((nAcc, n) => nAcc + (n.quantity || 0), 0);
-                          }, 0);
-                          return `${rejQty.toFixed(0)} ${group.unit} EN DEVOLUCIÓN`;
-                        })()}
-                      </span>
-                    )}
-                  </div>
+                        {/* Summary of quantities */}
+                        <div style={{ display: "flex", justifyContent: "flex-start", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--ops-text-muted)", flexWrap: "wrap" }}>
+                          <span>
+                            Meta: <strong style={{ color: "var(--ops-text)" }}>{groupNetTarget.toFixed(0)} {group.unit}</strong>{groupAppliedStock > 0 ? <> | Stock: <strong style={{ color: "#0D9488" }}>{formatNumber(groupAppliedStock)} {group.unit}</strong></> : null} | Comprado: <strong style={{ color: "var(--ops-text)" }}>{group.total_purchased.toFixed(0)} {group.unit}</strong> | Faltante: <strong style={{ color: isDone ? "#10B981" : "#F59E0B" }}>{Math.max(0, groupNetTarget - group.total_purchased).toFixed(0)} {group.unit}</strong>
+                          </span>
+                          {group.total_purchased > groupNetTarget && (
+                            <span style={{
+                              color: "#3B82F6", fontWeight: "800", backgroundColor: "rgba(59, 130, 246, 0.15)",
+                              padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(59, 130, 246, 0.3)"
+                            }}>
+                              +{(group.total_purchased - groupNetTarget).toFixed(0)} {group.unit} EXCEDENTE
+                            </span>
+                          )}
+                          {group.hasRejection && (
+                            <span style={{
+                              color: "#EF4444", fontWeight: "800", backgroundColor: "rgba(239, 68, 68, 0.15)",
+                              padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(239, 68, 68, 0.3)"
+                            }}>
+                              {/* Calculate rejection sum in base unit */}
+                              {(() => {
+                                const rejQty = group.items.reduce((acc, item) => {
+                                  const itemNovs = novelties.filter(n => n.task_id === item.id && n.novelty_type === 'rejection');
+                                  return acc + itemNovs.reduce((nAcc, n) => nAcc + (n.quantity || 0), 0);
+                                }, 0);
+                                return `${rejQty.toFixed(0)} ${group.unit} EN DEVOLUCIÓN`;
+                              })()}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {/* Variants List Section */}
                   {hasVariants && (

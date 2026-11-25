@@ -96,10 +96,10 @@ export default function ManualDispatchWizardModal({
         if (!isOpen) return;
         setEmergencyChecked(false);
         setEmergencyReason('');
-        evaluateInventoryGateStatus({ supabase, targetDate: getBogotaDateString() })
+        evaluateInventoryGateStatus({ supabase, targetDate: deliveryDate || getBogotaDateString() })
             .then(setGateStatus)
             .catch(err => console.warn('[ManualDispatchWizardModal] Error evaluando compuerta de inventario:', err));
-    }, [isOpen]);
+    }, [isOpen, deliveryDate]);
 
     // Checklist de Conformidad por Bloque
     const [step1Confirmed, setStep1Confirmed] = useState<boolean>(false);

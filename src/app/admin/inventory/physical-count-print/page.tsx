@@ -7,6 +7,7 @@ import { Printer, ArrowLeft, ClipboardList, Layers, Sparkles, Truck } from 'luci
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
+import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
 
 interface ProductItem {
     id: string;
@@ -53,31 +54,22 @@ export default function PhysicalCountPrintPage() {
 
     useEffect(() => {
         fetchProducts();
-    }, []);
+    }, [selectedDate]);
 
     const fetchProducts = async () => {
         setLoading(true);
         try {
-            const [prodRes, stockRes] = await Promise.all([
+            const [prodRes, resolvedInv] = await Promise.all([
                 supabase
                     .from('products')
                     .select('id, name, sku, unit_of_measure, inventory_group, category, accounting_id, parent_id')
                     .eq('is_active', true)
                     .order('name', { ascending: true })
                     .limit(5000),
-                supabase
-                    .from('inventory_stocks')
-                    .select('product_id, quantity')
-                    .gt('quantity', 0)
-                    .limit(5000)
+                resolveInitialInventory({ supabase, targetDate: selectedDate })
             ]);
 
             if (prodRes.error) throw prodRes.error;
-
-            const stockMap = new Map<string, number>();
-            (stockRes.data || []).forEach((st: any) => {
-                stockMap.set(st.product_id, Number(st.quantity) || 0);
-            });
 
             const prodList = prodRes.data || [];
             const prodNameMap = new Map<string, string>();
@@ -86,7 +78,7 @@ export default function PhysicalCountPrintPage() {
             const enriched = prodList.map((p: any) => ({
                 ...p,
                 familyKey: p.parent_id ? (prodNameMap.get(p.parent_id) || p.name) : p.name,
-                current_stock: stockMap.get(p.id) || 0
+                current_stock: Number(resolvedInv.stockMap[p.id] || 0)
             }));
 
             setProducts(enriched);
