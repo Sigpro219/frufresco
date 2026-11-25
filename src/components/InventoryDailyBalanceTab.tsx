@@ -2289,10 +2289,21 @@ interface CommittedSaleData {
         };
     }, [displayedFamilies]);
 
+    const overallTotalPhysical = useMemo(
+        () => dailyRows.reduce((acc, r) => acc + (r.colT_physicalCount !== null ? r.colT_physicalCount : 0), 0),
+        [dailyRows]
+    );
+    const isFutureBalanceDate = balanceDate > getBogotaDateString();
+    const isZeroPhysicalBlocked = !isSandbox && overallTotalPhysical <= 0.0001;
+
     // Realizar Cierre Diario Oficial y Congelación Contable (SPEC.md v1.5.0)
     const handleOfficialClosing = async () => {
         if (dailyRows.length === 0) {
             notify('No hay datos en la sábana para cerrar la jornada.', 'warning');
+            return;
+        }
+        if (balanceDate > getBogotaDateString()) {
+            notify('No se puede cerrar una jornada futura (posterior a hoy en hora Colombia).', 'warning');
             return;
         }
 
@@ -2301,6 +2312,10 @@ interface CommittedSaleData {
 
             const totalCalculated = dailyRows.reduce((acc, r) => acc + (r.colS_calculated || 0), 0);
             const totalPhysical = dailyRows.reduce((acc, r) => acc + (r.colT_physicalCount !== null ? r.colT_physicalCount : 0), 0);
+            if (!isSandbox && totalPhysical <= 0.0001) {
+                notify('No se puede cerrar la jornada oficial con Conteo Físico en 0. Carga primero la Columna T (Conteo Físico).', 'warning');
+                return;
+            }
             const totalMissing = dailyRows.reduce((acc, r) => acc + (r.colV_missing || 0), 0);
             const totalSurplus = dailyRows.reduce((acc, r) => acc + (r.colW_surplus || 0), 0);
 
@@ -2339,7 +2354,7 @@ interface CommittedSaleData {
                     id: `sandbox-close-${balanceDate}-${Date.now()}`,
                     closing_date: balanceDate,
                     closed_at: new Date().toISOString(),
-                    closed_by_name: 'Supervisor Sandbox (Pruebas)',
+                    closed_by_name: profile?.contact_name || user?.email || 'Supervisor Sandbox (Pruebas)',
                     notes: closingNotes || 'Cierre de prueba ejecutado en Modo Sandbox',
                     total_calculated: totalCalculated,
                     total_physical: totalPhysical,
@@ -2396,7 +2411,7 @@ interface CommittedSaleData {
                 .upsert({
                     closing_date: balanceDate,
                     closed_at: new Date().toISOString(),
-                    closed_by_name: 'Supervisor de Operaciones',
+                    closed_by_name: profile?.contact_name || user?.email || 'Supervisor de Operaciones',
                     notes: closingNotes || 'Cierre oficial ejecutado desde la Sábana Diaria',
                     total_calculated: totalCalculated,
                     total_physical: totalPhysical,
@@ -4319,7 +4334,7 @@ interface CommittedSaleData {
                             />
                             <button
                                 type="button"
-                                onClick={() => handleDateChange(todayStr)}
+                                onClick={() => handleDateChange(getBogotaDateString())}
                                 style={{
                                     padding: '0.2rem 0.45rem',
                                     borderRadius: '5px',
@@ -4791,9 +4806,18 @@ interface CommittedSaleData {
                             canEditSheet && sheetMode === 'manual_edit' && (
                                 <button
                                     type="button"
+                                    disabled={isFutureBalanceDate || isZeroPhysicalBlocked}
                                     onClick={() => {
                                         if (!canEditSheet) {
                                             notify('Solo la jefatura de inventarios o administradores pueden congelar el cierre oficial del día.', 'warning');
+                                            return;
+                                        }
+                                        if (balanceDate > getBogotaDateString()) {
+                                            notify('No se puede cerrar una jornada futura (posterior a hoy en hora Colombia).', 'warning');
+                                            return;
+                                        }
+                                        if (isZeroPhysicalBlocked) {
+                                            notify('No se puede cerrar la jornada oficial con Conteo Físico en 0. Carga primero la Columna T (Conteo Físico).', 'warning');
                                             return;
                                         }
                                         setIsClosingModalOpen(true);
@@ -4803,18 +4827,23 @@ interface CommittedSaleData {
                                         height: '32px',
                                         borderRadius: '8px',
                                         border: 'none',
-                                        backgroundColor: '#16A34A',
+                                        backgroundColor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? '#94A3B8' : '#16A34A',
                                         color: '#FFFFFF',
                                         fontSize: '0.73rem',
                                         fontWeight: '800',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '5px',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                                        cursor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 'not-allowed' : 'pointer',
+                                        opacity: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 0.7 : 1,
+                                        boxShadow: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 'none' : '0 1px 3px rgba(22, 163, 74, 0.3)',
                                         transition: 'all 0.15s ease'
                                     }}
-                                    title="Cerrar Día: Conciliar saldos, congelar jornada contable y trasladar Conteo Físico a Saldo Inicial siguiente."
+                                    title={isFutureBalanceDate
+                                        ? 'Bloqueado: no es posible cerrar una jornada futura.'
+                                        : isZeroPhysicalBlocked
+                                            ? 'Bloqueado: carga primero el Conteo Físico (Columna T > 0) antes de cerrar la jornada.'
+                                            : 'Cerrar Día: Conciliar saldos, congelar jornada contable y trasladar Conteo Físico a Saldo Inicial siguiente.'}
                                 >
                                     <Lock size={12} strokeWidth={2.2} />
                                     <span>Cerrar Día</span>
@@ -6496,21 +6525,21 @@ interface CommittedSaleData {
                             <button
                                 type="button"
                                 onClick={handleOfficialClosing}
-                                disabled={isSubmittingClosing}
+                                disabled={isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked}
                                 style={{
                                     padding: '0.7rem 1.4rem',
                                     borderRadius: '8px',
                                     border: 'none',
-                                    backgroundColor: '#16A34A',
+                                    backgroundColor: (isFutureBalanceDate || isZeroPhysicalBlocked) ? '#94A3B8' : '#16A34A',
                                     color: '#FFFFFF',
                                     fontSize: '0.82rem',
                                     fontWeight: '800',
-                                    cursor: 'pointer',
+                                    cursor: (isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked) ? 'not-allowed' : 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
-                                    opacity: isSubmittingClosing ? 0.7 : 1
+                                    boxShadow: (isFutureBalanceDate || isZeroPhysicalBlocked) ? 'none' : '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
+                                    opacity: (isSubmittingClosing || isFutureBalanceDate || isZeroPhysicalBlocked) ? 0.7 : 1
                                 }}
                             >
                                 <Lock size={15} strokeWidth={2.5} />

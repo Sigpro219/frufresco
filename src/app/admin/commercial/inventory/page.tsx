@@ -7,6 +7,7 @@ import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna, Zap, DollarSign } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
 import WasteSusceptibleProductsManager from '@/components/WasteSusceptibleProductsManager';
@@ -485,15 +486,13 @@ export default function InventoryAdminPage() {
     };
 
     // --- KARDEX STATES & TOGGLES ---
-    const [sharedInventoryDate, setSharedInventoryDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [sharedInventoryDate, setSharedInventoryDate] = useState<string>(() => getBogotaDateString());
     const [movementsDateRange, setMovementsDateRange] = useState<'selected_day' | '8days' | 'today' | 'custom'>('selected_day');
     const [customStartDate, setCustomStartDate] = useState<string>(() => {
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        return d.toISOString().split('T')[0];
+        return getBogotaDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
     });
     const [customEndDate, setCustomEndDate] = useState<string>(() => {
-        return new Date().toISOString().split('T')[0];
+        return getBogotaDateString();
     });
     const [movementsFilterActiveOnly, setMovementsFilterActiveOnly] = useState(true);
     const [movementsViewMode, setMovementsViewMode] = useState<'all' | 'returns' | 'stock'>('all');
@@ -783,7 +782,7 @@ export default function InventoryAdminPage() {
                 const now = new Date();
 
                 if (movementsDateRange === 'selected_day') {
-                    const targetDateStr = sharedInventoryDate || now.toISOString().split('T')[0];
+                    const targetDateStr = sharedInventoryDate || getBogotaDateString();
                     const [sY, sM, sD] = targetDateStr.split('-').map(Number);
                     const start = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 0, 0, 0, 0);
                     const end = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 23, 59, 59, 999);
@@ -872,7 +871,7 @@ export default function InventoryAdminPage() {
         try {
             if (!isAuto) setGeneratingAudit(true);
             
-            const today = new Date().toISOString().split('T')[0];
+            const today = getBogotaDateString();
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -1580,7 +1579,7 @@ export default function InventoryAdminPage() {
         const list = [...filteredFamilies];
 
         if (sortField === 'default') {
-            const today = new Date().toISOString().split('T')[0];
+            const today = getBogotaDateString();
             const currentTask = randomTasks.find(t => t.scheduled_date === today);
             
             return list.sort((a, b) => {
@@ -2105,7 +2104,7 @@ export default function InventoryAdminPage() {
             else if (movementsDateRange === 'today') rangeLabel = 'Hoy';
             else if (movementsDateRange === 'custom') rangeLabel = `${customStartDate}_al_${customEndDate}`;
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getBogotaDateString();
             const fileName = `Kardex_FruFresco_${rangeLabel}_${todayStr}.xlsx`;
 
             XLSX.writeFile(wb, fileName);
@@ -2188,7 +2187,7 @@ export default function InventoryAdminPage() {
                 XLSX.utils.book_append_sheet(wb, wsSkus, "Mapeo de SKUs");
             }
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getBogotaDateString();
             XLSX.writeFile(wb, `Matriz_Gobernanza_FruFresco_${todayStr}.xlsx`);
         } catch (err: any) {
             console.error('Error exportando matriz de gobernanza:', err);
