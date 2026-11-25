@@ -596,13 +596,24 @@ export async function POST(request: Request) {
             considerRoadTraffic: true
         };
 
-        // 3. Real Integration Check
+        // 3. Real Integration Check — Fail-Fast Zero-Mock (no silent simulation fallback)
         const allowExternalGcp = !isSandboxMode() || areSandboxExternalApisAllowed();
-        const gcpProjectId = allowExternalGcp ? process.env.GCP_PROJECT_ID : undefined;
-        const gcpApiKey = allowExternalGcp ? process.env.GCP_OPTIMIZATION_KEY : undefined;
+        if (!allowExternalGcp) {
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/route-optimizer-unavailable',
+                title: 'Motor de Ruteo Google deshabilitado en Sandbox',
+                status: 503,
+                code: 'SANDBOX_EXTERNAL_API_DISABLED',
+                detail: 'El ruteo automático con Google está deshabilitado en este entorno Sandbox (ENABLE_SANDBOX_EXTERNAL_APIS != true). No se generaron rutas simuladas; asigna manualmente o habilita la API externa de Google.',
+                requestId
+            }, { status: 503, headers: { 'x-request-id': requestId } });
+        }
+
+        const gcpProjectId = process.env.GCP_PROJECT_ID;
+        const gcpApiKey = process.env.GCP_OPTIMIZATION_KEY;
 
         let serviceAccountData: any = null;
-        if (allowExternalGcp && process.env.GCP_SERVICE_ACCOUNT_KEY) {
+        if (process.env.GCP_SERVICE_ACCOUNT_KEY) {
             try {
                 const rawKey = process.env.GCP_SERVICE_ACCOUNT_KEY.trim();
                 if (rawKey.startsWith('{')) {
@@ -616,7 +627,7 @@ export async function POST(request: Request) {
             }
         }
 
-        if (allowExternalGcp && !serviceAccountData) {
+        if (!serviceAccountData) {
             const serviceAccountPath = path.join(process.cwd(), 'gcp-service-account.json');
             try {
                 if (fs.existsSync(serviceAccountPath)) {
@@ -625,260 +636,268 @@ export async function POST(request: Request) {
             } catch (_) {}
         }
 
-        const hasServiceAccount = allowExternalGcp && !!serviceAccountData;
+        const hasServiceAccount = !!serviceAccountData;
+        if (!hasServiceAccount && !(gcpProjectId && gcpApiKey)) {
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/route-optimizer-unavailable',
+                title: 'Credenciales de Google Route Optimization no configuradas',
+                status: 503,
+                code: 'MISSING_GCP_CREDENTIALS',
+                detail: 'No se encontraron credenciales válidas de Google Cloud (GCP_SERVICE_ACCOUNT_KEY ni GCP_PROJECT_ID/GCP_OPTIMIZATION_KEY). No se generaron rutas simuladas; realiza la asignación manual o configura la cuenta de servicio.',
+                requestId
+            }, { status: 503, headers: { 'x-request-id': requestId } });
+        }
 
-        if (allowExternalGcp && (hasServiceAccount || (gcpProjectId && gcpApiKey))) {
-            let accessToken: string | null = null;
-            let projectId = gcpProjectId || serviceAccountData?.project_id || 'frufresco';
+        let accessToken: string | null = null;
+        let projectId = gcpProjectId || serviceAccountData?.project_id || 'frufresco';
 
-            // Check if we have a valid cached OAuth2 token
-            if (cachedOAuthToken && cachedOAuthToken.expiresAt > Date.now() + 60000) {
-                accessToken = cachedOAuthToken.token;
-                projectId = cachedOAuthToken.projectId;
-                console.log("[Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
-            } else if (hasServiceAccount && serviceAccountData) {
-                try {
-                    console.log("[Optimizer] Generating fresh GCP OAuth2 token via Service Account credentials...");
-                    const keyData = serviceAccountData;
-                    projectId = keyData.project_id || projectId;
-                    
-                    // Generate OAuth2 token using service account
-                    const header = { alg: 'RS256', typ: 'JWT' };
-                    const iat = Math.floor(Date.now() / 1000);
-                    const exp = iat + 3600;
-                    const claimSet = {
-                        iss: keyData.client_email,
-                        scope: 'https://www.googleapis.com/auth/cloud-platform',
-                        aud: 'https://oauth2.googleapis.com/token',
-                        exp: exp,
-                        iat: iat
-                    };
+        // Check if we have a valid cached OAuth2 token
+        if (cachedOAuthToken && cachedOAuthToken.expiresAt > Date.now() + 60000) {
+            accessToken = cachedOAuthToken.token;
+            projectId = cachedOAuthToken.projectId;
+            console.log("[Optimizer] Reusing cached GCP OAuth2 token (expires in", Math.round((cachedOAuthToken.expiresAt - Date.now()) / 1000), "s)");
+        } else if (hasServiceAccount && serviceAccountData) {
+            try {
+                console.log("[Optimizer] Generating fresh GCP OAuth2 token via Service Account credentials...");
+                const keyData = serviceAccountData;
+                projectId = keyData.project_id || projectId;
 
-                    const encodeBase64Url = (obj: any) => {
-                        return Buffer.from(JSON.stringify(obj))
-                            .toString('base64')
-                            .replace(/=/g, '')
-                            .replace(/\+/g, '-')
-                            .replace(/\//g, '_');
-                    };
+                const header = { alg: 'RS256', typ: 'JWT' };
+                const iat = Math.floor(Date.now() / 1000);
+                const exp = iat + 3600;
+                const claimSet = {
+                    iss: keyData.client_email,
+                    scope: 'https://www.googleapis.com/auth/cloud-platform',
+                    aud: 'https://oauth2.googleapis.com/token',
+                    exp: exp,
+                    iat: iat
+                };
 
-                    const signatureInput = `${encodeBase64Url(header)}.${encodeBase64Url(claimSet)}`;
-                    const sign = crypto.createSign('RSA-SHA256');
-                    sign.update(signatureInput);
-                    const signature = sign.sign(keyData.private_key, 'base64')
+                const encodeBase64Url = (obj: any) =>
+                    Buffer.from(JSON.stringify(obj))
+                        .toString('base64')
                         .replace(/=/g, '')
                         .replace(/\+/g, '-')
                         .replace(/\//g, '_');
 
-                    const jwtToken = `${signatureInput}.${signature}`;
+                const signatureInput = `${encodeBase64Url(header)}.${encodeBase64Url(claimSet)}`;
+                const sign = crypto.createSign('RSA-SHA256');
+                sign.update(signatureInput);
+                const signature = sign.sign(keyData.private_key, 'base64')
+                    .replace(/=/g, '')
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_');
 
-                    const tokenController = new AbortController();
-                    const tokenTimeout = setTimeout(() => tokenController.abort(), 5000);
-                    let tokenResponse;
-                    try {
-                        tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                            body: new URLSearchParams({
-                                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                                assertion: jwtToken
-                            }),
-                            signal: tokenController.signal
-                        });
-                    } finally {
-                        clearTimeout(tokenTimeout);
-                    }
+                const jwtToken = `${signatureInput}.${signature}`;
 
-                    if (!tokenResponse.ok) {
-                        const err = await tokenResponse.text();
-                        console.error("GCP OAuth exchange error:", err);
-                        throw new Error(`Google OAuth error: ${err}`);
-                    }
+                const tokenController = new AbortController();
+                const tokenTimeout = setTimeout(() => tokenController.abort(), 5000);
+                let tokenResponse;
+                try {
+                    tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({
+                            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                            assertion: jwtToken
+                        }),
+                        signal: tokenController.signal
+                    });
+                } finally {
+                    clearTimeout(tokenTimeout);
+                }
 
-                    const tokenData = await tokenResponse.json();
-                    accessToken = tokenData.access_token;
-                    
-                    // Cache token for 55 minutes
-                    cachedOAuthToken = {
-                        token: tokenData.access_token,
-                        expiresAt: Date.now() + 3300 * 1000,
-                        projectId: projectId
-                    };
-                    console.log("[Optimizer] Fresh OAuth2 token generated and cached successfully!");
-                } catch (oauthErr: any) {
-                    console.error("OAuth token generation failed, falling back to API Key if configured:", oauthErr);
+                if (!tokenResponse.ok) {
+                    const err = await tokenResponse.text();
+                    console.error("GCP OAuth exchange error:", err);
+                    throw new Error(`Google OAuth error (${tokenResponse.status})`);
+                }
+
+                const tokenData = await tokenResponse.json();
+                accessToken = tokenData.access_token;
+
+                cachedOAuthToken = {
+                    token: tokenData.access_token,
+                    expiresAt: Date.now() + 3300 * 1000,
+                    projectId: projectId
+                };
+                console.log("[Optimizer] Fresh OAuth2 token generated and cached successfully!");
+            } catch (oauthErr: any) {
+                console.error("OAuth token generation failed:", oauthErr);
+                if (!gcpApiKey) {
+                    return NextResponse.json({
+                        type: 'https://frufresco.com/errors/route-optimizer-unavailable',
+                        title: 'Fallo de autenticación OAuth2 con Google Cloud',
+                        status: 503,
+                        code: 'GCP_OAUTH_FAILED',
+                        detail: `No fue posible autenticar con Google Route Optimization API (${oauthErr?.message || 'OAuth2 error'}). No se generaron rutas simuladas; reintenta o asigna manualmente.`,
+                        requestId
+                    }, { status: 503, headers: { 'x-request-id': requestId } });
                 }
             }
+        }
 
-            console.log(`[Optimizer] Calling real Google Cloud Optimization API for Project: ${projectId}`);
-            
-            // Build target URL
-            const url = `https://routeoptimization.googleapis.com/v1/projects/${projectId}:optimizeTours` + (accessToken ? '' : `?key=${gcpApiKey}`);
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (accessToken) {
-                headers['Authorization'] = `Bearer ${accessToken}`;
-            }
+        console.log(`[Optimizer] Calling real Google Cloud Optimization API for Project: ${projectId}`);
 
-            const gcpController = new AbortController();
-            const gcpTimeout = setTimeout(() => gcpController.abort(), 18000);
-            let gcpResponse: Response | null = null;
-            let gcpFetchError: any = null;
+        const url = `https://routeoptimization.googleapis.com/v1/projects/${projectId}:optimizeTours` + (accessToken ? '' : `?key=${gcpApiKey}`);
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`;
+        }
 
-            try {
-                gcpResponse = await fetch(url, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(gcpRequest),
-                    signal: gcpController.signal
-                });
-            } catch (fetchErr: any) {
-                gcpFetchError = fetchErr;
-                console.warn(`[Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 8s' : fetchErr.message}). Falling back to internal simulation heuristic. RequestId: ${requestId}`);
-            } finally {
-                clearTimeout(gcpTimeout);
-            }
+        const gcpController = new AbortController();
+        const gcpTimeout = setTimeout(() => gcpController.abort(), 18000);
+        let gcpResponse: Response | null = null;
+        let gcpFetchError: any = null;
 
-            if (gcpResponse && gcpResponse.ok) {
-                const gcpData = await gcpResponse.json();
-                
-                // Transform Google's assigned routes back to assignments map { vehicleId: [orderIds] }
-                const assignments: Record<string, string[]> = {};
-                const routeStartTimes: Record<string, string> = {};
-                const stopEtas: Record<string, string> = {};
-                vehicles.forEach((v: any) => {
-                    assignments[v.id] = [];
-                    routeStartTimes[v.id] = fleet_start || '04:30';
-                });
+        try {
+            gcpResponse = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(gcpRequest),
+                signal: gcpController.signal
+            });
+        } catch (fetchErr: any) {
+            gcpFetchError = fetchErr;
+            console.error(`[Optimizer] GCP RouteOptimization fetch failed (${fetchErr.name === 'AbortError' ? 'Timeout 18s' : fetchErr.message}). RequestId: ${requestId}`);
+        } finally {
+            clearTimeout(gcpTimeout);
+        }
 
-                if (gcpData.routes) {
-                    gcpData.routes.forEach((route: any) => {
-                        const vehicleId = route.vehicleLabel; // We set this as v.id in gcpRequest
-                        if (vehicleId && assignments[vehicleId]) {
-                            // Extract order IDs from shipments in the route (only delivery visits, excluding pickups)
-                            const visitOrderIds = (route.visits || [])
-                                .filter((vst: any) => !vst.isPickup)
-                                .map((vst: any) => {
-                                    // Google omits shipmentIndex if it is 0. Using shipmentLabel (clusterId) is safer and direct.
-                                    const clusterId = vst.shipmentLabel || consolidatedClusters[vst.shipmentIndex ?? 0]?.clusterId;
-                                    if (clusterId && vst.startTime) {
-                                        try {
-                                            const dateObj = new Date(vst.startTime);
-                                            const bogotaDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-                                            const h = bogotaDate.getHours().toString().padStart(2, '0');
-                                            const m = bogotaDate.getMinutes().toString().padStart(2, '0');
-                                            stopEtas[clusterId] = `${h}:${m}`;
-                                        } catch (_) {}
-                                    }
-                                    return clusterId;
-                                })
-                                .filter(Boolean);
-                            
-                            assignments[vehicleId] = visitOrderIds;
+        if (gcpFetchError) {
+            const isTimeout = gcpFetchError?.name === 'AbortError';
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/route-optimizer-unavailable',
+                title: isTimeout ? 'Google Route Optimization excedió el tiempo de espera' : 'Error de red al conectar con Google Route Optimization',
+                status: 503,
+                code: isTimeout ? 'GCP_TIMEOUT' : 'GCP_UPSTREAM_ERROR',
+                detail: isTimeout
+                    ? 'Google Route Optimization tardó más de 18 segundos en responder. No se generaron rutas simuladas; reintenta o asigna manualmente.'
+                    : `Error de conexión con Google Route Optimization (${gcpFetchError?.message || 'Network error'}). No se generaron rutas simuladas.`,
+                requestId
+            }, { status: 503, headers: { 'x-request-id': requestId } });
+        }
 
-                            // Extract Google's calculated vehicle departure time
-                            if (route.vehicleStartTime) {
+        if (!gcpResponse || !gcpResponse.ok) {
+            const errText = gcpResponse ? await gcpResponse.text() : 'Sin respuesta de Google';
+            console.error(`[Optimizer] GCP RouteOptimization API non-OK (${gcpResponse?.status}): ${errText}. RequestId: ${requestId}`);
+            return NextResponse.json({
+                type: 'https://frufresco.com/errors/route-optimizer-unavailable',
+                title: 'Google Route Optimization rechazó la solicitud',
+                status: 503,
+                code: 'GCP_UPSTREAM_ERROR',
+                detail: `Google Route Optimization devolvió HTTP ${gcpResponse?.status || 503}. No se generaron rutas simuladas; revisa coordenadas/ventanas o asigna manualmente.`,
+                requestId
+            }, { status: 503, headers: { 'x-request-id': requestId } });
+        }
+
+        const gcpData = await gcpResponse.json();
+
+        // Transform Google's assigned routes back to assignments map { vehicleId: [orderIds] }
+        const assignments: Record<string, string[]> = {};
+        const routeStartTimes: Record<string, string> = {};
+        const stopEtas: Record<string, string> = {};
+        vehicles.forEach((v: any) => {
+            assignments[v.id] = [];
+            routeStartTimes[v.id] = fleet_start || '04:30';
+        });
+
+        if (gcpData.routes) {
+            gcpData.routes.forEach((route: any) => {
+                const vehicleId = route.vehicleLabel; // We set this as v.id in gcpRequest
+                if (vehicleId && assignments[vehicleId]) {
+                    const visitOrderIds = (route.visits || [])
+                        .filter((vst: any) => !vst.isPickup)
+                        .map((vst: any) => {
+                            const clusterId = vst.shipmentLabel || consolidatedClusters[vst.shipmentIndex ?? 0]?.clusterId;
+                            if (clusterId && vst.startTime) {
                                 try {
-                                    const dateObj = new Date(route.vehicleStartTime);
+                                    const dateObj = new Date(vst.startTime);
                                     const bogotaDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
                                     const h = bogotaDate.getHours().toString().padStart(2, '0');
                                     const m = bogotaDate.getMinutes().toString().padStart(2, '0');
-                                    routeStartTimes[vehicleId] = `${h}:${m}`;
+                                    stopEtas[clusterId] = `${h}:${m}`;
                                 } catch (_) {}
-                            } else if (visitOrderIds.length > 0) {
-                                // If vehicleStartTime is omitted, infer from first stop ETA minus 45 mins travel
-                                const firstClusterId = visitOrderIds[0];
-                                const firstEta = stopEtas[firstClusterId];
-                                if (firstEta) {
-                                    const [eh, em] = firstEta.split(':').map(Number);
-                                    let depMins = eh * 60 + em - 45;
-                                    const minFleetMins = parseTimeStr(fleet_start);
-                                    depMins = Math.max(minFleetMins, depMins);
-                                    const dh = Math.floor(depMins / 60).toString().padStart(2, '0');
-                                    const dm = (depMins % 60).toString().padStart(2, '0');
-                                    routeStartTimes[vehicleId] = `${dh}:${dm}`;
-                                }
                             }
+                            return clusterId;
+                        })
+                        .filter(Boolean);
+
+                    assignments[vehicleId] = visitOrderIds;
+
+                    if (route.vehicleStartTime) {
+                        try {
+                            const dateObj = new Date(route.vehicleStartTime);
+                            const bogotaDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+                            const h = bogotaDate.getHours().toString().padStart(2, '0');
+                            const m = bogotaDate.getMinutes().toString().padStart(2, '0');
+                            routeStartTimes[vehicleId] = `${h}:${m}`;
+                        } catch (_) {}
+                    } else if (visitOrderIds.length > 0) {
+                        const firstClusterId = visitOrderIds[0];
+                        const firstEta = stopEtas[firstClusterId];
+                        if (firstEta) {
+                            const [eh, em] = firstEta.split(':').map(Number);
+                            let depMins = eh * 60 + em - 45;
+                            const minFleetMins = parseTimeStr(fleet_start);
+                            depMins = Math.max(minFleetMins, depMins);
+                            const dh = Math.floor(depMins / 60).toString().padStart(2, '0');
+                            const dm = (depMins % 60).toString().padStart(2, '0');
+                            routeStartTimes[vehicleId] = `${dh}:${dm}`;
                         }
-                    });
+                    }
                 }
-
-                // Extract and expand skipped shipments from Google Cloud Route Optimization response to real orderIds
-                const skippedOrders = (gcpData.skippedShipments || []).flatMap((s: any) => {
-                    const cId = s.label || (s.index !== undefined ? consolidatedClusters[s.index]?.clusterId : undefined);
-                    const cluster = cId ? clusterById.get(String(cId)) : undefined;
-                    const realIds = cluster ? cluster.memberOrderIds : (cId ? [String(cId)] : []);
-                    return realIds.map(realId => ({
-                        orderId: realId,
-                        reasons: s.reasons || []
-                    }));
-                });
-
-                // Expand consolidated clusters hermetically to real orderIds only
-                const { expandedAssignments: finalAssignments, expandedStopEtas: finalStopEtas } = expandClusterAssignments(assignments, stopEtas);
-                const assignedOrderIds = new Set(Object.values(finalAssignments).flat());
-                const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
-                const explanation = await generateAiExplanation(orders, vehicles, finalAssignments, unassignedOrders);
-
-                return NextResponse.json({
-                    message: "Optimization generated by REAL Google Engine",
-                    routes: finalAssignments,
-                    route_start_times: routeStartTimes,
-                    stop_etas: finalStopEtas,
-                    theoretical_metrics: (() => {
-                        const rawDur = gcpData.metrics?.totalDuration;
-                        const durSeconds = typeof rawDur === 'string'
-                            ? (parseInt(rawDur.replace(/s$/i, ''), 10) || 0)
-                            : (Number(rawDur?.seconds) || 0);
-                        return {
-                            distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
-                            duration_min: Math.round(durSeconds / 60)
-                        };
-                    })(),
-                    skipped_orders: skippedOrders,
-                    geocoding_warnings: geocodingWarnings,
-                    gcp_raw: gcpData,
-                    simulation: false,
-                    explanation: explanation
-                }, { status: 200, headers: { 'x-request-id': requestId } });
-            } else {
-                const errText = gcpResponse ? await gcpResponse.text() : String(gcpFetchError?.message || 'Network / Timeout Error');
-                console.warn(`[Optimizer] GCP RouteOptimization API non-OK response: ${errText}. RequestId: ${requestId}. Cascading to simulation fallback heuristic.`);
-            }
+            });
         }
-        
-        // --- SIMULATION MODE --- (Fallback)
-        // Consumes pre-consolidated clusters directly (same-site + 10A/10B + cold-chain + timeWindows)
-        const { simulatedAssignments, simStartTimes, simEtas } = calculateSimulationAssignments(
-            consolidatedClusters,
-            vehicles,
-            fleet_start,
-            fleet_end,
-            { hasRefrigeratedFleet }
-        );
-        const { expandedAssignments: finalSimAssignments, expandedStopEtas: finalSimEtas } = expandClusterAssignments(simulatedAssignments, simEtas);
-        const assignedSimIds = new Set(Object.values(finalSimAssignments).flat());
-        const unassignedSimOrders = orders.filter(o => !assignedSimIds.has(String(o.id)));
-        const explanation = await generateAiExplanation(orders, vehicles, finalSimAssignments, unassignedSimOrders);
 
-        const simSkippedOrders = unassignedSimOrders.map(o => ({
-            orderId: String(o.id),
-            reasons: [{ code: 'DEMAND_EXCEEDS_VEHICLE_CAPACITY' }]
-        }));
-        
+        // Extract and expand skipped shipments from Google Cloud Route Optimization response to real orderIds
+        const skippedOrders = (gcpData.skippedShipments || []).flatMap((s: any) => {
+            const cId = s.label || (s.index !== undefined ? consolidatedClusters[s.index]?.clusterId : undefined);
+            const cluster = cId ? clusterById.get(String(cId)) : undefined;
+            const realIds = cluster ? cluster.memberOrderIds : (cId ? [String(cId)] : []);
+            return realIds.map(realId => ({
+                orderId: realId,
+                reasons: s.reasons || []
+            }));
+        });
+
+        // Expand consolidated clusters hermetically to real orderIds only
+        const { expandedAssignments: finalAssignments, expandedStopEtas: finalStopEtas } = expandClusterAssignments(assignments, stopEtas);
+        const assignedOrderIds = new Set(Object.values(finalAssignments).flat());
+        const unassignedOrders = orders.filter(o => !assignedOrderIds.has(String(o.id)));
+        const explanation = await generateAiExplanation(orders, vehicles, finalAssignments, unassignedOrders, {
+            consolidatedClusters: consolidatedClusters.map(c => ({
+                clusterId: c.clusterId,
+                customerName: orders.find(o => String(o.id) === String(c.memberOrderIds[0]))?.customer_name || c.clusterId,
+                memberOrderIds: c.memberOrderIds,
+                weightKg: c.weightKg,
+                crates: c.crates,
+                isPriority: c.isPriority,
+                isRefrigerated: c.isRefrigerated
+            })),
+            priorityOrderIds: consolidatedClusters.filter(c => c.isPriority).flatMap(c => c.memberOrderIds),
+            geocodingWarnings
+        });
+
         return NextResponse.json({
-            message: "OptimizeTours Request Structured Successfully (Simulation Mode)",
-            debug_request: gcpRequest,
-            status: "ready_for_key",
-            simulation: true,
-            routes: finalSimAssignments,
-            route_start_times: simStartTimes,
-            stop_etas: finalSimEtas,
-            theoretical_metrics: {
-                distance_km: vehicles.length * 4,
-                duration_min: vehicles.length * 20
-            },
-            skipped_orders: simSkippedOrders,
+            message: "Optimization generated by REAL Google Engine",
+            routes: finalAssignments,
+            route_start_times: routeStartTimes,
+            stop_etas: finalStopEtas,
+            theoretical_metrics: (() => {
+                const rawDur = gcpData.metrics?.totalDuration;
+                const durSeconds = typeof rawDur === 'string'
+                    ? (parseInt(rawDur.replace(/s$/i, ''), 10) || 0)
+                    : (Number(rawDur?.seconds) || 0);
+                return {
+                    distance_km: Math.round((gcpData.metrics?.totalDistanceMeters || 0) / 1000),
+                    duration_min: Math.round(durSeconds / 60)
+                };
+            })(),
+            skipped_orders: skippedOrders,
             geocoding_warnings: geocodingWarnings,
+            gcp_raw: gcpData,
+            simulation: false,
             explanation: explanation
         }, { status: 200, headers: { 'x-request-id': requestId } });
 
@@ -894,178 +913,98 @@ export async function POST(request: Request) {
     }
 }
 
-
-function calculateSimulationAssignments(
-    clusters: Array<{
-        clusterId: string;
-        weightKg: number;
-        crates: number;
-        isRefrigerated: boolean;
-        isPriority: boolean;
-        timeWindow: { startTime: string; endTime: string };
-    }>,
+async function generateAiExplanation(
+    orders: any[],
     vehicles: any[],
-    fleetStart = '04:30',
-    fleetEnd = '19:00',
-    options?: {
-        hasRefrigeratedFleet?: boolean;
+    assignments: Record<string, string[]>,
+    unassignedOrders: any[],
+    context?: {
+        consolidatedClusters?: Array<{ clusterId: string; customerName: string; memberOrderIds: string[]; weightKg: number; crates: number; isPriority: boolean; isRefrigerated: boolean }>;
+        priorityOrderIds?: string[];
+        geocodingWarnings?: Array<{ orderId: string; customerName: string; reason: string }>;
     }
 ) {
-    const newAssignments: Record<string, string[]> = {};
-    const simStartTimes: Record<string, string> = {};
-    const simEtas: Record<string, string> = {};
-    const hasRefrigeratedFleet = Boolean(options?.hasRefrigeratedFleet);
+    const orderById = new Map(orders.map(o => [String(o.id), o]));
+    const multiOrderClusters = (context?.consolidatedClusters || []).filter(c => c.memberOrderIds.length > 1);
+    const prioritySet = new Set((context?.priorityOrderIds || []).map(String));
+    const geoWarnings = context?.geocodingWarnings || [];
 
-    const usedWeight: Record<string, number> = {};
-    const usedCrates: Record<string, number> = {};
-    const usedPriorityCount: Record<string, number> = {};
-    const clusterById = new Map(clusters.map(c => [c.clusterId, c]));
-
-    vehicles.forEach(v => {
-        newAssignments[v.id] = [];
-        simStartTimes[v.id] = fleetStart;
-        usedWeight[v.id] = 0;
-        usedCrates[v.id] = 0;
-        usedPriorityCount[v.id] = 0;
-    });
-
-    // Sort pre-consolidated clusters: priority first (earliest stops/ETAs), then weight descending
-    const sortedClusters = [...clusters].sort((a, b) => {
-        if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
-        return b.weightKg - a.weightKg;
-    });
-
-    const pickEligibleVehicle = (groupWeight: number, groupCrates: number, needsRefrig: boolean, maxPriorityCap: number | null) => {
-        let bestVehicle: any = null;
-        let minWeight = Infinity;
-        for (const v of vehicles) {
-            const maxCapKg = Number(v.capacity_kg) || 0;
-            const maxCapCrates = Number(v.max_crates_capacity) || 483;
-            const vRefrig = v.is_refrigerated === true || v.refrigerated === true;
-            if (hasRefrigeratedFleet && needsRefrig && !vRefrig) continue;
-            if (usedWeight[v.id] + groupWeight > maxCapKg) continue;
-            if (usedCrates[v.id] + groupCrates > maxCapCrates) continue;
-            if (maxPriorityCap !== null && usedPriorityCount[v.id] >= maxPriorityCap) continue;
-            if (usedWeight[v.id] < minWeight) {
-                minWeight = usedWeight[v.id];
-                bestVehicle = v;
-            }
+    const buildDeterministicSummary = (fallbackReason?: string) => {
+        const totalAssigned = Object.values(assignments).reduce((s, ids) => s + ids.length, 0);
+        const activeRows = Object.entries(assignments)
+            .filter(([, ids]) => ids.length > 0)
+            .map(([vid, ids]) => {
+                const v = vehicles.find(veh => veh.id === vid);
+                const kg = ids.reduce((s, id) => s + (Number(orderById.get(String(id))?.total_weight_kg) || 0), 0);
+                const cr = ids.reduce((s, id) => s + (Number(orderById.get(String(id))?.crates) || 1), 0);
+                const capKg = Number(v?.capacity_kg) || 1;
+                const pctKg = Math.round((kg / capKg) * 100);
+                return `- **${v?.plate || vid}**: ${ids.length} pedidos · **${kg.toFixed(1)} kg** (${pctKg}%) · **${cr} canastillas**.`;
+            });
+        const idlePlates = vehicles.filter(v => !(assignments[v.id]?.length > 0)).map(v => v.plate);
+        const lines: string[] = [
+            `### Resumen Ejecutivo de Ruteo Google`,
+            `- **Distribución:** **${totalAssigned} pedidos** asignados en **${activeRows.length} camiones**${idlePlates.length > 0 ? ` (${idlePlates.length} libres: ${idlePlates.join(', ')})` : ''}.`,
+            ...activeRows
+        ];
+        if (multiOrderClusters.length > 0) {
+            lines.push(`- **Consolidaciones misma sede:** ${multiOrderClusters.map(c => `**${c.customerName}** (${c.memberOrderIds.length} pedidos en 1 parada)`).join(', ')}.`);
         }
-        return bestVehicle;
+        if (prioritySet.size > 0) {
+            lines.push(`- **Prioritarios:** **${prioritySet.size}** pedido(s) priorizados en las primeras paradas.`);
+        }
+        if (geoWarnings.length > 0) {
+            lines.push(`- **Alertas GPS:** **${geoWarnings.length}** pedido(s) sin coordenadas exactas (${geoWarnings.slice(0, 3).map(w => w.customerName).join(', ')}).`);
+        }
+        if (unassignedOrders.length > 0) {
+            lines.unshift(
+                `### Atención: ${unassignedOrders.length} Pedido(s) Sin Asignar`,
+                ...unassignedOrders.slice(0, 6).map(o => `- **${o.customer_name}** (${Number(o.total_weight_kg || 0).toFixed(1)} kg) quedó fuera por capacidad o ventana horaria.`),
+                `---`
+            );
+        }
+        if (fallbackReason) {
+            lines.push(`- *Resumen generado automáticamente desde métricas de Google (${fallbackReason}).*`);
+        }
+        return lines.join('\n');
     };
 
-    // Assign pre-consolidated clusters using capacity-, cold-chain-, and priority-aware rules (1-2 priority per truck)
-    sortedClusters.forEach(cluster => {
-        let bestVehicle: any = null;
-        if (cluster.isPriority) {
-            bestVehicle =
-                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, 1) ||
-                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, 2) ||
-                pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, null);
-        } else {
-            bestVehicle = pickEligibleVehicle(cluster.weightKg, cluster.crates, cluster.isRefrigerated, null);
-        }
-
-        if (bestVehicle) {
-            newAssignments[bestVehicle.id].push(cluster.clusterId);
-            usedWeight[bestVehicle.id] += cluster.weightKg;
-            usedCrates[bestVehicle.id] += cluster.crates;
-            if (cluster.isPriority) usedPriorityCount[bestVehicle.id] += 1;
-        }
-    });
-
-    // Calculate dynamic departure times for each vehicle based on earliest cluster delivery window
-    const [defH, defM] = fleetStart.split(':').map(Number);
-    const minFleetMins = defH * 60 + defM;
-
-    Object.keys(newAssignments).forEach(vId => {
-        const clusterIds = newAssignments[vId];
-        if (clusterIds.length === 0) return;
-
-        let earliestMins = Infinity;
-        clusterIds.forEach(cId => {
-            const c = clusterById.get(cId);
-            if (c?.timeWindow?.startTime) {
-                try {
-                    const dt = new Date(c.timeWindow.startTime);
-                    const bogota = new Date(dt.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-                    const totalM = bogota.getHours() * 60 + bogota.getMinutes();
-                    if (!isNaN(totalM) && totalM > 0 && totalM < earliestMins) {
-                        earliestMins = totalM;
-                    }
-                } catch (_) {}
-            }
-        });
-
-        if (earliestMins !== Infinity) {
-            let depMins = earliestMins - 45;
-            depMins = Math.max(minFleetMins, depMins);
-            const dh = Math.floor(depMins / 60).toString().padStart(2, '0');
-            const dm = (depMins % 60).toString().padStart(2, '0');
-            simStartTimes[vId] = `${dh}:${dm}`;
-        } else {
-            simStartTimes[vId] = fleetStart;
-        }
-
-        // Generate sequential ETAs for simulation (keyed by clusterId; expanded hermetically by caller)
-        let currentMins = (simStartTimes[vId] ? parseInt(simStartTimes[vId].split(':')[0]) * 60 + parseInt(simStartTimes[vId].split(':')[1]) : minFleetMins) + 30;
-        clusterIds.forEach(cId => {
-            const eh = Math.floor(currentMins / 60).toString().padStart(2, '0');
-            const em = (currentMins % 60).toString().padStart(2, '0');
-            simEtas[cId] = `${eh}:${em}`;
-            currentMins += 25;
-        });
-    });
-    
-    return { simulatedAssignments: newAssignments, simStartTimes, simEtas };
-}
-
-
-async function generateAiExplanation(orders: any[], vehicles: any[], assignments: Record<string, string[]>, unassignedOrders: any[]) {
     try {
         const apiKey = getGeminiApiKey();
         if (!apiKey) {
-            return "No se pudo generar el informe de la IA porque no está configurada la API Key de Gemini en el servidor.";
+            return buildDeterministicSummary('GEMINI_API_KEY no configurada en este entorno');
         }
 
-        // Build a concise description of the assignments for the prompt
-        let summaryText = `Analiza la siguiente asignación de despacho de la flota de FruFresco y redacta un informe de máximo 3 a 4 párrafos/viñetas explicando brevemente y con emojis la lógica/estrategia de esta planeación.
-        
-VEHÍCULOS DISPONIBLES:
-${vehicles.map(v => `- Camión ${v.plate} (Conductor: ${v.driver_name || 'No asignado'}, Capacidad de Peso: ${v.capacity_kg}kg, Capacidad de Canastillas: ${v.capacity_crates || 483})`).join('\n')}
+        let summaryText = `Actúa como el Director de Operaciones Logísticas de FruFresco. Redacta un resumen ejecutivo concreto, directo y sin relleno sobre esta planeación real generada por Google Route Optimization.
 
-PEDIDOS A DISTRIBUIR:
-${orders.map(o => `- Pedido #${o.id} para ${o.customer_name} (Peso: ${o.total_weight_kg}kg, Canastillas: ${o.crates_count || 1}, Tipo Cliente: ${o.profiles?.role === 'b2b_client' ? 'B2B' : 'B2C'}, Ubicación: ${o.address || 'Bogotá'})`).join('\n')}
-
-ASIGNACIÓN REALIZADA POR EL ALGORITMO:
+FLOTA ACTIVA Y ASIGNACIÓN REAL:
 ${Object.entries(assignments).map(([vehicleId, orderIds]) => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
-    if (!vehicle) return `- Vehículo desconocido (${vehicleId}): ${orderIds.length} pedidos`;
-    if (orderIds.length === 0) return `- Camión ${vehicle.plate} quedó LIBRE (sin pedidos asignados)`;
-    const assignedOrders = orderIds.map(id => {
-        const o = orders.find(ord => ord.id === id);
-        return o ? `${o.customer_name} (#${o.id}, ${o.total_weight_kg}kg)` : `Pedido #${id}`;
+    if (!vehicle) return `- Vehículo (${vehicleId}): ${orderIds.length} pedidos`;
+    if (orderIds.length === 0) return `- Camión ${vehicle.plate}: LIBRE (sin pedidos)`;
+    const totalKg = orderIds.reduce((s, id) => s + (Number(orderById.get(String(id))?.total_weight_kg) || 0), 0);
+    const totalCrates = orderIds.reduce((s, id) => s + (Number(orderById.get(String(id))?.crates) || 1), 0);
+    const pct = vehicle.capacity_kg ? Math.round((totalKg / vehicle.capacity_kg) * 100) : 0;
+    const sample = orderIds.slice(0, 8).map(id => {
+        const o = orderById.get(String(id));
+        return o ? `${o.customer_name} (${Number(o.total_weight_kg || 0).toFixed(1)}kg, ${o.address || 'sin dir'})` : `#${id}`;
     });
-    return `- Camión ${vehicle.plate} llevará ${orderIds.length} pedidos: ${assignedOrders.join(', ')}`;
+    return `- Camión ${vehicle.plate} (${vehicle.driver_name || 'Sin conductor'}, cap ${vehicle.capacity_kg}kg / ${vehicle.max_crates_capacity || 483} can.): ${orderIds.length} pedidos, ${totalKg.toFixed(1)}kg (${pct}%), ${totalCrates} can. Paradas: ${sample.join(' | ')}`;
 }).join('\n')}
 
-INSTRUCCIONES DE REDACCIÓN:
-1. Sé extremadamente directo, concreto y ejecutivo. Evita introducciones largas o conclusiones obvias ("no eches carreta"). Actúa como el Analista de Operaciones Logísticas de FruFresco.
-2. Redacta el informe usando estrictamente de 3 a 4 viñetas (bullet points) muy cortas, precisas y al grano.
-3. Resalta en **negrita** los datos logísticos clave (como placas de vehículos, nombres de conductores, pesos en **kg**, cantidad de **canastillas**, clientes corporativos o zonas/centros comerciales).
-4. Explica concretamente la estrategia:
-   - Consolidación de flota: por qué se seleccionaron esos camiones específicos y el ahorro de costos fijos al dejar otros libres.
-   - Agrupamiento geográfico: si hay entregas concentradas en un mismo sector o centro comercial.
-   - Seguridad: cumplimiento de límites de peso y capacidad de canastillas.
-5. Inicia cada viñeta con un emoji correspondiente (ej: , , , ).
-6. El texto debe ser de lectura rápida y ejecutiva para el despachador.`;
+${multiOrderClusters.length > 0 ? `CONSOLIDACIONES MISMA SEDE (EN 1 PARADA):\n${multiOrderClusters.map(c => `- ${c.customerName}: ${c.memberOrderIds.length} pedidos (${c.weightKg.toFixed(1)}kg, ${c.crates} can.)`).join('\n')}\n` : ''}
+${prioritySet.size > 0 ? `PEDIDOS PRIORITARIOS MARCADOS: ${prioritySet.size}\n` : ''}
+${geoWarnings.length > 0 ? `ALERTAS GPS (${geoWarnings.length}): ${geoWarnings.slice(0, 5).map(w => `${w.customerName} (${w.reason})`).join('; ')}\n` : ''}
+
+INSTRUCCIONES ESTRICTAS:
+1. PROHIBIDO usar emojis unicode.
+2. Usa exactamente 4 a 5 viñetas cortas con guion ("- ") y negritas (**dato**) en placas, pesos en **kg**, porcentajes de ocupación, zonas/municipios y alertas reales.
+3. Menciona: (a) uso de flota y camiones libres, (b) zonas geográficas reales por camión o alertas de rutas largas, (c) consolidaciones de misma sede y prioritarios si existen, (d) cualquier cuello de botella de ocupación (>90%) o alerta GPS.`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
-            summaryText += `\n\n¡ATENCIÓN! PEDIDOS QUE NO SE PUDIERON PROGRAMAR (SKIPPED):
-${unassignedOrders.map(o => `- Pedido #${o.id} para ${o.customer_name} (${o.total_weight_kg}kg, Canastillas: ${o.crates_count || 1}, Ventana: ${o.manual_delivery_time || 'flexible'})`).join('\n')}
-
-INSTRUCCIÓN ADICIONAL CRÍTICA:
-Menciona explícitamente y al inicio del informe que NO se pudieron programar todos los pedidos. Lista brevemente las razones (por ejemplo, porque la capacidad de carga está saturada o hay incompatibilidad en ventanas de tiempo con los vehículos activos) e indica los nombres de los clientes/pedidos que quedaron sin asignar.`;
+            summaryText += `\n\nATENCIÓN — PEDIDOS SIN ASIGNAR (${unassignedOrders.length}):
+${unassignedOrders.map(o => `- ${o.customer_name} (${Number(o.total_weight_kg || 0).toFixed(1)}kg, ${o.crates || 1} can., ventana: ${o.display_slot || 'Flexible'})`).join('\n')}
+Menciona esto en la PRIMERA viñeta explicando qué clientes quedaron por fuera.`;
         }
 
         try {
@@ -1093,53 +1032,13 @@ Menciona explícitamente y al inicio del informe que NO se pudieron programar to
                 return explanation;
             }
         } catch (aiCascadeErr: any) {
-            console.warn('[TransportOptimizer] IA cascade falló o se agotó, recurriendo a resumen programático:', aiCascadeErr?.message || aiCascadeErr);
+            console.warn('[TransportOptimizer] Gemini falló, usando resumen determinista con métricas reales:', aiCascadeErr?.message || aiCascadeErr);
+            return buildDeterministicSummary(aiCascadeErr?.message ? `Gemini no respondió: ${String(aiCascadeErr.message).slice(0, 80)}` : 'Gemini no respondió a tiempo');
         }
 
-        // Programmatic fallback explanation if all AI calls fail
-        const totalAssignedOrders = Object.values(assignments).reduce((sum, ids) => sum + ids.length, 0);
-        const activeVehicles = Object.entries(assignments)
-            .filter(([_, ids]) => ids.length > 0)
-            .map(([vid]) => {
-                const v = vehicles.find(veh => veh.id === vid);
-                return v ? v.plate : vid;
-            });
-
-        let programmaticExplanation = `### Resumen de Planeación de Ruta (Generado Automáticamente)
-
-* Se han distribuido **${totalAssignedOrders} pedidos** de forma automática utilizando el algoritmo de optimización de capacidad y rutas.
-* Se activaron **${activeVehicles.length} camiones** (${activeVehicles.join(', ')}) para esta operación, minimizando costos fijos al mantener el resto de la flota libre.
-* Las asignaciones se realizaron asegurando el cumplimiento estricto de los límites de peso (**kg**) y capacidad de canastillas de cada vehículo.
-* El agrupamiento de entregas se calculó minimizando las distancias geográficas y optimizando los tiempos estimados de llegada.
-
-*(Nota: El modelo de Inteligencia Artificial ya no está vigente o requiere actualización. Debe ponerse en contacto con el servicio de soporte técnico de inmediato para actualizarlo. Sin embargo, la optimización física de rutas se completó con éxito).*`;
-
-        if (unassignedOrders && unassignedOrders.length > 0) {
-            programmaticExplanation = `### ATENCIÓN: Planificación Incompleta (Pedidos Sin Asignar)
-
-* **No se pudieron programar todos los pedidos**. Quedaron **${unassignedOrders.length} pedidos sin asignar** debido a restricciones duras de ventanas de tiempo o límites de capacidad de los vehículos activos.
-* **Pedidos sin asignar**: ${unassignedOrders.map(o => `**${o.customer_name}** (Pedido #${o.id}, ${o.total_weight_kg}kg, Ventana: ${o.manual_delivery_time || 'flexible'})`).join(', ')}.
-
----
-
-` + programmaticExplanation;
-        }
-
-        return programmaticExplanation;
-        
+        return buildDeterministicSummary('sin texto devuelto por Gemini');
     } catch (e: any) {
         console.error('Error in generateAiExplanation wrapper:', e);
-        let errorFallback = `### Resumen de Planeación de Ruta (Generado Automáticamente)
-* Se completó la optimización de rutas de forma correcta.
-* Los pedidos fueron asignados según capacidades y cercanía geográfica.
-*(Nota: El servidor de IA no está respondiendo temporalmente).*`;
-
-        if (unassignedOrders && unassignedOrders.length > 0) {
-            errorFallback = `### ATENCIÓN: Planificación Incompleta
-* **Hay ${unassignedOrders.length} pedidos sin asignar** debido a restricciones de capacidad/horario.
----
-` + errorFallback;
-        }
-        return errorFallback;
+        return buildDeterministicSummary('error interno al redactar resumen IA');
     }
 }

@@ -57,6 +57,10 @@ interface Order {
     payment_status?: string;
     warehouse_spaces?: number[] | null;
     logistics_data?: Record<string, any> | null;
+    profiles?: {
+        latitude?: number | null;
+        longitude?: number | null;
+    } | null;
 }
 
 interface Vehicle {
@@ -155,7 +159,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [stopEtas, setStopEtas] = useState<Record<string, string>>({});
     const [confirmedManifest, setConfirmedManifest] = useState<any[] | null>(null);
     const [showPreConfirm, setShowPreConfirm] = useState(false);
-    const [optimizationSource, setOptimizationSource] = useState<'google' | 'simulation' | null>(null);
+    const [optimizationSource, setOptimizationSource] = useState<'google' | null>(null);
 
     const isMounted = useRef(true);
 
@@ -322,6 +326,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     customer_name: name,
                     address: o.shipping_address || 'Sin Dirección',
                     address_complement: o.profiles?.address_complement || '',
+                    latitude: o.latitude ?? o.profiles?.latitude ?? undefined,
+                    longitude: o.longitude ?? o.profiles?.longitude ?? undefined,
                     crates: o.crates || (o.total_weight_kg ? Math.ceil(o.total_weight_kg / avgCrateWeight) : 0),
                     novedad: notes,
                     total_weight_kg: o.total_weight_kg || 0,
@@ -352,12 +358,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         });
                         
                         setAssignments(filteredAssignments);
-                        setIsOptimized(savedData.isOptimized || false);
-                        if (savedData.optimizationSource === 'google' || savedData.optimizationSource === 'simulation') {
-                            setOptimizationSource(savedData.optimizationSource);
-                        } else {
-                            setOptimizationSource(null);
-                        }
+                        const isGoogleSaved = savedData.optimizationSource === 'google';
+                        setIsOptimized(isGoogleSaved && Boolean(savedData.isOptimized));
+                        setOptimizationSource(isGoogleSaved ? 'google' : null);
                         if (savedData.stopEtas && typeof savedData.stopEtas === 'object') {
                             setStopEtas(savedData.stopEtas);
                         }
@@ -414,6 +417,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         if (readOnly) return;
         try {
             setOptimizing(true);
+            setOptimizationError(null);
             
             const response = await fetch('/api/transport/optimize', {
                 method: 'POST',
@@ -428,23 +432,22 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || `Error en el servidor de optimización (código ${response.status})`);
+                throw new Error(errData.detail || errData.error || errData.title || `Error en el servidor de optimización (código ${response.status})`);
             }
 
             const result = await response.json();
             
             if (result.routes) {
                 setAssignments(result.routes);
-                const isSim = Boolean(result.simulation);
-                setOptimizationSource(isSim ? 'simulation' : 'google');
-                setIsOptimized(!isSim);
+                setOptimizationSource('google');
+                setIsOptimized(true);
                 if (result.route_start_times) {
                     setRouteStartTimes(result.route_start_times);
                 }
                 if (result.stop_etas) {
                     setStopEtas(result.stop_etas);
                 }
-                if (!isSim && result.theoretical_metrics) {
+                if (result.theoretical_metrics) {
                     setTheoreticalMetrics(result.theoretical_metrics);
                 } else {
                     setTheoreticalMetrics(null);
@@ -461,7 +464,6 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             console.error('Optimization failed:', err);
             const msg = err?.message || 'Ocurrió un error al procesar las rutas.';
             setOptimizationError(msg);
-            setTimeout(() => setOptimizationError(null), 8000);
         } finally {
             setOptimizing(false);
         }
@@ -474,39 +476,45 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
     const renderAiReport = (text: string) => {
         if (!text) return null;
-        
-        const lines = text.split('\n');
-        return lines.map((line, idx) => {
-            const trimmed = line.trim();
-            if (!trimmed) return <div key={idx} style={{ height: '0.75rem' }} />;
-            
-            const parts = trimmed.split(/(\*\*.*?\*\*)/g);
-            const content = parts.map((part, pIdx) => {
+
+        const formatInline = (raw: string) =>
+            raw.split(/(\*\*.*?\*\*|\*[^*]+\*)/g).map((part, pIdx) => {
                 if (part.startsWith('**') && part.endsWith('**')) {
-                    return <strong key={pIdx} style={{ fontWeight: '800', color: '#1E1B4B' }}>{part.slice(2, -2)}</strong>;
+                    return <strong key={pIdx} style={{ fontWeight: '800', color: '#0F172A' }}>{part.slice(2, -2)}</strong>;
+                }
+                if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+                    return <em key={pIdx} style={{ color: '#475569' }}>{part.slice(1, -1)}</em>;
                 }
                 return part;
             });
 
-            if (trimmed.startsWith('-') || trimmed.startsWith('•') || /^[^\w\s]\s*-/.test(trimmed)) {
-                const cleanContent = trimmed.replace(/^[-•]\s*/, '');
-                const bulletParts = cleanContent.split(/(\*\*.*?\*\*)/g).map((part, pIdx) => {
-                    if (part.startsWith('**') && part.endsWith('**')) {
-                        return <strong key={pIdx} style={{ fontWeight: '800', color: '#1E1B4B' }}>{part.slice(2, -2)}</strong>;
-                    }
-                    return part;
-                });
+        const lines = text.split('\n');
+        return lines.map((line, idx) => {
+            const trimmed = line.trim();
+            if (!trimmed) return <div key={idx} style={{ height: '0.5rem' }} />;
+            if (/^-{3,}$/.test(trimmed)) {
+                return <hr key={idx} style={{ border: 'none', borderTop: '1px solid #E2E8F0', margin: '0.75rem 0' }} />;
+            }
+            if (/^#{1,3}\s+/.test(trimmed)) {
+                const heading = trimmed.replace(/^#{1,3}\s+/, '');
                 return (
-                    <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', alignItems: 'flex-start' }}>
-                        <span style={{ color: '#6366F1', marginTop: '0.2rem' }}>•</span>
-                        <span style={{ flex: 1 }}>{bulletParts}</span>
+                    <h4 key={idx} style={{ margin: '0.25rem 0 0.6rem 0', fontSize: '0.92rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.01em' }}>
+                        {formatInline(heading)}
+                    </h4>
+                );
+            }
+            if (/^[-*•]\s+/.test(trimmed)) {
+                const cleanContent = trimmed.replace(/^[-*•]\s+/, '');
+                return (
+                    <div key={idx} style={{ display: 'flex', gap: '0.55rem', marginBottom: '0.55rem', alignItems: 'flex-start', lineHeight: 1.45 }}>
+                        <span style={{ color: '#0D7A57', fontWeight: '900', marginTop: '0.05rem' }}>•</span>
+                        <span style={{ flex: 1, color: '#334155' }}>{formatInline(cleanContent)}</span>
                     </div>
                 );
             }
-            
             return (
-                <p key={idx} style={{ margin: '0 0 0.75rem 0' }}>
-                    {content}
+                <p key={idx} style={{ margin: '0 0 0.6rem 0', color: '#334155', lineHeight: 1.45 }}>
+                    {formatInline(trimmed)}
                 </p>
             );
         });
@@ -1365,28 +1373,6 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     </span>
                                 );
                             }
-                            if (optimizationSource === 'simulation') {
-                                return (
-                                    <span
-                                        title="Distancias estimadas en línea recta; verificar ETAs manualmente"
-                                        style={{
-                                            padding: '0.32rem 0.65rem',
-                                            borderRadius: '8px',
-                                            fontSize: '0.68rem',
-                                            fontWeight: '800',
-                                            backgroundColor: '#FFFBEB',
-                                            color: '#92400E',
-                                            border: '1px solid #FDE68A',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            cursor: 'help'
-                                        }}
-                                    >
-                                        <AlertTriangle size={11} /> Motor Local (Sin tráfico Google)
-                                    </span>
-                                );
-                            }
                             if (!isOptimized && totalAssigned > 0) {
                                 return (
                                     <span style={{
@@ -1931,7 +1917,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                     #{stopNumber}
                                                                 </div>
 
-                                                                {/* 2-Line Stop Content */}
+                                                                {/* Stop Content: Customer + Address + Badges */}
                                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
                                                                         {isPriority && (
@@ -1941,17 +1927,60 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                             {order?.customer_name || 'Cliente'}
                                                                         </div>
                                                                     </div>
+                                                                    {order?.address && (
+                                                                        <div style={{ fontSize: '0.64rem', color: '#475569', fontWeight: '600', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={order.address}>
+                                                                            <MapPin size={10} style={{ flexShrink: 0, color: '#64748B' }} />
+                                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.address}</span>
+                                                                        </div>
+                                                                    )}
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
                                                                         {etaStr && (
                                                                             <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', padding: '1px 5px', borderRadius: '4px' }}>
                                                                                 ETA {etaStr}
                                                                             </span>
                                                                         )}
-                                                                        {order?.display_slot && order.display_slot !== 'Flexible' && (
-                                                                            <span style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '4px' }}>
-                                                                                {order.display_slot}
-                                                                            </span>
-                                                                        )}
+                                                                        {(() => {
+                                                                            const slotText = order?.display_slot || 'Flexible';
+                                                                            const isFlex = slotText === 'Flexible';
+                                                                            return (
+                                                                                <span style={{
+                                                                                    fontSize: '0.58rem',
+                                                                                    fontWeight: '800',
+                                                                                    backgroundColor: isFlex ? '#F1F5F9' : '#EFF6FF',
+                                                                                    color: isFlex ? '#475569' : '#1D4ED8',
+                                                                                    border: isFlex ? '1px solid #CBD5E1' : '1px solid #BFDBFE',
+                                                                                    padding: '1px 5px',
+                                                                                    borderRadius: '4px',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px'
+                                                                                }}>
+                                                                                    <Clock size={9} />
+                                                                                    {slotText}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
+                                                                        {(() => {
+                                                                            const lat = Number(order?.latitude);
+                                                                            const lng = Number(order?.longitude);
+                                                                            const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+                                                                            const isGenericBogota = hasCoords && (
+                                                                                (Math.abs(lat - 4.7109886) < 0.0005 && Math.abs(lng - (-74.072092)) < 0.0005) ||
+                                                                                (Math.abs(lat - 4.6097) < 0.0005 && Math.abs(lng - (-74.0817)) < 0.0005)
+                                                                            );
+                                                                            if (!hasCoords || isGenericBogota) {
+                                                                                return (
+                                                                                    <span
+                                                                                        title={isGenericBogota ? 'Coordenada coincide con centroide genérico de Bogotá — verificar pin del cliente' : 'Cliente sin coordenadas GPS válidas'}
+                                                                                        style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                                                                    >
+                                                                                        <AlertTriangle size={9} />
+                                                                                        {isGenericBogota ? 'GPS Genérico' : 'Sin GPS'}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
                                                                         {spaceLabel && (
                                                                             <span style={{ fontSize: '0.58rem', fontWeight: '900', color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', padding: '1px 5px', borderRadius: '4px' }}>
                                                                                 ESP {spaceLabel}
@@ -2227,7 +2256,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                     e.currentTarget.style.transform = 'translateY(0)';
                                 }}
                             >
-                                Entendido, ver mapa
+                                Entendido
                             </button>
                         </div>
                     </div>
