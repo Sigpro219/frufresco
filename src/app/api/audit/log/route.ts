@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStaffBearer, insertAuditLogSafe } from '@/lib/auth/verifyStaffBearer';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,46 +17,25 @@ function getSupabaseAdmin() {
 export async function POST(req: NextRequest) {
     try {
         const supabaseAdmin = getSupabaseAdmin();
+        const auth = await verifyStaffBearer(req, supabaseAdmin);
+        if ('error' in auth) {
+            return NextResponse.json({ error: auth.error }, { status: auth.status });
+        }
+
         const body = await req.json();
-        const { action, module, collaborator_name, collaborator_id, details } = body;
+        const { action, module, collaborator_id, details } = body;
 
         if (!action || !module) {
             return NextResponse.json({ error: 'Action and module are required' }, { status: 400 });
         }
 
-        // Validate collaborator_id against collaborators table
-        let validCollabId = null;
-        if (collaborator_id) {
-            const { data: collab } = await supabaseAdmin
-                .from('collaborators')
-                .select('id')
-                .eq('id', collaborator_id)
-                .maybeSingle();
-            if (collab) {
-                validCollabId = collab.id;
-            }
-        }
-
-        let { data, error } = await supabaseAdmin.from('audit_logs').insert([{
+        const { data, error } = await insertAuditLogSafe(supabaseAdmin, {
             action,
             module,
-            collaborator_name: collaborator_name || 'Administrador FruFresco',
-            collaborator_id: validCollabId,
-            details: details || {}
-        }]).select();
-
-        // Safe fallback if foreign key constraint trips
-        if (error && error.code === '23503') {
-            const retry = await supabaseAdmin.from('audit_logs').insert([{
-                action,
-                module,
-                collaborator_name: collaborator_name || 'Administrador FruFresco',
-                collaborator_id: null,
-                details: details || {}
-            }]).select();
-            data = retry.data;
-            error = retry.error;
-        }
+            collaboratorName: auth.actorName,
+            collaboratorId: collaborator_id || auth.userId,
+            details: details || {},
+        });
 
         if (error) {
             console.error('[Audit API] Error inserting audit log:', error);

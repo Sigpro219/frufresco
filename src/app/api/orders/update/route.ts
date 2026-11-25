@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText, OrderEmailItem } from '@/lib/emailTemplates';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { isSandboxMode, isSandboxEmailAllowed } from '@/lib/sandboxGuard';
+import { verifyStaffBearer } from '@/lib/auth/verifyStaffBearer';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -34,6 +35,13 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
+    const auth = await verifyStaffBearer(req, supabaseAdmin);
+    if ('error' in auth) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: auth.status }
+      );
+    }
 
     // 0. Consultar estado previo de la orden para auditoría y cálculo de diff
     const { data: previousOrder } = await supabaseAdmin

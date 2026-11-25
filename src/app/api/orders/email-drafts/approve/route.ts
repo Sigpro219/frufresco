@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStaffBearer, insertAuditLogSafe } from '@/lib/auth/verifyStaffBearer';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -11,10 +12,14 @@ function getSupabaseAdmin() {
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const auth = await verifyStaffBearer(req, supabaseAdmin);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
     const body = await req.json();
     const { draftId, clientId, clientType, deliveryDate, deliverySlot, address, notes, items, channel, originSource, documentUrl } = body;
-
-    const supabaseAdmin = getSupabaseAdmin();
 
     let finalDocumentUrl = documentUrl || body.attachmentUrl || null;
     if (!finalDocumentUrl && draftId) {
@@ -210,7 +215,12 @@ export async function POST(req: Request) {
       delivery_slot: deliverySlot || 'AM',
       shipping_address: address || profile.address || 'Bogotá',
       admin_notes: isGiftRemission ? `[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP] ${baseAdminNotes}` : baseAdminNotes,
-      logistics_data: isGiftRemission ? { is_gift_remission: true } : null,
+      logistics_data: {
+        ...(isGiftRemission ? { is_gift_remission: true } : {}),
+        created_by_id: auth.userId,
+        created_by_name: auth.actorName,
+        created_by_email: auth.actorEmail,
+      },
       origin_source: originSource || 'email',
       document_url: finalDocumentUrl
     };
@@ -241,6 +251,26 @@ export async function POST(req: Request) {
       // Clean up order if items insertion failed
       await supabaseAdmin.from('orders').delete().eq('id', newOrder.id);
       return NextResponse.json({ error: `Error al guardar ítems del pedido: ${itemsErr.message}` }, { status: 500 });
+    }
+
+    try {
+      await insertAuditLogSafe(supabaseAdmin, {
+        action: 'INSERT_orders',
+        module: 'orders',
+        collaboratorName: auth.actorName,
+        collaboratorId: auth.userId,
+        details: {
+          order_id: newOrder.id,
+          sequence_id: newOrder.sequence_id,
+          client_id: clientId,
+          client_name: profile.company_name || profile.contact_name,
+          delivery_date: orderData.delivery_date,
+          total: totalAmount,
+          origin_source: orderData.origin_source,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[Approve Email Draft] Audit log warning:', auditErr);
     }
 
     // 4. Registrar memoria de aprendizaje en document_learning_memory para cada ítem verificado

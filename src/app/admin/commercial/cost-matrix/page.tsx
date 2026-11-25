@@ -829,9 +829,12 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             await triggerPricingSync(productId, manualCost);
 
             // Registrar trazabilidad en auditoría
-            fetch('/api/audit/log', {
+            supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/audit/log', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+                },
                 body: JSON.stringify({
                     action: 'UPDATE_COST_MATRIX',
                     module: 'COMMERCIAL',
@@ -843,7 +846,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         manual_cost: manualCost
                     }
                 })
-            }).catch(e => console.warn('Audit log error:', e));
+            })).catch(e => console.warn('Audit log error:', e));
 
             // Ingestar cotización manual como observación en purchases para alimentar la serie temporal
             await supabase.from('purchases').insert([{
@@ -946,9 +949,12 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
             await triggerPricingSync(quotingProduct.id, newSmartCost);
 
             // 6. Auditoría
-            fetch('/api/audit/log', {
+            supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/audit/log', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+                },
                 body: JSON.stringify({
                     action: 'MARKET_QUOTE_REGISTERED',
                     module: 'COMMERCIAL',
@@ -960,7 +966,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                         smart_cost_result: newSmartCost
                     }
                 })
-            }).catch(e => console.warn('Audit error:', e));
+            })).catch(e => console.warn('Audit error:', e));
 
             setQuotingProduct(null);
             setQuoteInputCost('');
@@ -1084,9 +1090,12 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                 await triggerPricingSync(undefined, undefined, authorizedIds);
 
                 // Registrar trazabilidad auditada de la autorización masiva
-                fetch('/api/audit/log', {
+                supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/audit/log', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+                    },
                     body: JSON.stringify({
                         action: 'BATCH_SMART_COSTS_AUTHORIZED',
                         module: 'COMMERCIAL',
@@ -1096,7 +1105,7 @@ export default function CostMatrixPage({ embedded = false }: { embedded?: boolea
                             product_ids: authorizedIds
                         }
                     })
-                }).catch(e => console.warn('Audit error in batch authorize:', e));
+                })).catch(e => console.warn('Audit error in batch authorize:', e));
             }
 
             await fetchData();

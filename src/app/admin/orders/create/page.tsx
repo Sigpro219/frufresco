@@ -3947,9 +3947,12 @@ function CreateOrderContent() {
                 }
 
                 // Registrar trazabilidad inmutable en auditoría
-                fetch('/api/audit/log', {
+                supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/audit/log', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+                    },
                     body: JSON.stringify({
                         action: 'CREDIT_LIMIT_EXCEPTION_AUTHORIZED',
                         module: 'COMMERCIAL',
@@ -3965,7 +3968,7 @@ function CreateOrderContent() {
                             overdue_count: overdueCount
                         }
                     })
-                }).catch(e => console.warn('Audit error in credit check:', e));
+                })).catch(e => console.warn('Audit error in credit check:', e));
             }
 
             return { allowed: true };

@@ -482,12 +482,16 @@ export default function OrderDetailPage() {
                 variant_label: item.variant_label || item.nickname || null
             }));
 
-            const { data: { user: authUser } } = await supabase.auth.getUser();
+            const { data: { session } } = await supabase.auth.getSession();
+            const authUser = session?.user;
 
             // Llamada segura al backend para actualización atómica sin bloqueo de RLS
             const response = await fetch('/api/orders/update', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+                },
                 body: JSON.stringify({
                     orderId: id,
                     updates: {

@@ -18088,6 +18088,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   - `[ ] DT-482-6 (Paridad Core de Clientes — ClientsModule.tsx):` Consultar `special_agreement_models` y `special_agreement_model_clients` en `fetchData` (`L625-628`), `getAgreementInfo` (`L687-735`), `isAgreementInherited` (`L741-744`) y suscripción Realtime (`L372-380`), enriqueciendo fechas con la regla de mayor `valid_until` para erradicar falsos `SIN ACUERDO` (Nutresa/Presto, Colsubsidio, General Quincenal, General Mensual).
   - `[ ] DT-482-7 (Compuerta de Cierre):` Al ejecutar post-cierre operativo, verificar `npx.cmd tsc --noEmit` (`0` errores) y obtener dictamen `/goldfish` Modo 2 `🟢 CERTIFICADO` antes de cualquier push.
   - `[ ] DT-482-8 (Alineación Normativa .agents/AGENTS.md §6):` Actualizar `.agents/AGENTS.md §6` (*Poka-Yoke Anti-Falso Positivo*) reemplazando la regla obsoleta de fallback a *General Institucional* para clientes B2B sin acuerdo por el bloqueo `requiresAgreementBlock: true`.
+  - `[ ] DT-482-9 (RBAC + Trazabilidad Client-Side en Creación de Pedidos):` Añadir guarda RBAC `admin.orders` en `orders/create/page.tsx` y estampar `created_by_id`, `created_by_name`, `created_by_email` en `orders.logistics_data` + `INSERT_orders` en `audit_logs` en los 8 puntos `INSERT` client-side (`orders/create/page.tsx`: `handleDirectConfirmOrder` A/B, `handleCreateMultiOrders` 1/2, `handleSubmit` A/B; `EmailDraftsModule.tsx`: `handleSendManualReceipt`, `handleConfirmOrderDirectly`).
 
 ---
 
@@ -18116,8 +18117,11 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 ### Escenario 485: Limpieza Visual & Responsive Real en Barra Superior de `InventoryDailyBalanceTab` (SDD v1.9.440)
 - **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL`
 - **Enmienda Acotada (`src/components/InventoryDailyBalanceTab.tsx`):**
-  1. **Toolbar Responsive (`L4289-L4585`, `L4940-L4956`):** Habilitar `flexWrap: 'wrap'` en Línea 1 y Línea 2 (con buscador `minWidth: '170px'` y bloque izquierdo de categorías con `minWidth: 0`), evitando desborde/recorte horizontal de `Cerrar Día`, *Refresh*, `Salir Focus` e `Inmovilizado` en pantallas `<1440px`.
-  2. **Retiro de Barra Fija `Checklist Cierre` (`L5215-L5292`):** Suprimir la fila informativa `Checklist Cierre (X/5)` encima de la tabla para recuperar altura vertical limpia en la sábana diaria (sin alterar la lógica de `Cerrar Día`).
+  1. **Toolbar Responsive (`L4289-L4585`, `L4939-L4957`):** Habilitar `flexWrap: 'wrap'` en Línea 1 y Línea 2 (con buscador `minWidth: '170px'` y bloque izquierdo de categorías con `minWidth: 0`), evitando desborde/recorte horizontal de `Cerrar Día`, *Refresh*, `Salir Focus` e `Inmovilizado` en pantallas `<1440px`.
+  2. **Retiro de Barra Fija `Checklist Cierre` (`L5218`):** Suprimir la fila informativa `Checklist Cierre (X/5)` encima de la tabla para recuperar altura vertical limpia en la sábana diaria (sin alterar la lógica de `Cerrar Día`).
+  3. **Columna `M` (`VTA. ADICIONAL`) Trazable & Solo-Lectura (`L1077-1204`, `L1430-1658`, `L2799-2915`, `L3892`):**
+     - Mostrar `title`/tooltip enriquecido con el desglose exacto de soporte (`Pedido #seq · Cliente: XX,XX kg` de `postCutoffSalesMap` y movimientos `additional_sale`).
+     - Hacer la celda `M` **`isReadonly = true`** en la sábana (`L3892`, igual que `Col H` y `Col J`) para exigir que toda venta adicional esté soportada por un pedido real post-corte (cero salidas manuales huérfanas); y mantener en `persistCellChange` + estado optimista la guarda por rango `America/Bogota` (`getBogotaDayRangeUtcIso`) y descuento de `autoPostKg`.
 
 ---
 
@@ -18139,3 +18143,15 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - `ManualDispatchWizardModal.tsx`: cuando `gateStatus?.level === 'green' && gateStatus.sourceKind === 'partial_closing'`, mostrar banner informativo ámbar suave (sin checkbox/textarea de emergencia y sin bloquear el botón de lanzamiento).
   4. **`loading/page.tsx` (Badge `Inv. Hoy` + Compuerta Dinámica `selectedDate`):**
      - `todayClosingState` incluye `'partial'` (`.select('is_locked, notes')` con `isPartialClosingNote(data.notes)`), mostrando badge ámbar `Inv. Hoy (DD/MM): Parcial (Listo)` cuando existe Cierre Parcial; el `useEffect` de compuerta se ubica tras la declaración de `selectedDate` y sanitiza `gateTargetDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getBogotaDateString()` (protegiendo contra `'history15'`, `'all'` y `''`), manteniendo `todayStr = getBogotaDateString()` para el badge `Inv. Hoy` y alineando `recordInventoryGateOverride.targetOperationDate` con `inventoryGateStatus.targetDate || getBogotaDateString()`.
+
+---
+
+### Escenario 487: Blindaje Zero-Trust `Authorization: Bearer` en APIs de Órdenes/Auditoría y Trazabilidad Server-Side `created_by_*` (SDD v1.9.442)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y DESPLEGADO (0 errores tsc)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`):** Levantamiento exclusivamente para inyectar el header `Authorization: Bearer <access_token>` en los callers existentes (`EmailDraftsModule.tsx`, `loading/page.tsx`, `orders/[id]/page.tsx`, `cost-matrix/page.tsx`, `orders/create/page.tsx`).
+- **Reglas Consagradas:**
+  1. **Helper Único [`src/lib/auth/verifyStaffBearer.ts`](file:///c:/Projects/frufresco/src/lib/auth/verifyStaffBearer.ts):** Valida `Authorization: Bearer <token>` vía `supabaseAdmin.auth.getUser(token)`, exige perfil activo con rol interno distinto de `b2b_client`/`b2c_client`/`client` (`401`/`403`), y expone `insertAuditLogSafe` manejando la FK `audit_logs.collaborator_id -> collaborators(id)` (`23503`).
+  2. **Endpoints Blindados:**
+     - [`src/app/api/orders/email-drafts/approve/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/email-drafts/approve/route.ts): Exige `verifyStaffBearer`, estampa `created_by_id`, `created_by_name`, `created_by_email` en `orders.logistics_data` y registra `INSERT_orders` en `audit_logs`.
+     - [`src/app/api/orders/update/route.ts`](file:///c:/Projects/frufresco/src/app/api/orders/update/route.ts): Exige `verifyStaffBearer`.
+     - [`src/app/api/audit/log/route.ts`](file:///c:/Projects/frufresco/src/app/api/audit/log/route.ts): Exige `verifyStaffBearer`, deriva `collaborator_name` del JWT (`auth.actorName`) ignorando spoofing del body y persiste vía `insertAuditLogSafe`.
