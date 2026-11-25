@@ -20,7 +20,7 @@ import { GalleryOmnibox, normalizeSearchText } from '@/components/common/Gallery
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
 import { getBogotaDateString } from '@/lib/dateUtils';
 import { ensureUniversalStagingSpaces, formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { evaluateInventoryGateStatus, recordInventoryGateOverride, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
+import { evaluateInventoryGateStatus, recordInventoryGateOverride, isPartialClosingNote, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import { 
     MessageSquare, 
     Phone, 
@@ -253,7 +253,7 @@ function OrderLoadingContent() {
     };
 
     const [inventoryGateStatus, setInventoryGateStatus] = useState<InventoryGateStatus | null>(null);
-    const [todayClosingState, setTodayClosingState] = useState<'locked' | 'reopened' | 'none' | null>(null);
+    const [todayClosingState, setTodayClosingState] = useState<'locked' | 'partial' | 'reopened' | 'none' | null>(null);
     const [showInventoryGateModal, setShowInventoryGateModal] = useState(false);
     const [gateOverrideConfirmed, setGateOverrideConfirmed] = useState(false);
     const [gateOverrideReason, setGateOverrideReason] = useState('');
@@ -266,27 +266,6 @@ function OrderLoadingContent() {
         if (profile.custom_permissions?.includes('*')) return true;
         return checkUserPermission(profile, 'admin.orders', roles);
     }, [profile, roles]);
-
-    useEffect(() => {
-        let cancelled = false;
-        const todayStr = getBogotaDateString();
-        evaluateInventoryGateStatus({ supabase, targetDate: todayStr })
-            .then((res) => { if (!cancelled) setInventoryGateStatus(res); })
-            .catch((err) => console.warn('Inventory gate status fetch warning:', err));
-
-        supabase
-            .from('daily_inventory_closings')
-            .select('is_locked')
-            .eq('closing_date', todayStr)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (cancelled) return;
-                if (!data) setTodayClosingState('none');
-                else setTodayClosingState(data.is_locked ? 'locked' : 'reopened');
-            });
-
-        return () => { cancelled = true; };
-    }, [refreshTrigger]);
 
     const canView = hasPermission('admin.orders');
 
@@ -392,6 +371,30 @@ function OrderLoadingContent() {
             setSelectedDate(dateQueryParam);
         }
     }, [dateQueryParam]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const todayStr = getBogotaDateString();
+        const gateTargetDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : todayStr;
+        evaluateInventoryGateStatus({ supabase, targetDate: gateTargetDate })
+            .then((res) => { if (!cancelled) setInventoryGateStatus(res); })
+            .catch((err) => console.warn('Inventory gate status fetch warning:', err));
+
+        supabase
+            .from('daily_inventory_closings')
+            .select('is_locked, notes')
+            .eq('closing_date', todayStr)
+            .maybeSingle()
+            .then(({ data }) => {
+                if (cancelled) return;
+                if (!data) setTodayClosingState('none');
+                else if (data.is_locked) setTodayClosingState('locked');
+                else if (isPartialClosingNote(data.notes)) setTodayClosingState('partial');
+                else setTodayClosingState('reopened');
+            });
+
+        return () => { cancelled = true; };
+    }, [refreshTrigger, selectedDate]);
 
     const [dateCounts, setDateCounts] = useState<{ yesterday: number; today: number; tomorrow: number }>({ yesterday: 0, today: 0, tomorrow: 0 });
 
@@ -3878,21 +3881,26 @@ useEffect(() => {
                             const todayStr = getBogotaDateString();
                             const shortToday = `${todayStr.slice(8, 10)}/${todayStr.slice(5, 7)}`;
                             const isLocked = todayClosingState === 'locked';
+                            const isPartial = todayClosingState === 'partial';
                             const isReopened = todayClosingState === 'reopened';
-                            const bg = isLocked ? '#ECFDF5' : isReopened ? '#FFFBEB' : '#FEF2F2';
-                            const border = isLocked ? '#86EFAC' : isReopened ? '#FCD34D' : '#FCA5A5';
-                            const color = isLocked ? '#065F46' : isReopened ? '#92400E' : '#991B1B';
-                            const dot = isLocked ? '#10B981' : isReopened ? '#F59E0B' : '#EF4444';
+                            const bg = isLocked ? '#ECFDF5' : (isPartial || isReopened) ? '#FFFBEB' : '#FEF2F2';
+                            const border = isLocked ? '#86EFAC' : (isPartial || isReopened) ? '#FCD34D' : '#FCA5A5';
+                            const color = isLocked ? '#065F46' : (isPartial || isReopened) ? '#92400E' : '#991B1B';
+                            const dot = isLocked ? '#10B981' : (isPartial || isReopened) ? '#F59E0B' : '#EF4444';
                             const label = isLocked
                                 ? `Inv. Hoy (${shortToday}): Cerrado`
-                                : isReopened
-                                    ? `Inv. Hoy (${shortToday}): Reabierto`
-                                    : `Inv. Hoy (${shortToday}): Sin cerrar`;
+                                : isPartial
+                                    ? `Inv. Hoy (${shortToday}): Parcial (Listo)`
+                                    : isReopened
+                                        ? `Inv. Hoy (${shortToday}): Reabierto`
+                                        : `Inv. Hoy (${shortToday}): Sin cerrar`;
                             const tooltip = isLocked
                                 ? `El inventario de hoy (${todayStr}) ya fue cerrado oficialmente.`
-                                : isReopened
-                                    ? `El inventario de hoy (${todayStr}) fue reabierto y falta volver a sellarlo.`
-                                    : `Aún no se ha ejecutado el cierre de inventario de hoy (${todayStr}).`;
+                                : isPartial
+                                    ? `Cierre parcial del ${todayStr}: Conteo Físico avalado para lanzar la operación. Pendiente completar cierre contable definitivo.`
+                                    : isReopened
+                                        ? `El inventario de hoy (${todayStr}) fue reabierto y falta volver a sellarlo.`
+                                        : `Aún no se ha ejecutado el cierre de inventario de hoy (${todayStr}).`;
 
                             return (
                                 <Link
@@ -5907,7 +5915,7 @@ useEffect(() => {
                                                     try {
                                                         await recordInventoryGateOverride({
                                                             supabase,
-                                                            targetOperationDate: getBogotaDateString(),
+                                                            targetOperationDate: inventoryGateStatus.targetDate || getBogotaDateString(),
                                                             pendingClosingDate: inventoryGateStatus.lastOperatedDate,
                                                             sourceKind: inventoryGateStatus.sourceKind,
                                                             reason: gateOverrideReason,
