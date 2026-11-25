@@ -18231,3 +18231,27 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
        - `src/lib/exportRelacionDocumentosExcel.ts` (`L407`) y `src/app/api/transport/confirm/route.ts` (`L178`).
   5. **Saneamiento Seguro de `#2269`, `#2271`, `#2272`, `#2278`:**
      - Actualizar únicamente `status = 'billing_only'` y `warehouse_spaces = null`, **preservando intactos `billing_cut_id` e `invoice_id`** (evitando duplicar la factura ya emitida de `#2278` en Producción).
+
+---
+
+### Escenario 491: Blindaje Atómico de Reversión de Cortes ("Devolver el Tiempo"), Acceso Directo en Barra Principal, Doble Confirmación Obligatoria y Candado DIAN/Cadena/NC (SDD v1.9.446)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Archivo Intervenido:** `src/app/admin/commercial/billing/page.tsx`
+- **Alcance Contractual:**
+  1. **Acceso Directo Contextual en Barra Principal (`subTab === 'pending'`):**
+     - Memo `latestCutForSelectedDate`: cuando `selectedBillingDate !== 'all'`, selecciona el corte más reciente (`created_at DESC`, desempate `cut_number DESC`) de `cuts` para esa `scheduled_date` con `status IN ('closed', 'exported')` (aplica a `AM`, `PM` y `ADJ`).
+     - Renderiza junto al botón `Corte Mañana (AM)` el botón compacto `Revertir Corte #{cut_number} ({cut_slot})` (icono `RotateCcw` de `lucide-react`) visible para cualquier operador con `hasInvoicingAccess`, abriendo el modal existente de reversión (`handleOpenRevertModal(latestCutForSelectedDate)`).
+  2. **Doble Confirmación Obligatoria (Todos los Estados):**
+     - El modal de reversión exige **siempre** (tanto en `status === 'closed'` como en `status === 'exported'`):
+       - Selección de motivo obligatorio (y texto no vacío cuando `revertReason === 'Otro'`).
+       - Casilla de verificación explícita (`revertWoConfirmed`) confirmando la reversión (con alerta reforzada roja si el corte ya fue exportado a World Office).
+     - Copy adaptativo cuando `cut_slot === 'ADJ'` (liberación de devoluciones aprobadas de Nota Crédito en lugar de pedidos pendientes de FV).
+  3. **Candados Fiscales Duros en `handleConfirmRevertCut`:**
+     - **Candado 1 (World Office / Cadena):** Consulta `worldoffice_sync_status` en `billing_invoices` del corte (fallando en duro si hay error de lectura); aborta con toast de error si alguna factura tiene `worldoffice_sync_status IN ('synced', 'reconciled_cadena')`.
+     - **Candado 2 (Notas Crédito Hijas):** En cortes FV (`!isNcSlot`), consulta `billing_invoices` donde `parent_invoice_id IN cutInvoiceIds` y `is_credit_note = true`; aborta si existe al menos una Nota Crédito emitida contra alguna factura del corte.
+  4. **Orden Seguro de Ejecución & Limpieza N-a-1 (Facturas Unificadas):**
+     - Validación estricta de `{ error }` en todas las operaciones Supabase.
+     - Liberación de pedidos FV buscando tanto por `billing_cut_id = cutId` como por `invoice_id IN cutInvoiceIds`, limpiando `billing_cut_id = null`, `invoice_id = null` y removiendo `unified_invoice_id`, `unified_invoice_number` e `is_batch_accumulated` de `orders.logistics_data` cuando existan.
+     - Eliminación de `billing_invoices` y `billing_cuts` **antes** de rebobinar el consecutivo DIAN en `app_settings` (`billing_invoice_next_number` / `billing_nc_next_number`), evitando corrupción de secuencia si un delete falla.
+     - Fallback regex `/(\d+)$/` sobre `invoice_number` cuando `invoice_number_raw` sea nulo o `0`.
+     - Bitácora en `audit_logs` (`action: 'REVERT_BILLING_CUT'`) con `details` enriquecido (`module: 'COMMERCIAL'`, `actor_id`, `actor_email`, `actor_name`, `cut_id`, `cut_number`, `scheduled_date`, `cut_slot`, `reason`, `rewound_consecutive`, `rewound_to`, `reverted_at`).

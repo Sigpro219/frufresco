@@ -2312,6 +2312,21 @@ export default function BillingDashboard() {
         );
     }, [cuts, selectedBillingDate]);
 
+    // SDD Escenario 491: Último corte creado para la fecha seleccionada (AM, PM o ADJ) para acceso directo de reversión
+    const latestCutForSelectedDate = useMemo(() => {
+        if (selectedBillingDate === 'all') return null;
+        const candidates = cuts.filter(c =>
+            c.scheduled_date === selectedBillingDate &&
+            (c.status === 'closed' || c.status === 'exported')
+        );
+        if (candidates.length === 0) return null;
+        return [...candidates].sort((a, b) => {
+            const timeDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+            if (timeDiff !== 0) return timeDiff;
+            return Number(b.cut_number || 0) - Number(a.cut_number || 0);
+        })[0];
+    }, [cuts, selectedBillingDate]);
+
     // SDD Escenario 432 / 461: Conteo reactivo de pedidos FAC-IMP elegibles pendientes por cortar en la tarde
     const pendingFacImpOrdersCount = useMemo(() => {
         return pendingOrders.filter(o => {
@@ -3627,11 +3642,21 @@ export default function BillingDashboard() {
 
     const handleConfirmRevertCut = async () => {
         if (!cutToRevert) return;
-        if (cutToRevert.status === 'exported' && !revertWoConfirmed) {
+        if (!revertWoConfirmed) {
             showToast({
                 type: 'warning',
-                title: 'Confirmación Requerida',
-                message: 'Debe confirmar bajo su responsabilidad que el corte no ha sido procesado en World Office Desktop.'
+                title: 'Doble Confirmación Requerida',
+                message: cutToRevert.status === 'exported'
+                    ? 'Debe confirmar bajo su responsabilidad que el corte no ha sido procesado en World Office Desktop.'
+                    : 'Debe marcar la casilla de doble confirmación antes de revertir el corte.'
+            });
+            return;
+        }
+        if (revertReason === 'Otro' && !revertCustomReason.trim()) {
+            showToast({
+                type: 'warning',
+                title: 'Motivo Requerido',
+                message: 'Especifique el motivo de la reversión antes de continuar.'
             });
             return;
         }
@@ -3641,61 +3666,105 @@ export default function BillingDashboard() {
             const cutId = cutToRevert.id;
             const isNcSlot = cutToRevert.cut_slot === 'ADJ';
 
-            // 1. Obtener las facturas asociadas a este corte
-            const { data: cutInvoices } = await supabase
+            // 1. Obtener facturas del corte y validar estado fiscal (Escenario 491)
+            const { data: cutInvoices, error: cutInvoicesErr } = await supabase
                 .from('billing_invoices')
-                .select('id, invoice_number, invoice_number_raw, invoice_prefix')
+                .select('id, invoice_number, invoice_number_raw, invoice_prefix, worldoffice_sync_status')
                 .eq('cut_id', cutId);
+            if (cutInvoicesErr) throw cutInvoicesErr;
 
-            // 2. Rebobinado seguro de consecutivos DIAN (Asunción 2 Goldfish)
-            const settingKey = isNcSlot ? 'billing_nc_next_number' : 'billing_invoice_next_number';
-            const { data: currentSeqData } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('key', settingKey)
-                .single();
+            // Candado 1: World Office / Cadena
+            const lockedInvoices = (cutInvoices || []).filter(
+                (inv: any) => inv.worldoffice_sync_status === 'synced' || inv.worldoffice_sync_status === 'reconciled_cadena'
+            );
+            if (lockedInvoices.length > 0) {
+                const sample = lockedInvoices.slice(0, 3).map((inv: any) => inv.invoice_number).filter(Boolean).join(', ');
+                showToast({
+                    type: 'error',
+                    title: 'Reversión Bloqueada por Integridad Fiscal',
+                    message: `No se puede revertir: existen facturas sincronizadas con World Office o conciliadas con Cadena (${sample || lockedInvoices.length}).`
+                });
+                return;
+            }
 
-            const currentNextNum = Number(currentSeqData?.value || 0);
-            let wasRewound = false;
-            let minRewound = 0;
+            const cutInvoiceIds = (cutInvoices || []).map((inv: any) => inv.id).filter(Boolean);
 
-            if (cutInvoices && cutInvoices.length > 0) {
-                const rawNumbers = cutInvoices
-                    .map((inv: any) => Number(inv.invoice_number_raw))
-                    .filter((n: number) => !isNaN(n) && n > 0);
-
-                if (rawNumbers.length > 0) {
-                    const minRaw = Math.min(...rawNumbers);
-                    const maxRaw = Math.max(...rawNumbers);
-
-                    // Solo se rebobina si el corte revertido es el último emitido (contiguo a la secuencia actual)
-                    if (maxRaw + 1 === currentNextNum) {
-                        await supabase
-                            .from('app_settings')
-                            .upsert({
-                                key: settingKey,
-                                value: String(minRaw),
-                                updated_at: new Date().toISOString()
-                            });
-                        wasRewound = true;
-                        minRewound = minRaw;
-                        if (isNcSlot) {
-                            setNcNextNumber(minRaw);
-                        } else {
-                            setInvoiceNextNumber(minRaw);
-                        }
-                    }
+            // Candado 2: Notas Crédito hijas en cortes FV
+            if (!isNcSlot && cutInvoiceIds.length > 0) {
+                const { data: childNcs, error: childNcErr } = await supabase
+                    .from('billing_invoices')
+                    .select('id, invoice_number, parent_invoice_id')
+                    .in('parent_invoice_id', cutInvoiceIds)
+                    .eq('is_credit_note', true);
+                if (childNcErr) throw childNcErr;
+                if (childNcs && childNcs.length > 0) {
+                    const sampleNc = childNcs.slice(0, 3).map((nc: any) => nc.invoice_number).filter(Boolean).join(', ');
+                    showToast({
+                        type: 'error',
+                        title: 'Reversión Bloqueada por Notas Crédito',
+                        message: `Debe revertir primero las Notas Crédito asociadas a este corte (${sampleNc || childNcs.length}).`
+                    });
+                    return;
                 }
             }
 
-            // 3. Liberar pedidos (solo para cortes FV; en ADJ se preservan FV y solo se limpia credit_note_number)
-            if (!isNcSlot) {
-                const { error: releaseErr } = await supabase
-                    .from('orders')
-                    .update({ billing_cut_id: null, invoice_id: null })
-                    .eq('billing_cut_id', cutId);
+            // Calcular rango numérico para posible rebobinado DIAN (se ejecuta al final, tras borrar facturas y corte)
+            const rawNumbers = (cutInvoices || [])
+                .map((inv: any) => Number(inv.invoice_number_raw) || Number(String(inv.invoice_number || '').match(/(\d+)$/)?.[1] || 0))
+                .filter((n: number) => !isNaN(n) && n > 0);
+            const minRaw = rawNumbers.length > 0 ? Math.min(...rawNumbers) : 0;
+            const maxRaw = rawNumbers.length > 0 ? Math.max(...rawNumbers) : 0;
 
-                if (releaseErr) throw releaseErr;
+            // 2. Liberar pedidos (FV, incluyendo N-a-1 unificadas) o devoluciones (ADJ)
+            if (!isNcSlot) {
+                const { data: cutLinkedOrders, error: cutOrdersErr } = await supabase
+                    .from('orders')
+                    .select('id, logistics_data')
+                    .eq('billing_cut_id', cutId);
+                if (cutOrdersErr) throw cutOrdersErr;
+
+                const affectedOrdersMap = new Map<string, any>();
+                (cutLinkedOrders || []).forEach((o: any) => affectedOrdersMap.set(o.id, o));
+
+                if (cutInvoiceIds.length > 0) {
+                    const { data: invLinkedOrders, error: invOrdersErr } = await supabase
+                        .from('orders')
+                        .select('id, logistics_data')
+                        .in('invoice_id', cutInvoiceIds);
+                    if (invOrdersErr) throw invOrdersErr;
+                    (invLinkedOrders || []).forEach((o: any) => affectedOrdersMap.set(o.id, o));
+                }
+
+                const normalOrderIds: string[] = [];
+                const unifiedOrders: any[] = [];
+                affectedOrdersMap.forEach((o: any) => {
+                    const ld = o.logistics_data;
+                    if (ld && typeof ld === 'object' && ('unified_invoice_id' in ld || 'unified_invoice_number' in ld || 'is_batch_accumulated' in ld)) {
+                        unifiedOrders.push(o);
+                    } else {
+                        normalOrderIds.push(o.id);
+                    }
+                });
+
+                if (normalOrderIds.length > 0) {
+                    const { error: releaseErr } = await supabase
+                        .from('orders')
+                        .update({ billing_cut_id: null, invoice_id: null })
+                        .in('id', normalOrderIds);
+                    if (releaseErr) throw releaseErr;
+                }
+
+                for (const uo of unifiedOrders) {
+                    const nextLogistics = { ...(uo.logistics_data || {}) };
+                    delete nextLogistics.unified_invoice_id;
+                    delete nextLogistics.unified_invoice_number;
+                    delete nextLogistics.is_batch_accumulated;
+                    const { error: uoErr } = await supabase
+                        .from('orders')
+                        .update({ billing_cut_id: null, invoice_id: null, logistics_data: nextLogistics })
+                        .eq('id', uo.id);
+                    if (uoErr) throw uoErr;
+                }
             } else if (cutInvoices && cutInvoices.length > 0) {
                 const ncNumbers = cutInvoices
                     .map((inv: any) => inv.invoice_number)
@@ -3709,27 +3778,67 @@ export default function BillingDashboard() {
                 }
             }
 
-            // 4. Eliminar las facturas de billing_invoices
+            // 3. Eliminar las facturas de billing_invoices
             const { error: delInvErr } = await supabase
                 .from('billing_invoices')
                 .delete()
                 .eq('cut_id', cutId);
-
             if (delInvErr) throw delInvErr;
 
-            // 5. Eliminar el corte de billing_cuts
+            // 4. Eliminar el corte de billing_cuts
             const { error: delCutErr } = await supabase
                 .from('billing_cuts')
                 .delete()
                 .eq('id', cutId);
-
             if (delCutErr) throw delCutErr;
 
-            // 6. Bitácora inmutable en audit_logs (Pilar 4 & Asunción 3 Goldfish)
-            const finalReason = revertReason === 'Otro' ? (revertCustomReason || 'Otro motivo') : revertReason;
-            await supabase.from('audit_logs').insert({
+            // 5. Rebobinado seguro de consecutivos DIAN (ÚLTIMO paso fiscal tras eliminar facturas y corte)
+            const settingKey = isNcSlot ? 'billing_nc_next_number' : 'billing_invoice_next_number';
+            let wasRewound = false;
+            let minRewound = 0;
+
+            if (rawNumbers.length > 0) {
+                const { data: currentSeqData, error: seqErr } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', settingKey)
+                    .single();
+                if (seqErr) {
+                    console.warn('No se pudo leer consecutivo DIAN para rebobinar:', seqErr);
+                } else {
+                    const currentNextNum = Number(currentSeqData?.value || 0);
+                    if (maxRaw + 1 === currentNextNum) {
+                        const { error: upsertErr } = await supabase
+                            .from('app_settings')
+                            .upsert({
+                                key: settingKey,
+                                value: String(minRaw),
+                                updated_at: new Date().toISOString()
+                            });
+                        if (upsertErr) {
+                            console.warn('Error rebobinando consecutivo DIAN en app_settings:', upsertErr);
+                        } else {
+                            wasRewound = true;
+                            minRewound = minRaw;
+                            if (isNcSlot) {
+                                setNcNextNumber(minRaw);
+                            } else {
+                                setInvoiceNextNumber(minRaw);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Bitácora inmutable en audit_logs (Pilar 4 & Escenario 491)
+            const finalReason = revertReason === 'Otro' ? revertCustomReason.trim() : revertReason;
+            const { error: auditErr } = await supabase.from('audit_logs').insert({
                 action: 'REVERT_BILLING_CUT',
                 details: {
+                    module: 'COMMERCIAL',
+                    actor_id: user?.id || null,
+                    actor_email: user?.email || null,
+                    actor_name: (profile as any)?.contact_name || (profile as any)?.company_name || user?.email || 'Operador Facturación',
                     cut_id: cutId,
                     cut_number: cutToRevert.cut_number,
                     scheduled_date: cutToRevert.scheduled_date,
@@ -3742,11 +3851,14 @@ export default function BillingDashboard() {
                     reverted_at: new Date().toISOString()
                 }
             });
+            if (auditErr) console.warn('No se pudo registrar audit_logs de reversión:', auditErr);
 
             showToast({
                 type: 'success',
                 title: `Corte #${cutToRevert.cut_number} Revertido`,
-                message: `${cutToRevert.total_orders} pedidos devueltos a la bandeja de pendientes. ${wasRewound ? `Consecutivo DIAN rebobinado a ${minRewound}.` : ''}`
+                message: isNcSlot
+                    ? `Notas Crédito del corte revertidas y devoluciones liberadas.${wasRewound ? ` Consecutivo DIAN rebobinado a ${minRewound}.` : ''}`
+                    : `${cutToRevert.total_orders} pedidos devueltos a la bandeja de pendientes.${wasRewound ? ` Consecutivo DIAN rebobinado a ${minRewound}.` : ''}`
             });
 
             setIsRevertModalOpen(false);
@@ -5762,6 +5874,31 @@ export default function BillingDashboard() {
                                                         : `Corte Mañana (AM) ${selectedOrderIds.length > 0 ? `(${selectedOrderIds.length})` : `(${pendingOrdersCount})`}`}
                                                 </span>
                                             </button>
+
+                                            {hasInvoicingAccess && latestCutForSelectedDate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenRevertModal(latestCutForSelectedDate)}
+                                                    style={{
+                                                        backgroundColor: '#FEF2F2',
+                                                        color: '#991B1B',
+                                                        border: '1px solid #FECACA',
+                                                        padding: '0.28rem 0.65rem',
+                                                        borderRadius: '5px',
+                                                        fontWeight: '800',
+                                                        fontSize: '0.70rem',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: '0 1px 2px rgba(153, 27, 27, 0.08)'
+                                                    }}
+                                                    title={`Revertir el último corte del ${selectedBillingDate} (Corte #${latestCutForSelectedDate.cut_number} ${latestCutForSelectedDate.cut_slot}) con doble confirmación`}
+                                                >
+                                                    <RotateCcw size={11} strokeWidth={2.5} />
+                                                    <span>Revertir Corte #{latestCutForSelectedDate.cut_number} ({latestCutForSelectedDate.cut_slot})</span>
+                                                </button>
+                                            )}
 
                                             {canCreateHistoricalBillingOrder(user) && (
                                                 <button
@@ -10508,14 +10645,18 @@ export default function BillingDashboard() {
                             }}>
                                 <strong>Efecto de la Reversión ("Devolver el Tiempo"):</strong>
                                 <ul style={{ margin: '0.35rem 0 0 1rem', padding: 0 }}>
-                                    <li>Los <strong>{cutToRevert.total_orders} pedidos</strong> quedarán liberados e inmediatamente disponibles en la bandeja de pendientes.</li>
-                                    <li>Se eliminarán las facturas generadas de este corte en el sistema web.</li>
+                                    <li>
+                                        {cutToRevert.cut_slot === 'ADJ'
+                                            ? 'Las devoluciones aprobadas vinculadas a este lote de Notas Crédito quedarán nuevamente disponibles para volver a cortarse.'
+                                            : <>Los <strong>{cutToRevert.total_orders} pedidos</strong> quedarán liberados e inmediatamente disponibles en la bandeja de pendientes.</>}
+                                    </li>
+                                    <li>Se eliminarán las {cutToRevert.cut_slot === 'ADJ' ? 'Notas Crédito' : 'facturas'} generadas de este corte en el sistema web.</li>
                                     <li>Si este corte era el último emitido, el consecutivo DIAN se rebobinará automáticamente para no quemar números.</li>
                                 </ul>
                             </div>
 
-                            {/* Asunción 1 Goldfish: Advertencia si fue exportado a World Office */}
-                            {cutToRevert.status === 'exported' && (
+                            {/* Escenario 491: Doble Confirmación Obligatoria en todos los estados */}
+                            {cutToRevert.status === 'exported' ? (
                                 <div style={{
                                     backgroundColor: '#FEF2F2',
                                     border: '1px solid #FCA5A5',
@@ -10536,6 +10677,26 @@ export default function BillingDashboard() {
                                             style={{ accentColor: '#DC2626', marginTop: '2px' }}
                                         />
                                         Confirmo bajo mi responsabilidad que este corte NO ha sido procesado ni importado en World Office Desktop.
+                                    </label>
+                                </div>
+                            ) : (
+                                <div style={{
+                                    backgroundColor: '#FFFBEB',
+                                    border: '1px solid #FCD34D',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#92400E', fontWeight: '800', fontSize: '0.76rem', marginBottom: '6px' }}>
+                                        <AlertTriangle size={14} /> Doble Confirmación Obligatoria
+                                    </div>
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: '700', color: '#78350F' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={revertWoConfirmed}
+                                            onChange={(e) => setRevertWoConfirmed(e.target.checked)}
+                                            style={{ accentColor: '#D97706', marginTop: '2px' }}
+                                        />
+                                        Confirmo que revisé el corte #{cutToRevert.cut_number} ({cutToRevert.cut_slot}) y deseo devolverlo al estado anterior.
                                     </label>
                                 </div>
                             )}
@@ -10611,16 +10772,16 @@ export default function BillingDashboard() {
                             <button
                                 type="button"
                                 onClick={handleConfirmRevertCut}
-                                disabled={isRevertingCut || (cutToRevert.status === 'exported' && !revertWoConfirmed)}
+                                disabled={isRevertingCut || !revertWoConfirmed || (revertReason === 'Otro' && !revertCustomReason.trim())}
                                 style={{
                                     padding: '0.40rem 0.95rem',
                                     borderRadius: '6px',
                                     border: 'none',
-                                    backgroundColor: (cutToRevert.status === 'exported' && !revertWoConfirmed) ? '#94A3B8' : '#DC2626',
+                                    backgroundColor: (isRevertingCut || !revertWoConfirmed || (revertReason === 'Otro' && !revertCustomReason.trim())) ? '#94A3B8' : '#DC2626',
                                     color: 'white',
                                     fontSize: '0.74rem',
                                     fontWeight: '800',
-                                    cursor: (cutToRevert.status === 'exported' && !revertWoConfirmed) ? 'not-allowed' : 'pointer',
+                                    cursor: (isRevertingCut || !revertWoConfirmed || (revertReason === 'Otro' && !revertCustomReason.trim())) ? 'not-allowed' : 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
