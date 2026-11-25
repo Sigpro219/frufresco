@@ -247,7 +247,12 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     cursor++;
                 }
             };
-            missingOrders.forEach(o => {
+            const sortedMissing = [...missingOrders].sort((a, b) =>
+                (b.total_weight_kg - a.total_weight_kg) ||
+                (Number(a.sequence_id || 0) - Number(b.sequence_id || 0)) ||
+                String(a.id).localeCompare(String(b.id))
+            );
+            sortedMissing.forEach(o => {
                 const { spaces } = calculateCratesAndSpaces(o.total_weight_kg, avgKgPerCrate, spaceCapacity);
                 nextMap[o.id] = takeContiguous(Math.max(1, spaces));
             });
@@ -421,7 +426,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
             <div style={{ padding: '3rem', textAlign: 'center', backgroundColor: THEME.colors.surface, borderRadius: THEME.radius.xl, border: `1px solid ${THEME.colors.border}`, minHeight: '380px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 1rem', color: THEME.colors.primary }} />
                 <h3 style={{ color: THEME.colors.textMain, fontWeight: 800, fontSize: '0.95rem' }}>Cargando Centro de Mando de Bahías...</h3>
-                <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Sincronizando 150 bahías en suelo de Corabastos</span>
+                <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary }}>Sincronizando bahías elásticas (120+) en suelo de Corabastos</span>
             </div>
         );
     }
@@ -752,7 +757,7 @@ export default function StagingSpacesManagement({ readOnly = false, initialDate 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', borderBottom: `1px solid ${THEME.colors.border}`, paddingBottom: '0.65rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 900, color: THEME.colors.textMain }}>
-                                Distribución Física en Planta (Bahías 1 a 150)
+                                Distribución Física en Planta (Bahías 1 a {elasticMaxSpaces})
                             </h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: 600 }}>

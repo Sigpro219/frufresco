@@ -876,6 +876,7 @@ export async function POST(request: Request) {
                 isRefrigerated: c.isRefrigerated
             })),
             priorityOrderIds: consolidatedClusters.filter(c => c.isPriority).flatMap(c => c.memberOrderIds),
+            refrigeratedOrderIds: Array.from(refrigeratedOrderIds).map(String),
             geocodingWarnings
         });
 
@@ -921,12 +922,14 @@ async function generateAiExplanation(
     context?: {
         consolidatedClusters?: Array<{ clusterId: string; customerName: string; memberOrderIds: string[]; weightKg: number; crates: number; isPriority: boolean; isRefrigerated: boolean }>;
         priorityOrderIds?: string[];
+        refrigeratedOrderIds?: string[];
         geocodingWarnings?: Array<{ orderId: string; customerName: string; reason: string }>;
     }
 ) {
     const orderById = new Map(orders.map(o => [String(o.id), o]));
     const multiOrderClusters = (context?.consolidatedClusters || []).filter(c => c.memberOrderIds.length > 1);
     const prioritySet = new Set((context?.priorityOrderIds || []).map(String));
+    const refrigeratedSet = new Set((context?.refrigeratedOrderIds || []).map(String));
     const geoWarnings = context?.geocodingWarnings || [];
 
     const buildDeterministicSummary = (fallbackReason?: string) => {
@@ -952,6 +955,9 @@ async function generateAiExplanation(
         }
         if (prioritySet.size > 0) {
             lines.push(`- **Prioritarios:** **${prioritySet.size}** pedido(s) priorizados en las primeras paradas.`);
+        }
+        if (refrigeratedSet.size > 0) {
+            lines.push(`- **Cadena de frío:** **${refrigeratedSet.size}** pedido(s) con productos refrigerados asignados respetando furgones con frío.`);
         }
         if (geoWarnings.length > 0) {
             lines.push(`- **Alertas GPS:** **${geoWarnings.length}** pedido(s) sin coordenadas exactas (${geoWarnings.slice(0, 3).map(w => w.customerName).join(', ')}).`);
@@ -994,6 +1000,7 @@ ${Object.entries(assignments).map(([vehicleId, orderIds]) => {
 
 ${multiOrderClusters.length > 0 ? `CONSOLIDACIONES MISMA SEDE (EN 1 PARADA):\n${multiOrderClusters.map(c => `- ${c.customerName}: ${c.memberOrderIds.length} pedidos (${c.weightKg.toFixed(1)}kg, ${c.crates} can.)`).join('\n')}\n` : ''}
 ${prioritySet.size > 0 ? `PEDIDOS PRIORITARIOS MARCADOS: ${prioritySet.size}\n` : ''}
+${refrigeratedSet.size > 0 ? `PEDIDOS CON CADENA DE FRÍO (REFRIGERADOS): ${refrigeratedSet.size}\n` : ''}
 ${geoWarnings.length > 0 ? `ALERTAS GPS (${geoWarnings.length}): ${geoWarnings.slice(0, 5).map(w => `${w.customerName} (${w.reason})`).join('; ')}\n` : ''}
 
 INSTRUCCIONES ESTRICTAS:

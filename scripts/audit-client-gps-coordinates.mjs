@@ -24,7 +24,8 @@ const getArg = (name, def) => {
 };
 const envMode = getArg('env', 'sandbox'); // 'sandbox' | 'prod'
 const dryRun = args.includes('--dry-run');
-const maxApiCalls = Math.max(0, parseInt(getArg('max-api-calls', '50'), 10) || 50);
+const parsedMaxCalls = parseInt(getArg('max-api-calls', '50'), 10);
+const maxApiCalls = Number.isFinite(parsedMaxCalls) ? Math.max(0, parsedMaxCalls) : 50;
 const throttleMs = Math.max(50, parseInt(getArg('throttle-ms', '150'), 10) || 150);
 
 const envFile = envMode === 'prod' ? '.env.local' : '.env.sandbox';
