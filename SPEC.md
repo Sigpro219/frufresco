@@ -18434,3 +18434,37 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 - **Saneamiento Verificado en BD:**
   - Restauración idempotente (solo si `order_items` está en `0`) de las 10 líneas del Pedido `2296` (`893a28c6-4153-48c9-9f3a-14ddaf10f426`, Aldimark Gimnasio José Joaquín Casas, `FV-70121`) cruzadas contra `order_drafts` + Acuerdo `#192`, verificando `SUM(quantity * unit_price) === 271640`.
   - Backfill seguro `UPDATE orders SET type = 'b2b'` únicamente en pedidos con `type = 'b2c'` cuyo perfil asociado tenga `profiles.role = 'b2b_client'` (excluyendo `b2c_wompi`).
+
+---
+
+### Escenario 499: Terminal de Compras "Modo Lluvia / 3 Toques" (`/ops/compras`), Paridad 1:1 `Escenario 495`, Caja `cash_budgets`, Proveedores `PRODUCTOS`, Ruta Habitual ML y Comprobante Contable Imprimible sin Foto (`SDD v1.9.454`)
+- **Estado del Contrato:** `🟢 CERTIFICADO Y DESPLEGADO EN SANDBOX (\`tsc --noEmit\` 0 errores)`
+- **Cumplimiento `READ-ONLY LOCK` (`Escenario 477 §1`):** [`src/app/admin/procurement/purchases-print/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/procurement/purchases-print/page.tsx) permanece **intacto**.
+- **Arquitectura Modular (Anti-Monolito):**
+  1. `src/lib/procurement/buildHierarchicalPurchaseRows.ts` *(nuevo — lógica pura compartible: familias padre–hijos, hijos solo-stock `X`, `Demanda Familia − Stock Total Familia = Neto a Comprar`)*
+  2. `src/lib/procurement/buyerRouteLearning.ts` *(nuevo — cálculo puro de secuencia habitual en Corabastos sobre 45 días)*
+  3. `src/components/ops/BuyerCashBar.tsx` *(nuevo — barra de caja en vivo + progreso lúdico + tarjeta "Siguiente en tu Ruta" + cierre `100%`)*
+  4. `src/components/ops/ProcurementAccountingVoucherPrint.tsx` *(nuevo — comprobante contable imprimible bajo demanda Efectivo vs. Crédito)*
+  5. `supabase/migrations/20261126_cash_budgets_buyer_rls.sql` *(nuevo — amplía `SELECT` en `cash_budgets` a `'LIDER DE INVENTARIO'`, `'COORDINADOR DE OPERACIONES'`, `'TESORERO'`)*
+  6. `src/app/ops/compras/page.tsx` *(integración modular quirúrgica)*
+- **Alcance Contractual:**
+  1. **Paridad 1:1 con `purchases-print` (`Escenario 495`):**
+     - `fetchTasks` en `ops/compras/page.tsx` consulta los hermanos de catálogo (`parent_id IN (familyRootIds)` o `id IN (familyRootIds)`) para detectar hijos `solo-stock` (`demanda === 0 && stock > 0`).
+     - `buildHierarchicalPurchaseRows.ts` construye la misma jerarquía **Sublista → Familia (Padre consolidado + Hijos)**, marcando miembros solo-stock con bloqueo `X` y calculando **`Neto a Comprar = max(0, Demanda Familia − Stock Total Familia)`** sin doble conteo de inventario.
+  2. **Proveedores Reales `PRODUCTOS` (Cero Truncado >1.000 Filas):**
+     - `fetchProviders` consulta `.from('providers').select('id, name, tax_id, document_type, category, type, is_active, is_archived, is_deleted, product, payment_condition, warehouse_location, puesto, location, contact_phone').eq('category', 'PRODUCTOS').eq('is_active', true).eq('is_archived', false).eq('is_deleted', false)` (~136 filas).
+     - El modal sugiere primero los proveedores cuya columna `product` coincida con el producto/familia de la tarea; al seleccionar proveedor auto-llena **Ubicación (`warehouse_location` + `puesto`)** en una línea limpia con botón discreto *"Cambiar"*, y auto-selecciona **`A Crédito`** (`credit`) si `prov.type === 'credito'` (mostrando `payment_condition`: `DIARIO`/`SEMANAL`/`MENSUAL`) o **`En Efectivo`** (`cash`) si `prov.type === 'contado'`.
+     - `isQuickProvider` inserta `category: 'PRODUCTOS'`, `is_active: true`, `is_archived: false`, `is_deleted: false` para que el proveedor rápido aparezca inmediatamente en la lista.
+  3. **Modal "Modo Lluvia / 3 Toques" (Sin Foto Obligatoria ni Congelamiento):**
+     - Se **elimina** el campo y la obligatoriedad de foto (`voucherFile` / `voucher_image_url: null`) en el registro de compra de `/ops/compras` (soportado por `/ops/recepcion`, `/ops/recogida` y `/ops/control-caja`).
+     - Botones mínimos de `52px–56px` con alto contraste, inputs Estándar `5B` (`type="text"` + `inputMode="decimal"`, cero `<input type="number">`), `Ya mismo` (`pickupTimeMinutes = 0`) por defecto, vibración corta (`navigator.vibrate?.(40)`) y cierre instantáneo (`<= 800ms`, retirando el `setTimeout(..., 4000)` bloqueante).
+  4. **Caja en Vivo (`cash_budgets` + RLS) & Experiencia Lúdica Industrial (`BuyerCashBar.tsx`):**
+     - Migración `20261126_cash_budgets_buyer_rls.sql` habilita `SELECT` en `cash_budgets` para `'LIDER DE INVENTARIO'`, `'COORDINADOR DE OPERACIONES'` y `'TESORERO'` además de los roles existentes.
+     - `ops/compras/page.tsx` consulta `cash_budgets` por `.eq('target_date', selectedDate)` vinculando al comprador vía JSON en `notes` (`buyer_id` / `buyer_name`), y al guardar (`handleSavePurchase` y `handleConfirmQuickPurchase`) persiste `budget_id` (si hay presupuesto `'authorized'` activo), `payment_method` (`'cash' | 'credit'`) y `notes: JSON.stringify({ buyer_id, buyer_name })`.
+     - `BuyerCashBar.tsx` muestra en vivo: **`Caja Recibida − Gastado Efectivo = Saldo en Mano`**, separado **`Crédito Hoy (CxP)`**, barra de progreso del turno (`X / Y listos · Te faltan N`), tarjeta destacada **"Siguiente en tu Ruta"** y pantalla resumen de cuadre al llegar a `100%`.
+  5. **Aprendizaje de Ruta Habitual (`buyerRouteLearning.ts`):**
+     - Paginado con `fetchAllRows` sobre últimos **45 días** de `purchases` filtrando `.in('payment_method', ['cash', 'credit'])` y excluyendo `is_pre_digital_entry = true` / `raw_data_source = 'COTIZACION_MANUAL_MATRIZ'`.
+     - Calcula la mediana de posición relativa (`0.0 → 1.0`) por jornada `America/Bogota` para cada `product_id` (mínimo `2` jornadas), con fallback determinista: `warehouse_location` numérico ascendente → alfabético. Selector en UI: **`Mi Ruta Habitual | Alertas | Alfabético`**.
+  6. **Comprobante Contable Imprimible bajo Demanda (`ProcurementAccountingVoucherPrint.tsx`):**
+     - Vista/impresión limpia (`window.print()`) generada desde BD (`purchases` del día) separando **Compras en Efectivo** y **Compras a Crédito**, con comprador, proveedor (`tax_id`, Bodega/Puesto), `#accounting_id`, producto, cantidad, precio unitario, total y condición de pago, sin depender de fotos.
+  7. **Reglas Globales FruFresco:** `'use client';` en línea 1 en todo componente cliente, cero `<input type="number">`, cero emojis unicode (solo `lucide-react`), cero `SKU` nuevos en UI (`#accounting_id`) y cero `products.base_price`.

@@ -11,6 +11,19 @@ import { getCanonicalProcurementSpec, normalizeDemandToKg, calculateProcurementN
 import { getBogotaDateString } from '@/lib/dateUtils';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
+import {
+  buildHierarchicalPurchaseRows,
+  type CatalogFamilyMember,
+  type HierarchicalPurchaseRow
+} from '@/lib/procurement/buildHierarchicalPurchaseRows';
+import {
+  computeBuyerRouteRanks,
+  sortBuyerGroups,
+  type BuyerRouteHistoryRow,
+  type BuyerGroupSortMode
+} from '@/lib/procurement/buyerRouteLearning';
+import BuyerCashBar, { type BuyerSortMode, type NextRouteTaskInfo } from '@/components/ops/BuyerCashBar';
+import ProcurementAccountingVoucherPrint, { type VoucherPurchaseRow } from '@/components/ops/ProcurementAccountingVoucherPrint';
 import { 
   Calendar, 
   BookOpen, 
@@ -186,10 +199,10 @@ export default function ProcurementPage() {
         setProviderSearchText(`${prov.product ? prov.product.toUpperCase() : "PRODUCTO"} - ${prov.name}`);
         if (prov.warehouse_location || prov.puesto) {
           const parts = [];
-          if (prov.warehouse_location) parts.push(`Bodega: ${prov.warehouse_location}`);
-          if (prov.puesto) parts.push(`Puesto: ${prov.puesto}`);
-          setLocation(parts.join(", "));
-          
+          if (prov.warehouse_location) parts.push(`Bodega ${prov.warehouse_location}`);
+          if (prov.puesto) parts.push(`Puesto ${prov.puesto}`);
+          setLocation(parts.join(" · "));
+
           setContingencyBodega(prov.warehouse_location ? String(prov.warehouse_location) : "");
           setContingencyPuesto(prov.puesto ? String(prov.puesto) : "");
         } else if (prov.location) {
@@ -200,6 +213,12 @@ export default function ProcurementPage() {
           setLocation("");
           setContingencyBodega("");
           setContingencyPuesto("");
+        }
+
+        if (prov.type === 'credito') {
+          setPaymentMethod('credit');
+        } else {
+          setPaymentMethod('cash');
         }
       }
     } else {
@@ -230,15 +249,22 @@ export default function ProcurementPage() {
 
   // Logistics states
   const [purchaseUnit, setPurchaseUnit] = useState("Kg");
-  const [pickupTimeMinutes, setPickupTimeMinutes] = useState<number | null>(
-    null,
-  );
+  const [pickupTimeMinutes, setPickupTimeMinutes] = useState<number | null>(0);
   const [formError, setFormError] = useState<string | null>(null);
   const [targetDateLabel, setTargetDateLabel] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [quickPurchaseModalItem, setQuickPurchaseModalItem] = useState<ProcurementTask | null>(null);
   const [quickPurchasePriceStr, setQuickPurchasePriceStr] = useState("");
   const [isSubmittingQuickPurchase, setIsSubmittingQuickPurchase] = useState(false);
+
+  // Escenario 499 states (Paridad 495 + Cash Budgets + Route ML + Comprobante)
+  const [catalogById, setCatalogById] = useState<Record<string, CatalogFamilyMember>>({});
+  const [catalogMembersByFamily, setCatalogMembersByFamily] = useState<Record<string, CatalogFamilyMember[]>>({});
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  const [sortMode, setSortMode] = useState<BuyerSortMode>('route');
+  const [routeRankMap, setRouteRankMap] = useState<Record<string, number>>({});
+  const [cashBudgets, setCashBudgets] = useState<any[]>([]);
+  const [showVoucherPrintModal, setShowVoucherPrintModal] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -308,7 +334,9 @@ export default function ProcurementPage() {
           await Promise.all([
             fetchTasks(signal, initialCategory, dateToUse),
             fetchProviders(signal),
-            fetchConversions(signal)
+            fetchConversions(signal),
+            fetchCashBudgets(dateToUse, signal),
+            fetchBuyerRouteHistory(signal)
           ]);
         }
       }
@@ -458,7 +486,11 @@ export default function ProcurementPage() {
             .select(`
               *,
               provider:providers (
-                name
+                name,
+                tax_id,
+                payment_condition,
+                warehouse_location,
+                puesto
               )
             `)
             .in("task_id", rawTaskIds)
@@ -479,7 +511,7 @@ export default function ProcurementPage() {
           return acc;
         }, {});
 
-        // Fetch parent names if they have parent_id
+        // Fetch parent names & catalog siblings for Escenario 495 parity
         const parentIds = Array.from(new Set((products || []).map(p => p.parent_id).filter(Boolean)));
         let parentMap: Record<string, string> = {};
         if (parentIds.length > 0) {
@@ -493,7 +525,44 @@ export default function ProcurementPage() {
           });
         }
 
+        const familyRootIds = Array.from(new Set(
+          rawTasks.map((t: any) => productMap[t.product_id]?.parent_id || t.product_id).filter(Boolean)
+        ));
+        const nextCatalogById: Record<string, CatalogFamilyMember> = {};
+        (products || []).forEach((p: any) => {
+          nextCatalogById[p.id] = p;
+        });
+        const nextMembersByFamily: Record<string, CatalogFamilyMember[]> = {};
+        if (familyRootIds.length > 0) {
+          const { data: familyCatalogRows } = await supabase
+            .from("products")
+            .select("id, name, parent_id, min_inventory_level, category, purchase_sublist, unit_of_measure, weight_kg, accounting_id")
+            .or(`id.in.(${familyRootIds.join(",")}),parent_id.in.(${familyRootIds.join(",")})`)
+            .abortSignal(signal as any);
+
+          (familyCatalogRows || []).forEach((m: any) => {
+            nextCatalogById[m.id] = m;
+            const famKey = m.parent_id || m.id;
+            if (!nextMembersByFamily[famKey]) nextMembersByFamily[famKey] = [];
+            if (!nextMembersByFamily[famKey].some(existing => existing.id === m.id)) {
+              nextMembersByFamily[famKey].push(m);
+            }
+          });
+        }
+        (products || []).forEach((p: any) => {
+          const famKey = p.parent_id || p.id;
+          if (!nextMembersByFamily[famKey]) nextMembersByFamily[famKey] = [];
+          if (!nextMembersByFamily[famKey].some(existing => existing.id === p.id)) {
+            nextMembersByFamily[famKey].push(p);
+          }
+        });
+
         const stockMap: Record<string, number> = resolvedInv.stockMap;
+        if (isMounted.current && !signal?.aborted) {
+          setCatalogById(nextCatalogById);
+          setCatalogMembersByFamily(nextMembersByFamily);
+          setStockMap(stockMap);
+        }
 
         const purchasesData = purchasesRes.data;
         const currentPurchases = purchasesData || [];
@@ -651,8 +720,11 @@ export default function ProcurementPage() {
     try {
       const { data, error } = await supabase
         .from("providers")
-        .select("*")
+        .select("id, name, tax_id, document_type, category, type, is_active, is_archived, is_deleted, product, payment_condition, warehouse_location, puesto, location, contact_phone")
+        .eq("category", "PRODUCTOS")
         .eq("is_active", true)
+        .eq("is_archived", false)
+        .eq("is_deleted", false)
         .abortSignal(signal as any);
 
       if (error) {
@@ -677,16 +749,95 @@ export default function ProcurementPage() {
     }
   };
 
+  const fetchCashBudgets = async (targetDate: string, signal?: AbortSignal) => {
+    if (!targetDate) return;
+    try {
+      const { data, error } = await supabase
+        .from("cash_budgets")
+        .select("id, target_date, amount, status, notes, created_at")
+        .eq("target_date", targetDate)
+        .abortSignal(signal as any);
+      if (error) {
+        if (isAbortError(error)) return;
+        console.warn("Error fetching cash_budgets:", error);
+        return;
+      }
+      if (isMounted.current && !signal?.aborted) {
+        setCashBudgets(data || []);
+      }
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.warn("Exception in fetchCashBudgets:", err);
+    }
+  };
+
+  const fetchBuyerRouteHistory = async (signal?: AbortSignal) => {
+    try {
+      const since45d = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: historyRows, error } = await fetchAllRows<BuyerRouteHistoryRow>(
+        (from, to) =>
+          supabase
+            .from("purchases")
+            .select("product_id, created_at, payment_method, is_pre_digital_entry, raw_data_source")
+            .gte("created_at", since45d)
+            .in("payment_method", ["cash", "credit"])
+            .range(from, to)
+            .abortSignal(signal as any)
+      );
+      if (error) {
+        if (isAbortError(error)) return;
+        console.warn("Error fetching buyer route history:", error);
+        return;
+      }
+      if (isMounted.current && !signal?.aborted) {
+        setRouteRankMap(computeBuyerRouteRanks(historyRows || []));
+      }
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.warn("Exception in fetchBuyerRouteHistory:", err);
+    }
+  };
+
+  const normalizeProviderText = (val: string) =>
+    (val || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/^#\d+\s*/, "")
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .trim();
+
+  const getProviderMatchScore = (prov: any, task: ProcurementTask | null): number => {
+    if (!task || !prov?.product) return 0;
+    const provProd = normalizeProviderText(prov.product);
+    if (!provProd) return 0;
+    const taskName = normalizeProviderText(task.product_name);
+    const parentName = normalizeProviderText(task.parent_name || "");
+    if ((taskName && (taskName.includes(provProd) || provProd.includes(taskName))) ||
+        (parentName && (parentName.includes(provProd) || provProd.includes(parentName)))) {
+      return 3;
+    }
+    const taskTokens = new Set([...taskName.split(/\s+/), ...parentName.split(/\s+/)].filter(t => t.length >= 3));
+    const provTokens = provProd.split(/[\s,;/]+/).filter(t => t.length >= 3);
+    const hits = provTokens.filter(t => taskTokens.has(t)).length;
+    return hits > 0 ? Math.min(2, hits) : 0;
+  };
+
   const getFilteredProviders = () => {
     return providers
       .filter((p) => p.category === "PRODUCTOS")
       .filter((p) => {
-        const text = providerSearchText.toLowerCase();
-        const prodMatch = (p.product || "").toLowerCase().includes(text);
-        const nameMatch = (p.name || "").toLowerCase().includes(text);
+        const text = normalizeProviderText(providerSearchText);
+        if (!text) return true;
+        const prodMatch = normalizeProviderText(p.product || "").includes(text);
+        const nameMatch = normalizeProviderText(p.name || "").includes(text);
         return prodMatch || nameMatch;
       })
-      .sort((a, b) => (a.product || "").localeCompare(b.product || ""));
+      .sort((a, b) => {
+        const scoreDiff = getProviderMatchScore(b, selectedTask) - getProviderMatchScore(a, selectedTask);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (a.product || "").localeCompare(b.product || "");
+      });
   };
 
   const runConsolidation = async (signal?: AbortSignal) => {
@@ -1076,6 +1227,53 @@ export default function ProcurementPage() {
     }
   };
 
+  const buyerId = profile?.id || user?.id || '';
+  const buyerName = (profile as any)?.contact_name || (profile as any)?.company_name || user?.email || 'Comprador';
+
+  const parseBuyerNotes = (notesVal: unknown): { buyer_id?: string; buyer_name?: string } => {
+    if (!notesVal) return {};
+    if (typeof notesVal === 'object') return notesVal as { buyer_id?: string; buyer_name?: string };
+    if (typeof notesVal === 'string') {
+      try {
+        return JSON.parse(notesVal);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  };
+
+  const matchingBudgets = cashBudgets.filter((b: any) => {
+    const parsed = parseBuyerNotes(b.notes);
+    if (parsed.buyer_id && buyerId) return parsed.buyer_id === buyerId;
+    if (parsed.buyer_name && buyerName) {
+      return parsed.buyer_name.toLowerCase().trim() === buyerName.toLowerCase().trim();
+    }
+    return false;
+  });
+
+  const authorizedBudgets = matchingBudgets.filter((b: any) => b.status === 'authorized');
+  const activeAuthorizedBudgetId: string | null = authorizedBudgets[0]?.id || null;
+  const budgetStatus: string | null = authorizedBudgets[0]?.status || matchingBudgets[0]?.status || null;
+  const receivedCash = (authorizedBudgets.length > 0 ? authorizedBudgets : matchingBudgets).reduce(
+    (sum: number, b: any) => sum + (Number(b.amount) || 0),
+    0
+  );
+
+  const buyerDayPurchases = taskPurchases.filter((p: any) => {
+    const parsed = parseBuyerNotes(p.notes);
+    if (parsed.buyer_id && buyerId) return parsed.buyer_id === buyerId;
+    return true;
+  });
+
+  const spentCash = buyerDayPurchases
+    .filter((p: any) => (p.payment_method || 'cash') === 'cash')
+    .reduce((sum: number, p: any) => sum + (Number(p.total_cost) || 0), 0);
+
+  const creditTotal = buyerDayPurchases
+    .filter((p: any) => p.payment_method === 'credit')
+    .reduce((sum: number, p: any) => sum + (Number(p.total_cost) || 0), 0);
+
   const handleConfirmQuickPurchase = async () => {
     if (!quickPurchaseModalItem) return;
     let provId = selectedProvider || localStorage.getItem('last_provider_id');
@@ -1101,6 +1299,10 @@ export default function ProcurementPage() {
     setIsSubmittingQuickPurchase(true);
     try {
       const cost = qtyToBuy * realUnitPrice;
+      const provObj = providers.find((p) => p.id === provId);
+      const quickPayMethod: 'cash' | 'credit' = provObj?.type === 'credito' ? 'credit' : 'cash';
+      const notesPayload = JSON.stringify({ buyer_id: buyerId, buyer_name: buyerName });
+
       const { error: pErr } = await supabase.from("purchases").insert({
         task_id: quickPurchaseModalItem.id,
         product_id: quickPurchaseModalItem.product_id,
@@ -1109,8 +1311,12 @@ export default function ProcurementPage() {
         quantity: qtyToBuy,
         unit_price: realUnitPrice,
         total_cost: cost,
+        voucher_image_url: null,
         purchase_unit: quickPurchaseModalItem.unit || "Kg",
         status: "pending_pickup",
+        budget_id: activeAuthorizedBudgetId,
+        payment_method: quickPayMethod,
+        notes: notesPayload,
       });
       if (pErr) throw pErr;
 
@@ -1123,10 +1329,16 @@ export default function ProcurementPage() {
         .eq("id", quickPurchaseModalItem.id);
       if (tErr) throw tErr;
 
+      if (typeof navigator !== "undefined") navigator.vibrate?.(40);
+      const nextBalance = receivedCash - (spentCash + (quickPayMethod === 'cash' ? cost : 0));
       setQuickPurchaseModalItem(null);
       setQuickPurchasePriceStr("");
-      (window as any).showToast?.("Compra rápida registrada con éxito!", "success");
+      (window as any).showToast?.(
+        `Compra registrada. Saldo en mano: ${formatMoney(nextBalance)}`,
+        "success"
+      );
       fetchTasks(undefined, filterCategory, selectedDate);
+      if (selectedDate) fetchCashBudgets(selectedDate);
     } catch (err: any) {
       alert("Error en compra rápida: " + (err?.message || err));
     } finally {
@@ -1155,12 +1367,6 @@ export default function ProcurementPage() {
       setFormError("Selecciona un proveedor de la lista");
       return;
     }
-    if (!voucherFile) {
-      setFormError(
-        "Es obligatorio tomar una foto de la evidencia (Vale/Factura)",
-      );
-      return;
-    }
     if (pickupTimeMinutes === null) {
       setFormError("Selecciona una hora estimada de recogida");
       return;
@@ -1179,7 +1385,10 @@ export default function ProcurementPage() {
             tax_id: newProviderTaxId,
             contact_phone: newProviderPhone,
             email: newProviderEmail,
-            category: "Varios",
+            category: "PRODUCTOS",
+            is_active: true,
+            is_archived: false,
+            is_deleted: false,
           })
           .select()
           .single();
@@ -1198,9 +1407,6 @@ export default function ProcurementPage() {
     try {
       const cost = parseFloat(qty) * parseFloat(price);
 
-      // 0. Subir imagen primero si existe
-      const voucherImageUrl = await uploadVoucher();
-
       // Calcular hora estimada
       let estimatedPickup = null;
       if (pickupTimeMinutes !== null) {
@@ -1209,9 +1415,7 @@ export default function ProcurementPage() {
         estimatedPickup = date.toISOString();
       }
 
-      // 1. Guardar la compra
-      const buyerId = profile?.id || user?.id || '';
-      const buyerName = (profile as any)?.contact_name || (profile as any)?.company_name || user?.email || 'Comprador';
+      // 1. Guardar la compra (Modo Lluvia: sin foto obligatoria)
       const notesPayload = JSON.stringify({ buyer_id: buyerId, buyer_name: buyerName });
 
       const { error: pErr } = await supabase.from("purchases").insert({
@@ -1222,7 +1426,7 @@ export default function ProcurementPage() {
         quantity: parseFloat(qty),
         unit_price: parseFloat(price),
         total_cost: cost,
-        voucher_image_url: voucherImageUrl,
+        voucher_image_url: null,
         purchase_unit: purchaseUnit,
         estimated_pickup_time: estimatedPickup,
         pickup_location:
@@ -1230,6 +1434,7 @@ export default function ProcurementPage() {
           newProviderLoc ||
           providers.find((p) => p.id === providerId)?.location,
         status: "pending_pickup", // Mark as pending pickup so logistics team sees it
+        budget_id: activeAuthorizedBudgetId,
         payment_method: paymentMethod,
         notes: notesPayload
       });
@@ -1317,6 +1522,13 @@ export default function ProcurementPage() {
         console.warn('Aviso al sincronizar PPP diario en commercial_cost_matrix (DT-11):', pppErr);
       }
 
+      if (typeof navigator !== "undefined") navigator.vibrate?.(40);
+      const nextBalance = receivedCash - (spentCash + (paymentMethod === 'cash' ? cost : 0));
+      (window as any).showToast?.(
+        `Compra registrada. Saldo en mano: ${formatMoney(nextBalance)}`,
+        "success"
+      );
+
       setSelectedTask(prev => prev ? { ...prev, total_purchased: newPurchased, status: newStatus } : null);
       setPurchaseSuccess(true);
       setTimeout(() => {
@@ -1324,7 +1536,8 @@ export default function ProcurementPage() {
         setSelectedTask(null);
         fetchTasks(undefined, filterCategory, selectedDate);
         fetchProviders();
-      }, 4000);
+        if (selectedDate) fetchCashBudgets(selectedDate);
+      }, 450);
     } catch (e: any) {
       alert("Error: " + e.message);
     } finally {
@@ -1592,6 +1805,7 @@ export default function ProcurementPage() {
                     setSelectedDate(nextDate);
                     setTargetDateLabel(nextDate);
                     fetchTasks(undefined, filterCategory, nextDate);
+                    fetchCashBudgets(nextDate);
                   }}
                   style={{
                     fontSize: "0.8rem",
@@ -2096,6 +2310,182 @@ export default function ProcurementPage() {
         </table>
       </div>
 
+      {(() => {
+        const visibleTasks = tasks.filter(
+          (t) => !filterCategory || filterCategory === "Ver Todo" || t.category === filterCategory
+        );
+
+        const hierarchicalRows = buildHierarchicalPurchaseRows(
+          visibleTasks.map((t) => ({
+            ...t,
+            sublist: t.category,
+            demanda_neta: t.raw_order_qty ?? t.total_requested,
+            a_comprar: t.meta_neteo ?? t.total_requested,
+          })),
+          catalogMembersByFamily,
+          stockMap,
+          { catalogById }
+        );
+
+        type BuyerCardGroup = {
+          product_id: string;
+          product_name_base: string;
+          category: string;
+          delivery_date: string;
+          total_requested: number;
+          total_purchased: number;
+          unit: string;
+          status: "pending" | "partial" | "completed";
+          items: ProcurementTask[];
+          childRows: HierarchicalPurchaseRow<ProcurementTask & { sublist?: string; demanda_neta?: number; a_comprar?: number }>[];
+          familyRow?: HierarchicalPurchaseRow<ProcurementTask & { sublist?: string; demanda_neta?: number; a_comprar?: number }>;
+          familyTotalDemand: number;
+          familyTotalStock: number;
+          netToBuy: number;
+          hasRejection: boolean;
+          hasDeficit: boolean;
+          hasWarning: boolean;
+        };
+
+        const groupedMap: Record<string, BuyerCardGroup> = {};
+
+        hierarchicalRows.forEach((row) => {
+          const baseKey = row.family_id || row.parent_id || row.product_id;
+          if (!groupedMap[baseKey]) {
+            let baseName = row.parent_name || row.product_name;
+            const idx = baseName.lastIndexOf(" (");
+            if (idx !== -1 && baseName.endsWith(")")) {
+              baseName = baseName.slice(0, idx);
+            }
+            groupedMap[baseKey] = {
+              product_id: baseKey,
+              product_name_base: baseName,
+              category: row.sublist || row.category || "S/N",
+              delivery_date: row.delivery_date || "",
+              total_requested: 0,
+              total_purchased: 0,
+              unit: row.unit || "Kg",
+              status: "pending",
+              items: [],
+              childRows: [],
+              familyTotalDemand: 0,
+              familyTotalStock: 0,
+              netToBuy: 0,
+              hasRejection: false,
+              hasDeficit: false,
+              hasWarning: false,
+            };
+          }
+
+          const g = groupedMap[baseKey];
+          if (row.row_type === "family") {
+            g.familyRow = row;
+            g.familyTotalDemand = row.familyTotalDemand ?? row.demanda_neta ?? 0;
+            g.familyTotalStock = row.familyTotalStock ?? row.stock_bodega ?? 0;
+            g.netToBuy = row.netToBuy ?? row.a_comprar ?? 0;
+            return;
+          }
+
+          g.childRows.push(row);
+          if (!row.is_stock_only) {
+            g.items.push(row as unknown as ProcurementTask);
+            g.total_requested += Number(row.total_requested || 0);
+            g.total_purchased += Number(row.total_purchased || 0);
+            if (!g.delivery_date && row.delivery_date) g.delivery_date = row.delivery_date;
+            if (row.hasRejection) g.hasRejection = true;
+            if (row.hasDeficit) g.hasDeficit = true;
+            if (row.hasWarning) g.hasWarning = true;
+          }
+        });
+
+        Object.values(groupedMap).forEach((group) => {
+          if (group.items.length === 0) {
+            group.status = "completed";
+          } else {
+            const allCompleted = group.items.every((item) => item.status === "completed");
+            const anyPartial = group.items.some((item) => item.status === "partial" || item.total_purchased > 0);
+            group.status = allCompleted ? "completed" : anyPartial ? "partial" : "pending";
+          }
+          if (!group.familyRow) {
+            group.familyTotalDemand = group.items.reduce((acc, it) => acc + Number(it.raw_order_qty ?? it.total_requested ?? 0), 0);
+            group.familyTotalStock = group.items.reduce((acc, it) => acc + Number(it.applied_stock || 0), 0);
+            group.netToBuy = group.items.reduce((acc, it) => acc + Number(it.meta_neteo ?? it.total_requested ?? 0), 0);
+          }
+        });
+
+        const providerBodegaMap: Record<string, number> = {};
+        Object.values(groupedMap).forEach((g) => {
+          const gNorm = normalizeProviderText(g.product_name_base);
+          const matchedProv = providers.find((p) => {
+            const pNorm = normalizeProviderText(p.product || "");
+            return pNorm && (gNorm.includes(pNorm) || pNorm.includes(gNorm));
+          });
+          if (matchedProv?.warehouse_location) {
+            const num = parseInt(String(matchedProv.warehouse_location).replace(/[^0-9]/g, ""), 10);
+            if (!Number.isNaN(num)) providerBodegaMap[g.product_id] = num;
+          }
+        });
+
+        const sortedGroups = sortBuyerGroups(
+          Object.values(groupedMap),
+          sortMode,
+          routeRankMap,
+          providerBodegaMap
+        );
+
+        const openTaskForPurchase = (task: ProcurementTask) => {
+          setSelectedTask(task);
+          setPickupTimeMinutes(0);
+          const u = (task.unit || "").toLowerCase();
+          if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
+          else if (u === "bulto") setPurchaseUnit("Bulto");
+          else if (u === "caja") setPurchaseUnit("Caja");
+          else if (u === "canastilla") setPurchaseUnit("Canastilla");
+          else setPurchaseUnit("Kg");
+        };
+
+        const firstPendingGroup = sortedGroups.find((g) => g.status !== "completed" && g.items.some((it) => it.status !== "completed"));
+        const firstPendingItem = firstPendingGroup?.items.find((it) => it.status !== "completed") || null;
+        const matchedNextProv = firstPendingItem
+          ? providers.find((p) => getProviderMatchScore(p, firstPendingItem) > 0)
+          : null;
+
+        const nextTaskInfo: NextRouteTaskInfo | null = firstPendingItem
+          ? {
+              id: firstPendingItem.id,
+              productName: firstPendingItem.product_name,
+              accountingId: firstPendingItem.accounting_id ?? null,
+              pendingQty: Math.max(0, Number((firstPendingItem.meta_neteo ?? firstPendingItem.total_requested ?? 0) - (firstPendingItem.total_purchased || 0))),
+              unit: firstPendingItem.unit,
+              warehouseLocation: matchedNextProv?.warehouse_location ?? null,
+              puesto: matchedNextProv?.puesto ?? null,
+              hasAlert: !!(firstPendingItem.hasRejection || firstPendingItem.hasDeficit || firstPendingItem.hasWarning),
+            }
+          : null;
+
+        return (
+          <>
+            <div className="no-print" style={{ marginBottom: "1rem" }}>
+              <BuyerCashBar
+                receivedCash={receivedCash}
+                spentCash={spentCash}
+                creditTotal={creditTotal}
+                hasActiveBudget={matchingBudgets.length > 0}
+                budgetStatus={budgetStatus}
+                completedCount={visibleTasks.filter((t) => t.status === "completed").length}
+                totalCount={visibleTasks.length}
+                nextTask={nextTaskInfo}
+                onBuyNextTask={(taskId) => {
+                  const found = visibleTasks.find((t) => t.id === taskId);
+                  if (found) openTaskForPurchase(found);
+                }}
+                sortMode={sortMode}
+                onSortModeChange={setSortMode}
+                onOpenPrintVoucher={() => setShowVoucherPrintModal(true)}
+                buyerName={buyerName}
+              />
+            </div>
+
       {loading ? (
         <div style={{ textAlign: "center", padding: "4rem 2rem", animation: "pulse 2s infinite" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--ops-primary)", animation: "spin 2s linear infinite", marginBottom: "1rem" }}><RefreshCw size={36} /></div>
@@ -2143,91 +2533,10 @@ export default function ProcurementPage() {
               </p>
             </div>
           )}
-          {(() => {
-            const grouped: Record<string, {
-              product_id: string;
-              product_name_base: string;
-              category: string;
-              delivery_date: string;
-              total_requested: number;
-              total_purchased: number;
-              unit: string;
-              status: "pending" | "partial" | "completed";
-              items: ProcurementTask[];
-              hasRejection: boolean;
-              hasDeficit: boolean;
-              hasWarning: boolean;
-            }> = {};
-
-            tasks.filter(t => !filterCategory || filterCategory === "Ver Todo" || t.category === filterCategory).forEach((task) => {
-              const baseKey = task.parent_id || task.product_id;
-              if (!grouped[baseKey]) {
-                let baseName = task.parent_name || task.product_name;
-                const idx = baseName.lastIndexOf(" (");
-                if (idx !== -1 && baseName.endsWith(")")) {
-                  baseName = baseName.slice(0, idx);
-                }
-                grouped[baseKey] = {
-                  product_id: baseKey,
-                  product_name_base: baseName,
-                  category: task.category,
-                  delivery_date: task.delivery_date || "",
-                  total_requested: 0,
-                  total_purchased: 0,
-                  unit: task.unit,
-                  status: "pending",
-                  items: [],
-                  hasRejection: false,
-                  hasDeficit: false,
-                  hasWarning: false
-                };
-              }
-              grouped[baseKey].total_requested += task.total_requested;
-              grouped[baseKey].total_purchased += task.total_purchased;
-              grouped[baseKey].items.push(task);
-
-              if (task.hasRejection) grouped[baseKey].hasRejection = true;
-              if (task.hasDeficit) grouped[baseKey].hasDeficit = true;
-              if (task.hasWarning) grouped[baseKey].hasWarning = true;
-            });
-
-            // Update status of groups
-            Object.values(grouped).forEach((group) => {
-              const allCompleted = group.items.every((item) => item.status === "completed");
-              const anyPartial = group.items.some((item) => item.status === "partial" || item.total_purchased > 0);
-              if (allCompleted) {
-                group.status = "completed";
-              } else if (anyPartial) {
-                group.status = "partial";
-              } else {
-                group.status = "pending";
-              }
-            });
-
-            // Sort groups by severity
-            const sortedGroups = Object.values(grouped).sort((a, b) => {
-              const getGroupSeverity = (g: typeof a): number => {
-                if (g.hasRejection) return 0;
-                if (g.hasDeficit) return 1;
-                if (g.hasWarning) return 2;
-                if (g.status === "partial") return 3;
-                if (g.status === "pending") return 4;
-                return 5;
-              };
-              const sevA = getGroupSeverity(a);
-              const sevB = getGroupSeverity(b);
-              if (sevA !== sevB) return sevA - sevB;
-
-              const dateA = a.delivery_date || "9999-99-99";
-              const dateB = b.delivery_date || "9999-99-99";
-              return dateA.localeCompare(dateB);
-            });
-
-            return sortedGroups.map((group) => {
-              const hasVariants = group.items.length > 1 || (group.items[0] && group.items[0].variant_label);
+          {sortedGroups.map((group) => {
+              const isHierarchical = !!group.familyRow || group.childRows.length > 1 || (group.items[0] && group.items[0].variant_label);
               const isDone = group.status === "completed";
 
-              // Check group novelty severity for layout
               let groupBorderColor = "var(--ops-border)";
               if (group.hasRejection) groupBorderColor = "#EF4444";
               else if (group.hasDeficit) groupBorderColor = "#F59E0B";
@@ -2253,15 +2562,8 @@ export default function ProcurementPage() {
                     animation: group.hasRejection ? "pulse-rejection-soft 4s ease-in-out infinite" : undefined,
                   }}
                   onClick={() => {
-                    // Click on parent card opens first item if no variants
-                    if (!hasVariants && group.items[0]) {
-                      setSelectedTask(group.items[0]);
-                      const u = (group.items[0].unit || "").toLowerCase();
-                      if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
-                      else if (u === "bulto") setPurchaseUnit("Bulto");
-                      else if (u === "caja") setPurchaseUnit("Caja");
-                      else if (u === "canastilla") setPurchaseUnit("Canastilla");
-                      else setPurchaseUnit("Kg");
+                    if (!isHierarchical && group.items[0]) {
+                      openTaskForPurchase(group.items[0]);
                     }
                   }}
                 >
@@ -2313,10 +2615,14 @@ export default function ProcurementPage() {
                     </div>
                   </div>
 
-                  {/* Overall progress bar */}
+                  {/* Overall progress bar + Family Netting Summary (Escenario 495 parity) */}
                   {(() => {
-                    const groupNetTarget = group.items.reduce((acc, it) => acc + Number(it.meta_neteo ?? it.total_requested ?? 0), 0);
-                    const groupAppliedStock = group.items.reduce((acc, it) => acc + Number(it.applied_stock || 0), 0);
+                    const groupNetTarget = group.familyRow
+                      ? group.netToBuy
+                      : group.items.reduce((acc, it) => acc + Number(it.meta_neteo ?? it.total_requested ?? 0), 0);
+                    const groupAppliedStock = group.familyRow
+                      ? group.familyTotalStock
+                      : group.items.reduce((acc, it) => acc + Number(it.applied_stock || 0), 0);
                     const netProgressPct = groupNetTarget > 0 ? Math.min(100, (group.total_purchased / groupNetTarget) * 100) : 100;
                     return (
                       <>
@@ -2329,17 +2635,40 @@ export default function ProcurementPage() {
                           }} />
                         </div>
 
+                        {group.familyRow && (
+                          <div style={{
+                            fontSize: "0.74rem",
+                            fontWeight: "800",
+                            color: "#0D9488",
+                            backgroundColor: "rgba(13, 148, 136, 0.08)",
+                            border: "1px solid rgba(13, 148, 136, 0.25)",
+                            borderRadius: "8px",
+                            padding: "0.4rem 0.65rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "0.4rem"
+                          }}>
+                            <span>
+                              Demanda Familia: <strong>{formatNumber(group.familyTotalDemand)} {group.unit}</strong> − Stock Total Familia: <strong>{formatNumber(group.familyTotalStock)} {group.unit}</strong>
+                            </span>
+                            <span>
+                              Neto a Comprar: <strong>{formatNumber(group.netToBuy)} {group.unit}</strong>
+                            </span>
+                          </div>
+                        )}
+
                         {/* Summary of quantities */}
                         <div style={{ display: "flex", justifyContent: "flex-start", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--ops-text-muted)", flexWrap: "wrap" }}>
                           <span>
-                            Meta: <strong style={{ color: "var(--ops-text)" }}>{groupNetTarget.toFixed(0)} {group.unit}</strong>{groupAppliedStock > 0 ? <> | Stock: <strong style={{ color: "#0D9488" }}>{formatNumber(groupAppliedStock)} {group.unit}</strong></> : null} | Comprado: <strong style={{ color: "var(--ops-text)" }}>{group.total_purchased.toFixed(0)} {group.unit}</strong> | Faltante: <strong style={{ color: isDone ? "#10B981" : "#F59E0B" }}>{Math.max(0, groupNetTarget - group.total_purchased).toFixed(0)} {group.unit}</strong>
+                            Meta: <strong style={{ color: "var(--ops-text)" }}>{formatNumber(groupNetTarget)} {group.unit}</strong>{groupAppliedStock > 0 ? <> | Stock: <strong style={{ color: "#0D9488" }}>{formatNumber(groupAppliedStock)} {group.unit}</strong></> : null} | Comprado: <strong style={{ color: "var(--ops-text)" }}>{formatNumber(group.total_purchased)} {group.unit}</strong> | Faltante: <strong style={{ color: isDone ? "#10B981" : "#F59E0B" }}>{formatNumber(Math.max(0, groupNetTarget - group.total_purchased))} {group.unit}</strong>
                           </span>
                           {group.total_purchased > groupNetTarget && (
                             <span style={{
                               color: "#3B82F6", fontWeight: "800", backgroundColor: "rgba(59, 130, 246, 0.15)",
                               padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(59, 130, 246, 0.3)"
                             }}>
-                              +{(group.total_purchased - groupNetTarget).toFixed(0)} {group.unit} EXCEDENTE
+                              +{formatNumber(group.total_purchased - groupNetTarget)} {group.unit} EXCEDENTE
                             </span>
                           )}
                           {group.hasRejection && (
@@ -2347,7 +2676,6 @@ export default function ProcurementPage() {
                               color: "#EF4444", fontWeight: "800", backgroundColor: "rgba(239, 68, 68, 0.15)",
                               padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.65rem", border: "1px solid rgba(239, 68, 68, 0.3)"
                             }}>
-                              {/* Calculate rejection sum in base unit */}
                               {(() => {
                                 const rejQty = group.items.reduce((acc, item) => {
                                   const itemNovs = novelties.filter(n => n.task_id === item.id && n.novelty_type === 'rejection');
@@ -2362,8 +2690,8 @@ export default function ProcurementPage() {
                     );
                   })()}
 
-                  {/* Variants List Section */}
-                  {hasVariants && (
+                  {/* Children / Variants List Section */}
+                  {isHierarchical && (
                     <div style={{
                       marginTop: "0.5rem",
                       display: "grid",
@@ -2371,9 +2699,55 @@ export default function ProcurementPage() {
                       borderTop: "1px solid var(--ops-border)",
                       paddingTop: "0.75rem"
                     }}>
-                      {group.items.map((item) => {
+                      {group.childRows.map((childRow) => {
+                        if (childRow.is_stock_only) {
+                          return (
+                            <div
+                              key={childRow.id}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr auto",
+                                alignItems: "center",
+                                padding: "0.6rem 0.8rem",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(100, 116, 139, 0.08)",
+                                border: "1px dashed var(--ops-border)",
+                                cursor: "not-allowed",
+                                opacity: 0.72,
+                              }}
+                            >
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                <span style={{ fontWeight: "700", fontSize: "0.85rem", color: "var(--ops-text-muted)" }}>
+                                  {childRow.accounting_id ? `#${childRow.accounting_id} ` : ""}{childRow.product_name}
+                                </span>
+                                <span style={{ fontSize: "0.75rem", color: "#0D9488", fontWeight: "700" }}>
+                                  Stock en Bodega: {formatNumber(childRow.stock_bodega)} {childRow.unit} (Solo Stock · Sin Demanda)
+                                </span>
+                              </div>
+                              <span
+                                title="Bloqueado: miembro solo-stock"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  padding: "0.25rem 0.55rem",
+                                  borderRadius: "6px",
+                                  backgroundColor: "rgba(100, 116, 139, 0.18)",
+                                  color: "var(--ops-text-muted)",
+                                  fontSize: "0.72rem",
+                                  fontWeight: "900",
+                                }}
+                              >
+                                <X size={13} /> BLOQUEADO
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        const item = childRow as unknown as ProcurementTask;
                         const itemDone = item.status === "completed";
-                        
+
                         let itemStatusColor = "var(--ops-text-muted)";
                         if (item.hasRejection) itemStatusColor = "#EF4444";
                         else if (item.hasDeficit) itemStatusColor = "#F59E0B";
@@ -2395,14 +2769,8 @@ export default function ProcurementPage() {
                               transition: "all 0.2s ease"
                             }}
                             onClick={(e) => {
-                              e.stopPropagation(); // Avoid triggering parent onClick
-                              setSelectedTask(item);
-                              const u = (item.unit || "").toLowerCase();
-                              if (u === "unidad" || u === "und") setPurchaseUnit("Unidad");
-                              else if (u === "bulto") setPurchaseUnit("Bulto");
-                              else if (u === "caja") setPurchaseUnit("Caja");
-                              else if (u === "canastilla") setPurchaseUnit("Canastilla");
-                              else setPurchaseUnit("Kg");
+                              e.stopPropagation();
+                              openTaskForPurchase(item);
                             }}
                           >
                             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -2415,7 +2783,7 @@ export default function ProcurementPage() {
                                   }} />
                                 )}
                                 <span style={{ fontWeight: "700", fontSize: "0.85rem", color: "var(--ops-text)" }}>
-                                  {item.product_id !== group.product_id ? item.product_name : (item.variant_label || "Estándar")}
+                                  {item.product_id !== group.product_id ? item.product_name : (item.variant_label || item.product_name || "Estándar")}
                                 </span>
                               </div>
                               <div style={{ fontSize: "0.75rem", color: "var(--ops-text-muted)", marginTop: "2px" }}>
@@ -2441,7 +2809,6 @@ export default function ProcurementPage() {
                                   COMPRADO
                                 </span>
                               )}
-                              {/* Shortfall close fast action */}
                               {item.status === "partial" && (
                                 <button
                                   onClick={() => handleCloseShortfall(item)}
@@ -2455,7 +2822,6 @@ export default function ProcurementPage() {
                                   <Flag size={14} />
                                 </button>
                               )}
-                              {/* Fast purchase action (Modal controlado, sin window.prompt) */}
                               {!itemDone && (
                                 <button
                                   onClick={() => {
@@ -2490,10 +2856,12 @@ export default function ProcurementPage() {
                   )}
                 </div>
               );
-            });
-          })()}
+            })}
         </div>
       )}
+          </>
+        );
+      })()}
 
       {/* PURCHASE MODAL */}
       {selectedTask && (
@@ -2981,6 +3349,48 @@ export default function ProcurementPage() {
 
                   {!isQuickProvider ? (
                     <div style={{ position: "relative", width: "100%" }}>
+                      {!selectedProvider && (() => {
+                        const suggested = providers
+                          .filter((p) => p.category === "PRODUCTOS" && getProviderMatchScore(p, selectedTask) > 0)
+                          .slice(0, 4);
+                        if (suggested.length === 0) return null;
+                        return (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.6rem" }}>
+                            {suggested.map((sp) => (
+                              <button
+                                key={sp.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProvider(sp.id);
+                                  setShowProviderDropdown(false);
+                                }}
+                                style={{
+                                  minHeight: "52px",
+                                  padding: "0.5rem 0.85rem",
+                                  borderRadius: "10px",
+                                  border: "1px solid rgba(16, 185, 129, 0.5)",
+                                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                                  color: "#10B981",
+                                  fontSize: "0.8rem",
+                                  fontWeight: "800",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                              >
+                                <Zap size={14} />
+                                <span>{sp.name}</span>
+                                {sp.warehouse_location ? (
+                                  <span style={{ opacity: 0.8, fontSize: "0.72rem" }}>
+                                    (B{sp.warehouse_location}{sp.puesto ? `·P${sp.puesto}` : ""})
+                                  </span>
+                                ) : null}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {selectedProvider ? (
                         <div
                           onClick={() => {
@@ -3388,7 +3798,7 @@ export default function ProcurementPage() {
                     }}
                   >
                     {[
-                      { label: "YA", value: 0 },
+                      { label: "Ya mismo", value: 0 },
                       { label: "30m", value: 30 },
                       { label: "1h", value: 60 },
                       { label: "2h", value: 120 },
@@ -3396,20 +3806,23 @@ export default function ProcurementPage() {
                     ].map((time) => (
                       <button
                         key={time.label}
+                        type="button"
                         style={{
-                          padding: "0.8rem 0.2rem",
-                          borderRadius: "8px",
-                          border: `1px solid ${pickupTimeMinutes === time.value ? "var(--ops-primary)" : "var(--ops-border)"}`,
+                          minHeight: "52px",
+                          padding: "0.8rem 0.25rem",
+                          borderRadius: "10px",
+                          border: `2px solid ${pickupTimeMinutes === time.value ? "var(--ops-primary)" : "var(--ops-border)"}`,
                           backgroundColor:
                             pickupTimeMinutes === time.value
-                              ? "rgba(16, 185, 129, 0.1)"
+                              ? "rgba(16, 185, 129, 0.14)"
                               : "transparent",
                           color:
                             pickupTimeMinutes === time.value
                               ? "var(--ops-primary)"
                               : "var(--ops-text)",
-                          fontSize: "0.8rem",
-                          fontWeight: "700",
+                          fontSize: "0.82rem",
+                          fontWeight: "800",
+                          cursor: "pointer",
                         }}
                         onClick={() => setPickupTimeMinutes(time.value)}
                       >
@@ -3429,7 +3842,7 @@ export default function ProcurementPage() {
                         color: "var(--ops-text-muted)",
                       }}
                     >
-                      UBICACIÓN DE RECOGIDA (OPCIONAL)
+                      UBICACIÓN DE RECOGIDA
                     </label>
                     <button
                       type="button"
@@ -3442,34 +3855,46 @@ export default function ProcurementPage() {
                         display: "flex",
                         alignItems: "center",
                         gap: "0.25rem",
-                        fontSize: "0.75rem",
-                        fontWeight: "bold",
+                        fontSize: "0.78rem",
+                        fontWeight: "800",
                         padding: "0.2rem 0.5rem",
                         borderRadius: "6px",
                         backgroundColor: showLocationContingency ? "rgba(8, 145, 178, 0.1)" : "transparent",
                       }}
-                      title="Ingresar ubicación excepcional"
+                      title="Cambiar ubicación"
                     >
-                      <Pencil size={12} style={{ display: 'inline-flex', alignItems: 'center' }} /> {showLocationContingency ? "Ocultar" : "Excepcional"}
+                      <Pencil size={12} style={{ display: 'inline-flex', alignItems: 'center' }} /> {showLocationContingency ? "Ocultar" : "Cambiar"}
                     </button>
                   </div>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Ej: Bodega 4, Puesto 12"
-                    style={{
-                      width: "100%",
-                      padding: "1rem",
-                      borderRadius: "12px",
-                      backgroundColor: "var(--ops-bg)",
-                      border: "1px solid var(--ops-border)",
-                      color: "var(--ops-text)",
-                      fontSize: "0.85rem",
-                    }}
-                  />
+                  <div style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: "12px",
+                    backgroundColor: "var(--ops-bg)",
+                    border: "1px solid var(--ops-border)",
+                    color: location ? "var(--ops-text)" : "var(--ops-text-muted)",
+                    fontSize: "0.85rem",
+                    fontWeight: "700",
+                  }}>
+                    {location || "Sin ubicación asignada (toca Cambiar para editar)"}
+                  </div>
                   {showLocationContingency && (
-                    <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "var(--ops-surface)", borderRadius: "12px", border: "1px dashed var(--ops-border)" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "var(--ops-surface)", borderRadius: "12px", border: "1px dashed var(--ops-border)" }}>
+                      <input
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="Ej: Bodega 4 · Puesto 12"
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem 0.9rem",
+                          borderRadius: "10px",
+                          backgroundColor: "var(--ops-bg)",
+                          border: "1px solid var(--ops-border)",
+                          color: "var(--ops-text)",
+                          fontSize: "0.85rem",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: "0.75rem" }}>
                       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                         <span style={{ fontSize: "0.7rem", color: "var(--ops-text-muted)", fontWeight: "600" }}>BODEGA</span>
                         <input
@@ -3477,9 +3902,9 @@ export default function ProcurementPage() {
                           value={contingencyBodega}
                           onChange={(e) => {
                             setContingencyBodega(e.target.value);
-                            const newBodega = e.target.value ? `Bodega: ${e.target.value}` : "";
-                            const currentPuesto = contingencyPuesto ? `Puesto: ${contingencyPuesto}` : "";
-                            setLocation([newBodega, currentPuesto].filter(Boolean).join(", "));
+                            const newBodega = e.target.value ? `Bodega ${e.target.value}` : "";
+                            const currentPuesto = contingencyPuesto ? `Puesto ${contingencyPuesto}` : "";
+                            setLocation([newBodega, currentPuesto].filter(Boolean).join(" · "));
                           }}
                           placeholder="Elegir o escribir..."
                           style={{
@@ -3505,9 +3930,9 @@ export default function ProcurementPage() {
                           value={contingencyPuesto}
                           onChange={(e) => {
                             setContingencyPuesto(e.target.value);
-                            const currentBodega = contingencyBodega ? `Bodega: ${contingencyBodega}` : "";
-                            const newPuesto = e.target.value ? `Puesto: ${e.target.value}` : "";
-                            setLocation([currentBodega, newPuesto].filter(Boolean).join(", "));
+                            const currentBodega = contingencyBodega ? `Bodega ${contingencyBodega}` : "";
+                            const newPuesto = e.target.value ? `Puesto ${e.target.value}` : "";
+                            setLocation([currentBodega, newPuesto].filter(Boolean).join(" · "));
                           }}
                           placeholder="Elegir o escribir..."
                           style={{
@@ -3524,6 +3949,7 @@ export default function ProcurementPage() {
                         <datalist id="puestos-list">
                           {availablePuestos.map(p => <option key={p} value={p} />)}
                         </datalist>
+                      </div>
                       </div>
                     </div>
                   )}
@@ -3546,7 +3972,8 @@ export default function ProcurementPage() {
                       type="button"
                       onClick={() => setPaymentMethod('cash')}
                       style={{
-                        padding: "0.65rem 0.5rem",
+                        minHeight: "52px",
+                        padding: "0.75rem 0.5rem",
                         borderRadius: "10px",
                         border: paymentMethod === 'cash' ? "2px solid #10B981" : "1px solid var(--ops-border)",
                         backgroundColor: paymentMethod === 'cash' ? "rgba(16, 185, 129, 0.15)" : "var(--ops-bg)",
@@ -3560,13 +3987,14 @@ export default function ProcurementPage() {
                         gap: "6px"
                       }}
                     >
-                      En Efectivo
+                      <Banknote size={16} /> En Efectivo
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('credit')}
                       style={{
-                        padding: "0.65rem 0.5rem",
+                        minHeight: "52px",
+                        padding: "0.75rem 0.5rem",
                         borderRadius: "10px",
                         border: paymentMethod === 'credit' ? "2px solid #38BDF8" : "1px solid var(--ops-border)",
                         backgroundColor: paymentMethod === 'credit' ? "rgba(56, 189, 248, 0.15)" : "var(--ops-bg)",
@@ -3580,79 +4008,16 @@ export default function ProcurementPage() {
                         gap: "6px"
                       }}
                     >
-                      A Crédito
+                      <CreditCard size={16} /> A Crédito
+                      {(() => {
+                        const prov = providers.find((p) => p.id === selectedProvider);
+                        if (prov?.type === 'credito' && prov?.payment_condition) {
+                          return <span style={{ fontSize: "0.7rem", opacity: 0.9 }}>({prov.payment_condition})</span>;
+                        }
+                        return null;
+                      })()}
                     </button>
                   </div>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: "bold",
-                      marginBottom: "0.5rem",
-                      color: "var(--ops-primary)",
-                    }}
-                  >
-                    EVIDENCIA (FOTO OBLIGATORIA *)
-                  </label>
-                  <input
-                    type="file"
-                    id="voucherInput"
-                    onChange={handleFileChange}
-                    style={{
-                      position: "absolute",
-                      width: "1px",
-                      height: "1px",
-                      padding: "0",
-                      margin: "-1px",
-                      overflow: "hidden",
-                      clip: "rect(0, 0, 0, 0)",
-                      whiteSpace: "nowrap",
-                      border: "0",
-                    }}
-                  />
-                  <label
-                    htmlFor="voucherInput"
-                    style={{
-                      width: "100%",
-                      minHeight: voucherPreview ? "240px" : "120px",
-                      borderRadius: "12px",
-                      backgroundColor: "var(--ops-bg)",
-                      border: "2px dashed var(--ops-border)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--ops-text-muted)",
-                      cursor: "pointer",
-                      overflow: "hidden",
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    {voucherPreview ? (
-                      <img
-                        src={voucherPreview}
-                        alt="Preview"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          maxHeight: "350px",
-                          objectFit: "contain",
-                          backgroundColor: "#000",
-                          borderRadius: "10px"
-                        }}
-                      />
-                    ) : (
-                      <>
-                        <span style={{ color: "var(--ops-primary)", marginBottom: "8px" }}><Camera size={28} strokeWidth={1.5} /></span>
-                        <span style={{ fontSize: "0.7rem" }}>
-                          TOCAR PARA TOMAR FOTO
-                        </span>
-                      </>
-                    )}
-                  </label>
                 </div>
 
                 {formError && (
@@ -3677,10 +4042,11 @@ export default function ProcurementPage() {
 
                 <button
                   onClick={handleSavePurchase}
-                  disabled={submitting || uploadingImage}
+                  disabled={submitting}
                   style={{
                     width: "100%",
-                    padding: "1.2rem",
+                    minHeight: "54px",
+                    padding: "1rem",
                     borderRadius: "12px",
                     backgroundColor: "var(--ops-primary)",
                     color: "white",
@@ -3689,14 +4055,11 @@ export default function ProcurementPage() {
                     fontSize: "1.1rem",
                     marginTop: "0.5rem",
                     boxShadow: "0 4px 6px rgba(16, 185, 129, 0.2)",
-                    opacity: submitting || uploadingImage ? 0.6 : 1,
+                    opacity: submitting ? 0.6 : 1,
+                    cursor: "pointer",
                   }}
                 >
-                  {uploadingImage
-                    ? "SUBIENDO FOTO..."
-                    : submitting
-                      ? "GUARDANDO..."
-                      : "REGISTRAR COMPRA"}
+                  {submitting ? "GUARDANDO..." : "REGISTRAR COMPRA"}
                 </button>
                 </>
                 )}
@@ -4256,6 +4619,7 @@ export default function ProcurementPage() {
                 disabled={isSubmittingQuickPurchase}
                 style={{
                   flex: 1,
+                  minHeight: "52px",
                   padding: "0.75rem",
                   borderRadius: "8px",
                   border: "none",
@@ -4271,6 +4635,34 @@ export default function ProcurementPage() {
           </div>
         </div>
       )}
+
+      <ProcurementAccountingVoucherPrint
+        isOpen={showVoucherPrintModal}
+        onClose={() => setShowVoucherPrintModal(false)}
+        targetDate={selectedDate || targetDateLabel}
+        buyerName={buyerName}
+        receivedCash={receivedCash}
+        purchases={buyerDayPurchases.map((p: any): VoucherPurchaseRow => {
+          const catProd = catalogById[p.product_id];
+          const taskMatch = tasks.find((t) => t.id === p.task_id || t.product_id === p.product_id);
+          return {
+            id: p.id,
+            productName: catProd?.name || taskMatch?.product_name || "Producto",
+            accountingId: catProd?.accounting_id ?? taskMatch?.accounting_id ?? null,
+            quantity: Number(p.quantity) || 0,
+            unit: p.purchase_unit || taskMatch?.unit || "Kg",
+            unitPrice: Number(p.unit_price) || 0,
+            totalCost: Number(p.total_cost) || 0,
+            paymentMethod: p.payment_method || "cash",
+            paymentCondition: p.provider?.payment_condition ?? null,
+            providerName: p.provider?.name || "Proveedor",
+            providerTaxId: p.provider?.tax_id ?? null,
+            warehouseLocation: p.provider?.warehouse_location ?? null,
+            puesto: p.provider?.puesto ?? null,
+            createdAt: p.created_at ?? null,
+          };
+        })}
+      />
     </div>
   );
 }
