@@ -279,38 +279,85 @@ export function RouteSpaghettiMapModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-5"
+            style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                backdropFilter: 'blur(4px)',
+                padding: '16px',
+            }}
             role="dialog"
             aria-modal="true"
             aria-label="Mapa Espagueti de Rutas"
         >
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-[1440px] h-[90vh] flex flex-col overflow-hidden">
+            <div
+                style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '16px',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                    border: '1px solid #E2E8F0',
+                    width: '100%',
+                    maxWidth: '1440px',
+                    height: '90vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                }}
+            >
                 {/* Header */}
-                <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center">
-                            <RouteIcon className="w-5 h-5" />
+                <div
+                    style={{
+                        padding: '14px 20px',
+                        borderBottom: '1px solid #E2E8F0',
+                        backgroundColor: '#F8FAFC',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        flexShrink: 0,
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                            style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                backgroundColor: '#0F172A',
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                            }}
+                        >
+                            <RouteIcon size={18} />
                         </div>
                         <div>
-                            <h2 className="text-base font-bold text-slate-900 leading-tight">
+                            <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
                                 Mapa Espagueti de Rutas
                             </h2>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
                                 {trafficMode === 'live_predictive' && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                        <Navigation className="w-3 h-3" />
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}>
+                                        <Navigation size={11} />
                                         Tráfico Predictivo en Vivo (Google)
                                     </span>
                                 )}
                                 {trafficMode === 'weekday_projected' && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                        <Clock className="w-3 h-3" />
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                        <Clock size={11} />
                                         Tráfico Proyectado (Mismo Día Semana)
                                     </span>
                                 )}
                                 {!trafficMode && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                        <Info className="w-3 h-3" />
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0' }}>
+                                        <Info size={11} />
                                         Sin telemetría de tráfico de Google
                                     </span>
                                 )}
@@ -318,14 +365,24 @@ export function RouteSpaghettiMapModal({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-slate-500" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Truck size={16} color="#64748B" />
                             <select
                                 value={selectedVehicleId}
                                 onChange={(e) => setSelectedVehicleId(e.target.value)}
                                 aria-label="Filtrar por camión"
-                                className="text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                style={{
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    color: '#0F172A',
+                                    backgroundColor: '#FFFFFF',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: '8px',
+                                    padding: '6px 12px',
+                                    outline: 'none',
+                                    cursor: 'pointer',
+                                }}
                             >
                                 <option value="ALL">
                                     Todos los camiones ({activeVehicles.length})
@@ -342,24 +399,49 @@ export function RouteSpaghettiMapModal({
                             type="button"
                             onClick={onClose}
                             aria-label="Cerrar mapa espagueti"
-                            className="p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 transition-colors"
+                            style={{
+                                padding: '6px',
+                                borderRadius: '8px',
+                                border: '1px solid #E2E8F0',
+                                backgroundColor: '#FFFFFF',
+                                color: '#475569',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
                         >
-                            <X className="w-5 h-5" />
+                            <X size={18} />
                         </button>
                     </div>
                 </div>
 
                 {/* Body: Map + Lateral Panel */}
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12">
+                <div
+                    style={{
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1.85fr) minmax(340px, 1fr)',
+                    }}
+                >
                     {/* Map Canvas */}
-                    <div className="lg:col-span-8 relative min-h-[340px] bg-slate-100">
+                    <div
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            minHeight: '420px',
+                            backgroundColor: '#F1F5F9',
+                        }}
+                    >
                         <GoogleMap
                             mapId={GOOGLE_MAPS_MAP_ID}
                             defaultCenter={{ lat: BODEGA_CENTRAL.lat, lng: BODEGA_CENTRAL.lng }}
                             defaultZoom={12}
                             gestureHandling="greedy"
                             disableDefaultUI={false}
-                            className="w-full h-full"
+                            style={{ width: '100%', height: '100%' }}
                         >
                             <SpaghettiPolylinesLayer
                                 items={polylineItems}
@@ -372,12 +454,12 @@ export function RouteSpaghettiMapModal({
                                 title="Bodega Central (Corabastos)"
                                 zIndex={30}
                             >
-                                <div className="flex flex-col items-center">
-                                    <div className="px-2 py-1 rounded-lg bg-slate-900 text-white shadow-lg border border-white flex items-center gap-1.5 text-[11px] font-bold whitespace-nowrap">
-                                        <Warehouse className="w-3.5 h-3.5 text-amber-400" />
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <div style={{ padding: '4px 8px', borderRadius: '8px', backgroundColor: '#0F172A', color: '#FFFFFF', boxShadow: '0 4px 10px rgba(0,0,0,0.25)', border: '1px solid #FFFFFF', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                        <Warehouse size={13} color="#FBBF24" />
                                         <span>Bodega Central (Corabastos)</span>
                                     </div>
-                                    <div className="w-2.5 h-2.5 bg-slate-900 rotate-45 -mt-1.5 border-r border-b border-white" />
+                                    <div style={{ width: '10px', height: '10px', backgroundColor: '#0F172A', transform: 'rotate(45deg)', marginTop: '-5px', borderRight: '1px solid #FFFFFF', borderBottom: '1px solid #FFFFFF' }} />
                                 </div>
                             </AdvancedMarker>
 
@@ -395,12 +477,20 @@ export function RouteSpaghettiMapModal({
                                         zIndex={isActive ? 40 : 25}
                                         onClick={() => setActiveStopKey(stop.key)}
                                     >
-                                        <div className="flex flex-col items-center cursor-pointer group">
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
                                             <div
-                                                style={{ backgroundColor: stop.color }}
-                                                className={`px-2 py-0.5 rounded-full text-white font-extrabold text-[11px] shadow-md border-2 border-white transition-transform ${
-                                                    isActive ? 'scale-125 ring-2 ring-slate-900' : 'group-hover:scale-110'
-                                                }`}
+                                                style={{
+                                                    backgroundColor: stop.color,
+                                                    padding: '2px 8px',
+                                                    borderRadius: '9999px',
+                                                    color: '#FFFFFF',
+                                                    fontWeight: 800,
+                                                    fontSize: '11px',
+                                                    boxShadow: isActive ? '0 0 0 2px #0F172A, 0 4px 10px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.25)',
+                                                    border: '2px solid #FFFFFF',
+                                                    transform: isActive ? 'scale(1.22)' : 'scale(1)',
+                                                    transition: 'transform 0.15s',
+                                                }}
                                             >
                                                 #{stop.stopNumber}
                                             </div>
@@ -412,23 +502,31 @@ export function RouteSpaghettiMapModal({
                     </div>
 
                     {/* Lateral Summary & Stop Table */}
-                    <div className="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white flex flex-col min-h-0">
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div
+                        style={{
+                            borderLeft: '1px solid #E2E8F0',
+                            backgroundColor: '#FFFFFF',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0,
+                        }}
+                    >
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                             {visibleVehicles.length === 0 && (
-                                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-center text-xs text-slate-600">
+                                <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', textAlign: 'center', fontSize: '12px', color: '#475569' }}>
                                     No hay camiones con paradas asignadas para mostrar.
                                 </div>
                             )}
 
                             {/* Zero-Mock Notice when polyline is missing */}
                             {vehiclesWithoutPolyline.length > 0 && (
-                                <div className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs flex items-start gap-2.5">
-                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #FCD34D', backgroundColor: '#FFFBEB', color: '#78350F', fontSize: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                    <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                                     <div>
-                                        <p className="font-bold">
+                                        <p style={{ margin: 0, fontWeight: 800 }}>
                                             Modo Manual — sin polilínea ni métricas de tráfico de Google
                                         </p>
-                                        <p className="text-[11px] text-amber-800 mt-0.5">
+                                        <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#92400E' }}>
                                             {vehiclesWithoutPolyline.map((v) => v.plate).join(', ')} sin trazo optimizado vigente. No se generan distancias, tiempos ni líneas rectas sintéticas.
                                         </p>
                                     </div>
@@ -451,69 +549,83 @@ export function RouteSpaghettiMapModal({
                                 return (
                                     <div
                                         key={v.id}
-                                        className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm"
+                                        style={{
+                                            borderRadius: '12px',
+                                            border: '1px solid #E2E8F0',
+                                            overflow: 'hidden',
+                                            backgroundColor: '#FFFFFF',
+                                            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
+                                            flexShrink: 0,
+                                        }}
                                     >
                                         {/* Vehicle Card Header */}
-                                        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 min-w-0">
+                                        <div style={{ padding: '10px 14px', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                                                 <span
-                                                    className="w-3 h-3 rounded-full shrink-0 border border-white shadow-sm"
-                                                    style={{ backgroundColor: v.color }}
+                                                    style={{
+                                                        width: '12px',
+                                                        height: '12px',
+                                                        borderRadius: '9999px',
+                                                        backgroundColor: v.color,
+                                                        border: '1px solid #FFFFFF',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                                        flexShrink: 0,
+                                                    }}
                                                 />
-                                                <span className="text-xs font-extrabold text-slate-900 truncate">
+                                                <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {v.plate}
                                                 </span>
                                                 {v.driverName && (
-                                                    <span className="text-[11px] text-slate-500 truncate">
+                                                    <span style={{ fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                         · {v.driverName}
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className="text-[11px] font-semibold text-slate-600 shrink-0">
+                                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569', flexShrink: 0 }}>
                                                 {vehicleStops.length} paradas
                                             </span>
                                         </div>
 
                                         {/* Real Metrics Row or Manual Notice */}
-                                        <div className="px-3.5 py-2.5 border-b border-slate-100 bg-white">
+                                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#FFFFFF' }}>
                                             {hasPolyline && metrics ? (
-                                                <div className="grid grid-cols-3 gap-2 text-center">
-                                                    <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100">
-                                                        <div className="text-[10px] text-slate-500 font-medium">
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px', textAlign: 'center' }}>
+                                                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '6px', border: '1px solid #F1F5F9' }}>
+                                                        <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
                                                             Distancia
                                                         </div>
-                                                        <div className="text-xs font-bold text-slate-900">
+                                                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A' }}>
                                                             {metrics.distance_km} km
                                                         </div>
                                                     </div>
-                                                    <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100">
-                                                        <div className="text-[10px] text-slate-500 font-medium">
+                                                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '6px', border: '1px solid #F1F5F9' }}>
+                                                        <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
                                                             Conducción
                                                         </div>
-                                                        <div className="text-xs font-bold text-slate-900">
+                                                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A' }}>
                                                             {metrics.travel_min} min
                                                         </div>
                                                     </div>
-                                                    <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100">
-                                                        <div className="text-[10px] text-slate-500 font-medium">
+                                                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '6px', border: '1px solid #F1F5F9' }}>
+                                                        <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
                                                             Total Ruta
                                                         </div>
-                                                        <div className="text-xs font-bold text-slate-900">
+                                                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A' }}>
                                                             {metrics.total_min} min
                                                         </div>
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="text-[11px] font-medium text-amber-800 bg-amber-50/80 border border-amber-200 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-                                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                                <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400E', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <AlertTriangle size={13} color="#D97706" style={{ flexShrink: 0 }} />
                                                     <span>Modo Manual — sin polilínea ni métricas de tráfico de Google</span>
                                                 </div>
                                             )}
 
                                             {/* Google Maps Direction Chunks */}
-                                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                            <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                                                 {directionChunks.length === 0 ? (
-                                                    <span className="text-[11px] text-slate-400 italic">
+                                                    <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>
                                                         Sin paradas con GPS válido para navegación
                                                     </span>
                                                 ) : directionChunks.length === 1 ? (
@@ -521,9 +633,9 @@ export function RouteSpaghettiMapModal({
                                                         href={directionChunks[0].url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold transition-colors"
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '8px', backgroundColor: '#0F172A', color: '#FFFFFF', fontSize: '11px', fontWeight: 700, textDecoration: 'none' }}
                                                     >
-                                                        <ExternalLink className="w-3 h-3" />
+                                                        <ExternalLink size={12} />
                                                         Abrir en Google Maps
                                                     </a>
                                                 ) : (
@@ -533,9 +645,9 @@ export function RouteSpaghettiMapModal({
                                                             href={chunk.url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold transition-colors"
+                                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 10px', borderRadius: '8px', backgroundColor: '#0F172A', color: '#FFFFFF', fontSize: '11px', fontWeight: 700, textDecoration: 'none' }}
                                                         >
-                                                            <ExternalLink className="w-3 h-3" />
+                                                            <ExternalLink size={12} />
                                                             Abrir en Google Maps · Tramo {cIdx + 1}
                                                         </a>
                                                     ))
@@ -544,8 +656,8 @@ export function RouteSpaghettiMapModal({
                                         </div>
 
                                         {/* Stops Breakdown */}
-                                        <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                                            {vehicleStops.map((stop) => {
+                                        <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                            {vehicleStops.map((stop, sIdx) => {
                                                 const leg = stopLegMetrics?.[stop.orderId];
                                                 const eta = stopEtas?.[stop.orderId];
                                                 const isActive = activeStopKey === stop.key;
@@ -554,51 +666,63 @@ export function RouteSpaghettiMapModal({
                                                     <div
                                                         key={stop.key}
                                                         onClick={() => setActiveStopKey(stop.key)}
-                                                        className={`px-3.5 py-2 text-xs cursor-pointer transition-colors ${
-                                                            isActive ? 'bg-blue-50/70' : 'hover:bg-slate-50'
-                                                        }`}
+                                                        style={{
+                                                            padding: '8px 14px',
+                                                            fontSize: '12px',
+                                                            cursor: 'pointer',
+                                                            backgroundColor: isActive ? '#EFF6FF' : '#FFFFFF',
+                                                            borderTop: sIdx > 0 ? '1px solid #F1F5F9' : 'none',
+                                                        }}
                                                     >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex items-start gap-2 min-w-0">
+                                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', minWidth: 0 }}>
                                                                 <span
-                                                                    style={{ backgroundColor: v.color }}
-                                                                    className="px-1.5 py-0.5 rounded text-white font-bold text-[10px] shrink-0 mt-0.5"
+                                                                    style={{
+                                                                        backgroundColor: v.color,
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '6px',
+                                                                        color: '#FFFFFF',
+                                                                        fontWeight: 800,
+                                                                        fontSize: '10px',
+                                                                        flexShrink: 0,
+                                                                        marginTop: '2px',
+                                                                    }}
                                                                 >
                                                                     #{stop.stopNumber}
                                                                 </span>
-                                                                <div className="min-w-0">
-                                                                    <p className="font-semibold text-slate-900 truncate">
+                                                                <div style={{ minWidth: 0 }}>
+                                                                    <p style={{ margin: 0, fontWeight: 700, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                         {stop.order.customer_name || 'Cliente'}
                                                                     </p>
                                                                     {stop.order.address && (
-                                                                        <p className="text-[11px] text-slate-500 truncate">
+                                                                        <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                                             {stop.order.address}
                                                                         </p>
                                                                     )}
                                                                 </div>
                                                             </div>
 
-                                                            <div className="text-right shrink-0">
+                                                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                                                 {eta && (
-                                                                    <div className="text-[11px] font-bold text-slate-800">
+                                                                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A' }}>
                                                                         {eta}
                                                                     </div>
                                                                 )}
                                                                 {stop.gpsStatus !== 'valid' ? (
-                                                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                                                                        <MapPin className="w-2.5 h-2.5" />
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 700, color: '#B91C1C', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', padding: '1px 6px', borderRadius: '6px' }}>
+                                                                        <MapPin size={10} />
                                                                         Sin GPS válido
                                                                     </span>
                                                                 ) : leg?.is_same_site_followup ? (
-                                                                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                                                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#4338CA', backgroundColor: '#EEF2FF', border: '1px solid #C7D2FE', padding: '1px 6px', borderRadius: '6px' }}>
                                                                         Mismo punto (0 km · 0 min)
                                                                     </span>
                                                                 ) : leg ? (
-                                                                    <span className="text-[11px] font-medium text-slate-600">
+                                                                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>
                                                                         {leg.distance_km} km · {leg.travel_min} min
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[10px] text-slate-400">
+                                                                    <span style={{ fontSize: '10px', color: '#94A3B8' }}>
                                                                         Sin métrica
                                                                     </span>
                                                                 )}

@@ -18385,3 +18385,23 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - **Regla Matemática & KPIs Sin Doble Conteo:**
        - El stock de hijos `solo-stock` suma al consolidado informativo `FAMILIA`, pero **no** muta el `meta_neteo` individual de otros SKUs en `procurementNettingEngine.ts`. Cero etiqueta `inc.` (`-` cuando stock es `0`).
        - `completedTasks`, `partialTasks`, `pendingTasks`, `totalProgress` y contadores por categoría en `ops/compras/page.tsx` se calculan exclusivamente sobre tareas reales demandadas (`row_type !== 'family' && !is_stock_only`), preservando el disparo exacto de `100%` (*"¡Misión Cumplida!"*).
+
+---
+
+### Escenario 496: Visibilidad No-Invasiva de Stock Familiar en Alistamiento (Impreso Oficio + OPS Digital `/ops/picking` y `/ops/picking/terminal`) (SDD v1.9.451)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17728`):** Autorización acotada del CTO sobre `src/app/admin/orders/alistamiento-print/page.tsx` únicamente para: query de hermanos de catálogo por `familyRootIds`, etiqueta `BASE INV: CIERRE PARCIAL`, indicador `INV[0] · Fam[X]` en `<th>`, y micro-cinta de 1 línea entre `</table>` y footer (cero columnas/filas extra, cero cambios en `OPERATIONAL_STATUSES` o `normalizeToKg`).
+- **Alcance Contractual:**
+  1. **Rutas Acotadas:**
+     - *En alcance:* `src/lib/inventory/familyStockResolver.ts` *(nuevo helper puro)*, `src/app/admin/orders/alistamiento-print/page.tsx`, `src/app/ops/picking/page.tsx` (vistas `client` y `product`) y `src/app/ops/picking/terminal/page.tsx`.
+     - *Fuera de alcance:* `src/app/ops/picking/dashboard/page.tsx` y `src/app/ops/picking/cliente/[id]/page.tsx`.
+  2. **Regla Matemática Canónica (`familyStockResolver.ts`):**
+     - `familyRootId = (p.parent_id && p.parent_id !== p.id) ? p.parent_id : p.id` (blindaje self-referencing).
+     - Deduplicación por `product_id` y **homogeneidad estricta de unidad base normalizada** (`KG` / `UN` / `CJ` / `DOC`): `familyStock` suma únicamente hermanos con la misma unidad normalizada.
+  3. **Sábana de Alistamiento Impresa (`alistamiento-print/page.tsx`):**
+     - Encabezado `BASE INV`: para `sourceKind === 'partial_closing'`, muestra `BASE INV: CIERRE PARCIAL (<fecha>)` en tono ámbar `#B45309`.
+     - Encabezado `<th>` de columna: cuando `ownStock === 0 && familyStock > 0`, muestra `INV[0] · Fam[<familyStock>]` en tono ámbar `#B45309` en lugar de alarma roja pura.
+     - Micro-cinta de 1 línea entre `</table>` y footer (solo cuando existen hermanos con stock `> 0` ausentes de `chunkProducts` de esa hoja): `Bodega familia sin pedido en hoja: <Nombre> #<accounting_id> (<X> <UM>)` (cero emojis, cero `SKU`).
+  4. **Módulo Digital OPS (`/ops/picking` y `/ops/picking/terminal`):**
+     - Muestra pill compacto informativo `Fam: <X> <UM> (#<accounting_id>[+N])` (eligiendo el hermano con mayor stock) cuando `ownStock === 0 && familyStock > 0`.
+     - **Inmutabilidad transaccional:** El pill es puramente informativo; **no** modifica `available_stock`, la compuerta `DT-17`, `picked_quantity` ni `inventory_movements`. En `terminal/page.tsx`, la consulta de `inventory_stocks` incluye los IDs de hermanos y filtra `.eq('status', 'available')` para paridad con `/api/inventory/stocks`.

@@ -8,6 +8,12 @@ import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import { OPERATIONAL_CELLS, getOperationalTargetDate, normalizeOperationalCell } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { isSandboxMode } from '@/lib/sandboxGuard';
+import {
+    getFamilyRootId,
+    resolveFamilyStockSummary,
+    formatFamilyStockBadgeText,
+    type FamilyCatalogProduct
+} from '@/lib/inventory/familyStockResolver';
 import { CornerDownRight, CheckCircle2, Scale } from 'lucide-react';
 
 // Types
@@ -23,6 +29,7 @@ type PickingItem = {
     zone_name: string;
     space_label?: string | null;
     available_stock?: number;
+    family_stock_badge?: string | null;
     physical_instruction?: string | null;
 };
 
@@ -114,14 +121,33 @@ export default function PickingTerminal() {
                     return resolvedCell === normalizedTargetCell;
                 });
 
-                const stockLookupIds = Array.from(new Set(
-                    pendingItems.flatMap(it => [it.product_id || it.products?.id, it.products?.parent_id]).filter(Boolean) as string[]
+                const familyRootIds = Array.from(new Set(
+                    pendingItems.map(it => getFamilyRootId({
+                        id: it.product_id || it.products?.id || '',
+                        parent_id: it.products?.parent_id
+                    })).filter(Boolean)
                 ));
+                let familyCatalog: FamilyCatalogProduct[] = [];
+                if (familyRootIds.length > 0) {
+                    const rootStr = familyRootIds.join(',');
+                    const { data: famRows } = await supabase
+                        .from('products')
+                        .select('id, name, accounting_id, parent_id, unit_of_measure')
+                        .eq('is_active', true)
+                        .or(`id.in.(${rootStr}),parent_id.in.(${rootStr})`);
+                    familyCatalog = (famRows || []) as FamilyCatalogProduct[];
+                }
+
+                const stockLookupIds = Array.from(new Set([
+                    ...pendingItems.flatMap(it => [it.product_id || it.products?.id, it.products?.parent_id]),
+                    ...familyCatalog.map(m => m.id)
+                ].filter(Boolean) as string[]));
                 const stockByProd: Record<string, number> = {};
                 if (stockLookupIds.length > 0) {
                     const { data: stockRows, error: stockError } = await supabase
                         .from('inventory_stocks')
                         .select('product_id, quantity')
+                        .eq('status', 'available')
                         .in('product_id', stockLookupIds);
                     if (stockError) throw stockError;
                     (stockRows || []).forEach((s: any) => {
@@ -154,6 +180,17 @@ export default function PickingTerminal() {
                     const parentId = item.products?.parent_id || null;
                     const childStock = stockByProd[pid] || 0;
                     const availStock = childStock > 0 ? childStock : (parentId ? (stockByProd[parentId] || 0) : 0);
+                    const famBadge = formatFamilyStockBadgeText(resolveFamilyStockSummary({
+                        product: {
+                            id: pid,
+                            name: item.products.name,
+                            accounting_id: item.products.accounting_id,
+                            parent_id: parentId,
+                            unit_of_measure: itemUnit
+                        },
+                        allFamilyProducts: familyCatalog,
+                        stockMap: stockByProd
+                    }));
 
                     return {
                         id: item.id,
@@ -167,6 +204,7 @@ export default function PickingTerminal() {
                         zone_name: 'General',
                         space_label: getOrderSpaceDisplayLabel(item.orders),
                         available_stock: availStock,
+                        family_stock_badge: famBadge,
                         physical_instruction: physicalInst
                     };
                 });
@@ -412,6 +450,11 @@ export default function PickingTerminal() {
                                 {(item.available_stock ?? 0) <= 0 && (
                                     <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-bold">
                                         SIN STOCK ({item.available_stock ?? 0})
+                                    </span>
+                                )}
+                                {item.family_stock_badge && (
+                                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
+                                        {item.family_stock_badge}
                                     </span>
                                 )}
                             </div>

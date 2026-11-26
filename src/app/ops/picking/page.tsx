@@ -11,6 +11,12 @@ import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/
 import { getOperationalTargetDate, OPERATIONAL_CELLS, normalizeOperationalCell } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
+import {
+    getFamilyRootId,
+    resolveFamilyStockSummary,
+    formatFamilyStockBadgeText,
+    type FamilyCatalogProduct
+} from '@/lib/inventory/familyStockResolver';
 import { 
     Calendar, 
     GraduationCap, 
@@ -44,6 +50,7 @@ interface PickingItem {
     quality_notes?: string;
     category?: string;
     available_stock?: number;
+    family_stock_badge?: string | null;
 }
 
 interface PickingTask {
@@ -190,22 +197,41 @@ export default function PickingExecutionPage() {
             )).filter(Boolean);
 
             const stockMap: Record<string, number> = {};
+            let familyCatalog: FamilyCatalogProduct[] = [];
             if (productIds.length > 0) {
+                const familyRootIds = Array.from(new Set(
+                    (activeOrders || []).flatMap((o: any) =>
+                        (o.order_items || []).map((it: any) => {
+                            const prod = Array.isArray(it.products) ? it.products[0] : it.products;
+                            return it.product_id ? getFamilyRootId({ id: it.product_id, parent_id: prod?.parent_id }) : null;
+                        })
+                    ).filter(Boolean) as string[]
+                ));
                 try {
-                    const stockRes = await fetch(`/api/inventory/stocks?t=${Date.now()}`, { 
-                        signal,
-                        cache: 'no-store',
-                        headers: {
-                            'Cache-Control': 'no-cache',
-                            'Pragma': 'no-cache'
-                        }
-                    });
+                    const [stockRes, famRes] = await Promise.all([
+                        fetch(`/api/inventory/stocks?t=${Date.now()}`, { 
+                            signal,
+                            cache: 'no-store',
+                            headers: {
+                                'Cache-Control': 'no-cache',
+                                'Pragma': 'no-cache'
+                            }
+                        }),
+                        familyRootIds.length > 0
+                            ? supabase
+                                .from('products')
+                                .select('id, name, accounting_id, parent_id, unit_of_measure')
+                                .eq('is_active', true)
+                                .or(`id.in.(${familyRootIds.join(',')}),parent_id.in.(${familyRootIds.join(',')})`)
+                            : Promise.resolve({ data: [] })
+                    ]);
                     if (stockRes.ok) {
                         const allStocks = await stockRes.json();
                         Object.entries(allStocks || {}).forEach(([pIdStr, qty]) => {
                             stockMap[pIdStr] = Number(qty || 0);
                         });
                     }
+                    familyCatalog = ((famRes as any)?.data || []) as FamilyCatalogProduct[];
                 } catch (err) {
                     console.error('Error fetching inventory stocks via API:', err);
                 }
@@ -323,6 +349,17 @@ export default function PickingExecutionPage() {
                             const dispName = physicalInst ? `${baseName} (${physicalInst})` : (variant ? `${baseName} (${variant})` : baseName);
                             const childStock = Number(stockMap[item.product_id] || 0);
                             const resolvedStock = childStock > 0 ? childStock : (product?.parent_id ? Number(stockMap[product.parent_id] || 0) : 0);
+                            const famBadge = formatFamilyStockBadgeText(resolveFamilyStockSummary({
+                                product: {
+                                    id: item.product_id,
+                                    name: product?.name || 'Producto',
+                                    accounting_id: product?.accounting_id,
+                                    parent_id: product?.parent_id,
+                                    unit_of_measure: itemUnit
+                                },
+                                allFamilyProducts: familyCatalog,
+                                stockMap
+                            }));
                             return {
                                 id: item.id,
                                 product_id: item.product_id,
@@ -333,7 +370,8 @@ export default function PickingExecutionPage() {
                                 quality_notes: item.quality_notes,
                                 unit: itemUnit,
                                 category: resolvedCell,
-                                available_stock: resolvedStock
+                                available_stock: resolvedStock,
+                                family_stock_badge: famBadge
                             };
                         });
 
@@ -478,6 +516,7 @@ export default function PickingExecutionPage() {
         unit: string;
         category?: string;
         available_stock?: number;
+        family_stock_badge?: string | null;
         clients: {
             id: string;
             order_id: string;
@@ -508,6 +547,7 @@ export default function PickingExecutionPage() {
                         unit: item.unit,
                         category: item.category,
                         available_stock: item.available_stock,
+                        family_stock_badge: item.family_stock_badge,
                         clients: []
                     };
                 }
@@ -1174,6 +1214,19 @@ export default function PickingExecutionPage() {
                                                                 {(item.available_stock || 0) === 0 && <AlertCircle size={10} />}
                                                             </span>
                                                         )}
+                                                        {item.family_stock_badge && (
+                                                            <span style={{
+                                                                fontSize: '0.68rem',
+                                                                color: '#D97706',
+                                                                backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                                                                border: '1px solid rgba(245, 158, 11, 0.35)',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontWeight: '800'
+                                                            }}>
+                                                                {item.family_stock_badge}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 {!isDone ? (() => {
@@ -1268,6 +1321,19 @@ export default function PickingExecutionPage() {
                                         }}>
                                             Stock: {(group.available_stock || 0).toLocaleString('es-CO')} {group.unit}
                                         </span>
+                                        {group.family_stock_badge && (
+                                            <span style={{
+                                                fontSize: '0.75rem',
+                                                backgroundColor: '#FEF3C7',
+                                                color: '#92400E',
+                                                padding: '4px 9px',
+                                                borderRadius: '8px',
+                                                fontWeight: '900',
+                                                border: '1px solid #F59E0B'
+                                            }}>
+                                                {group.family_stock_badge}
+                                            </span>
+                                        )}
                                         {selectedCategory === 'TODAS' && group.category && (
                                             <span style={{ fontSize: '0.7rem', color: 'white', backgroundColor: 'rgba(255, 255, 255, 0.15)', padding: '4px 10px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
                                                 {group.category}
