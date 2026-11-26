@@ -242,16 +242,20 @@ function PqrsContent() {
     // Pantalla de Carga
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 shadow-md flex items-center justify-center mb-4">
-                    <Loader2 className="w-8 h-8 text-[#0D7A57] animate-spin" />
+            <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '16px', backgroundColor: '#FFFFFF', border: '1px solid rgba(226, 232, 240, 0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                    <Loader2 size={32} color="#0D7A57" className="pqrs-spin" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800 tracking-tight font-['Space_Grotesk']">
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', margin: 0, fontFamily: 'var(--font-outfit), sans-serif' }}>
                     Verificando Protocolo de Calidad FruFresco
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '0.35rem', maxWidth: '300px', lineHeight: 1.45 }}>
                     Cargando la información oficial del despacho y los productos amparados...
                 </p>
+                <style jsx global>{`
+                    .pqrs-spin { animation: pqrsSpin 1s linear infinite; }
+                    @keyframes pqrsSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}</style>
             </div>
         );
     }
@@ -269,95 +273,98 @@ function PqrsContent() {
         );
 
         return (
-            <main className="min-h-screen bg-[#F8FAFC] py-8 px-4 flex flex-col items-center justify-center">
-                <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+            <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: 'clamp(1rem, 4vw, 2rem) 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowX: 'hidden', boxSizing: 'border-box' }}>
+                <div style={{ width: '100%', maxWidth: '448px', backgroundColor: '#FFFFFF', borderRadius: '24px', border: '1px solid #E2E8F0', boxShadow: '0 20px 35px -10px rgba(15, 23, 42, 0.12)', overflow: 'hidden', animation: 'pqrsFadeIn 0.3s ease-out' }}>
                     {/* Header Verde Esmeralda */}
-                    <div className="bg-gradient-to-br from-[#0D7A57] via-[#095C41] to-[#043E2C] text-white p-6 text-center relative">
-                        <div className="w-14 h-14 mx-auto bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
-                            <CheckCircle2 className="w-8 h-8 text-emerald-300" strokeWidth={2.4} />
+                    <div style={{ background: 'linear-gradient(135deg, #0D7A57 0%, #095C41 55%, #043E2C 100%)', color: '#FFFFFF', padding: '1.5rem', textAlign: 'center', position: 'relative' }}>
+                        <div style={{ width: '56px', height: '56px', margin: '0 auto 0.75rem', backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.22)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <CheckCircle2 size={32} color="#6EE7B7" strokeWidth={2.4} />
                         </div>
-                        <span className="inline-block px-3 py-1 bg-white/15 border border-white/25 rounded-full text-[10px] font-mono tracking-widest uppercase font-bold text-emerald-100">
+                        <span style={{ display: 'inline-block', padding: '0.25rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '9999px', fontSize: '10px', fontFamily: 'monospace', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, color: '#D1FAE5' }}>
                             Protocolo Agro-Logístico Certificado
                         </span>
-                        <h2 className="text-xl font-bold font-['Space_Grotesk'] tracking-tight mt-2 text-white">
+                        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-outfit), sans-serif', margin: '0.5rem 0 0', color: '#FFFFFF' }}>
                             Garantía Radicada Exitosamente
                         </h2>
-                        <p className="text-xs text-emerald-100/90 mt-1 font-['Inter']">
+                        <p style={{ fontSize: '0.78rem', color: 'rgba(209, 250, 229, 0.9)', margin: '0.25rem 0 0' }}>
                             El reclamo ha sido vinculado en tiempo real a la Torre de Control
                         </p>
                     </div>
 
                     {/* Ficha del Ticket Oficial */}
-                    <div className="p-6 space-y-4">
-                        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-center">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-['Space_Grotesk']">
+                    <div style={{ padding: 'clamp(1rem, 4vw, 1.5rem)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>
                                 Radicado Oficial de Calidad
                             </span>
-                            <div className="text-2xl font-black font-mono tracking-wider text-[#0D7A57] mt-0.5 select-all">
+                            <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '0.06em', color: '#0D7A57', marginTop: '4px', userSelect: 'all' }}>
                                 {ticketResult.ticketCode}
                             </div>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-2 bg-amber-50 border border-amber-200 rounded-full text-[11px] font-semibold text-amber-800">
-                                <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', marginTop: '8px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, color: '#92400E' }}>
+                                <Clock size={12} color="#D97706" />
                                 Auditoría técnica en curso
                             </div>
                         </div>
 
                         {/* Resumen */}
-                        <div className="space-y-2.5 text-xs text-slate-600 border-t border-b border-slate-100 py-3.5">
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 font-medium">Remisión amparada:</span>
-                                <span className="font-mono font-bold text-slate-800">{friendlyNum}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.8rem', color: '#475569', borderTop: '1px solid #F1F5F9', borderBottom: '1px solid #F1F5F9', padding: '0.85rem 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#94A3B8', fontWeight: 500 }}>Remisión amparada:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1E293B' }}>{friendlyNum}</span>
                             </div>
                             {ticketResult.productName && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 font-medium">Ítem auditado:</span>
-                                    <span className="font-bold text-slate-800 text-right">{ticketResult.productName}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ color: '#94A3B8', fontWeight: 500 }}>Ítem auditado:</span>
+                                    <span style={{ fontWeight: 700, color: '#1E293B', textAlign: 'right' }}>{ticketResult.productName}</span>
                                 </div>
                             )}
                             {ticketResult.affectedQty && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 font-medium">Volumen afectado:</span>
-                                    <span className="font-mono font-bold text-slate-800">{ticketResult.affectedQty} {ticketResult.unit}</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ color: '#94A3B8', fontWeight: 500 }}>Volumen afectado:</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1E293B' }}>{ticketResult.affectedQty} {ticketResult.unit}</span>
                                 </div>
                             )}
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 font-medium">Preferencia:</span>
-                                <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#94A3B8', fontWeight: 500 }}>Preferencia:</span>
+                                <span style={{ fontWeight: 600, color: '#065F46', backgroundColor: '#ECFDF5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #D1FAE5' }}>
                                     {ticketResult.resolutionPref}
                                 </span>
                             </div>
                         </div>
 
                         {/* Aviso Poka-Yoke de facturación */}
-                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex gap-2.5 text-[11px] text-amber-900 leading-relaxed">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div style={{ backgroundColor: 'rgba(255, 251, 235, 0.85)', border: '1px solid #FDE68A', borderRadius: '12px', padding: '0.75rem', display: 'flex', gap: '10px', fontSize: '12px', color: '#78350F', lineHeight: 1.5 }}>
+                            <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                             <div>
                                 <strong>Salvaguarda Contable:</strong> La línea de facturación de este ítem entra en pausa preventiva hasta que el equipo de Calidad formalice la reposición física o la Nota Crédito.
                             </div>
                         </div>
 
                         {/* Acciones */}
-                        <div className="pt-2 space-y-2.5">
+                        <div style={{ paddingTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                             <a
                                 href={`https://wa.me/573167022898?text=${waMessage}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl font-bold text-sm shadow-md shadow-emerald-500/10 transition-all"
+                                style={{ width: '100%', minHeight: '46px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '0.75rem 1rem', backgroundColor: '#25D366', color: '#FFFFFF', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem', textDecoration: 'none', boxSizing: 'border-box', boxShadow: '0 4px 12px rgba(37, 211, 102, 0.2)' }}
                             >
-                                <MessageCircle className="w-4 h-4" />
+                                <MessageCircle size={18} />
                                 Confirmar Trámite por WhatsApp
                             </a>
 
                             <Link
                                 href="/"
-                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition-colors"
+                                style={{ width: '100%', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '0.65rem 1rem', backgroundColor: '#F1F5F9', color: '#334155', borderRadius: '12px', fontWeight: 600, fontSize: '0.82rem', textDecoration: 'none', boxSizing: 'border-box' }}
                             >
-                                <ArrowLeft className="w-3.5 h-3.5" />
+                                <ArrowLeft size={15} />
                                 Finalizar y Salir
                             </Link>
                         </div>
                     </div>
                 </div>
+                <style jsx global>{`
+                    @keyframes pqrsFadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+                `}</style>
             </main>
         );
     }
@@ -365,36 +372,38 @@ function PqrsContent() {
     // Pantalla de Búsqueda si no hay pedido especificado en URL
     if (!order) {
         return (
-            <main className="min-h-screen bg-[#F8FAFC] py-8 px-4 flex flex-col items-center justify-center">
-                <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200/90 shadow-lg p-6 space-y-6">
-                    <div className="text-center space-y-2">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto text-[#0D7A57]">
-                            <ShieldCheck className="w-6 h-6" />
+            <main style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: 'clamp(1rem, 4vw, 2rem) 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflowX: 'hidden', boxSizing: 'border-box' }}>
+                <div style={{ width: '100%', maxWidth: '448px', backgroundColor: '#FFFFFF', borderRadius: '24px', border: '1px solid #E2E8F0', boxShadow: '0 10px 30px -10px rgba(15, 23, 42, 0.1)', padding: 'clamp(1.25rem, 4vw, 1.5rem)', display: 'flex', flexDirection: 'column', gap: '1.25rem', boxSizing: 'border-box' }}>
+                    <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: '#ECFDF5', border: '1px solid #D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', color: '#0D7A57' }}>
+                            <ShieldCheck size={24} />
                         </div>
-                        <h1 className="text-xl font-bold font-['Space_Grotesk'] text-slate-900 tracking-tight">
+                        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-outfit), sans-serif', color: '#0F172A', margin: 0 }}>
                             Portal Oficial de Garantías
                         </h1>
-                        <p className="text-xs text-slate-500 leading-relaxed">
+                        <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.5, margin: 0 }}>
                             Escanea el código QR de tu remisión física o ingresa el ID del pedido para radicar novedades de calidad.
                         </p>
                     </div>
 
-                    <form onSubmit={handleSearchOrder} className="space-y-3">
-                        <div className="relative">
+                    <form onSubmit={handleSearchOrder} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
                                 placeholder="Ej: 1573 o código de remisión"
                                 value={lookupQuery}
                                 onChange={(e) => setLookupQuery(e.target.value)}
-                                className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0D7A57] focus:bg-white transition-all font-mono"
+                                className="pqrs-input"
+                                style={{ width: '100%', padding: '0.75rem 2.5rem 0.75rem 1rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', fontWeight: 600, color: '#1E293B', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' }}
                             />
                             {lookupQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setLookupQuery('')}
-                                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                                    aria-label="Limpiar búsqueda"
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', minWidth: '36px', minHeight: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X size={16} />
                                 </button>
                             )}
                         </div>
@@ -402,26 +411,30 @@ function PqrsContent() {
                         <button
                             type="submit"
                             disabled={isSearching || !lookupQuery.trim()}
-                            className="w-full py-3 px-4 bg-[#0D7A57] hover:bg-[#0B6849] disabled:opacity-50 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all"
+                            style={{ width: '100%', minHeight: '46px', padding: '0.75rem 1rem', backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none', borderRadius: '12px', fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: (isSearching || !lookupQuery.trim()) ? 'not-allowed' : 'pointer', opacity: (isSearching || !lookupQuery.trim()) ? 0.55 : 1, boxSizing: 'border-box' }}
                         >
-                            {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                            {isSearching ? <Loader2 size={16} className="pqrs-spin" /> : <ShieldCheck size={16} />}
                             Consultar Remisión
                         </button>
                     </form>
 
                     {errorMsg && (
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                            {errorMsg}
+                        <div style={{ padding: '0.75rem', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px', fontSize: '0.8rem', color: '#B91C1C', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AlertTriangle size={16} color="#EF4444" style={{ flexShrink: 0 }} />
+                            <span>{errorMsg}</span>
                         </div>
                     )}
 
-                    <div className="border-t border-slate-100 pt-4 text-center">
-                        <p className="text-[11px] text-slate-400">
-                            ¿Tienes la hoja física impresa? Busca el código QR rotulado <strong>"Garantía & PQRS"</strong> en la parte inferior para acceder directamente.
+                    <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem', textAlign: 'center' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#94A3B8', margin: 0, lineHeight: 1.45 }}>
+                            ¿Tienes la hoja física impresa? Busca el código QR rotulado <strong>&quot;Garantía &amp; PQRS&quot;</strong> en la parte inferior para acceder directamente.
                         </p>
                     </div>
                 </div>
+                <style jsx global>{`
+                    .pqrs-spin { animation: pqrsSpin 1s linear infinite; }
+                    @keyframes pqrsSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                `}</style>
             </main>
         );
     }
@@ -432,72 +445,94 @@ function PqrsContent() {
     const friendlyNum = order.sequence_id ? `#REM-${order.sequence_id}` : `#${order.id.slice(0, 8)}`;
 
     return (
-        <main className="min-h-screen bg-[#F8FAFC] py-6 px-4 sm:px-6">
-            <div className="w-full max-w-lg mx-auto space-y-4">
+        <main className="pqrs-main" style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', padding: 'clamp(1rem, 3vw, 1.75rem) clamp(0.75rem, 3vw, 1.5rem)', overflowX: 'hidden', boxSizing: 'border-box' }}>
+            <div style={{ width: '100%', maxWidth: '520px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 
                 {/* 1. Header de Autoridad & Ficha Institucional */}
-                <header className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-5 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-                    
-                    <div className="flex items-center justify-between gap-3 mb-2.5">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-[10px] font-extrabold tracking-wider uppercase text-[#0D7A57]">
-                            <ShieldCheck className="w-3.5 h-3.5 text-[#0D7A57]" />
+                <header style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)', padding: 'clamp(1rem, 3.5vw, 1.25rem)', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '0.6rem' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '9999px', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', fontSize: '10px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#0D7A57' }}>
+                            <ShieldCheck size={14} color="#0D7A57" />
                             Garantía Agro-Logística Oficial
                         </div>
-                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 700, color: '#334155', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                             {friendlyNum}
                         </span>
                     </div>
 
-                    <h1 className="text-lg sm:text-xl font-bold font-['Space_Grotesk'] text-slate-900 tracking-tight">
+                    <h1 style={{ fontSize: 'clamp(1.1rem, 4vw, 1.3rem)', fontWeight: 700, fontFamily: 'var(--font-outfit), sans-serif', color: '#0F172A', margin: 0, lineHeight: 1.25 }}>
                         {order.client_name}
                     </h1>
                     
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-2 font-medium">
-                        <div className="flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem 1rem', fontSize: '0.78rem', color: '#64748B', marginTop: '0.5rem', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Calendar size={14} color="#94A3B8" />
                             <span>Entrega: {order.delivery_date || 'Hoy'}</span>
                         </div>
                         {order.shipping_address && (
-                            <div className="flex items-center gap-1 truncate max-w-xs">
-                                <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                <span className="truncate">{order.shipping_address}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0, maxWidth: '100%' }}>
+                                <Truck size={14} color="#94A3B8" style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.shipping_address}</span>
                             </div>
                         )}
                     </div>
                 </header>
 
                 {/* 2. Formulario de Radicación */}
-                <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-5 space-y-5">
+                <form onSubmit={handleSubmit} style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)', padding: 'clamp(1rem, 3.5vw, 1.25rem)', display: 'flex', flexDirection: 'column', gap: '1.25rem', boxSizing: 'border-box' }}>
                     
                     {/* Switcher de Tipo de Novedad */}
                     <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 font-['Space_Grotesk']">
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
                             Tipo de Novedad
                         </label>
-                        <div className="grid grid-cols-2 gap-2 bg-slate-100/80 p-1 rounded-xl">
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', backgroundColor: '#F1F5F9', padding: '4px', borderRadius: '12px' }}>
                             <button
                                 type="button"
                                 onClick={() => setReportType('product')}
-                                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                                    reportType === 'product'
-                                        ? 'bg-white text-[#0D7A57] shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-800'
-                                }`}
+                                style={{
+                                    minHeight: '44px',
+                                    padding: '0.5rem 0.65rem',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    backgroundColor: reportType === 'product' ? '#FFFFFF' : 'transparent',
+                                    color: reportType === 'product' ? '#0D7A57' : '#64748B',
+                                    boxShadow: reportType === 'product' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                                }}
                             >
-                                <Package className="w-3.5 h-3.5" />
+                                <Package size={15} />
                                 Producto Afectado
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setReportType('general')}
-                                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                                    reportType === 'general'
-                                        ? 'bg-white text-[#0D7A57] shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-800'
-                                }`}
+                                style={{
+                                    minHeight: '44px',
+                                    padding: '0.5rem 0.65rem',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    backgroundColor: reportType === 'general' ? '#FFFFFF' : 'transparent',
+                                    color: reportType === 'general' ? '#0D7A57' : '#64748B',
+                                    boxShadow: reportType === 'general' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                                }}
                             >
-                                <Truck className="w-3.5 h-3.5" />
+                                <Truck size={15} />
                                 Novedad de Entrega
                             </button>
                         </div>
@@ -505,42 +540,41 @@ function PqrsContent() {
 
                     {/* Selector de Producto (si es reporte de producto) */}
                     {reportType === 'product' && (
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Selecciona el Producto Despachado
                                 </label>
-                                <span className="text-[11px] font-mono text-slate-400">
+                                <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#94A3B8' }}>
                                     {orderItems.length} ítems en remisión
                                 </span>
                             </div>
 
-                            <div className="relative">
-                                <select
-                                    value={selectedItemId}
-                                    onChange={(e) => setSelectedItemId(e.target.value)}
-                                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0D7A57] focus:bg-white"
-                                >
-                                    {orderItems.map((itm) => (
-                                        <option key={itm.id} value={itm.id}>
-                                            {itm.accounting_id ? `#${itm.accounting_id} ` : ''}{itm.name} — ({itm.quantity} {itm.unit})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <select
+                                value={selectedItemId}
+                                onChange={(e) => setSelectedItemId(e.target.value)}
+                                className="pqrs-input"
+                                style={{ width: '100%', minHeight: '44px', padding: '0.6rem 0.75rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', fontWeight: 600, color: '#1E293B', outline: 'none', boxSizing: 'border-box' }}
+                            >
+                                {orderItems.map((itm) => (
+                                    <option key={itm.id} value={itm.id}>
+                                        {itm.accounting_id ? `#${itm.accounting_id} ` : ''}{itm.name} — ({itm.quantity} {itm.unit})
+                                    </option>
+                                ))}
+                            </select>
 
                             {selectedProduct && (
-                                <div className="p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-lg bg-[#0D7A57] text-white flex items-center justify-center font-mono font-bold text-[11px]">
+                                <div style={{ padding: '0.65rem 0.75rem', backgroundColor: '#ECFDF5', border: '1px solid #D1FAE5', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.78rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: '#0D7A57', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
                                             {selectedProduct.accounting_id ? `#${selectedProduct.accounting_id}` : 'ITM'}
                                         </div>
-                                        <div>
-                                            <span className="font-bold text-slate-800 block leading-tight">{selectedProduct.name}</span>
-                                            <span className="text-[11px] text-emerald-800">Despacho oficial de entrega</span>
+                                        <div style={{ minWidth: 0 }}>
+                                            <span style={{ fontWeight: 700, color: '#1E293B', display: 'block', lineHeight: 1.25 }}>{selectedProduct.name}</span>
+                                            <span style={{ fontSize: '11px', color: '#065F46' }}>Despacho oficial de entrega</span>
                                         </div>
                                     </div>
-                                    <span className="font-mono font-bold text-xs bg-white px-2 py-0.5 rounded border border-emerald-200 text-[#0D7A57]">
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', backgroundColor: '#FFFFFF', padding: '3px 8px', borderRadius: '6px', border: '1px solid #A7F3D0', color: '#0D7A57', flexShrink: 0 }}>
                                         {selectedProduct.quantity} {selectedProduct.unit}
                                     </span>
                                 </div>
@@ -549,11 +583,11 @@ function PqrsContent() {
                     )}
 
                     {/* Diagnóstico de Calidad / Motivo */}
-                    <div className="space-y-2">
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Diagnóstico de Calidad / Motivo
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        <div className="pqrs-reasons-grid">
                             {NOVELTY_TYPES.map((nt) => {
                                 const Icon = nt.icon;
                                 const isSelected = reasonId === nt.id;
@@ -562,14 +596,26 @@ function PqrsContent() {
                                         key={nt.id}
                                         type="button"
                                         onClick={() => setReasonId(nt.id)}
-                                        className={`p-2 rounded-xl text-left border text-[11px] font-semibold flex items-center gap-1.5 transition-all ${
-                                            isSelected
-                                                ? 'bg-[#0D7A57]/5 border-[#0D7A57] text-[#0D7A57] ring-1 ring-[#0D7A57]'
-                                                : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100/70'
-                                        }`}
+                                        style={{
+                                            minHeight: '44px',
+                                            padding: '0.5rem 0.6rem',
+                                            borderRadius: '12px',
+                                            textAlign: 'left',
+                                            border: isSelected ? '1.5px solid #0D7A57' : '1px solid #E2E8F0',
+                                            backgroundColor: isSelected ? 'rgba(13, 122, 87, 0.06)' : '#F8FAFC',
+                                            color: isSelected ? '#0D7A57' : '#475569',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            cursor: 'pointer',
+                                            minWidth: 0,
+                                            transition: 'all 0.15s'
+                                        }}
                                     >
-                                        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: nt.color }} />
-                                        <span className="truncate">{nt.short}</span>
+                                        <Icon size={14} color={nt.color} style={{ flexShrink: 0 }} />
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nt.short}</span>
                                     </button>
                                 );
                             })}
@@ -578,29 +624,28 @@ function PqrsContent() {
 
                     {/* Cantidad Afectada (si es producto) */}
                     {reportType === 'product' && selectedProduct && (
-                        <div className="space-y-1.5">
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                     Cantidad Afectada / Reclamada
                                 </label>
-                                <span className="text-[11px] text-slate-400">
+                                <span style={{ fontSize: '11px', color: '#94A3B8' }}>
                                     Máximo permitido: {selectedProduct.quantity} {selectedProduct.unit}
                                 </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="relative flex-1">
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={affectedQtyStr}
-                                        onChange={(e) => {
-                                            let raw = e.target.value.replace(/[^0-9.,]/g, '');
-                                            setAffectedQtyStr(raw);
-                                        }}
-                                        className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0D7A57] focus:bg-white text-right"
-                                    />
-                                </div>
-                                <span className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 min-w-[50px] text-center">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={affectedQtyStr}
+                                    onChange={(e) => {
+                                        let raw = e.target.value.replace(/[^0-9.,]/g, '');
+                                        setAffectedQtyStr(raw);
+                                    }}
+                                    className="pqrs-input"
+                                    style={{ flex: 1, minHeight: '44px', padding: '0.6rem 0.75rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', fontFamily: 'monospace', fontWeight: 700, color: '#1E293B', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
+                                />
+                                <span style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 0.75rem', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '12px', fontSize: '0.8rem', fontFamily: 'monospace', fontWeight: 700, color: '#334155', minWidth: '54px', boxSizing: 'border-box' }}>
                                     {selectedProduct.unit}
                                 </span>
                             </div>
@@ -608,20 +653,20 @@ function PqrsContent() {
                     )}
 
                     {/* Captura de Evidencia Fotográfica */}
-                    <div className="space-y-2">
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Fotografía de Evidencia (Obligatoria)
                         </label>
                         
                         {!photoPreview ? (
-                            <label className="border-2 border-dashed border-slate-200 hover:border-[#0D7A57] bg-slate-50 hover:bg-emerald-50/30 rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center cursor-pointer transition-all group">
-                                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-[#0D7A57] group-hover:scale-105 transition-all mb-2">
-                                    <Camera className="w-6 h-6" />
+                            <label style={{ border: '2px dashed #CBD5E1', backgroundColor: '#F8FAFC', borderRadius: '16px', padding: '1.25rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s' }}>
+                                <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', marginBottom: '0.5rem' }}>
+                                    <Camera size={24} />
                                 </div>
-                                <span className="text-xs font-bold text-slate-700 group-hover:text-[#0D7A57]">
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>
                                     Tomar foto o subir desde galería
                                 </span>
-                                <span className="text-[10px] text-slate-400 mt-0.5">
+                                <span style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
                                     JPG, PNG o WebP de alta resolución
                                 </span>
                                 <input
@@ -629,52 +674,57 @@ function PqrsContent() {
                                     accept="image/*"
                                     capture="environment"
                                     onChange={handlePhotoChange}
-                                    className="hidden"
+                                    style={{ display: 'none' }}
                                 />
                             </label>
                         ) : (
-                            <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 group">
+                            <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E2E8F0', backgroundColor: '#0F172A' }}>
                                 <img
                                     src={photoPreview}
                                     alt="Evidencia cargada"
-                                    className="w-full h-44 object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                    style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }}
                                 />
-                                <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-md text-white text-[10px] font-mono flex items-center gap-1.5">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <div style={{ position: 'absolute', bottom: '8px', left: '8px', padding: '4px 10px', borderRadius: '6px', backgroundColor: 'rgba(0,0,0,0.65)', color: '#FFFFFF', fontSize: '11px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <CheckCircle2 size={13} color="#34D399" />
                                     Evidencia lista para radicación
                                 </div>
                                 <button
                                     type="button"
                                     onClick={handleClearPhoto}
-                                    className="absolute top-2 right-2 p-1.5 rounded-full bg-red-600/90 text-white hover:bg-red-700 transition-colors shadow-sm"
+                                    style={{ position: 'absolute', top: '8px', right: '8px', width: '36px', height: '36px', borderRadius: '50%', border: 'none', backgroundColor: 'rgba(220, 38, 38, 0.92)', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                                     title="Eliminar foto"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X size={16} />
                                 </button>
                             </div>
                         )}
                     </div>
 
                     {/* Solución Deseada por el Cliente */}
-                    <div className="space-y-2">
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Compensación Deseada
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="pqrs-two-col">
                             <button
                                 type="button"
                                 onClick={() => setResolutionPref('reposicion')}
-                                className={`p-3 rounded-xl border text-left transition-all ${
-                                    resolutionPref === 'reposicion'
-                                        ? 'bg-[#0D7A57]/5 border-[#0D7A57] ring-1 ring-[#0D7A57]'
-                                        : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/50'
-                                }`}
+                                style={{
+                                    minHeight: '54px',
+                                    padding: '0.75rem',
+                                    borderRadius: '12px',
+                                    border: resolutionPref === 'reposicion' ? '1.5px solid #0D7A57' : '1px solid #E2E8F0',
+                                    backgroundColor: resolutionPref === 'reposicion' ? 'rgba(13, 122, 87, 0.06)' : '#F8FAFC',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s'
+                                }}
                             >
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 mb-0.5">
-                                    <RefreshCw className={`w-3.5 h-3.5 ${resolutionPref === 'reposicion' ? 'text-[#0D7A57]' : 'text-slate-400'}`} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 700, color: '#1E293B', marginBottom: '3px' }}>
+                                    <RefreshCw size={14} color={resolutionPref === 'reposicion' ? '#0D7A57' : '#94A3B8'} />
                                     Reposición Express
                                 </div>
-                                <p className="text-[10px] text-slate-500 leading-snug">
+                                <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.35, margin: 0 }}>
                                     Mercancía de reemplazo en el próximo corte de despacho.
                                 </p>
                             </button>
@@ -682,17 +732,22 @@ function PqrsContent() {
                             <button
                                 type="button"
                                 onClick={() => setResolutionPref('nota_credito')}
-                                className={`p-3 rounded-xl border text-left transition-all ${
-                                    resolutionPref === 'nota_credito'
-                                        ? 'bg-[#0D7A57]/5 border-[#0D7A57] ring-1 ring-[#0D7A57]'
-                                        : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/50'
-                                }`}
+                                style={{
+                                    minHeight: '54px',
+                                    padding: '0.75rem',
+                                    borderRadius: '12px',
+                                    border: resolutionPref === 'nota_credito' ? '1.5px solid #0D7A57' : '1px solid #E2E8F0',
+                                    backgroundColor: resolutionPref === 'nota_credito' ? 'rgba(13, 122, 87, 0.06)' : '#F8FAFC',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s'
+                                }}
                             >
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 mb-0.5">
-                                    <FileText className={`w-3.5 h-3.5 ${resolutionPref === 'nota_credito' ? 'text-[#0D7A57]' : 'text-slate-400'}`} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 700, color: '#1E293B', marginBottom: '3px' }}>
+                                    <FileText size={14} color={resolutionPref === 'nota_credito' ? '#0D7A57' : '#94A3B8'} />
                                     Nota Crédito
                                 </div>
-                                <p className="text-[10px] text-slate-500 leading-snug">
+                                <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.35, margin: 0 }}>
                                     Descuento monetario directo aplicado a la factura/remisión.
                                 </p>
                             </button>
@@ -700,8 +755,8 @@ function PqrsContent() {
                     </div>
 
                     {/* Explicación / Detalle de la Novedad */}
-                    <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider font-['Space_Grotesk']">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Detalle de la Novedad
                         </label>
                         <textarea
@@ -709,40 +764,43 @@ function PqrsContent() {
                             placeholder="Describe brevemente lo ocurrido (ej: Tomate magullado en la base de la canastilla, o faltante de 2 kilos al pesar)..."
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0D7A57] focus:bg-white leading-relaxed"
+                            className="pqrs-input"
+                            style={{ width: '100%', padding: '0.75rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', color: '#1E293B', lineHeight: 1.5, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
                         />
                     </div>
 
                     {/* Datos de Contacto */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <div className="pqrs-two-col">
                         <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
                                 Nombre de quien reporta
                             </label>
-                            <div className="relative">
-                                <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                            <div style={{ position: 'relative' }}>
+                                <User size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                                 <input
                                     type="text"
                                     placeholder="Chef / Almacenista"
                                     value={contactName}
                                     onChange={(e) => setContactName(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0D7A57]"
+                                    className="pqrs-input"
+                                    style={{ width: '100%', minHeight: '44px', padding: '0.55rem 0.75rem 0.55rem 2.25rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', fontWeight: 500, color: '#1E293B', outline: 'none', boxSizing: 'border-box' }}
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
                                 Teléfono / WhatsApp
                             </label>
-                            <div className="relative">
-                                <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                            <div style={{ position: 'relative' }}>
+                                <Phone size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                                 <input
                                     type="tel"
                                     placeholder="310 000 0000"
                                     value={contactPhone}
                                     onChange={(e) => setContactPhone(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#0D7A57]"
+                                    className="pqrs-input"
+                                    style={{ width: '100%', minHeight: '44px', padding: '0.55rem 0.75rem 0.55rem 2.25rem', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', fontSize: '16px', fontFamily: 'monospace', fontWeight: 500, color: '#1E293B', outline: 'none', boxSizing: 'border-box' }}
                                 />
                             </div>
                         </div>
@@ -750,8 +808,8 @@ function PqrsContent() {
 
                     {/* Alerta de Error si ocurre */}
                     {formError && (
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2 animate-in fade-in">
-                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <div style={{ padding: '0.75rem', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px', fontSize: '0.8rem', color: '#B91C1C', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            <AlertTriangle size={16} color="#EF4444" style={{ flexShrink: 0, marginTop: '2px' }} />
                             <span>{formError}</span>
                         </div>
                     )}
@@ -760,16 +818,16 @@ function PqrsContent() {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="w-full py-3.5 px-4 bg-gradient-to-r from-[#0D7A57] to-[#0A6346] hover:from-[#0B6849] hover:to-[#08523A] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 transition-all disabled:opacity-50"
+                        style={{ width: '100%', minHeight: '48px', padding: '0.85rem 1rem', background: 'linear-gradient(90deg, #0D7A57 0%, #0A6346 100%)', color: '#FFFFFF', border: 'none', borderRadius: '12px', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.55 : 1, boxShadow: '0 8px 20px rgba(13, 122, 87, 0.2)', boxSizing: 'border-box' }}
                     >
                         {submitting ? (
                             <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 size={16} className="pqrs-spin" />
                                 Radicando Garantía Oficial...
                             </>
                         ) : (
                             <>
-                                <Send className="w-4 h-4" />
+                                <Send size={16} />
                                 Radicar Garantía de Calidad
                             </>
                         )}
@@ -778,16 +836,51 @@ function PqrsContent() {
                 </form>
 
                 {/* Footer de Respaldo Institucional */}
-                <footer className="text-center py-2 space-y-1">
-                    <p className="text-[11px] text-slate-400 font-medium">
+                <footer style={{ textAlign: 'center', padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <p style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 500, margin: 0 }}>
                         Investments Cortes S.A.S. • Protocolo Oficial de Calidad FruFresco
                     </p>
-                    <p className="text-[10px] text-slate-400">
-                        Línea de soporte al cliente: <span className="font-mono font-bold text-slate-500">+57 316 702 2898</span>
+                    <p style={{ fontSize: '10px', color: '#94A3B8', margin: 0 }}>
+                        Línea de soporte al cliente: <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#64748B' }}>+57 316 702 2898</span>
                     </p>
                 </footer>
 
             </div>
+
+            <style jsx global>{`
+                .pqrs-reasons-grid {
+                    display: grid;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 8px;
+                }
+                .pqrs-two-col {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 10px;
+                }
+                .pqrs-input:focus {
+                    border-color: #0D7A57 !important;
+                    background-color: #FFFFFF !important;
+                    box-shadow: 0 0 0 3px rgba(13, 122, 87, 0.12);
+                }
+                .pqrs-spin {
+                    animation: pqrsSpin 1s linear infinite;
+                }
+                @keyframes pqrsSpin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                @media (max-width: 640px) {
+                    .pqrs-reasons-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+                @media (max-width: 520px) {
+                    .pqrs-two-col {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            `}</style>
         </main>
     );
 }
@@ -795,8 +888,8 @@ function PqrsContent() {
 export default function PqrsPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-[#0D7A57] animate-spin" />
+            <div style={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Loader2 size={32} color="#0D7A57" />
             </div>
         }>
             <PqrsContent />

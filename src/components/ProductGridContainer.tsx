@@ -450,11 +450,12 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                         href="/#catalog"
                         scroll={false}
                         style={{
-                            fontSize: '0.72rem',
+                            fontSize: '0.8125rem',
                             fontWeight: '600',
                             color: '#166534',
                             backgroundColor: '#FFFFFF',
-                            padding: '2px 8px',
+                            minHeight: '44px',
+                            padding: '6px 12px',
                             borderRadius: '6px',
                             border: '1px solid #BBF7D0',
                             textDecoration: 'none',
@@ -464,7 +465,7 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                         }}
                     >
                         <span>Ver todo el catálogo</span>
-                        <X size={11} />
+                        <X size={13} />
                     </Link>
                 </div>
             )}
@@ -473,10 +474,11 @@ export default async function ProductGridContainer({ q, category, locale }: Prop
                 <div style={{ 
                     backgroundColor: 'var(--accent)', 
                     color: 'var(--primary-dark)', 
-                    padding: '1.2rem', 
-                    borderRadius: '16px', 
-                    marginBottom: '2.5rem',
+                    padding: 'clamp(0.85rem, 2.5vw, 1.2rem)',
+                    borderRadius: '16px',
+                    marginBottom: '1.5rem',
                     textAlign: 'center',
+                    fontSize: 'clamp(0.9rem, 2.2vw, 1rem)',
                     fontWeight: '800',
                     border: '2px solid var(--primary)',
                     boxShadow: '0 10px 25px rgba(26, 77, 46, 0.08)'

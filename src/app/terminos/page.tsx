@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function TerminosPage() {
   return (
-    <main style={{ backgroundColor: '#FAF9F6', minHeight: '100vh', padding: '32px 16px 64px', color: '#081C15' }}>
+    <main style={{ backgroundColor: '#FAF9F6', minHeight: '100vh', padding: 'clamp(16px, 4vw, 32px) clamp(12px, 3.5vw, 16px) 48px', color: '#081C15', overflowX: 'hidden' }}>
       <div style={{ maxWidth: '860px', margin: '0 auto' }}>
         <Link
           href="/"
@@ -21,7 +21,9 @@ export default function TerminosPage() {
             fontWeight: 700,
             fontSize: '0.92rem',
             textDecoration: 'none',
-            marginBottom: '20px',
+            marginBottom: '16px',
+            minHeight: '44px',
+            padding: '4px 0',
           }}
         >
           <ArrowLeft size={16} />
@@ -31,14 +33,15 @@ export default function TerminosPage() {
         <article
           style={{
             backgroundColor: '#FFFFFF',
-            borderRadius: '18px',
+            borderRadius: 'clamp(14px, 3vw, 18px)',
             border: '1px solid rgba(8, 28, 21, 0.1)',
-            padding: '32px 28px',
+            padding: 'clamp(20px, 5vw, 32px) clamp(16px, 4.5vw, 28px)',
             boxShadow: '0 8px 30px rgba(8, 28, 21, 0.04)',
             lineHeight: 1.7,
+            overflowWrap: 'anywhere',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <div
               style={{
                 width: '40px',
@@ -49,15 +52,16 @@ export default function TerminosPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
               <FileText size={22} />
             </div>
-            <div>
-              <h1 style={{ margin: 0, fontFamily: 'var(--font-outfit), sans-serif', fontSize: '1.65rem', fontWeight: 800 }}>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+              <h1 style={{ margin: 0, fontFamily: 'var(--font-outfit), sans-serif', fontSize: 'clamp(1.25rem, 4.5vw, 1.65rem)', fontWeight: 800, lineHeight: 1.25 }}>
                 Términos y Condiciones de Uso y Compra
               </h1>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569' }}>
+              <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#475569' }}>
                 FruFresco · NIT 901.393.217 · Ley 1480 de 2011 (Estatuto del Consumidor)
               </p>
             </div>

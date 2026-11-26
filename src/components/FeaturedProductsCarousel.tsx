@@ -29,13 +29,24 @@ export default function FeaturedProductsCarousel({ products, locale }: Props) {
     return (
         <div 
             ref={containerRef}
-            style={{ position: 'relative', padding: '1rem 0' }}
+            className="sf-featured-carousel"
+            style={{ position: 'relative', padding: '0.75rem 0' }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
             <style dangerouslySetInnerHTML={{__html: `
                 .hide-scrollbar::-webkit-scrollbar {
                     display: none;
+                }
+                .sf-carousel-scroll {
+                    overflow-x: auto;
+                    scrollbar-width: none;
+                    ms-overflow-style: none;
+                    padding: 0.75rem 54px;
+                    scroll-behavior: smooth;
+                    scroll-snap-type: x mandatory;
+                    -webkit-overflow-scrolling: touch;
+                    overscroll-behavior-x: contain;
                 }
                 .sf-marquee-track {
                     display: flex;
@@ -48,29 +59,67 @@ export default function FeaturedProductsCarousel({ products, locale }: Props) {
                 .sf-marquee-paused {
                     animation-play-state: paused;
                 }
+                .sf-carousel-item {
+                    min-width: 264px;
+                    max-width: 264px;
+                    flex-shrink: 0;
+                    display: flex;
+                    scroll-snap-align: start;
+                }
+                .sf-carousel-nav-btn {
+                    position: absolute;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    z-index: 20;
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 50%;
+                    background-color: rgba(255, 255, 255, 0.88);
+                    border: 1px solid rgba(255, 255, 255, 0.95);
+                    box-shadow: 0 8px 24px rgba(8, 28, 21, 0.12);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    backdrop-filter: blur(16px);
+                    -webkit-backdrop-filter: blur(16px);
+                    color: #081C15;
+                    transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1), color 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+                }
                 @keyframes sfTop10Marquee {
                     0% { transform: translate3d(0, 0, 0); }
                     100% { transform: translate3d(-50%, 0, 0); }
                 }
+                @media (max-width: 768px) {
+                    .sf-carousel-scroll {
+                        padding: 0.5rem 4px;
+                    }
+                    .sf-marquee-track {
+                        animation: none;
+                        gap: 0.75rem;
+                    }
+                    .sf-carousel-item {
+                        min-width: clamp(216px, 68vw, 256px);
+                        max-width: clamp(216px, 68vw, 256px);
+                    }
+                    .sf-carousel-nav-btn {
+                        display: none;
+                    }
+                }
                 @media (prefers-reduced-motion: reduce) {
                     .sf-marquee-track { animation: none; }
+                    .sf-carousel-nav-btn { transition: none; }
+                    .sf-carousel-scroll { scroll-behavior: auto; }
                 }
             `}} />
             
             <div 
                 ref={scrollRef}
-                style={{ 
-                    overflowX: 'auto', 
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                    padding: '0.75rem 54px',
-                    scrollBehavior: 'smooth'
-                }}
-                className="hide-scrollbar"
+                className="hide-scrollbar sf-carousel-scroll"
             >
                 <div className={`sf-marquee-track ${isHovered ? 'sf-marquee-paused' : ''}`}>
                     {trackItems.map((p, idx) => (
-                        <div key={`${p.id}-${idx}`} style={{ minWidth: '264px', maxWidth: '264px', flexShrink: 0, display: 'flex' }}>
+                        <div key={`${p.id}-${idx}`} className="sf-carousel-item">
                             <ProductCard product={p} locale={locale} />
                         </div>
                     ))}
@@ -80,26 +129,9 @@ export default function FeaturedProductsCarousel({ products, locale }: Props) {
             {/* BOTÓN IZQUIERDA */}
             <button 
                 onClick={() => scrollByAmount(-284 * 2)}
+                className="sf-carousel-nav-btn"
                 style={{
-                    position: 'absolute',
                     left: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    zIndex: 20,
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-                    border: '1px solid rgba(255, 255, 255, 0.95)',
-                    boxShadow: '0 8px 24px rgba(8, 28, 21, 0.12)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                    color: '#081C15',
-                    transition: 'background-color 200ms ease, color 200ms ease, transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 200ms ease, opacity 200ms ease',
                     opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {
@@ -124,26 +156,9 @@ export default function FeaturedProductsCarousel({ products, locale }: Props) {
             {/* BOTÓN DERECHA */}
             <button 
                 onClick={() => scrollByAmount(284 * 2)}
+                className="sf-carousel-nav-btn"
                 style={{
-                    position: 'absolute',
                     right: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    zIndex: 20,
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-                    border: '1px solid rgba(255, 255, 255, 0.95)',
-                    boxShadow: '0 8px 24px rgba(8, 28, 21, 0.12)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                    color: '#081C15',
-                    transition: 'background-color 200ms ease, color 200ms ease, transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 200ms ease, opacity 200ms ease',
                     opacity: isHovered ? 1 : 0.82
                 }}
                 onMouseEnter={(e) => {

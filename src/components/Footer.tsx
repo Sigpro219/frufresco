@@ -22,7 +22,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
   const logoUrl = initialConfig?.logoUrl || '/logo.png';
 
   return (
-    <footer style={{ 
+    <footer className="site-footer-root" style={{ 
       background: 'linear-gradient(180deg, #05130e 0%, #020a07 100%)', 
       color: '#F9FAFB', 
       padding: '2.75rem 0 1.75rem',
@@ -38,7 +38,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
            </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+        <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
           
           {/* Brand */}
           <div>
@@ -101,19 +101,19 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
               textTransform: 'uppercase'
             }}>{t.contact}</h4>
             <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
-                <MapPin size={18} strokeWidth={1.5} color="var(--primary)" /> {address}
+              <li style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', color: '#94a3b8', fontSize: '0.95rem', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                <MapPin size={18} strokeWidth={1.5} color="var(--primary)" style={{ flexShrink: 0, marginTop: '3px' }} /> <span>{address}</span>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
-                <Phone size={18} strokeWidth={1.5} color="var(--primary)" /> {phone}
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem', minWidth: 0 }}>
+                <Phone size={18} strokeWidth={1.5} color="var(--primary)" style={{ flexShrink: 0 }} /> <span>{phone}</span>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
-                <Mail size={18} strokeWidth={1.5} color="var(--primary)" />
-                <a href={`mailto:${ordersEmail}`} style={{ color: '#94a3b8', textDecoration: 'none' }}>{ordersEmail}</a>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem', minWidth: 0 }}>
+                <Mail size={18} strokeWidth={1.5} color="var(--primary)" style={{ flexShrink: 0 }} />
+                <a href={`mailto:${ordersEmail}`} style={{ color: '#94a3b8', textDecoration: 'none', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{ordersEmail}</a>
               </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
-                <Mail size={18} strokeWidth={1.5} color="var(--primary)" />
-                <a href={`mailto:${contactEmail}`} style={{ color: '#94a3b8', textDecoration: 'none' }}>{contactEmail}</a>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem', minWidth: 0 }}>
+                <Mail size={18} strokeWidth={1.5} color="var(--primary)" style={{ flexShrink: 0 }} />
+                <a href={`mailto:${contactEmail}`} style={{ color: '#94a3b8', textDecoration: 'none', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{contactEmail}</a>
               </li>
               <li style={{ marginTop: '0.25rem' }}>
                 <a 
@@ -129,13 +129,14 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
                     textDecoration: 'none',
                     backgroundColor: 'rgba(52, 211, 153, 0.1)',
                     border: '1px solid rgba(52, 211, 153, 0.25)',
-                    padding: '6px 12px',
+                    padding: '10px 14px',
+                    minHeight: '44px',
                     borderRadius: '8px',
                     fontSize: '0.85rem',
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  <MessageCircle size={16} strokeWidth={2.2} /> {locale === 'en' ? 'Customer Care & Quality (WhatsApp)' : 'SAC & Calidad (WhatsApp)'}
+                  <MessageCircle size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} /> {locale === 'en' ? 'Customer Care & Quality (WhatsApp)' : 'SAC & Calidad (WhatsApp)'}
                 </a>
               </li>
             </ul>
@@ -207,6 +208,16 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
         }
         .delta-badge:hover .delta-icon {
           transform: scale(1.1);
+        }
+        @media (max-width: 768px) {
+          .site-footer-root {
+            padding: 2rem 0 1.5rem !important;
+          }
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1.5rem !important;
+            margin-bottom: 1.5rem !important;
+          }
         }
       `}</style>
     </footer>

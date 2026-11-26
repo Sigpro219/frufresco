@@ -69,14 +69,16 @@ function SimulatorContent() {
     };
 
     return (
-        <div style={{
+        <div className="sim-card" style={{
+            width: '100%',
             maxWidth: '500px',
-            margin: '4rem auto',
+            margin: '2rem auto',
             backgroundColor: 'white',
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #E5E7EB'
+            border: '1px solid #E5E7EB',
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
             {/* Header estilo Wompi */}
             <div style={{
@@ -91,16 +93,16 @@ function SimulatorContent() {
                 </div>
             </div>
 
-            <div style={{ padding: '2rem' }}>
+            <div className="sim-body" style={{ padding: '2rem' }}>
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{ fontSize: '0.9rem', color: '#6B7280', marginBottom: '0.5rem' }}>
                         {locale === 'es' ? 'Estás pagando a' : 'You are paying to'}
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#111827' }}>FRUFRESCO EXPRESS</div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#3B0F6E', marginTop: '1rem' }}>
+                    <div className="sim-amount" style={{ fontSize: '2.5rem', fontWeight: '900', color: '#3B0F6E', marginTop: '1rem' }}>
                         ${amount.toLocaleString(locale === 'es' ? 'es-CO' : 'en-US')}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '0.5rem' }}>{t.paymentReference}: {reference}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#9CA3AF', marginTop: '0.5rem', wordBreak: 'break-all' }}>{t.paymentReference}: {reference}</div>
                 </div>
 
                 {status === 'processing' ? (
@@ -145,14 +147,16 @@ function SimulatorContent() {
                             disabled={loading}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
+                                minHeight: '48px',
+                                padding: '0.9rem 1rem',
                                 backgroundColor: '#10B981',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '12px',
                                 fontWeight: '700',
+                                fontSize: '0.95rem',
                                 cursor: 'pointer',
-                                transition: 'opacity 0.2s'
+                                transition: 'transform 0.15s ease, opacity 0.2s ease'
                             }}
                         >
                             {t.simulateSuccess}
@@ -163,14 +167,16 @@ function SimulatorContent() {
                             disabled={loading}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
+                                minHeight: '48px',
+                                padding: '0.9rem 1rem',
                                 backgroundColor: '#EF4444',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '12px',
                                 fontWeight: '700',
+                                fontSize: '0.95rem',
                                 cursor: 'pointer',
-                                transition: 'opacity 0.2s'
+                                transition: 'transform 0.15s ease, opacity 0.2s ease'
                             }}
                         >
                             {t.simulateDecline}
@@ -181,17 +187,19 @@ function SimulatorContent() {
                             disabled={loading}
                             style={{
                                 width: '100%',
-                                padding: '1rem',
+                                minHeight: '48px',
+                                padding: '0.9rem 1rem',
                                 backgroundColor: '#6B7280',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '12px',
                                 fontWeight: '700',
+                                fontSize: '0.95rem',
                                 cursor: 'pointer',
-                                transition: 'opacity 0.2s'
+                                transition: 'transform 0.15s ease, opacity 0.2s ease'
                             }}
                         >
-                            ️ {locale === 'es' ? 'Simular Error Técnico' : 'Simulate Technical Error'}
+                            {locale === 'es' ? 'Simular Error Técnico' : 'Simulate Technical Error'}
                         </button>
                     </div>
                 )}
@@ -215,6 +223,18 @@ function SimulatorContent() {
                 .animate-spin {
                     animation: spin 1s linear infinite;
                 }
+                @media (max-width: 768px) {
+                    .sim-card {
+                        margin: 0.75rem auto !important;
+                        border-radius: 18px !important;
+                    }
+                    .sim-body {
+                        padding: 1.25rem !important;
+                    }
+                    .sim-amount {
+                        font-size: 2rem !important;
+                    }
+                }
             `}</style>
         </div>
     );
@@ -222,7 +242,7 @@ function SimulatorContent() {
 
 export default function PaymentSimulatorPage() {
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
             <Suspense fallback={<div>Loading simulator...</div>}>
                 <SimulatorContent />
             </Suspense>

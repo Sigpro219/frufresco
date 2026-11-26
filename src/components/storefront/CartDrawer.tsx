@@ -54,6 +54,22 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
   } = useCart();
 
   const [draftQty, setDraftQty] = useState<Record<string, string>>({});
+  const [shouldRender, setShouldRender] = useState(isDrawerOpen);
+  const [isVisible, setIsVisible] = useState(isDrawerOpen);
+
+  useEffect(() => {
+    if (isDrawerOpen) {
+      setShouldRender(true);
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setIsVisible(true));
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setIsVisible(false);
+      const timer = setTimeout(() => setShouldRender(false), 260);
+      return () => clearTimeout(timer);
+    }
+  }, [isDrawerOpen]);
 
   useEffect(() => {
     if (isCartLoaded) sanitizeForFrioganMode(config.frioganMode);
@@ -93,7 +109,7 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
     return out;
   }, [suggestions, items, config.frioganMode, locale]);
 
-  if (!isDrawerOpen) return null;
+  if (!shouldRender) return null;
 
   const minHogar = config.minOrderHogar > 0 ? config.minOrderHogar : 150000;
   const remainingForMin = Math.max(0, minHogar - merchandiseSubtotal);
@@ -122,9 +138,32 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
       aria-modal="true"
       aria-label={isEn ? 'Shopping cart' : 'Tu carrito de mercado'}
       onClick={closeDrawer}
-      style={{ position: 'fixed', inset: 0, zIndex: 10050, backgroundColor: 'rgba(8,28,21,0.5)', backdropFilter: 'blur(3px)', display: 'flex', justifyContent: 'flex-end' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10050,
+        backgroundColor: 'rgba(8,28,21,0.5)',
+        backdropFilter: 'blur(3px)',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 220ms ease',
+      }}
     >
-      <aside onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '430px', height: '100%', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', boxShadow: '-12px 0 36px rgba(8,28,21,0.2)' }}>
+      <aside
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          height: '100%',
+          backgroundColor: '#FFFFFF',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '-12px 0 36px rgba(8,28,21,0.2)',
+          transform: isVisible ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+      >
         <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(8,28,21,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FAF9F6' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <ShoppingBag size={20} color="#0D7A57" />
@@ -137,7 +176,7 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
               </span>
             </div>
           </div>
-          <button type="button" onClick={closeDrawer} aria-label={isEn ? 'Close cart' : 'Cerrar carrito'} style={{ width: '34px', height: '34px', borderRadius: '9999px', border: '1px solid rgba(8,28,21,0.12)', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button type="button" onClick={closeDrawer} aria-label={isEn ? 'Close cart' : 'Cerrar carrito'} style={{ width: '44px', height: '44px', borderRadius: '9999px', border: '1px solid rgba(8,28,21,0.12)', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <X size={18} />
           </button>
         </div>
@@ -180,7 +219,7 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
               <p style={{ margin: 0, fontSize: '0.84rem', color: '#64748B' }}>
                 {isEn ? 'Tap + Add on any product card to build your order.' : 'Pulsa + Agregar en cualquier producto del catálogo.'}
               </p>
-              <button type="button" onClick={closeDrawer} style={{ marginTop: '4px', backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none', borderRadius: '9999px', padding: '8px 16px', fontWeight: 700, fontSize: '0.875rem' }}>
+              <button type="button" onClick={closeDrawer} style={{ marginTop: '4px', backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none', borderRadius: '9999px', padding: '10px 20px', minHeight: '44px', fontWeight: 700, fontSize: '0.875rem' }}>
                 {isEn ? 'Browse catalog' : 'Explorar catálogo'}
               </button>
             </div>
@@ -204,15 +243,15 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
                           {item.variant_label || item.unit || 'Unidad'} · ${item.price.toLocaleString('es-CO')} c/u
                         </div>
                       </div>
-                      <button type="button" onClick={() => removeItem(item.id, item.name)} aria-label={`Eliminar ${item.name}`} style={{ background: 'transparent', border: 'none', color: '#94A3B8', padding: '2px' }}>
-                        <Trash2 size={15} />
+                      <button type="button" onClick={() => removeItem(item.id, item.name)} aria-label={`Eliminar ${item.name}`} style={{ background: 'transparent', border: 'none', color: '#94A3B8', minWidth: '44px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, margin: '-8px -8px 0 0' }}>
+                        <Trash2 size={16} />
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '7px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '7px', gap: '8px' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid rgba(8,28,21,0.16)', borderRadius: '9999px', backgroundColor: '#FAF9F6', padding: '2px' }}>
-                        <button type="button" aria-label={`Disminuir ${item.name}`} onClick={() => { setDraftQty((p) => { const n = { ...p }; delete n[key]; return n; }); updateItemQuantity(item.id, item.name, item.quantity - 1); }} style={{ width: '25px', height: '25px', borderRadius: '9999px', border: 'none', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Minus size={13} />
+                        <button type="button" aria-label={`Disminuir ${item.name}`} onClick={() => { setDraftQty((p) => { const n = { ...p }; delete n[key]; return n; }); updateItemQuantity(item.id, item.name, item.quantity - 1); }} style={{ width: '44px', height: '44px', borderRadius: '9999px', border: 'none', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Minus size={15} />
                         </button>
                         <input
                           type="text"
@@ -222,10 +261,10 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
                           onChange={(e) => setDraftQty((prev) => ({ ...prev, [key]: e.target.value.replace(/[^0-9]/g, '') }))}
                           onBlur={() => commitDraftQty(item)}
                           onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
-                          style={{ width: '36px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 700, fontSize: '0.84rem', color: '#081C15', fontVariantNumeric: 'tabular-nums', outline: 'none' }}
+                          style={{ width: '40px', minHeight: '44px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 700, fontSize: '16px', color: '#081C15', fontVariantNumeric: 'tabular-nums', outline: 'none' }}
                         />
-                        <button type="button" aria-label={`Aumentar ${item.name}`} onClick={() => { setDraftQty((p) => { const n = { ...p }; delete n[key]; return n; }); updateItemQuantity(item.id, item.name, item.quantity + 1); }} style={{ width: '25px', height: '25px', borderRadius: '9999px', border: 'none', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Plus size={13} />
+                        <button type="button" aria-label={`Aumentar ${item.name}`} onClick={() => { setDraftQty((p) => { const n = { ...p }; delete n[key]; return n; }); updateItemQuantity(item.id, item.name, item.quantity + 1); }} style={{ width: '44px', height: '44px', borderRadius: '9999px', border: 'none', backgroundColor: '#FFFFFF', color: '#081C15', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Plus size={15} />
                         </button>
                       </div>
                       <span style={{ fontWeight: 800, fontSize: '0.92rem', color: '#081C15', fontVariantNumeric: 'tabular-nums' }}>
@@ -257,7 +296,7 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
                     <button
                       type="button"
                       onClick={() => addItem(buildStorefrontCartItem(product, opt, 1, optsLen, kind, price, locale))}
-                      style={{ backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none', borderRadius: '9999px', padding: '5px 11px', fontSize: '0.78rem', fontWeight: 700, flexShrink: 0 }}
+                      style={{ backgroundColor: '#0D7A57', color: '#FFFFFF', border: 'none', borderRadius: '9999px', padding: '8px 14px', minHeight: '44px', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}
                     >
                       + Agregar
                     </button>
@@ -281,10 +320,10 @@ export default function CartDrawer({ config, suggestions = [] }: CartDrawerProps
               </span>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button type="button" onClick={clearCart} style={{ padding: '10px 12px', borderRadius: '11px', border: '1px solid rgba(8,28,21,0.14)', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 600, fontSize: '0.82rem' }}>
+              <button type="button" onClick={clearCart} style={{ padding: '10px 14px', minHeight: '44px', borderRadius: '11px', border: '1px solid rgba(8,28,21,0.14)', backgroundColor: '#FFFFFF', color: '#64748B', fontWeight: 600, fontSize: '0.84rem' }}>
                 {isEn ? 'Clear' : 'Vaciar'}
               </button>
-              <Link href={isEn ? '/checkout?lang=en' : '/checkout'} onClick={closeDrawer} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', backgroundColor: '#0D7A57', color: '#FFFFFF', borderRadius: '11px', padding: '11px 14px', fontWeight: 800, fontSize: '0.92rem' }}>
+              <Link href={isEn ? '/checkout?lang=en' : '/checkout'} onClick={closeDrawer} style={{ flex: 1, minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', backgroundColor: '#0D7A57', color: '#FFFFFF', borderRadius: '11px', padding: '11px 14px', fontWeight: 800, fontSize: '0.94rem' }}>
                 <span>{isEn ? 'Go to Checkout' : 'Ir a Pagar'}</span>
                 <ArrowRight size={17} />
               </Link>

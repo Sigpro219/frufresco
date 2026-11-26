@@ -469,14 +469,15 @@ export default function LoginPage() {
     }, []);
 
     return (
-        <main style={{ 
+        <main className="login-page-main" style={{ 
             minHeight: '100vh', 
             backgroundColor: '#0a1a0f',
             backgroundImage: 'url("https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2000&auto=format&fit=crop")',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundAttachment: 'fixed',
-            position: 'relative'
+            position: 'relative',
+            overflowX: 'hidden'
         }}>
             {/* Dark Overlay with Radial Gradient for depth */}
             <div style={{
@@ -494,12 +495,12 @@ export default function LoginPage() {
                     padding: 'clamp(2rem, 6vh, 5rem) 1rem',
                     minHeight: 'calc(100vh - 80px)'
                 }}>
-                    <div style={{
+                    <div className="login-glass-card" style={{
                         backgroundColor: 'rgba(255, 255, 255, 0.08)',
                         backdropFilter: 'blur(16px)',
                         WebkitBackdropFilter: 'blur(16px)',
                         padding: 'clamp(1.5rem, 5vw, 2.2rem) clamp(1.25rem, 5vw, 2.5rem)',
-                        borderRadius: '32px',
+                        borderRadius: 'clamp(22px, 4vw, 32px)',
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         width: '100%',
@@ -1613,6 +1614,7 @@ export default function LoginPage() {
             <style jsx global>{`
                 .login-input {
                     background-color: #FFFFFF !important;
+                    box-sizing: border-box !important;
                 }
                 .login-input:focus {
                     background-color: #FFFFFF !important;
@@ -1627,12 +1629,30 @@ export default function LoginPage() {
                     -webkit-text-fill-color: #0F172A !important;
                     transition: background-color 5000s ease-in-out 0s;
                 }
+                .login-glass-card > div {
+                    animation: loginFadeIn 0.25s ease-out;
+                }
+                @keyframes loginFadeIn {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
                 .animate-pulse {
                     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
                 }
                 @keyframes pulse {
                     0%, 100% { opacity: 1; }
                     50% { opacity: .5; }
+                }
+                @media (max-width: 768px) {
+                    .login-page-main {
+                        background-attachment: scroll !important;
+                    }
+                    .login-input {
+                        font-size: 16px !important;
+                    }
+                    .btn-premium {
+                        min-height: 46px !important;
+                    }
                 }
             `}</style>
         </main>

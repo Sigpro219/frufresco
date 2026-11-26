@@ -1625,18 +1625,20 @@ export default function CheckoutPage() {
     if (!isMounted) return null;
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+        <main style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', overflowX: 'hidden' }}>
 
-            <div className="container mobile-stack" style={{ padding: '1.25rem 1rem', display: 'grid', gridTemplateColumns: 'minmax(0, 1.38fr) minmax(350px, 0.92fr)', gap: '1.25rem', maxWidth: '1440px', alignItems: 'start' }}>
+            <div className="container mobile-stack checkout-main-grid" style={{ padding: '1.25rem 1rem', display: 'grid', gridTemplateColumns: 'minmax(0, 1.38fr) minmax(350px, 0.92fr)', gap: '1.25rem', maxWidth: '1440px', alignItems: 'start' }}>
 
                 {/* LEFT COLUMN: THE 3-STEP JOURNEY (60% - OPTIMIZADO EN EJE Y) */}
-                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '0.85rem', minWidth: 0 }}>
                     
                     {/* Header Bar Compacto */}
-                    <div style={{
+                    <div className="checkout-header-bar" style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.65rem',
                         backgroundColor: 'white',
                         padding: '0.65rem 1.15rem',
                         borderRadius: '16px',
@@ -1657,12 +1659,12 @@ export default function CheckoutPage() {
                             }}>
                                 {locale === 'es' ? 'Finalizar Compra' : 'Checkout'}
                             </h1>
-                            <span className="hidden sm:inline" style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '500' }}>
+                            <span className="checkout-city-tag" style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: '500' }}>
                                 • Bogotá
                             </span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <div className="checkout-header-actions" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={handleLoadLastOrder}
@@ -1872,7 +1874,7 @@ export default function CheckoutPage() {
                                 flexDirection: 'column',
                                 gap: '6px'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                     <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#166534', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                         <Heart size={13} color="#059669" />
                                         {locale === 'es' ? 'Tus Elegidos habituales:' : 'Your saved recipients:'}
@@ -1948,7 +1950,7 @@ export default function CheckoutPage() {
                                 flexDirection: 'column',
                                 gap: '8px'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <div style={{
                                             width: '36px',
@@ -2035,6 +2037,8 @@ export default function CheckoutPage() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: '6px',
                                     padding: '0.35rem 0.75rem',
                                     backgroundColor: latitude ? '#ECFDF5' : '#FFFBEB',
                                     border: `1px solid ${latitude ? '#A7F3D0' : '#FDE68A'}`,
@@ -2077,7 +2081,7 @@ export default function CheckoutPage() {
                                         fontSize: '0.74rem',
                                         color: '#475569'
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <Receipt size={13} color="#64748B" />
                                                 <span>
@@ -2131,7 +2135,7 @@ export default function CheckoutPage() {
                                 {isGiftForRecipient ? (
                                     /* MODO REGALO: CAPTURA EXCLUSIVA DEL DESTINATARIO */
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                             <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#166534', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                                 <Gift size={14} color="#059669" />
                                                 {locale === 'es' ? 'Datos de quien recibe en portería o puerta:' : 'Recipient details at door or gate:'}
@@ -2280,7 +2284,7 @@ export default function CheckoutPage() {
                                         fontSize: '0.74rem',
                                         color: '#475569'
                                     }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <Receipt size={13} color="#64748B" />
                                                 <span>
@@ -2495,7 +2499,7 @@ export default function CheckoutPage() {
                                         );
                                     })}
 
-                                    <div style={{ position: 'relative', width: '130px', flexShrink: 0 }}>
+                                    <div className="checkout-date-picker" style={{ position: 'relative', width: '130px', flexShrink: 0 }}>
                                         <div style={{ position: 'absolute', left: '8px', top: 0, bottom: 0, display: 'flex', alignItems: 'center', color: 'var(--primary)', opacity: 0.5, pointerEvents: 'none' }}>
                                             <Calendar size={13} />
                                         </div>
@@ -2584,7 +2588,7 @@ export default function CheckoutPage() {
                                             gap: '6px'
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <input
                                                     type="radio"
@@ -2679,6 +2683,7 @@ export default function CheckoutPage() {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
+                                                flexWrap: 'wrap',
                                                 gap: '6px'
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2820,7 +2825,7 @@ export default function CheckoutPage() {
                                     transition: 'all 0.15s ease'
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <div style={{
                                             width: '18px',
@@ -2863,7 +2868,7 @@ export default function CheckoutPage() {
                                             transition: 'all 0.15s ease'
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <div style={{
                                                     width: '18px',
@@ -2908,7 +2913,7 @@ export default function CheckoutPage() {
                                         boxShadow: paymentMethod === 'payroll_deduction' ? '0 0 0 1px #047857' : 'none'
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <div style={{
                                                 width: '18px',
@@ -2941,7 +2946,7 @@ export default function CheckoutPage() {
                 </div>
 
                 {/* RIGHT COLUMN: STICKY FINANCIAL SUMMARY & CTA (40% - ALTA DENSIDAD) */}
-                <div style={{ position: 'sticky', top: '85px', zIndex: 10 }}>
+                <div className="checkout-summary-col" style={{ position: 'sticky', top: '85px', zIndex: 10, minWidth: 0 }}>
                     <div style={{
                         backgroundColor: 'white',
                         padding: '1.15rem 1.25rem',
@@ -3269,6 +3274,7 @@ export default function CheckoutPage() {
                                     disabled={items.length === 0}
                                     style={{
                                         width: '100%',
+                                        minHeight: '48px',
                                         padding: '0.85rem',
                                         fontSize: '0.9rem',
                                         borderRadius: '14px',
@@ -3310,6 +3316,7 @@ export default function CheckoutPage() {
                                 disabled={loading || items.length === 0 || !isMinOrderMet || (outOfZone && !isB2B)}
                                 style={{
                                     width: '100%',
+                                    minHeight: '48px',
                                     padding: '0.85rem',
                                     fontSize: '0.94rem',
                                     borderRadius: '14px',
@@ -3378,24 +3385,25 @@ export default function CheckoutPage() {
 
             {/* MAP PICKER MODAL */}
             {showMapPicker && (
-                <div style={{
+                <div className="checkout-modal-overlay" style={{
                     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
                     backgroundColor: 'rgba(15, 23, 42, 0.8)', zIndex: 9999, display: 'flex',
                     alignItems: 'center', justifyContent: 'center', padding: '2rem',
                     backdropFilter: 'blur(8px)'
                 }}>
-                    <div style={{
+                    <div className="checkout-map-modal" style={{
                         width: '100%', maxWidth: '1000px', height: '85vh', backgroundColor: 'white',
                         borderRadius: '32px', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         border: '1px solid rgba(255, 255, 255, 0.2)'
                     }}>
-                        <div style={{ 
+                        <div className="checkout-map-header" style={{ 
                             padding: '1.5rem 2rem', 
                             borderBottom: '1px solid var(--border)', 
                             display: 'flex', 
                             justifyContent: 'space-between', 
                             alignItems: 'center',
+                            gap: '10px',
                             backgroundColor: 'white'
                         }}>
                             <div>
@@ -3528,7 +3536,7 @@ export default function CheckoutPage() {
                             </Map>
                         </div>
 
-                        <div style={{ padding: '1.25rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1.25rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                        <div className="checkout-map-footer" style={{ padding: '1.25rem 2rem', backgroundColor: '#F9FAFB', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1.25rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
                             <div style={{ marginRight: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -3580,8 +3588,10 @@ export default function CheckoutPage() {
                                     type="button"
                                     onClick={handleRegisterRejectionAndReturn}
                                     disabled={isRegisteringRejection}
+                                    className="checkout-modal-cta"
                                     style={{
                                         padding: '0.75rem 1.25rem',
+                                        minHeight: '44px',
                                         borderRadius: 'var(--radius-full)',
                                         backgroundColor: '#FEF3C7',
                                         border: '1px solid #FCD34D',
@@ -3591,6 +3601,7 @@ export default function CheckoutPage() {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
+                                        justifyContent: 'center',
                                         gap: '6px'
                                     }}
                                 >
@@ -3601,14 +3612,16 @@ export default function CheckoutPage() {
                             <button 
                                 type="button"
                                 onClick={handleConfirmLocationFromMap}
-                                className="btn-premium"
+                                className="btn-premium checkout-modal-cta"
                                 style={{ 
                                     padding: '0.85rem 2.25rem', 
+                                    minHeight: '46px',
                                     borderRadius: 'var(--radius-full)', 
                                     fontWeight: '900',
                                     fontSize: '0.95rem',
                                     display: 'flex',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     gap: '10px',
                                     backgroundColor: (outOfZone && !isB2B) ? '#DC2626' : 'var(--primary)',
                                     color: '#FFFFFF',
@@ -3651,7 +3664,7 @@ export default function CheckoutPage() {
 
             {/* Modal de Confirmación Previo al Pago (Sobrio, Elegante B2C/B2B) */}
             {showConfirmationModal && (
-                <div style={{
+                <div className="checkout-modal-overlay" style={{
                     position: 'fixed',
                     top: 0,
                     left: 0,
@@ -3665,7 +3678,7 @@ export default function CheckoutPage() {
                     justifyContent: 'center',
                     padding: '1.5rem'
                 }}>
-                    <div style={{
+                    <div className="checkout-confirm-modal" style={{
                         backgroundColor: '#FFFFFF',
                         borderRadius: '24px',
                         width: '100%',
@@ -3799,7 +3812,7 @@ export default function CheckoutPage() {
                         )}
 
                         {/* Executive Boarding Pass: 2-Column Grid (Logística vs Finanzas) */}
-                        <div style={{
+                        <div className="checkout-confirm-grid" style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                             gap: '14px',
@@ -3980,12 +3993,14 @@ export default function CheckoutPage() {
                         )}
 
                         {/* Footer Action Buttons */}
-                        <div style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginTop: '1.75rem', flexWrap: 'wrap' }}>
+                        <div className="checkout-confirm-footer" style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginTop: '1.75rem', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={() => setShowConfirmationModal(false)}
+                                className="checkout-modal-cta"
                                 style={{
                                     padding: '0.9rem 1.75rem',
+                                    minHeight: '46px',
                                     borderRadius: '14px',
                                     border: '1px solid #CBD5E1',
                                     backgroundColor: 'white',
@@ -3995,6 +4010,7 @@ export default function CheckoutPage() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     gap: '8px',
                                     transition: 'all 0.2s'
                                 }}
@@ -4006,8 +4022,10 @@ export default function CheckoutPage() {
                                 type="button"
                                 onClick={executeOrderSubmission}
                                 disabled={loading}
+                                className="checkout-modal-cta"
                                 style={{
                                     padding: '0.9rem 2.25rem',
+                                    minHeight: '48px',
                                     borderRadius: '14px',
                                     border: 'none',
                                     backgroundColor: 'var(--primary)',
@@ -4017,6 +4035,7 @@ export default function CheckoutPage() {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
                                     gap: '10px',
                                     boxShadow: '0 4px 14px rgba(13, 122, 87, 0.3)',
                                     transition: 'all 0.2s'
@@ -4102,12 +4121,13 @@ export default function CheckoutPage() {
                                 : `This will remove all ${items.length} ${items.length === 1 ? 'item' : 'items'} from your cart. Do you want to proceed?`}
                         </p>
 
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={() => setShowClearCartModal(false)}
                                 style={{
-                                    flex: 1,
+                                    flex: '1 1 130px',
+                                    minHeight: '44px',
                                     padding: '0.7rem 1rem',
                                     borderRadius: '12px',
                                     border: '1px solid #E2E8F0',
@@ -4125,7 +4145,8 @@ export default function CheckoutPage() {
                                 type="button"
                                 onClick={handleConfirmClearCart}
                                 style={{
-                                    flex: 1,
+                                    flex: '1 1 130px',
+                                    minHeight: '44px',
                                     padding: '0.7rem 1rem',
                                     borderRadius: '12px',
                                     border: 'none',
@@ -4144,6 +4165,70 @@ export default function CheckoutPage() {
                     </div>
                 </div>
             )}
+
+            <style jsx>{`
+                .checkout-input-modern {
+                    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+                }
+                .checkout-input-modern:focus {
+                    outline: none;
+                    border-color: var(--primary) !important;
+                    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+                }
+                @media (max-width: 768px) {
+                    .checkout-main-grid {
+                        padding: 0.75rem !important;
+                        gap: 1rem !important;
+                        grid-template-columns: 1fr !important;
+                    }
+                    .checkout-city-tag {
+                        display: none !important;
+                    }
+                    .checkout-header-bar {
+                        padding: 0.75rem 0.9rem !important;
+                    }
+                    .checkout-header-actions {
+                        width: 100%;
+                    }
+                    .checkout-summary-col {
+                        position: static !important;
+                        top: auto !important;
+                    }
+                    .checkout-input-modern {
+                        font-size: 16px !important;
+                        min-height: 44px;
+                    }
+                    .checkout-date-picker {
+                        width: 100% !important;
+                        flex: 1 1 100% !important;
+                    }
+                    .checkout-modal-overlay {
+                        padding: 0.5rem !important;
+                    }
+                    .checkout-map-modal {
+                        height: 92vh !important;
+                        border-radius: 20px !important;
+                    }
+                    .checkout-map-header,
+                    .checkout-map-footer {
+                        padding: 1rem !important;
+                    }
+                    .checkout-confirm-modal {
+                        padding: 1.25rem !important;
+                        border-radius: 20px !important;
+                    }
+                    .checkout-confirm-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .checkout-confirm-footer {
+                        flex-direction: column-reverse !important;
+                        gap: 10px !important;
+                    }
+                    .checkout-modal-cta {
+                        width: 100% !important;
+                    }
+                }
+            `}</style>
         </main>
     );
 }

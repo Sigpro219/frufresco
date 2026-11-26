@@ -224,14 +224,14 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
     }).slice(0, 6) : []; // Mostramos 6 para un diseño más limpio (2 filas de 3)
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#FFFFFF', paddingBottom: '5rem' }}>
-            <div className="container" style={{ paddingTop: '2rem' }}>
+        <main className="product-page-main" style={{ minHeight: '100vh', backgroundColor: '#FFFFFF', paddingBottom: '5rem', overflowX: 'hidden' }}>
+            <div className="container product-page-container" style={{ paddingTop: '2rem' }}>
                 <ProductDetailClient product={product} />
 
                 {/* Related Products Section */}
                 {relatedProducts && relatedProducts.length > 0 && (
-                    <section style={{ marginTop: '8rem' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+                    <section className="related-section" style={{ marginTop: '8rem' }}>
+                        <div className="related-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
                             <span style={{ 
                                 color: 'var(--primary)', 
                                 fontWeight: '800', 
@@ -239,7 +239,7 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
                                 fontSize: '0.85rem',
                                 textTransform: 'uppercase'
                             }}>{t.completeOrder}</span>
-                            <h2 style={{
+                            <h2 className="related-title" style={{
                                 fontSize: '2.5rem',
                                 fontWeight: '900',
                                 marginTop: '0.5rem',
@@ -304,7 +304,14 @@ export default async function ProductPage(props: { params: Promise<{ id: string 
                 @media (max-width: 768px) {
                     .related-grid {
                         grid-template-columns: repeat(2, 1fr);
+                        gap: 0.85rem !important;
+                        padding: 0.75rem 0.5rem 4rem 0.5rem !important;
                     }
+                    .product-page-main { padding-bottom: 3rem !important; }
+                    .product-page-container { padding-top: 1rem !important; }
+                    .related-section { margin-top: 3.25rem !important; }
+                    .related-header { margin-bottom: 1.5rem !important; }
+                    .related-title { font-size: 1.55rem !important; gap: 8px !important; flex-wrap: wrap !important; }
                 }
                 
                 @media (max-width: 480px) {

@@ -277,7 +277,7 @@ export default function Navbar() {
                 maxWidth: '1600px'
             }}>
                 {/* LOGO (Arquitectura de Doble Capa: FruFresco en Público vs onFRU en Interno) */}
-                <Link href={isShoppingContext ? `/${locale === 'en' ? '?lang=en' : ''}` : (pathname?.startsWith('/ops') ? '/ops' : '/admin')} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease' }}
+                <Link className="navbar-brand-link" href={isShoppingContext ? `/${locale === 'en' ? '?lang=en' : ''}` : (pathname?.startsWith('/ops') ? '/ops' : '/admin')} style={{ display: 'flex', alignItems: 'center', transition: 'transform 0.3s ease', minWidth: 0 }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
@@ -687,19 +687,21 @@ export default function Navbar() {
                 </nav>
 
                 {/* MOBILE ACTIONS WRAPPER (CART PILL + HAMBURGER) */}
-                <div className="nav-mobile-actions" style={{ display: 'none', alignItems: 'center', gap: '8px' }}>
+                <div className="nav-mobile-actions" style={{ display: 'none', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     {isShoppingContext && (
                         <Link href="/checkout" style={{ textDecoration: 'none' }}>
                             <button style={{
                                 border: '1px solid rgba(0,0,0,0.08)',
                                 backgroundColor: 'white',
                                 borderRadius: '9999px',
-                                padding: '6px 11px',
+                                padding: '8px 12px',
+                                minHeight: '44px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
                                 cursor: 'pointer',
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                                whiteSpace: 'nowrap'
                             }}>
                                 <ShoppingCart size={17} color="var(--primary)" strokeWidth={2} />
                                 <span style={{ fontWeight: '800', color: 'var(--primary)', fontSize: '0.82rem' }}>
@@ -712,16 +714,20 @@ export default function Navbar() {
                         className="nav-hamburger"
                         onClick={() => setMobileOpen(o => !o)}
                         aria-label="Menú"
+                        aria-expanded={mobileOpen}
                         style={{
                             background: 'none',
                             border: `1px solid ${THEME.colors.border}`,
                             borderRadius: THEME.radius.md,
-                            padding: '8px',
+                            padding: '10px',
+                            minWidth: '44px',
+                            minHeight: '44px',
                             cursor: 'pointer',
                             color: THEME.colors.textMain,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            display: 'flex'
+                            display: 'flex',
+                            flexShrink: 0
                         }}
                     >
                         {mobileOpen ? <XIcon size={22} strokeWidth={1.5} /> : <Menu size={22} strokeWidth={1.5} />}
@@ -1016,10 +1022,12 @@ export default function Navbar() {
                 @media (max-width: 768px) {
                     .nav-desktop { display: none !important; }
                     .nav-right-actions { display: none !important; }
-                    .nav-mobile-actions { display: flex !important; }
-                    .navbar-container { height: 64px !important; }
-                    .navbar-logo-wrap { height: 50px !important; min-width: 80px !important; }
-                    .navbar-logo-img { height: 50px !important; }
+                    .nav-mobile-actions { display: flex !important; flex-shrink: 0; }
+                    .navbar-container { height: 64px !important; padding: 0 12px !important; gap: 8px !important; }
+                    .navbar-brand-link { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+                    .navbar-logo-wrap { height: 44px !important; min-width: 0 !important; }
+                    .navbar-logo-img { height: 44px !important; max-width: 120px; object-fit: contain; }
+                    .navbar-sync-pill { padding: 2px 5px !important; margin-left: 0.25rem !important; }
                 }
                 @media (min-width: 769px) {
                     .nav-mobile-menu { display: none !important; }
@@ -1031,7 +1039,9 @@ export default function Navbar() {
                     display: flex;
                     align-items: center;
                     gap: 12px;
-                    padding: 14px 20px;
+                    min-height: 44px;
+                    box-sizing: border-box;
+                    padding: 12px 20px;
                     color: #1A231E;
                     font-size: 0.95rem;
                     font-weight: 500;
@@ -1052,9 +1062,9 @@ export default function Navbar() {
                 }
             `}</style>
             {/* ── MOBILE MENU PANEL ── */}
-            {mobileOpen && (
                 <div
                     className="nav-mobile-menu"
+                    aria-hidden={!mobileOpen}
                     style={{
                         position: 'absolute',
                         top: '100%',
@@ -1064,8 +1074,14 @@ export default function Navbar() {
                         borderBottom: `1px solid ${THEME.colors.border}`,
                         boxShadow: THEME.shadow.lg,
                         zIndex: 200,
-                        maxHeight: 'calc(100dvh - 95px)',
+                        maxHeight: 'calc(100dvh - 64px)',
                         overflowY: 'auto',
+                        overscrollBehavior: 'contain',
+                        transform: mobileOpen ? 'translateY(0)' : 'translateY(-8px)',
+                        opacity: mobileOpen ? 1 : 0,
+                        visibility: mobileOpen ? 'visible' : 'hidden',
+                        pointerEvents: mobileOpen ? 'auto' : 'none',
+                        transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease, visibility 200ms ease',
                     }}
                 >
                     {/* User info */}
@@ -1085,11 +1101,13 @@ export default function Navbar() {
                             <button
                                 onClick={() => changeLanguage('es')}
                                 style={{
-                                    padding: '4px 12px',
+                                    padding: '8px 14px',
+                                    minHeight: '44px',
+                                    minWidth: '44px',
                                     borderRadius: '9999px',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.8rem',
                                     fontWeight: '800',
                                     backgroundColor: locale === 'es' ? 'white' : 'transparent',
                                     color: locale === 'es' ? 'var(--primary)' : '#64748B',
@@ -1099,11 +1117,13 @@ export default function Navbar() {
                             <button
                                 onClick={() => changeLanguage('en')}
                                 style={{
-                                    padding: '4px 12px',
+                                    padding: '8px 14px',
+                                    minHeight: '44px',
+                                    minWidth: '44px',
                                     borderRadius: '9999px',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.8rem',
                                     fontWeight: '800',
                                     backgroundColor: locale === 'en' ? 'white' : 'transparent',
                                     color: locale === 'en' ? 'var(--primary)' : '#64748B',
@@ -1262,23 +1282,22 @@ export default function Navbar() {
                         {mounted && user ? (
                             <button
                                 onClick={() => { signOut(); setMobileOpen(false); }}
-                                style={{ flex: 1, padding: '10px', border: '1px solid #fee2e2', backgroundColor: '#fff1f1', color: '#ef4444', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                style={{ flex: 1, minHeight: '44px', padding: '10px 14px', border: '1px solid #fee2e2', backgroundColor: '#fff1f1', color: '#ef4444', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
                                 <LogOut size={16} /> {t.navSignOut}
                             </button>
                         ) : (
                             <>
                                 <Link href="/login" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
-                                    <button style={{ width: '100%', padding: '10px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textMain, borderRadius: THEME.radius.md, fontWeight: '600', cursor: 'pointer' }}>{t.navLogin}</button>
+                                    <button style={{ width: '100%', minHeight: '44px', padding: '10px 14px', border: `1px solid ${THEME.colors.border}`, backgroundColor: 'white', color: THEME.colors.textMain, borderRadius: THEME.radius.md, fontWeight: '600', cursor: 'pointer' }}>{t.navLogin}</button>
                                 </Link>
                                 <Link href="/register" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
-                                    <button style={{ width: '100%', padding: '10px', border: 'none', backgroundColor: THEME.colors.primary, color: 'white', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer' }}>{t.navRegister}</button>
+                                    <button style={{ width: '100%', minHeight: '44px', padding: '10px 14px', border: 'none', backgroundColor: THEME.colors.primary, color: 'white', borderRadius: THEME.radius.md, fontWeight: '700', cursor: 'pointer' }}>{t.navRegister}</button>
                                 </Link>
                             </>
                         )}
                     </div>
                 </div>
-            )}
         </header>
     );
 }

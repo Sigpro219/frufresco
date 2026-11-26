@@ -53,7 +53,7 @@ export default function RegisterB2C() {
 
     if (success) {
         return (
-            <main style={{ minHeight: '100vh', position: 'relative', backgroundColor: '#0a1a0f' }}>
+            <main style={{ minHeight: '100vh', position: 'relative', backgroundColor: '#0a1a0f', overflowX: 'hidden' }}>
                 {/* Background Image Context */}
                 <div style={{
                     position: 'absolute',
@@ -69,16 +69,17 @@ export default function RegisterB2C() {
                 }} />
                 
                 <div style={{ position: 'relative', zIndex: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6rem 1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 'clamp(2rem, 6vh, 6rem) 1rem' }}>
                         <div style={{ 
                             backgroundColor: 'rgba(255, 255, 255, 0.08)',
                             backdropFilter: 'blur(20px)',
                             WebkitBackdropFilter: 'blur(20px)',
-                            padding: '4rem 2.5rem', 
-                            borderRadius: '32px', 
+                            padding: 'clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 2.5rem)', 
+                            borderRadius: 'clamp(20px, 4vw, 32px)', 
                             border: '1px solid rgba(255, 255, 255, 0.15)',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                             textAlign: 'center', 
+                            width: '100%',
                             maxWidth: '500px',
                             color: 'white'
                         }}>
@@ -129,7 +130,7 @@ export default function RegisterB2C() {
     }
 
     return (
-        <main style={{ minHeight: '100vh', position: 'relative', backgroundColor: '#0a1a0f' }}>
+        <main style={{ minHeight: '100vh', position: 'relative', backgroundColor: '#0a1a0f', overflowX: 'hidden' }}>
             {/* Background Image context like Login */}
             <div style={{
                 position: 'fixed',
@@ -151,24 +152,24 @@ export default function RegisterB2C() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 minHeight: '100vh',
-                padding: '4rem 1rem'
+                padding: 'clamp(1.5rem, 5vh, 4rem) 1rem'
             }}>
                 <div style={{ 
                         backgroundColor: 'rgba(255, 255, 255, 0.08)', 
                         backdropFilter: 'blur(20px)',
                         WebkitBackdropFilter: 'blur(20px)',
-                        padding: '3.5rem 2.5rem', 
-                        borderRadius: '32px', 
+                        padding: 'clamp(1.75rem, 5vw, 3.5rem) clamp(1.25rem, 5vw, 2.5rem)', 
+                        borderRadius: 'clamp(20px, 4vw, 32px)', 
                         border: '1px solid rgba(255, 255, 255, 0.15)',
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         width: '100%', 
                         maxWidth: '480px',
                         color: 'white'
                     }}>
-                        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+                        <div style={{ textAlign: 'center', marginBottom: 'clamp(1.75rem, 4vw, 3rem)' }}>
                             <h1 style={{ 
                                 fontFamily: 'var(--font-outfit), sans-serif',
-                                fontSize: '2.5rem', 
+                                fontSize: 'clamp(1.85rem, 6vw, 2.5rem)', 
                                 fontWeight: '900', 
                                 color: 'white',
                                 margin: 0,
@@ -179,7 +180,7 @@ export default function RegisterB2C() {
                             </p>
                         </div>
 
-                        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             {error && (
                                 <div style={{ 
                                     padding: '1rem', 
@@ -190,7 +191,7 @@ export default function RegisterB2C() {
                                     fontWeight: '600',
                                     border: '1px solid rgba(220, 38, 38, 0.3)'
                                 }}>
-                                    ️ {error}
+                                    {error}
                                 </div>
                             )}
 
@@ -361,10 +362,25 @@ export default function RegisterB2C() {
                 </div>
             
             <style jsx global>{`
+                .login-input {
+                    box-sizing: border-box;
+                }
                 .login-input:focus {
                     background-color: rgba(255, 255, 255, 0.1) !important;
                     border-color: var(--secondary) !important;
                     box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1) !important;
+                }
+                @media (max-width: 768px) {
+                    .mobile-stack {
+                        grid-template-columns: 1fr !important;
+                        gap: 1rem !important;
+                    }
+                    .login-input {
+                        font-size: 16px !important;
+                    }
+                    .btn-premium {
+                        min-height: 48px !important;
+                    }
                 }
             `}</style>
         </main>

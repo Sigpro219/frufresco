@@ -1230,9 +1230,9 @@ export default function B2BDashboard() {
     }
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary }}>
+        <main className="b2b-dashboard-main" style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography.fontFamilySecondary, overflowX: 'hidden' }}>
 
-            <div className="container" style={{ padding: '0.75rem 1.5rem 1.25rem', maxWidth: '1600px', margin: '0 auto' }}>
+            <div className="container b2b-main-container" style={{ padding: '0.75rem 1.5rem 1.25rem', maxWidth: '1600px', margin: '0 auto' }}>
 
                 {/* UNIFIED ULTRA-COMPACT HEADER & TOOLBAR (SINGLE ROW COMMAND BAR) */}
                 <div style={{ 
@@ -1356,7 +1356,7 @@ export default function B2BDashboard() {
 
                         {/* Focus Mode Selector (Only on Quick Order tab) */}
                         {activeTab === 'order' && (
-                            <div style={{
+                            <div className="b2b-focus-controls" style={{
                                 display: 'flex',
                                 backgroundColor: '#F1F5F9',
                                 borderRadius: THEME.radius.md,
@@ -1442,6 +1442,7 @@ export default function B2BDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
+                        flexWrap: 'wrap',
                         gap: '1rem',
                         boxShadow: '0 2px 8px rgba(30, 64, 175, 0.06)'
                     }}>
@@ -1596,6 +1597,7 @@ export default function B2BDashboard() {
                                             {/* FLOATING AUTOCOMPLETE DROPDOWN (DESPLEGABLE IDÉNTICO A LA IMAGEN 2) */}
                                             {isSearchDropdownOpen && searchTerm.trim().length > 0 && (
                                                 <div 
+                                                    className="b2b-search-dropdown"
                                                     onMouseDown={(e) => e.preventDefault()}
                                                     style={{
                                                         position: 'absolute',
@@ -3564,7 +3566,7 @@ export default function B2BDashboard() {
                                                         <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: 'var(--text-main)' }}>
                                                             {agreement.model_snapshot_name || agreement.pricing_models?.name || 'Acuerdo Comercial Institucional - FruFresco'}
                                                         </h3>
-                                                        <div style={{ display: 'flex', gap: '1.25rem', marginTop: '6px', fontSize: '0.82rem', color: '#64748B', fontWeight: '600' }}>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1.25rem', marginTop: '6px', fontSize: '0.82rem', color: '#64748B', fontWeight: '600' }}>
                                                             <span>� Vigencia: <strong>{validDateStr}</strong></span>
                                                             <span> Portafolio en convenio: <strong style={{ color: 'var(--primary)' }}>{items.length} Insumos</strong></span>
                                                         </div>
@@ -3918,7 +3920,7 @@ export default function B2BDashboard() {
 
                         {/* Kardex Movements Table */}
                         <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', overflow: 'hidden' }}>
-                            <div style={{ padding: '1rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ padding: '1rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '800', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <FileText size={16} color="var(--primary)" /> Historial Kardex de Canastillas (Movimientos)
                                 </h4>
@@ -4515,6 +4517,7 @@ export default function B2BDashboard() {
                                     <div style={{
                                         flex: 1,
                                         overflowY: 'auto',
+                                        overflowX: 'auto',
                                         marginBottom: '1rem',
                                         border: '1px solid #E2E8F0',
                                         borderRadius: '16px',
@@ -4780,10 +4783,33 @@ export default function B2BDashboard() {
                     .b2b-dashboard-grid {
                         grid-template-columns: 1fr !important;
                     }
+                    .b2b-focus-controls {
+                        display: none !important;
+                    }
+                    .b2b-catalog-container,
+                    .b2b-cart-sidebar {
+                        min-width: 0;
+                        width: 100%;
+                    }
                 }
                 @media (max-width: 768px) {
+                    .b2b-main-container {
+                        padding: 0.5rem 0.65rem 1.25rem !important;
+                    }
+                    .b2b-dashboard-grid {
+                        gap: 1rem !important;
+                    }
+                    .b2b-dashboard-main input,
+                    .b2b-dashboard-main select,
+                    .b2b-dashboard-main textarea {
+                        font-size: 16px !important;
+                    }
+                    .b2b-search-dropdown {
+                        width: min(340px, calc(100vw - 2.5rem)) !important;
+                        max-width: calc(100vw - 2.5rem) !important;
+                    }
                     .b2b-tab-navigation {
-                        gap: 2px !important;
+                        gap: 4px !important;
                         overflow-x: auto !important;
                         max-width: 100% !important;
                         -webkit-overflow-scrolling: touch;
@@ -4791,6 +4817,11 @@ export default function B2BDashboard() {
                     }
                     .b2b-tab-navigation::-webkit-scrollbar {
                         display: none;
+                    }
+                    .b2b-tab-navigation button {
+                        min-height: 44px !important;
+                        padding: 0.5rem 0.75rem !important;
+                        font-size: 0.8rem !important;
                     }
                     .b2b-tab-button {
                         padding: 0.5rem 0.25rem !important;

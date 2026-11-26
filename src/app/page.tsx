@@ -199,7 +199,8 @@ export default async function Home({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                padding: '6px 12px',
+                minHeight: '44px',
+                padding: '8px 14px',
                 borderRadius: '9999px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid rgba(8,28,21,0.14)',
@@ -222,7 +223,7 @@ export default async function Home({
           aria-label={featuredTitle}
           style={{ maxWidth: '1440px', margin: '0 auto', padding: '10px 16px 8px' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Flame size={18} color="#D97706" aria-hidden="true" />
               <h2
@@ -230,7 +231,7 @@ export default async function Home({
                   margin: 0,
                   fontFamily: 'var(--font-outfit), sans-serif',
                   fontWeight: 800,
-                  fontSize: '1.25rem',
+                  fontSize: 'clamp(1.1rem, 2vw, 1.3rem)',
                   color: '#081C15',
                 }}
               >
@@ -239,7 +240,14 @@ export default async function Home({
             </div>
             <Link
               href={isEn ? '/?lang=en&category=OFERTAS#catalog' : '/?category=OFERTAS#catalog'}
-              style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0D7A57' }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: '44px',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                color: '#0D7A57',
+              }}
             >
               {isEn ? 'See all deals →' : 'Ver todas las ofertas →'}
             </Link>

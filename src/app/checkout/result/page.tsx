@@ -98,7 +98,7 @@ function ResultContent() {
         : '';
 
     return (
-        <div style={{
+        <div className="result-card" style={{
             maxWidth: '600px',
             margin: '4rem auto',
             padding: '3rem',
@@ -106,10 +106,11 @@ function ResultContent() {
             backgroundColor: 'white',
             borderRadius: '24px',
             boxShadow: 'var(--shadow-lg)',
-            border: '1px solid var(--border)'
+            border: '1px solid var(--border)',
+            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>{renderIconStatus()}</div>
-            <h1 style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem', color: '#0F172A', fontFamily: 'var(--font-outfit), sans-serif' }}>{renderMessage()}</h1>
+            <h1 className="result-title" style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem', color: '#0F172A', fontFamily: 'var(--font-outfit), sans-serif' }}>{renderMessage()}</h1>
 
             <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.05rem', lineHeight: '1.5' }}>
                 {codStatus === 'cod_success'
@@ -153,16 +154,16 @@ function ResultContent() {
                     flexDirection: 'column',
                     gap: '0.5rem'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
                             {codStatus === 'cod_success' ? 'Método de Pago' : 'ID de Transacción'}
                         </span>
-                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '700', color: '#334155' }}>
+                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '700', color: '#334155', wordBreak: 'break-all' }}>
                             {codStatus === 'cod_success' ? 'Contra Entrega (Efectivo / Transferencia)' : transactionId}
                         </span>
                     </div>
                     {friendlyId && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                        <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>Número de Pedido</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <span style={{ 
@@ -223,16 +224,47 @@ function ResultContent() {
                 </div>
             )}
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Link href="/" className="btn btn-primary" style={{ padding: '0.85rem 2rem', display: 'inline-flex', alignItems: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800' }}>
+            <div className="result-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link href="/" className="btn btn-primary result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800', transition: 'all 0.2s ease' }}>
                     <ShoppingBag size={18} /> Volver al Inicio
                 </Link>
                 {status === 'error' && (
-                    <Link href="/checkout" className="btn" style={{ padding: '0.85rem 2rem', border: '1px solid var(--border)', borderRadius: '14px', fontWeight: '700' }}>
+                    <Link href="/checkout" className="btn result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', border: '1px solid var(--border)', borderRadius: '14px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}>
                         Reintentar
                     </Link>
                 )}
             </div>
+
+            <style jsx>{`
+                @keyframes resultFadeIn {
+                    from { opacity: 0; transform: translateY(8px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .result-card {
+                    animation: resultFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+                }
+                @media (max-width: 768px) {
+                    .result-card {
+                        margin: 1.25rem 0.75rem !important;
+                        padding: 1.75rem 1.25rem !important;
+                        border-radius: 20px !important;
+                    }
+                    .result-title {
+                        font-size: 1.55rem !important;
+                    }
+                    .result-tx-row {
+                        flex-direction: column !important;
+                        align-items: flex-start !important;
+                    }
+                    .result-actions {
+                        flex-direction: column !important;
+                        width: 100%;
+                    }
+                    .result-cta {
+                        width: 100% !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

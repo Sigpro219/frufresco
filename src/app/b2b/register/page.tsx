@@ -80,8 +80,8 @@ function B2BRegisterContent() {
     const b2b = content || {};
 
     return (
-        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }}>
-            <div style={{
+        <main style={{ minHeight: '100vh', backgroundColor: '#F3F4F6', overflowX: 'hidden' }}>
+            <div className="b2b-register-hero" style={{
                 minHeight: 'calc(100vh - 80px)', 
                 display: 'flex',
                 alignItems: 'center',
@@ -89,7 +89,7 @@ function B2BRegisterContent() {
                 backgroundImage: 'url(/b2b-bg.png)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                padding: '4rem 0'
+                padding: 'clamp(1.75rem, 5vh, 4rem) 0'
             }}>
                 <div style={{
                     position: 'absolute',
@@ -177,17 +177,30 @@ function B2BRegisterContent() {
                 @media (max-width: 1024px) {
                     .b2b-register-grid {
                         grid-template-columns: 1fr;
-                        gap: 2.5rem;
+                        gap: 2rem;
                     }
                     .b2b-bot-wrapper {
                         max-width: 540px !important;
                         margin: 0 auto;
                     }
                 }
-                @media (max-width: 640px) {
+                @media (max-width: 768px) {
+                    .b2b-register-grid {
+                        grid-template-columns: 1fr !important;
+                        gap: 1.5rem;
+                    }
                     .b2b-benefits-grid {
                         grid-template-columns: 1fr;
-                        gap: 0.85rem;
+                        gap: 0.75rem;
+                    }
+                    .b2b-bot-wrapper input,
+                    .b2b-bot-wrapper select,
+                    .b2b-bot-wrapper textarea {
+                        font-size: 16px !important;
+                        box-sizing: border-box;
+                    }
+                    .b2b-bot-wrapper button {
+                        min-height: 44px;
                     }
                 }
                 @keyframes fadeInRight {

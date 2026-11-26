@@ -100,7 +100,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
     <>
       <article className={`sf-card ${isFriogan ? 'sf-card-friogan' : ''}`}>
         <div>
-          <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', backgroundColor: '#F7F4ED', height: '172px', marginBottom: '11px' }}>
+          <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', backgroundColor: '#F7F4ED', width: '100%', aspectRatio: '4 / 3', marginBottom: '11px' }}>
             <Link href={detailHref} style={{ position: 'relative', display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
               {hasImage && product.image_url ? (
                 <Image
@@ -110,7 +110,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                   sizes="(max-width: 640px) 50vw, 240px"
                   unoptimized={!product.image_url.startsWith('/') && !product.image_url.includes('.supabase.co/storage/v1/object/public/')}
                   className="sf-card-img"
-                  style={{ objectFit: 'cover', transition: 'transform 220ms ease' }}
+                  style={{ objectFit: 'cover' }}
                 />
               ) : (
                 <CategoryPlaceholder code={catCode} />
@@ -123,10 +123,10 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
               aria-label={isEn ? `Quick view ${title}` : `Vista rápida de ${title}`}
               style={{
                 position: 'absolute',
-                top: '8px',
-                right: '8px',
-                width: '32px',
-                height: '32px',
+                top: '6px',
+                right: '6px',
+                width: '44px',
+                height: '44px',
                 borderRadius: '9999px',
                 border: '1px solid rgba(8,28,21,0.1)',
                 backgroundColor: 'rgba(255,255,255,0.94)',
@@ -137,7 +137,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                 boxShadow: '0 2px 6px rgba(8,28,21,0.08)',
               }}
             >
-              <Eye size={15} aria-hidden="true" />
+              <Eye size={16} aria-hidden="true" />
             </button>
 
             {isPromo && (
@@ -161,7 +161,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
             </span>
           </div>
 
-          <Link href={detailHref} style={{ display: 'block', fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 700, fontSize: '1.02rem', lineHeight: 1.25, color: '#081C15', marginBottom: '10px' }}>
+          <Link href={detailHref} style={{ display: 'block', fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 700, fontSize: 'clamp(0.92rem, 2.4vw, 1.02rem)', lineHeight: 1.25, color: '#081C15', marginBottom: '10px' }}>
             {title}
           </Link>
 
@@ -177,7 +177,8 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                     onClick={() => setSelectedIdx(idx)}
                     style={{
                       flex: '1 1 auto',
-                      padding: '4px 8px',
+                      minHeight: '44px',
+                      padding: '6px 8px',
                       borderRadius: '8px',
                       fontSize: '0.8125rem',
                       fontWeight: active ? 700 : 600,
@@ -185,7 +186,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                       backgroundColor: active ? '#FFFFFF' : 'transparent',
                       color: active ? (isFriogan ? '#7F1D1D' : '#081C15') : '#64748B',
                       boxShadow: active ? '0 1px 3px rgba(8,28,21,0.1)' : 'none',
-                      transition: 'background-color 140ms ease, color 140ms ease',
+                      transition: 'background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
                   >
                     {opt.label}
@@ -200,7 +201,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '10px', borderTop: '1px solid #EFECE6' }}>
+        <div className="sf-card-footer">
           <div style={{ display: 'flex', flexDirection: 'column', fontVariantNumeric: 'tabular-nums' }}>
             {priceRes.isPriceAvailable ? (
               <>
@@ -209,7 +210,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                     ${priceRes.originalDisplayPrice.toLocaleString('es-CO')}
                   </span>
                 )}
-                <span style={{ fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 800, fontSize: '1.16rem', color: isFriogan ? '#7F1D1D' : '#081C15' }}>
+                <span style={{ fontFamily: 'var(--font-outfit), sans-serif', fontWeight: 800, fontSize: 'clamp(1.02rem, 2.5vw, 1.16rem)', color: isFriogan ? '#7F1D1D' : '#081C15' }}>
                   ${priceRes.displayPrice.toLocaleString('es-CO')}
                 </span>
               </>
@@ -225,7 +226,8 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
               type="button"
               disabled
               style={{
-                padding: '7px 12px',
+                minHeight: '44px',
+                padding: '8px 12px',
                 borderRadius: '9999px',
                 border: '1px solid rgba(8,28,21,0.12)',
                 backgroundColor: '#F1F5F9',
@@ -242,18 +244,19 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '2px',
                 backgroundColor: isFriogan ? '#7F1D1D' : '#081C15',
                 color: '#FFFFFF',
                 borderRadius: '9999px',
-                padding: '5px 10px',
+                padding: '0 4px',
+                minHeight: '44px',
               }}
             >
               <button
                 type="button"
                 aria-label={isEn ? `Decrease ${title}` : `Disminuir ${title}`}
                 onClick={() => updateItemQuantity(product.id, cartItemName, qtyInCart - 1)}
-                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', padding: '2px' }}
+                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '34px', minHeight: '44px' }}
               >
                 <Minus size={14} />
               </button>
@@ -264,7 +267,7 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
                 type="button"
                 aria-label={isEn ? `Increase ${title}` : `Aumentar ${title}`}
                 onClick={() => updateItemQuantity(product.id, cartItemName, qtyInCart + 1)}
-                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', padding: '2px' }}
+                style={{ background: 'transparent', border: 'none', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '34px', minHeight: '44px' }}
               >
                 <Plus size={14} />
               </button>
@@ -296,35 +299,49 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
           border-radius: 18px;
           border: 1px solid #EAE5DC;
           padding: 13px;
+          width: 100%;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
+          transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms cubic-bezier(0.16, 1, 0.3, 1);
         }
         .sf-card:hover {
           transform: translateY(-2px);
           box-shadow: 0 14px 28px -12px rgba(8, 28, 21, 0.14);
           border-color: rgba(13, 122, 87, 0.34);
         }
-        .sf-card:hover .sf-card-img {
+        :global(.sf-card-img) {
+          transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .sf-card:hover :global(.sf-card-img) {
           transform: scale(1.03);
         }
         .sf-card-friogan {
           border-color: rgba(127, 29, 29, 0.22);
           background-color: #FFFDFD;
         }
+        .sf-card-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          padding-top: 10px;
+          border-top: 1px solid #EFECE6;
+        }
         .sf-add-btn {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 5px;
+          min-height: 44px;
           background-color: #0D7A57;
           color: #FFFFFF;
           border: none;
           border-radius: 9999px;
-          padding: 8px 15px;
+          padding: 10px 16px;
           font-weight: 800;
           font-size: 0.84rem;
-          transition: background-color 150ms ease, transform 150ms ease;
+          transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
         }
         .sf-add-btn:hover {
           background-color: #081C15;
@@ -334,6 +351,26 @@ export default function ProductCard({ product, locale = 'es' }: { product: Produ
         }
         .sf-add-btn-friogan:hover {
           background-color: #450A0A;
+        }
+        @media (max-width: 480px) {
+          .sf-card {
+            padding: 11px;
+            border-radius: 16px;
+          }
+          .sf-card-footer {
+            flex-wrap: wrap;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sf-card,
+          :global(.sf-card-img),
+          .sf-add-btn {
+            transition: none;
+          }
+          .sf-card:hover,
+          .sf-card:hover :global(.sf-card-img) {
+            transform: none;
+          }
         }
       `}</style>
     </>

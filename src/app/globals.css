@@ -1,5 +1,6 @@
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 :root {
@@ -45,6 +46,7 @@ body {
   background-color: var(--background);
   color: var(--text-main);
   line-height: 1.6;
+  overflow-x: clip;
 }
 
 a {
@@ -173,6 +175,18 @@ button {
 
 /* Responsive Helpers */
 @media (max-width: 768px) {
+  .container {
+    width: 100%;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+
+  .section-title {
+    font-size: clamp(1.375rem, 5.5vw, 1.75rem);
+    margin-bottom: 1.25rem;
+    line-height: 1.2;
+  }
+
   .mobile-stack {
     flex-direction: column !important;
     grid-template-columns: 1fr !important;

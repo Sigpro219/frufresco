@@ -85,9 +85,9 @@ export default function ExpressBeaconPage() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#0B1120', color: '#F8FAFC', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.25rem' }}>
-            <div style={{ maxWidth: '430px', width: '100%', backgroundColor: '#111827', border: `1px solid ${isTracking ? 'rgba(16, 185, 129, 0.5)' : '#1F2937'}`, borderRadius: '24px', padding: '1.5rem', boxShadow: '0 20px 45px rgba(0,0,0,0.5)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#0B1120', color: '#F8FAFC', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem', overflowX: 'hidden' }}>
+            <div className="track-card" style={{ maxWidth: '430px', width: '100%', backgroundColor: '#111827', border: `1px solid ${isTracking ? 'rgba(16, 185, 129, 0.5)' : '#1F2937'}`, borderRadius: '24px', padding: '1.35rem', boxShadow: '0 20px 45px rgba(0,0,0,0.5)', transition: 'border-color 0.25s ease, box-shadow 0.25s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '1.25rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Truck size={20} color="#10B981" />
                         <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em' }}>BALIZA MÓVIL FRUFRESCO</span>
@@ -96,7 +96,8 @@ export default function ExpressBeaconPage() {
                         fontSize: '0.7rem', fontWeight: 900, padding: '4px 10px', borderRadius: '999px',
                         backgroundColor: isTracking ? 'rgba(16, 185, 129, 0.18)' : 'rgba(148, 163, 184, 0.14)',
                         color: isTracking ? '#34D399' : '#94A3B8',
-                        display: 'inline-flex', alignItems: 'center', gap: '5px'
+                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                        transition: 'all 0.2s ease'
                     }}>
                         <Radio size={12} />
                         {isTracking ? 'EN VIVO' : 'EN PAUSA'}
@@ -105,8 +106,8 @@ export default function ExpressBeaconPage() {
 
                 <div style={{ backgroundColor: '#0F172A', borderRadius: '16px', padding: '1rem 1.25rem', border: '1px solid #1E293B', marginBottom: '1.25rem' }}>
                     <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase' }}>Placa Asignada</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, letterSpacing: '0.04em', color: '#FFFFFF', marginTop: '2px' }}>{info.plate}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.65rem', fontSize: '0.78rem', color: '#CBD5E1' }}>
+                    <div style={{ fontSize: 'clamp(1.5rem, 6vw, 2rem)', fontWeight: 900, letterSpacing: '0.04em', color: '#FFFFFF', marginTop: '2px', wordBreak: 'break-word' }}>{info.plate}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginTop: '0.65rem', fontSize: '0.78rem', color: '#CBD5E1' }}>
                         <span>Estado: <strong>{info.route_status.toUpperCase()}</strong></span>
                         <span>Paradas: <strong>{info.total_stops}</strong></span>
                     </div>
@@ -116,11 +117,12 @@ export default function ExpressBeaconPage() {
                     type="button"
                     onClick={() => setActive(prev => !prev)}
                     style={{
-                        width: '100%', padding: '1rem', borderRadius: '16px', border: 'none',
+                        width: '100%', minHeight: '48px', padding: '1rem', borderRadius: '16px', border: 'none',
                         backgroundColor: active ? '#DC2626' : '#059669',
                         color: '#FFFFFF', fontSize: '1rem', fontWeight: 900, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                        boxShadow: active ? '0 10px 25px rgba(220,38,38,0.35)' : '0 10px 25px rgba(5,150,105,0.35)'
+                        boxShadow: active ? '0 10px 25px rgba(220,38,38,0.35)' : '0 10px 25px rgba(5,150,105,0.35)',
+                        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                 >
                     {active ? <Power size={20} /> : <Navigation size={20} />}
@@ -132,10 +134,11 @@ export default function ExpressBeaconPage() {
                         type="button"
                         onClick={() => sendNow()}
                         style={{
-                            width: '100%', marginTop: '0.75rem', padding: '0.75rem', borderRadius: '12px',
+                            width: '100%', minHeight: '44px', marginTop: '0.75rem', padding: '0.75rem', borderRadius: '12px',
                             border: '1px solid #334155', backgroundColor: '#1E293B', color: '#E2E8F0',
-                            fontSize: '0.82rem', fontWeight: 800, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                            fontSize: '0.85rem', fontWeight: 800, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            transition: 'all 0.2s ease'
                         }}
                     >
                         <RefreshCw size={15} />
@@ -164,6 +167,15 @@ export default function ExpressBeaconPage() {
                     </div>
                 </div>
             </div>
+            <style jsx>{`
+                @keyframes trackFadeIn {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .track-card {
+                    animation: trackFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                }
+            `}</style>
         </div>
     );
 }
