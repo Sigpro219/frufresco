@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Inter, Outfit } from 'next/font/google';
 import "./globals.css";
 import ClientLayout from '@/components/ClientLayout';
@@ -16,15 +17,37 @@ const outfit = Outfit({
   display: 'swap',
 });
 
-export async function generateMetadata() {
+export async function generateMetadata(): Promise<Metadata> {
+  const defaultTitle = 'FruFresco | Tu despensa gourmet del campo a la ciudad';
+  const defaultDescription = 'Abastecimiento de alimentos frescos para tu negocio y hogar.';
+
   try {
     const primary = await getSeoSettings();
 
     if (primary) {
+      const title = primary.meta_title || defaultTitle;
+      const description = primary.meta_description || defaultDescription;
       return {
-        title: primary.meta_title,
-        description: primary.meta_description,
+        metadataBase: new URL('https://frufresco.co'),
+        alternates: { canonical: '/' },
+        title,
+        description,
         keywords: primary.keywords?.join(', '),
+        openGraph: {
+          title,
+          description,
+          url: 'https://frufresco.co',
+          siteName: 'FruFresco',
+          locale: 'es_CO',
+          type: 'website',
+          images: [{ url: '/hero_fresh_produce.png', width: 1200, height: 630, alt: 'FruFresco — Frutas y verduras frescas del campo a la ciudad' }],
+        },
+        twitter: {
+          card: 'summary_large_image',
+          title,
+          description,
+          images: ['/hero_fresh_produce.png'],
+        },
       };
     }
   } catch (e) {
@@ -32,8 +55,25 @@ export async function generateMetadata() {
   }
 
   return {
-    title: 'FruFresco | Tu despensa gourmet del campo a la ciudad',
-    description: 'Abastecimiento de alimentos frescos para tu negocio y hogar.',
+    metadataBase: new URL('https://frufresco.co'),
+    alternates: { canonical: '/' },
+    title: defaultTitle,
+    description: defaultDescription,
+    openGraph: {
+      title: defaultTitle,
+      description: defaultDescription,
+      url: 'https://frufresco.co',
+      siteName: 'FruFresco',
+      locale: 'es_CO',
+      type: 'website',
+      images: [{ url: '/hero_fresh_produce.png', width: 1200, height: 630, alt: 'FruFresco — Frutas y verduras frescas del campo a la ciudad' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: defaultTitle,
+      description: defaultDescription,
+      images: ['/hero_fresh_produce.png'],
+    },
   };
 }
 
@@ -68,7 +108,7 @@ export default async function RootLayout({
         `}} />
         <script dangerouslySetInnerHTML={{ __html: `
           // 1. Detección proactiva de sesión corrupta
-          if (localStorage.getItem('sb-vuxisqojpsrvmhzunqyd-auth-token') === 'undefined' || 
+          if (localStorage.getItem('sb-csqurhdykbalvlnpowcz-auth-token') === 'undefined' || 
               localStorage.getItem('supabase.auth.token') === 'undefined') {
             localStorage.clear();
           }

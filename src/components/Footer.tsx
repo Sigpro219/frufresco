@@ -15,7 +15,8 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
 
   const appName = config.brand.name;
   const phone = initialConfig?.contactPhone || '316 7022898';
-  const email = 'contacto@investmentscortes.com';
+  const ordersEmail = 'pedidos@frufresco.co';
+  const contactEmail = 'contacto@frufresco.co';
   const address = 'CL 12 B # 71 D - 31 TO 4 AP 101, Bogotá D.C., Colombia';
   const description = t.footerDesc;
   const logoUrl = initialConfig?.logoUrl || '/logo.png';
@@ -83,6 +84,8 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
                   <ShieldCheck size={15} strokeWidth={2.2} /> {locale === 'en' ? 'Warranty & Claims (PQRS)' : 'Garantía & PQRS'}
                 </Link>
               </li>
+              <li><Link href="/privacidad" className="footer-link">{locale === 'en' ? 'Privacy Policy' : 'Política de Privacidad'}</Link></li>
+              <li><Link href="/terminos" className="footer-link">{locale === 'en' ? 'Terms & Conditions' : 'Términos y Condiciones'}</Link></li>
             </ul>
           </div>
 
@@ -105,7 +108,12 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
                 <Phone size={18} strokeWidth={1.5} color="var(--primary)" /> {phone}
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
-                <Mail size={18} strokeWidth={1.5} color="var(--primary)" /> {email}
+                <Mail size={18} strokeWidth={1.5} color="var(--primary)" />
+                <a href={`mailto:${ordersEmail}`} style={{ color: '#94a3b8', textDecoration: 'none' }}>{ordersEmail}</a>
+              </li>
+              <li style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#94a3b8', fontSize: '0.95rem' }}>
+                <Mail size={18} strokeWidth={1.5} color="var(--primary)" />
+                <a href={`mailto:${contactEmail}`} style={{ color: '#94a3b8', textDecoration: 'none' }}>{contactEmail}</a>
               </li>
               <li style={{ marginTop: '0.25rem' }}>
                 <a 

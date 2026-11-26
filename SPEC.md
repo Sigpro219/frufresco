@@ -18369,5 +18369,19 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - `TOTAL <SUBLISTA>` y el contador de productos del banner excluyen `row_type === 'family'` y deduplican `stock_bodega` por `product_id`.
      - Subtítulo actualiza etiqueta para `partial_closing` (`BASE INV: CIERRE PARCIAL (<fecha>)`).
      - `exportToExcel` incluye la columna `Tipo Registro` (`Familia` / `↳ Presentación` / `Individual`) con los mismos totales y nombres jerárquicos.
-  3. **Directiva de Paridad Digital (Obligatoria para Ambiente Digital `/admin/procurement`):**
-     - Este estándar jerárquico (`Familia Padre resaltada → ↳ Hijos sin negrilla`, bloqueo diagonal/visual en hijos solo-stock y consolidación de stock familiar sin doble conteo) queda consagrado como norma obligatoria para replicar igualmente en el **ambiente digital de compras** (`/admin/procurement`).
+  3. **Directiva de Paridad Digital OPS (`/ops/compras`, Pendiente de Ejecución — Blindado Pre-Código por `/goldfish`):**
+     - **Alcance Real de Rutas & Enmienda `READ-ONLY LOCK` (`Escenario 477 §1`):**
+       - *En alcance:* `src/lib/procurement/buildHierarchicalPurchaseRows.ts` *(nuevo helper puro compartido)*, `src/app/admin/procurement/purchases-print/page.tsx` *(refactor para consumir el helper)* y `src/app/ops/compras/page.tsx` *(módulo digital operativo de compras en plaza)*.
+       - *Fuera de alcance:* `src/app/admin/procurement/page.tsx` (hub financiero), `src/app/admin/procurement/cash/page.tsx` (caja menor) y `src/components/FastPlazaPurchasesModal.tsx`.
+     - **Helper Canónico Compartido (`src/lib/procurement/buildHierarchicalPurchaseRows.ts`):**
+       - Extrae la agrupación jerárquica (`row_type: 'family' | 'child' | 'standalone'`, `is_stock_only`, orden `base → demandados → solo-stock`, `familyTotalStock` deduplicado por `product_id` y `familyTotalDemand`) como función pura compartida entre papel/Excel y `/ops/compras`.
+       - En `ops/compras/page.tsx`, `fetchTasks` debe consultar además los hermanos activos del catálogo (`products` donde `parent_id IN (familyIds)` o `id IN (familyIds)`) y cruzarlos con `resolvedInv.stockMap` para detectar hijos `solo-stock` (`stock > 0 && demanda === 0`) **sin** crear registros en `procurement_tasks`.
+     - **Semántica Transaccional en `/ops/compras` (`FAMILIA` vs `↳ Hijo` vs `standalone`):**
+       - **Cabecera `FAMILIA` (`row_type: 'family'`):** Encabezado consolidado e informativo (resaltado en negrilla con `Demanda Familiar`, `Stock INV Familiar` incluyendo hijos solo-stock, `A Comprar Familiar = max(0, familyTotalDemand - familyTotalStock)` y `Comprado Familiar`). **NO ejecuta compra directa** (`onClick` deshabilitado) para preservar integridad referencial 1:1 con `procurement_tasks.id`, `purchases.task_id`, PPP diario en `commercial_cost_matrix` y recepción en `/ops/recepcion`.
+       - **Hijo con demanda (`row_type: 'child' && !is_stock_only`):** Renderizado con prefijo `↳` y tipografía regular (sin negrilla); mantiene modal de compra, compra rápida (`Zap`), cierre de faltante, escasez y sustitución vinculados a su `procurement_tasks.id`.
+       - **Producto `standalone`:** Mantiene tarjeta simple clickeable directa sin cambios transaccionales.
+     - **Bloqueo Visual y Funcional en Hijos `solo-stock` (`is_stock_only === true`):**
+       - Fila virtual de solo lectura dentro de la tarjeta familiar con prefijo `↳`, `Stock INV` en negrilla, bloqueo visual (trama diagonal / estilo atenuado + badge `Solo stock · No comprar`, solo iconos `lucide-react`, cero emojis) y bloqueo total de modal de compra, `Zap`, cierre faltante, escasez y sustitución.
+     - **Regla Matemática & KPIs Sin Doble Conteo:**
+       - El stock de hijos `solo-stock` suma al consolidado informativo `FAMILIA`, pero **no** muta el `meta_neteo` individual de otros SKUs en `procurementNettingEngine.ts`. Cero etiqueta `inc.` (`-` cuando stock es `0`).
+       - `completedTasks`, `partialTasks`, `pendingTasks`, `totalProgress` y contadores por categoría en `ops/compras/page.tsx` se calculan exclusivamente sobre tareas reales demandadas (`row_type !== 'family' && !is_stock_only`), preservando el disparo exacto de `100%` (*"¡Misión Cumplida!"*).
