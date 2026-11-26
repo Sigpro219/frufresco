@@ -18352,3 +18352,22 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - **WhatsApp / Chat** (`orders/create/page.tsx`) y **Correo texto plano** (`GmailMessageViewer` en `EmailDraftsModule.tsx`): resaltado línea por línea + clic bidireccional.
      - **Excel / ODS / CSV** (`ExcelTableViewer.tsx` y visor inline de `EmailDraftsModule.tsx`): resaltado por fila `<tr>` + `Check` en la celda `#` + clic bidireccional.
      - **PDF / Imagen / Correo HTML:** banda fija superior `"Auditando ahora"` con el texto original, `#accounting_id` (jamás `SKU`) y progreso `X / N revisadas`.
+
+---
+
+### Escenario 495: Jerarquía Padre → Hijos (`↳`) en Planilla de Compras Corabastos (PDF + Excel), Consolidado de Familia y Bloqueo Diagonal `╳` en Hijos Solo-Stock (SDD v1.9.450)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`):** Autorización acotada del CTO sobre `src/app/admin/procurement/purchases-print/page.tsx` para incorporar jerarquía Familia (`Padre → ↳ Hijos`) en la Planilla de Compras Corabastos (impresión y Excel).
+- **Alcance Contractual:**
+  1. **Agrupación por Familia (`parent_id || id`) en `purchases-print/page.tsx`:**
+     - Para familias con `>= 2` miembros activos y demanda o stock en la sublista: emite 1 fila **Padre (`row_type: 'family'`)** resaltada y en negrilla sumando `Stock INV` (incluyendo hijos solo-stock sin demanda) y `Demanda` de toda la familia, con `Precio $/UM` y `Puesto / Proveedor` libres para negociación global.
+     - Debajo del padre emite únicamente los **Hijos (`row_type: 'child'`)** con `demanda > 0` o `stock > 0`, indentados con flecha tipográfica `↳` y texto sin negrilla.
+     - Hijos solo-stock (`stock > 0 && demanda === 0`, ej. `#409 Aguacate papelillo`): muestran su `Stock INV` en negrilla y bloquean `DEMANDA`, `PRECIO $/UM` y `PUESTO / PROVEEDOR` mediante una **`╳` diagonal SVG** a celda completa impidiendo escribir compra por error.
+     - Hijos con `demanda > 0 && stock === 0`: conservan `-` en `Stock INV` (eliminada la etiqueta confusa `inc.`; solo se muestra `↑` cuando una variante repetida del mismo SKU sí posee stock `> 0` en la fila superior).
+     - Productos independientes sin familia activa: se renderizan en 1 fila (`standalone`) sin cambios.
+  2. **Cero Doble Conteo & Paridad Excel:**
+     - `TOTAL <SUBLISTA>` y el contador de productos del banner excluyen `row_type === 'family'` y deduplican `stock_bodega` por `product_id`.
+     - Subtítulo actualiza etiqueta para `partial_closing` (`BASE INV: CIERRE PARCIAL (<fecha>)`).
+     - `exportToExcel` incluye la columna `Tipo Registro` (`Familia` / `↳ Presentación` / `Individual`) con los mismos totales y nombres jerárquicos.
+  3. **Directiva de Paridad Digital (Obligatoria para Ambiente Digital `/admin/procurement`):**
+     - Este estándar jerárquico (`Familia Padre resaltada → ↳ Hijos sin negrilla`, bloqueo diagonal/visual en hijos solo-stock y consolidación de stock familiar sin doble conteo) queda consagrado como norma obligatoria para replicar igualmente en el **ambiente digital de compras** (`/admin/procurement`).
