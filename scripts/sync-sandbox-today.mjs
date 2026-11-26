@@ -164,9 +164,10 @@ async function main() {
     }
 
     if (eligibleOrders.length > 0) {
-      // 4. Nullify assigned_route_id / billing_cut_id if referenced ID does not exist in Sandbox
+      // 4. Nullify assigned_route_id / billing_cut_id / invoice_id if referenced ID does not exist in Sandbox
       const routeIds = [...new Set(eligibleOrders.map((o) => o.assigned_route_id).filter(Boolean))];
       const cutIds = [...new Set(eligibleOrders.map((o) => o.billing_cut_id).filter(Boolean))];
+      const invoiceIds = [...new Set(eligibleOrders.map((o) => o.invoice_id).filter(Boolean))];
 
       const validRouteIds = new Set();
       if (routeIds.length > 0) {
@@ -180,6 +181,13 @@ async function main() {
         for (const c of cutsInSbx || []) validCutIds.add(c.id);
       }
 
+      const validInvoiceIds = new Set();
+      for (let i = 0; i < invoiceIds.length; i += 200) {
+        const slice = invoiceIds.slice(i, i + 200);
+        const { data: invoicesInSbx } = await sbx.from('invoices').select('id').in('id', slice);
+        for (const inv of invoicesInSbx || []) validInvoiceIds.add(inv.id);
+      }
+
       const preparedOrders = eligibleOrders.map((o) => {
         const clone = { ...o };
         if (clone.assigned_route_id && !validRouteIds.has(clone.assigned_route_id)) {
@@ -187,6 +195,9 @@ async function main() {
         }
         if (clone.billing_cut_id && !validCutIds.has(clone.billing_cut_id)) {
           clone.billing_cut_id = null;
+        }
+        if (clone.invoice_id && !validInvoiceIds.has(clone.invoice_id)) {
+          clone.invoice_id = null;
         }
         return clone;
       });
