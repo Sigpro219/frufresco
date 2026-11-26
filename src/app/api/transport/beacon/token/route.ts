@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
         const { data: vehicle, error: vErr } = await supabaseAdmin
             .from('fleet_vehicles')
-            .select('id, plate, gps_imei, status')
+            .select('id, plate, gps_imei, gps_kit_id, status')
             .ilike('plate', plate)
             .maybeSingle();
 
@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
         if (!vehicle || vehicle.status === 'inactive') {
             return NextResponse.json({ error: `La placa ${plate} no está registrada o está inactiva en Flota` }, { status: 400 });
         }
-        if (vehicle.gps_imei) {
-            return NextResponse.json({ error: `El vehículo ${plate} ya cuenta con GPS satelital activo` }, { status: 400 });
+        if (vehicle.gps_imei && !vehicle.gps_kit_id) {
+            return NextResponse.json({ error: `El vehículo ${plate} ya cuenta con GPS satelital fijo activo` }, { status: 400 });
         }
 
         const { token, payload } = signBeaconToken({ route_id: route.id, plate: vehicle.plate });

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { action, vehicleId, vehicleData, odometer, driverId, status } = body;
+        const { action, vehicleId, vehicleData, odometer, driverId, status, kitId } = body;
 
         const adminSupabase = createAdminClient();
 
@@ -232,6 +232,96 @@ export async function POST(request: Request) {
             }
 
             return NextResponse.json({ success: true, deleted: data });
+        }
+
+        // 8. Acción: ASIGNAR / LIBERAR KIT GPS PORTÁTIL
+        if (action === 'assign_gps_kit') {
+            const strictAuth = await verifySessionAndPermission(request, 'admin.transport.edit');
+            if (!strictAuth.authorized) {
+                return NextResponse.json(
+                    { error: strictAuth.error || 'Se requiere permiso admin.transport.edit para asignar kits GPS.' },
+                    { status: 403 }
+                );
+            }
+            if (!vehicleId || typeof vehicleId !== 'string') {
+                return NextResponse.json({ error: 'Falta el ID del vehículo.' }, { status: 400 });
+            }
+
+            const { data: targetVehicle, error: targetErr } = await adminSupabase
+                .from('fleet_vehicles')
+                .select('id, plate, gps_imei, gps_kit_id, tracking_source')
+                .eq('id', vehicleId)
+                .maybeSingle();
+
+            if (targetErr) throw targetErr;
+            if (!targetVehicle) {
+                return NextResponse.json({ error: 'Vehículo no encontrado.' }, { status: 404 });
+            }
+
+            if (!kitId) {
+                if (targetVehicle.gps_kit_id) {
+                    const { error: clearErr } = await adminSupabase
+                        .from('fleet_vehicles')
+                        .update({
+                            gps_kit_id: null,
+                            gps_imei: null,
+                            ...(targetVehicle.tracking_source === 'hardware_gps' ? { last_gps_sync: null } : {})
+                        })
+                        .eq('id', targetVehicle.id);
+                    if (clearErr) throw clearErr;
+                }
+                return NextResponse.json({ success: true, unassigned: true });
+            }
+
+            if (targetVehicle.gps_imei && !targetVehicle.gps_kit_id) {
+                return NextResponse.json(
+                    { error: `El vehículo ${targetVehicle.plate} ya tiene un GPS fijo instalado y no admite kit portátil.` },
+                    { status: 409 }
+                );
+            }
+
+            const { data: kit, error: kitErr } = await adminSupabase
+                .from('portable_gps_kits')
+                .select('id, label, imei, is_active')
+                .eq('id', String(kitId))
+                .maybeSingle();
+
+            if (kitErr) throw kitErr;
+            if (!kit) {
+                return NextResponse.json({ error: 'Kit GPS portátil no encontrado.' }, { status: 404 });
+            }
+            if (!kit.is_active) {
+                return NextResponse.json({ error: `El kit ${kit.label} está inactivo.` }, { status: 400 });
+            }
+
+            const { data: prevOwners } = await adminSupabase
+                .from('fleet_vehicles')
+                .select('id, tracking_source')
+                .neq('id', targetVehicle.id)
+                .or(`gps_kit_id.eq.${kit.id},gps_imei.eq.${kit.imei}`);
+
+            for (const prev of prevOwners || []) {
+                await adminSupabase
+                    .from('fleet_vehicles')
+                    .update({
+                        gps_kit_id: null,
+                        gps_imei: null,
+                        ...(prev.tracking_source === 'hardware_gps' ? { last_gps_sync: null } : {})
+                    })
+                    .eq('id', prev.id);
+            }
+
+            const { error: assignErr } = await adminSupabase
+                .from('fleet_vehicles')
+                .update({
+                    gps_kit_id: kit.id,
+                    gps_imei: kit.imei
+                })
+                .eq('id', targetVehicle.id);
+
+            if (assignErr) throw assignErr;
+
+            return NextResponse.json({ success: true, kit_label: kit.label, plate: targetVehicle.plate });
         }
 
         return NextResponse.json({ error: `Acción '${action}' no reconocida.` }, { status: 400 });

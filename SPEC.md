@@ -18631,3 +18631,38 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Invoca `gemini-2.5-flash` con prompt estricto de ciclo cerrado (solo lectura, cita exacta de `#sequence_id` y `[EML-...]`, cero alucinaciones).
   3. **Widget Flotante Exclusivo (`src/components/orders/OrdersAiCopilot.tsx`):**
      - Montado únicamente en `src/app/admin/orders/loading/page.tsx` (`bottom-4 right-4 z-[60]`, íconos `lucide-react` sin emojis, superficie sólida industrial clara, chips de consulta rápida y micrófono opcional `Web Speech API` `es-CO` que hidrata el input sin envío automático).
+
+
+---
+
+### Escenario 502: Kits GPS Portátiles Itinerantes, Ingesta Dual (Apps-360 + Webhook Genérico) y Coexistencia con Baliza QR (SDD v1.9.457)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` EXIT 0)`
+- **Archivos en Alcance (libres de `READ-ONLY LOCK`):**
+  - `supabase/migrations/20261126_portable_gps_kits.sql` (nuevo)
+  - `src/lib/telemetry/apps360.ts`
+  - `src/app/api/transport/sync-gps/route.ts`
+  - `src/app/api/transport/gps-webhook/route.ts` (nuevo)
+  - `src/app/api/transport/gps-kits/route.ts` (nuevo)
+  - `src/app/api/transport/vehicles/route.ts`
+  - `src/app/api/transport/beacon/token/route.ts`
+  - `src/components/FleetManagement.tsx`
+  - `src/app/admin/transport/page.tsx`
+- **Alcance Contractual:**
+  1. **Catálogo `portable_gps_kits`, Unicidad y Triggers de Liberación (`20261126_portable_gps_kits.sql`):**
+     - Tabla `public.portable_gps_kits` (`id`, `label` UNIQUE, `imei` UNIQUE, `provider IN ('apps360', 'webhook')`, `is_active`, `notes`, timestamps) con RLS equivalente a `fleet_vehicles` (`admin`, `sys_admin`, `web_admin`, `operations`, `COORDINADOR DE OPERACIONES`).
+     - `fleet_vehicles.gps_kit_id` (FK `ON DELETE SET NULL`) + índices parciales únicos `idx_fleet_vehicles_gps_imei_unique` y `idx_fleet_vehicles_gps_kit_id_unique`.
+     - `vehicle_gps_logs.battery_level NUMERIC`.
+     - Trigger PostgreSQL `SECURITY DEFINER` `fn_release_portable_gps_kit_on_route_close` (`AFTER UPDATE OF status ON public.routes` hacia `completed` / `cancelled`, verificando que no exista otra ruta activa para `UPPER(TRIM(NEW.vehicle_plate))`): libera `gps_kit_id = NULL, gps_imei = NULL` y limpia `last_gps_sync = NULL` si `tracking_source = 'hardware_gps'`.
+     - Trigger `BEFORE DELETE` `fn_cleanup_vehicle_before_kit_delete` en `portable_gps_kits`: limpia `gps_kit_id`, `gps_imei` y `last_gps_sync` (si venía de `hardware_gps`) antes de borrar, impidiendo mutación fantasma a GPS Fijo.
+  2. **Ingesta Apps-360 (`apps360.ts` + `sync-gps/route.ts`):**
+     - `NormalizedTelemetry.plate: string | null`; `sanitizeGpsImei` (`10..20` dígitos) ejecutado antes de validar `plate`; permite dispositivos con `plate` O `imei` válido.
+     - `sync-gps/route.ts`: resuelve primero por `gps_imei` (excluyendo `status = 'inactive'`) y hace fallback por `.ilike('plate', item.plate)`. No sobrescribe `gps_imei` en fallback si ya está asignado a otro vehículo ni pisa un kit activo. Prohibido actualizar `current_odometer` / `last_odometer_update` si `gps_kit_id != null` o `normalizeFleetOwnership(vehicle_type) === 'Tercero'`. Registra siempre `matchedVehicle.plate` en `vehicle_gps_logs` y `synced_plates`.
+  3. **Webhook Genérico Externo (`POST /api/transport/gps-webhook`):**
+     - Autenticación Zero-Trust con `GPS_WEBHOOK_SECRET` vía `x-gps-webhook-secret` o `Authorization: Bearer` usando `crypto.timingSafeEqual` (fail-closed `503`/`401`).
+     - Guarda `isSandboxMode()`: retorna `200 { success: true, skipped: true, sandbox: true }`.
+     - Validación Zod (`imei` 10..20 dígitos, WGS84 `!= (0,0)`, `speed`, `heading`, `battery_level`, `ignition_status`, `timestamp` saneado). Match estricto por `gps_imei` en vehículos activos (`status !== 'inactive'`), sin tocar `current_odometer`.
+  4. **Coexistencia Dual con Baliza QR & Gestión de Kits:**
+     - `beacon/token/route.ts` y `admin/transport/page.tsx`: solo bloquean QR si el vehículo tiene GPS **fijo** (`Boolean(gps_imei) && !gps_kit_id`); permiten Baliza QR cuando lleva Kit Portátil (`gps_kit_id != null`) o no tiene GPS.
+     - CRUD `/api/transport/gps-kits` (`GET`/`POST`/`PATCH`/`DELETE`) con limpieza de `fleet_vehicles` al desactivar (`is_active = false`) o eliminar.
+     - Acción atómica `assign_gps_kit` en `/api/transport/vehicles` (exige `admin.transport.edit`), bloqueando con `HTTP 409 Conflict` si el vehículo destino tiene GPS fijo (`gps_imei != null && gps_kit_id == null`), liberando el kit de cualquier vehículo previo y limpiando su `last_gps_sync` si venía de `hardware_gps`.
+     - UI: gestión de kits en `FleetManagement.tsx` y selector rápido de 1 clic en Monitor Global (`admin/transport/page.tsx`).

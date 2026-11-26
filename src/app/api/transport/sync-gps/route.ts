@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { fetchApps360Fleet } from '@/lib/telemetry/apps360';
 import { isSandboxMode, isSandboxGpsReadonlyAllowed } from '@/lib/sandboxGuard';
+import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
 
 // 1. Esquema Zod de Parámetros de Consulta (Mandamiento 1)
 const SyncQuerySchema = z.object({
@@ -63,11 +64,7 @@ export async function GET(req: NextRequest) {
         const targetPlate = parsedQuery.data.plate?.toUpperCase();
 
         // 3. Consulta telemática satelital resiliente con timeout
-        let liveObjects = await fetchApps360Fleet(customApiKey);
-
-        if (targetPlate) {
-            liveObjects = liveObjects.filter(item => item.plate.toUpperCase() === targetPlate);
-        }
+        const liveObjects = await fetchApps360Fleet(customApiKey);
 
         if (liveObjects.length === 0) {
             return NextResponse.json({
@@ -97,7 +94,56 @@ export async function GET(req: NextRequest) {
 
         // 4. Procesamiento Paralelo Concurrente (Promise.allSettled) para máxima velocidad
         const updatePromises = liveObjects.map(async (item) => {
-            const updatePayload: any = {
+            let matchedVehicle: {
+                id: string;
+                plate: string;
+                gps_imei: string | null;
+                gps_kit_id: string | null;
+                vehicle_type: string | null;
+            } | null = null;
+            let matchedByImei = false;
+
+            if (item.imei) {
+                const { data: byImei, error: imeiErr } = await supabaseAdmin
+                    .from('fleet_vehicles')
+                    .select('id, plate, gps_imei, gps_kit_id, vehicle_type')
+                    .eq('gps_imei', item.imei)
+                    .neq('status', 'inactive')
+                    .maybeSingle();
+                if (imeiErr) throw imeiErr;
+                if (byImei) {
+                    matchedVehicle = byImei;
+                    matchedByImei = true;
+                }
+            }
+
+            if (!matchedVehicle && item.plate) {
+                const { data: byPlate, error: plateErr } = await supabaseAdmin
+                    .from('fleet_vehicles')
+                    .select('id, plate, gps_imei, gps_kit_id, vehicle_type')
+                    .ilike('plate', item.plate)
+                    .neq('status', 'inactive')
+                    .maybeSingle();
+                if (plateErr) throw plateErr;
+                if (byPlate) {
+                    matchedVehicle = byPlate;
+                }
+            }
+
+            if (!matchedVehicle) {
+                return null;
+            }
+
+            const resolvedPlate = (matchedVehicle.plate || '').trim().toUpperCase();
+            if (targetPlate && resolvedPlate !== targetPlate) {
+                return null;
+            }
+
+            const isPortableOrThirdParty =
+                Boolean(matchedVehicle.gps_kit_id) ||
+                normalizeFleetOwnership(matchedVehicle.vehicle_type) === 'Tercero';
+
+            const updatePayload: Record<string, string | number | boolean | null> = {
                 last_latitude: item.latitude,
                 last_longitude: item.longitude,
                 speed: item.speed,
@@ -107,53 +153,70 @@ export async function GET(req: NextRequest) {
                 tracking_source: 'hardware_gps'
             };
 
-            if (item.imei) {
-                updatePayload.gps_imei = item.imei;
+            if (!matchedByImei && item.imei && !matchedVehicle.gps_kit_id && !matchedVehicle.gps_imei) {
+                const { data: existingOwner } = await supabaseAdmin
+                    .from('fleet_vehicles')
+                    .select('id')
+                    .eq('gps_imei', item.imei)
+                    .neq('id', matchedVehicle.id)
+                    .maybeSingle();
+                if (!existingOwner) {
+                    updatePayload.gps_imei = item.imei;
+                }
             }
 
-            if (item.odometer_km) {
+            if (item.odometer_km && !isPortableOrThirdParty) {
                 updatePayload.current_odometer = item.odometer_km;
                 updatePayload.last_odometer_update = item.last_gps_sync;
             }
 
-            const { data, error } = await supabaseAdmin
+            const { error } = await supabaseAdmin
                 .from('fleet_vehicles')
                 .update(updatePayload)
-                .ilike('plate', item.plate)
-                .select('id, plate');
+                .eq('id', matchedVehicle.id);
 
             if (error) {
-                console.warn(`[Sync GPS API][${requestId}] Error actualizando ${item.plate}:`, error.message);
+                console.warn(`[Sync GPS API][${requestId}] Error actualizando ${resolvedPlate}:`, error.message);
                 throw error;
             }
 
-            if (data && data.length > 0) {
-                // Registro histórico en vehicle_gps_logs de forma no-bloqueante
-                supabaseAdmin.from('vehicle_gps_logs').insert({
-                    vehicle_id: data[0].id,
-                    plate: item.plate,
-                    latitude: item.latitude,
-                    longitude: item.longitude,
-                    speed: item.speed,
-                    heading: item.heading,
-                    ignition_status: item.ignition_status,
-                    tracking_source: 'hardware_gps',
-                    created_at: item.last_gps_sync
-                }).then(null, () => {});
+            // Registro histórico en vehicle_gps_logs de forma no-bloqueante con placa real de BD
+            supabaseAdmin.from('vehicle_gps_logs').insert({
+                vehicle_id: matchedVehicle.id,
+                plate: matchedVehicle.plate,
+                latitude: item.latitude,
+                longitude: item.longitude,
+                speed: item.speed,
+                heading: item.heading,
+                ignition_status: item.ignition_status,
+                tracking_source: 'hardware_gps',
+                created_at: item.last_gps_sync
+            }).then(null, () => {});
 
-                return item.plate;
-            }
-
-            return null;
+            return {
+                resolvedPlate,
+                speed: item.speed,
+                heading: item.heading,
+                ignition: item.ignition_status,
+                lastSync: item.last_gps_sync
+            };
         });
 
         const settledResults = await Promise.allSettled(updatePromises);
         const syncedVehicles: string[] = [];
+        const syncedSummaries: Array<{ plate: string; speed: number; heading: number; ignition: boolean; lastSync: string }> = [];
         let errorsCount = 0;
 
         for (const res of settledResults) {
             if (res.status === 'fulfilled' && res.value) {
-                syncedVehicles.push(res.value);
+                syncedVehicles.push(res.value.resolvedPlate);
+                syncedSummaries.push({
+                    plate: res.value.resolvedPlate,
+                    speed: res.value.speed,
+                    heading: res.value.heading,
+                    ignition: res.value.ignition,
+                    lastSync: res.value.lastSync
+                });
             } else if (res.status === 'rejected') {
                 errorsCount++;
             }
@@ -169,13 +232,7 @@ export async function GET(req: NextRequest) {
                 synced_count: syncedVehicles.length,
                 synced_plates: syncedVehicles,
                 errors_count: errorsCount,
-                vehicles: liveObjects.map(v => ({
-                    plate: v.plate,
-                    speed: v.speed,
-                    heading: v.heading,
-                    ignition: v.ignition_status,
-                    lastSync: v.last_gps_sync
-                }))
+                vehicles: syncedSummaries
             },
             meta: {
                 timestamp: new Date().toISOString(),

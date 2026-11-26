@@ -330,6 +330,8 @@ export default function TransportControlTower() {
     };
 
     const [fleetData, setFleetData] = useState<any[]>([]);
+    const [portableKits, setPortableKits] = useState<Array<{ id: string; label: string; imei: string; is_active: boolean; assigned_vehicle?: { id: string; plate: string } | null }>>([]);
+    const [kitAssigningRouteId, setKitAssigningRouteId] = useState<string | null>(null);
     const [driversData, setDriversData] = useState<any[]>([]);
     const [hoveredVehicleId, setHoveredVehicleId] = useState<string | null>(null);
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -454,6 +456,21 @@ export default function TransportControlTower() {
             const { data: fData } = await supabase
                 .from('fleet_vehicles')
                 .select('*');
+
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const kitHeaders: Record<string, string> = {};
+                if (session?.access_token) kitHeaders['Authorization'] = `Bearer ${session.access_token}`;
+                const kitsRes = await fetch('/api/transport/gps-kits', { headers: kitHeaders });
+                if (kitsRes.ok) {
+                    const kitsJson = await kitsRes.json();
+                    if (isMounted.current && Array.isArray(kitsJson.kits)) {
+                        setPortableKits(kitsJson.kits.filter((k: any) => k.is_active));
+                    }
+                }
+            } catch {
+                // Silencioso si migración aún no está aplicada
+            }
 
             const { data: nameData } = await supabase
                 .from('app_settings')
@@ -996,32 +1013,92 @@ export default function TransportControlTower() {
                                                             {Math.round(progress)}% &bull; {formatNumber(route.total_kilos || 0)} kg
                                                         </span>
                                                     </div>
-                                                    {canEdit && ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(route.status) && !fleetData.find((v: any) => v.plate === route.vehicle_plate)?.gps_imei && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleOpenQrBeacon(route)}
-                                                            disabled={qrLoadingRouteId === route.id}
-                                                            style={{
-                                                                marginTop: '8px',
-                                                                width: '100%',
-                                                                padding: '6px 10px',
-                                                                borderRadius: '8px',
-                                                                border: '1px solid #CBD5E1',
-                                                                backgroundColor: '#F8FAFC',
-                                                                color: '#0F172A',
-                                                                fontSize: '0.72rem',
-                                                                fontWeight: '800',
-                                                                cursor: qrLoadingRouteId === route.id ? 'wait' : 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: '6px'
-                                                            }}
-                                                        >
-                                                            <QrCode size={13} color={THEME.colors.primary} />
-                                                            <span>{qrLoadingRouteId === route.id ? 'Generando QR...' : 'QR / WhatsApp GPS'}</span>
-                                                        </button>
-                                                    )}
+                                                    {(() => {
+                                                        const normPlate = (route.vehicle_plate || '').trim().toUpperCase();
+                                                        const routeVeh = fleetData.find((v: any) => (v.plate || '').trim().toUpperCase() === normPlate);
+                                                        const isActiveRoute = ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(route.status);
+                                                        const hasFixedGps = Boolean(routeVeh?.gps_imei) && !routeVeh?.gps_kit_id;
+                                                        const canShowQr = canEdit && isActiveRoute && !hasFixedGps;
+                                                        const canAssignKit = canEdit && isActiveRoute && Boolean(routeVeh?.id) && !hasFixedGps && portableKits.length > 0;
+                                                        return (
+                                                            <>
+                                                                {canAssignKit && (
+                                                                    <select
+                                                                        value={routeVeh?.gps_kit_id || ''}
+                                                                        disabled={kitAssigningRouteId === route.id}
+                                                                        onChange={async (e) => {
+                                                                            const selectedKitId = e.target.value || null;
+                                                                            setKitAssigningRouteId(route.id);
+                                                                            try {
+                                                                                const { data: { session } } = await supabase.auth.getSession();
+                                                                                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                                                                                if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+                                                                                const res = await fetch('/api/transport/vehicles', {
+                                                                                    method: 'POST',
+                                                                                    headers,
+                                                                                    body: JSON.stringify({
+                                                                                        action: 'assign_gps_kit',
+                                                                                        vehicleId: routeVeh.id,
+                                                                                        kitId: selectedKitId
+                                                                                    })
+                                                                                });
+                                                                                if (res.ok) {
+                                                                                    await fetchTransportData();
+                                                                                }
+                                                                            } finally {
+                                                                                setKitAssigningRouteId(null);
+                                                                            }
+                                                                        }}
+                                                                        style={{
+                                                                            marginTop: '8px',
+                                                                            width: '100%',
+                                                                            padding: '6px 8px',
+                                                                            borderRadius: '8px',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            backgroundColor: routeVeh?.gps_kit_id ? '#ECFEFF' : '#FFFFFF',
+                                                                            color: '#0F172A',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: '800',
+                                                                            cursor: kitAssigningRouteId === route.id ? 'wait' : 'pointer'
+                                                                        }}
+                                                                    >
+                                                                        <option value="">Sin Kit GPS (Solo Celular)</option>
+                                                                        {portableKits.map(kit => (
+                                                                            <option key={kit.id} value={kit.id}>
+                                                                                {kit.label}{kit.assigned_vehicle && kit.assigned_vehicle.id !== routeVeh?.id ? ` (en ${kit.assigned_vehicle.plate})` : ''}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                )}
+                                                                {canShowQr && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenQrBeacon(route)}
+                                                                        disabled={qrLoadingRouteId === route.id}
+                                                                        style={{
+                                                                            marginTop: '8px',
+                                                                            width: '100%',
+                                                                            padding: '6px 10px',
+                                                                            borderRadius: '8px',
+                                                                            border: '1px solid #CBD5E1',
+                                                                            backgroundColor: '#F8FAFC',
+                                                                            color: '#0F172A',
+                                                                            fontSize: '0.72rem',
+                                                                            fontWeight: '800',
+                                                                            cursor: qrLoadingRouteId === route.id ? 'wait' : 'pointer',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '6px'
+                                                                        }}
+                                                                    >
+                                                                        <QrCode size={13} color={THEME.colors.primary} />
+                                                                        <span>{qrLoadingRouteId === route.id ? 'Generando QR...' : 'QR / WhatsApp GPS'}</span>
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                             );
                                         })}

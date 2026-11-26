@@ -15,7 +15,8 @@ import {
     XCircle, 
     Save, 
     Truck,
-    Trash2
+    Trash2,
+    Radio
 } from 'lucide-react';
 
 interface Route {
@@ -45,6 +46,8 @@ interface Vehicle {
     max_crates_capacity?: number;
     status: 'available' | 'on_route' | 'maintenance' | 'inactive';
     driver_id?: string;
+    gps_imei?: string | null;
+    gps_kit_id?: string | null;
     current_odometer: number;
     avg_daily_km: number;
     driver?: {
@@ -98,6 +101,16 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
     const [isSavingVehicle, setIsSavingVehicle] = useState(false);
     const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [portableKits, setPortableKits] = useState<Array<{
+        id: string;
+        label: string;
+        imei: string;
+        provider: 'apps360' | 'webhook';
+        is_active: boolean;
+        assigned_vehicle?: { id: string; plate: string } | null;
+    }>>([]);
+    const [newKit, setNewKit] = useState({ label: '', imei: '', provider: 'apps360' as 'apps360' | 'webhook' });
+    const [savingKit, setSavingKit] = useState(false);
 
     const showFeedback = (type: 'success' | 'error', message: string) => {
         setActionFeedback({ type, message });
@@ -195,17 +208,83 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         }
     }, []);
 
+    const fetchPortableKits = useCallback(async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = {};
+            if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+            const res = await fetch('/api/transport/gps-kits', { headers });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (isMounted.current && Array.isArray(json.kits)) {
+                setPortableKits(json.kits);
+            }
+        } catch {
+            // Silencioso si migración aún no está aplicada
+        }
+    }, []);
+
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            await Promise.all([fetchVehicles(), fetchDrivers()]);
+            await Promise.all([fetchVehicles(), fetchDrivers(), fetchPortableKits()]);
             if (isMounted.current) setLastUpdated(new Date());
         } catch (err) {
             console.error('Error loading data:', err);
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [fetchVehicles, fetchDrivers]);
+    }, [fetchVehicles, fetchDrivers, fetchPortableKits]);
+
+    const handleCreateKit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (readOnly) return;
+        setSavingKit(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+            const res = await fetch('/api/transport/gps-kits', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(newKit)
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Error creando kit GPS portátil.');
+            }
+            setNewKit({ label: '', imei: '', provider: 'apps360' });
+            await fetchPortableKits();
+            showFeedback('success', `Kit ${data.kit?.label || ''} registrado correctamente.`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error registrando kit GPS.';
+            showFeedback('error', msg);
+        } finally {
+            setSavingKit(false);
+        }
+    };
+
+    const handleDeleteKit = async (kitId: string, label: string) => {
+        if (readOnly) return;
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = {};
+            if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+            const res = await fetch(`/api/transport/gps-kits?id=${encodeURIComponent(kitId)}`, {
+                method: 'DELETE',
+                headers
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Error eliminando kit GPS.');
+            }
+            await Promise.all([fetchPortableKits(), fetchVehicles()]);
+            showFeedback('success', `Kit ${label} eliminado.`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Error eliminando kit GPS.';
+            showFeedback('error', msg);
+        }
+    };
 
     useEffect(() => {
         isMounted.current = true;
@@ -1003,6 +1082,115 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                     </div>
                 </div>
             )}
+
+            {/* Kits GPS Portátiles (Flota Tercera / Itinerante) */}
+            <div style={{ marginTop: '2rem', padding: '1.5rem', borderRadius: '20px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Radio size={18} color="#0891B2" /> Kits GPS Portátiles (Flota Tercera / Itinerante)
+                        </h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>
+                            Equipos 4G rotativos identificables por IMEI. Se asignan por día desde el Monitor Global y se liberan automáticamente al cerrar ruta.
+                        </p>
+                    </div>
+                </div>
+
+                {!readOnly && (
+                    <form onSubmit={handleCreateKit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem', marginBottom: '1rem', alignItems: 'end' }}>
+                        <div>
+                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>ETIQUETA</label>
+                            <input
+                                required
+                                placeholder="Ej: KIT-01"
+                                value={newKit.label}
+                                onChange={e => setNewKit({ ...newKit, label: e.target.value.toUpperCase() })}
+                                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontWeight: '700', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>IMEI (10–20 DÍGITOS)</label>
+                            <input
+                                required
+                                placeholder="Ej: 864251049123456"
+                                value={newKit.imei}
+                                onChange={e => setNewKit({ ...newKit, imei: e.target.value.replace(/\D/g, '') })}
+                                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontWeight: '700', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>PROVEEDOR</label>
+                            <select
+                                value={newKit.provider}
+                                onChange={e => setNewKit({ ...newKit, provider: e.target.value as 'apps360' | 'webhook' })}
+                                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #CBD5E1', fontWeight: '700', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                            >
+                                <option value="apps360">Apps-360</option>
+                                <option value="webhook">Webhook Genérico (Traccar/Otro)</option>
+                            </select>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={savingKit}
+                            style={{
+                                padding: '0.65rem 1rem',
+                                borderRadius: '10px',
+                                border: 'none',
+                                backgroundColor: '#0891B2',
+                                color: '#FFFFFF',
+                                fontWeight: '800',
+                                fontSize: '0.82rem',
+                                cursor: savingKit ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <Plus size={15} /> {savingKit ? 'Guardando...' : 'Agregar Kit'}
+                        </button>
+                    </form>
+                )}
+
+                {portableKits.length === 0 ? (
+                    <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#FFFFFF', border: '1px dashed #CBD5E1', color: '#64748B', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center' }}>
+                        Aún no hay kits GPS portátiles registrados.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        {portableKits.map(kit => (
+                            <div key={kit.id} style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '0.65rem 0.9rem',
+                                borderRadius: '12px',
+                                backgroundColor: '#FFFFFF',
+                                border: `1px solid ${kit.assigned_vehicle ? '#A5F3FC' : '#E2E8F0'}`
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: '900', color: '#0F172A' }}>
+                                        {kit.label} <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: '700' }}>({kit.provider})</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: '600' }}>
+                                        IMEI: {kit.imei} {kit.assigned_vehicle ? `• Asignado a ${kit.assigned_vehicle.plate}` : '• Libre en bodega'}
+                                    </div>
+                                </div>
+                                {!readOnly && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteKit(kit.id, kit.label)}
+                                        title={`Eliminar ${kit.label}`}
+                                        style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: '8px', padding: '5px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                                    >
+                                        <Trash2 size={13} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             <style jsx>{`
                 @keyframes pulse {

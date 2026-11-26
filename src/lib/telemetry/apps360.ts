@@ -7,7 +7,7 @@
 import { isSandboxMode, isSandboxGpsReadonlyAllowed } from '@/lib/sandboxGuard';
 
 export interface NormalizedTelemetry {
-    plate: string;
+    plate: string | null;
     imei?: string;
     latitude: number;
     longitude: number;
@@ -17,6 +17,12 @@ export interface NormalizedTelemetry {
     odometer_km?: number;
     last_gps_sync: string;
     tracking_source: 'hardware_gps' | 'mobile_app';
+}
+
+export function sanitizeGpsImei(raw?: string | number | null): string | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    const digits = String(raw).replace(/\D/g, '');
+    return digits.length >= 10 && digits.length <= 20 ? digits : undefined;
 }
 
 export interface Apps360RawDevice {
@@ -164,9 +170,10 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
         return null;
     }
 
+    const imei = sanitizeGpsImei(obj.device_data?.imei ?? (obj as Record<string, unknown>).imei as string | number | undefined);
     const candidateName = obj.device_data?.plate_number || obj.plate_number || obj.name || (obj as any).plate || '';
     const plate = extractCleanPlate(candidateName);
-    if (!plate) return null;
+    if (!plate && !imei) return null;
 
     const rawSpeed = typeof obj.speed === 'string' ? parseFloat(obj.speed) : (obj.speed || 0);
     const safeSpeed = Math.max(0, Number.isFinite(rawSpeed) ? rawSpeed : 0);
@@ -204,7 +211,6 @@ export function normalizeApps360Device(obj: Apps360RawDevice): NormalizedTelemet
         odometer = typeof rawOdo === 'string' ? parseFloat(rawOdo) : rawOdo;
     }
 
-    const imei = obj.device_data?.imei || (obj as any).imei;
     const rawTimeCandidate = obj.device_data?.traccar?.time || obj.time || obj.device_data?.time || (obj as any).dt_tracker || (obj as any).dt_server;
     const lastGpsSync = parseTelemetryDate(rawTimeCandidate, obj.timestamp || obj.moved_timestamp);
 
