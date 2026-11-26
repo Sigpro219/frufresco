@@ -42,10 +42,11 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
           
           {/* Brand */}
           <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#FAF9F6', padding: '6px 14px', borderRadius: '12px', marginBottom: '1rem' }}>
+            <div className="footer-logo-wrap" style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#FAF9F6', padding: '6px 14px', borderRadius: '12px', marginBottom: '1rem' }}>
               <img 
                 src={logoUrl || '/logo.png'} 
                 alt={appName} 
+                className="footer-brand-logo"
                 style={{ height: '42px', width: 'auto', objectFit: 'contain', display: 'block' }} 
                 onError={(e) => {
                   if (!e.currentTarget.src.endsWith('/logo.png')) {
@@ -54,10 +55,10 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
                 }}
               />
             </div>
-            <p style={{ opacity: 0.78, lineHeight: 1.55, fontSize: '0.9rem', margin: '0 0 0.75rem' }}>
+            <p className="footer-desc" style={{ opacity: 0.78, lineHeight: 1.55, fontSize: '0.9rem', margin: '0 0 0.75rem' }}>
               {description}
             </p>
-            <p style={{ fontSize: '0.78rem', color: '#6EE7B7', fontWeight: 600, margin: 0 }}>
+            <p className="footer-delivery-note" style={{ fontSize: '0.78rem', color: '#6EE7B7', fontWeight: 600, margin: 0 }}>
               {locale === 'en'
                 ? 'AM Deliveries · Bogota & Sabana · Cash on delivery or B2B credit'
                 : 'Despachos AM · Bogotá, Chía, Cajicá, Cota y Sabana · Contraentrega o crédito B2B'}
@@ -66,7 +67,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
 
           {/* Links */}
           <div>
-            <h4 style={{ 
+            <h4 className="footer-heading" style={{ 
               fontFamily: 'var(--font-outfit), sans-serif',
               fontSize: '1.1rem', 
               fontWeight: '800', 
@@ -75,7 +76,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
               letterSpacing: '0.15em',
               textTransform: 'uppercase'
             }}>{t.quickLinks}</h4>
-            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            <ul className="footer-links-list" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <li><Link href={locale === 'en' ? '/?lang=en' : '/'} className="footer-link">{t.navHome}</Link></li>
               <li><Link href={locale === 'en' ? '/?lang=en#catalog' : '/#catalog'} className="footer-link">{t.navCatalog}</Link></li>
               <li><Link href={locale === 'en' ? '/b2b/register?lang=en' : '/b2b/register'} className="footer-link">{t.navInstitutional}</Link></li>
@@ -91,7 +92,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
 
           {/* Contact */}
           <div>
-            <h4 style={{ 
+            <h4 className="footer-heading" style={{ 
               fontFamily: 'var(--font-outfit), sans-serif',
               fontSize: '1.1rem', 
               fontWeight: '800', 
@@ -100,7 +101,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
               letterSpacing: '0.15em',
               textTransform: 'uppercase'
             }}>{t.contact}</h4>
-            <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <ul className="footer-contact-list" style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <li style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', color: '#94a3b8', fontSize: '0.95rem', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                 <MapPin size={18} strokeWidth={1.5} color="var(--primary)" style={{ flexShrink: 0, marginTop: '3px' }} /> <span>{address}</span>
               </li>
@@ -143,7 +144,7 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
           </div>
         </div>
 
-        <div style={{ 
+        <div className="footer-bottom-bar" style={{ 
           borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
           paddingTop: '2rem', 
           display: 'flex', 
@@ -211,12 +212,52 @@ export default function Footer({ initialConfig }: { initialConfig?: StorefrontRu
         }
         @media (max-width: 768px) {
           .site-footer-root {
-            padding: 2rem 0 1.5rem !important;
+            padding: 1.5rem 0 1.15rem !important;
           }
           .footer-grid {
             grid-template-columns: 1fr !important;
-            gap: 1.5rem !important;
-            margin-bottom: 1.5rem !important;
+            gap: 1.15rem !important;
+            margin-bottom: 1.1rem !important;
+          }
+          .footer-logo-wrap {
+            padding: 4px 10px !important;
+            margin-bottom: 0.65rem !important;
+          }
+          .footer-brand-logo {
+            height: 32px !important;
+          }
+          .footer-desc {
+            font-size: 0.82rem !important;
+            line-height: 1.45 !important;
+            margin-bottom: 0.45rem !important;
+          }
+          .footer-delivery-note {
+            font-size: 0.74rem !important;
+          }
+          .footer-heading {
+            font-size: 0.82rem !important;
+            margin-bottom: 0.55rem !important;
+            letter-spacing: 0.1em !important;
+          }
+          .footer-links-list {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 0.45rem 0.75rem !important;
+          }
+          .footer-link {
+            font-size: 0.84rem !important;
+          }
+          .footer-contact-list {
+            gap: 0.5rem !important;
+          }
+          .footer-contact-list li {
+            font-size: 0.83rem !important;
+          }
+          .footer-bottom-bar {
+            padding-top: 1rem !important;
+            gap: 0.65rem !important;
+            justify-content: center !important;
+            text-align: center;
           }
         }
       `}</style>

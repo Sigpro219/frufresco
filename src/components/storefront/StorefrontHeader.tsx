@@ -145,7 +145,10 @@ export default function StorefrontHeader({ config }: StorefrontHeaderProps) {
     <>
       <header className="sf-header-root">
         {/* Top operational announcement bar */}
-        <div style={{ backgroundColor: config.storeStatus === 'closed' ? '#7F1D1D' : '#081C15', color: '#F8FAFC', fontSize: '0.8125rem' }}>
+        <div
+          className={config.storeStatus === 'closed' ? undefined : 'sf-top-bar-open'}
+          style={{ backgroundColor: config.storeStatus === 'closed' ? '#7F1D1D' : '#081C15', color: '#F8FAFC', fontSize: '0.8125rem' }}
+        >
           <div className="sf-container" style={{ padding: '7px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
               {config.storeStatus === 'closed' ? <ShieldAlert size={15} aria-hidden="true" /> : <Clock size={15} color="#6EE7B7" aria-hidden="true" />}
@@ -400,6 +403,7 @@ export default function StorefrontHeader({ config }: StorefrontHeaderProps) {
           .sf-cart-btn { margin-left: auto; }
           .sf-search-slot { order: 4; flex: 1 0 100% !important; max-width: 100% !important; margin-left: 0 !important; }
         }
+        @media (max-width: 768px) { .sf-top-bar-open { display: none !important; } }
         @media (max-width: 640px) { .sf-hide-sm { display: none !important; } }
       `}</style>
     </>
