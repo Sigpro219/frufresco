@@ -18468,3 +18468,28 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   6. **Comprobante Contable Imprimible bajo Demanda (`ProcurementAccountingVoucherPrint.tsx`):**
      - Vista/impresión limpia (`window.print()`) generada desde BD (`purchases` del día) separando **Compras en Efectivo** y **Compras a Crédito**, con comprador, proveedor (`tax_id`, Bodega/Puesto), `#accounting_id`, producto, cantidad, precio unitario, total y condición de pago, sin depender de fotos.
   7. **Reglas Globales FruFresco:** `'use client';` en línea 1 en todo componente cliente, cero `<input type="number">`, cero emojis unicode (solo `lucide-react`), cero `SKU` nuevos en UI (`#accounting_id`) y cero `products.base_price`.
+
+
+---
+
+### Escenario 499: Persistencia de Borradores de Planeación Logística y Mapa Espagueti por Fecha en Sandbox (`app_settings` + `localStorage`) (SDD v1.9.454)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (0 errores tsc · Exclusivo Sandbox)`
+- **Alcance Estricto:** Encapsulado 100% detrás de `isSandboxMode()` ([`src/lib/sandboxGuard.ts`](file:///c:/Projects/frufresco/src/lib/sandboxGuard.ts)) en [`src/components/RoutePlanner.tsx`](file:///c:/Projects/frufresco/src/components/RoutePlanner.tsx); cero efectos en Producción y cero tablas nuevas en BD (reutiliza `public.app_settings`).
+- **Blindajes Consagrados (Goldfish Pre-Vuelo):**
+  1. **Clave por Fecha y Vista Multi-Fecha (`draftScope`):** `draftScope = (showAllDates || !selectedDeliveryDate) ? 'ALL' : selectedDeliveryDate`. Claves aisladas `route_planner_draft_${draftScope}` en `app_settings` y `frufresco_route_planner_draft_${draftScope}` en `localStorage`, evitando colisiones en `"Ver Todos"` o al borrar la fecha.
+  2. **Guard Anti-Race & Anti-Sobrescritura:** `loadedDraftScopeRef`, `fetchSeqRef` (descarta respuestas obsoletas ante cambios rápidos de fecha) y bloqueo total cuando `loading || readOnly || loadedDraftScopeRef.current !== draftScope` o cuando `assignments` está vacío (nunca sobrescribe un borrador guardado al abrir en una nueva fecha).
+  3. **Protección `trg_audit_app_settings` (`audit_logs`):** Debounce de `700ms` + deduplicación contra `lastSavedJsonRef` (sin `savedAt`) para evitar escrituras redundantes en `app_settings`.
+  4. **Precedencia & Limpieza Determinística:** Al hidratar en Sandbox prevalece la fuente (`app_settings` vs `localStorage`) con `savedAt` ISO más reciente (`app_settings` gana en empate). En `Confirmar y Lanzar` (`L651`) y `Limpiar` (`L1711`), se ejecuta `await delete` en `app_settings` **antes** de `await fetchInitialData()`.
+
+---
+
+### Escenario 500: Estandarización Sticky Magnético (`0px` Gap), Contraste WCAG AAA y Ordenadores Tri-Estado en Galería de Talento Humano (`/admin/hr`) (SDD v1.9.455)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
+- **Archivo Intervenido:** `src/app/admin/hr/page.tsx`
+- **Alcance Contractual (`estandar-galerias-frufresco`):**
+  1. **Apilamiento Sticky 0px Gap:**
+     - Toolbar Omnibox acoplada flush en `top: 84px`, `minHeight: 56px`, `zIndex: 40`, fondo `#FFFFFF` 100% opaco, `marginBottom: 0px` y radios superiores (`14px 14px 0 0`) en modo Lista.
+     - Encabezados `<th>` acoplados flush en `top: 140px`, `zIndex: 30`, fondo sólido Slate-100 **`#F1F5F9`**, texto **`#0F172A`** (WCAG AAA) y `borderBottom: 2px solid #CBD5E1` sobre `borderCollapse: 'separate', borderSpacing: 0` y `overflow: 'visible'`.
+  2. **Ordenadores Tri-Estado (`Asc → Desc → Natural`):**
+     - Implementado `handleSort` con iconos `ArrowUp`, `ArrowDown` y `ArrowUpDown` (`lucide-react`) en **Colaborador** (`name`), **Rol / Sede** (`role` y `specialty` independientes) y **Contacto** (`contact`).
+  3. **Atajo `/`:** Presionar `/` enfoca el Superbuscador Omnibox cuando el foco no está en un campo de entrada.

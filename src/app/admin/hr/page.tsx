@@ -6,7 +6,8 @@ import {
     MapPin, Building2, Clock, CheckCircle2, AlertCircle, Trash2, Edit2, X, ChevronRight, 
     FileSpreadsheet, LayoutGrid, List, Truck, Eye, EyeOff, HelpCircle, Archive, FolderOpen,
     QrCode, Printer, RefreshCw, Shield, Save, Check, AlertTriangle, Sparkles,
-    DollarSign, ChevronDown, ChevronUp, Edit3, ShoppingBag, ShieldAlert, CreditCard
+    DollarSign, ChevronDown, ChevronUp, Edit3, ShoppingBag, ShieldAlert, CreditCard,
+    ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
@@ -110,7 +111,33 @@ export default function HRManagement() {
     const [showSearchHelp, setShowSearchHelp] = useState(false);
     const [filterRole, setFilterRole] = useState('all');
     const [filterSpecialty, setFilterSpecialty] = useState('all');
-    const [sortBy, setSortBy] = useState<'name' | 'role' | 'specialty'>('name');
+    const [sortField, setSortField] = useState<'name' | 'role' | 'specialty' | 'contact' | null>(null);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    const handleSort = (field: 'name' | 'role' | 'specialty' | 'contact') => {
+        if (sortField !== field) {
+            setSortField(field);
+            setSortOrder('asc');
+        } else if (sortOrder === 'asc') {
+            setSortOrder('desc');
+        } else {
+            setSortField(null);
+            setSortOrder('asc');
+        }
+    };
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+            const tag = (document.activeElement?.tagName || '').toUpperCase();
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            e.preventDefault();
+            searchInputRef.current?.focus();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
     const [editingUser, setEditingUser] = useState<Profile | null>(null);
     const [showAdd, setShowAdd] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
@@ -982,12 +1009,27 @@ export default function HRManagement() {
 
             return matchesSearch && matchesRole && matchesSpecialty && matchesArchived;
         }).sort((a, b) => {
-            if (sortBy === 'name') return (a.contact_name || '').localeCompare(b.contact_name || '');
-            if (sortBy === 'role') return (a.role || '').localeCompare(b.role || '');
-            if (sortBy === 'specialty') return (a.specialty || '').localeCompare(b.specialty || '');
+            if (!sortField) return 0;
+            const dir = sortOrder === 'asc' ? 1 : -1;
+            if (sortField === 'name') {
+                return dir * (a.contact_name || '').localeCompare(b.contact_name || '', 'es', { sensitivity: 'base' });
+            }
+            if (sortField === 'role') {
+                const roleA = ROLES.find(r => r.value === a.role)?.label || a.role || '';
+                const roleB = ROLES.find(r => r.value === b.role)?.label || b.role || '';
+                return dir * roleA.localeCompare(roleB, 'es', { sensitivity: 'base' });
+            }
+            if (sortField === 'specialty') {
+                return dir * (a.specialty || '').localeCompare(b.specialty || '', 'es', { sensitivity: 'base' });
+            }
+            if (sortField === 'contact') {
+                const contactA = a.email || a.contact_phone || a.phone || '';
+                const contactB = b.email || b.contact_phone || b.phone || '';
+                return dir * contactA.localeCompare(contactB, 'es', { sensitivity: 'base' });
+            }
             return 0;
         });
-    }, [users, searchTerm, filterRole, filterSpecialty, showArchived, sortBy]);
+    }, [users, searchTerm, filterRole, filterSpecialty, showArchived, sortField, sortOrder]);
 
     const dynamicSpecialties = Array.from(new Set(users.map(u => u.specialty).filter(Boolean)))
         .sort((a, b) => (a || '').localeCompare(b || ''));
@@ -1304,15 +1346,17 @@ export default function HRManagement() {
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
-                    marginBottom: '1rem', 
+                    marginBottom: viewMode === 'list' ? '0px' : '1rem', 
                     backgroundColor: '#FFFFFF', 
-                    padding: '10px 16px', 
-                    borderRadius: '16px', 
+                    padding: '8px 16px', 
+                    minHeight: '56px',
+                    borderRadius: viewMode === 'list' ? '14px 14px 0 0' : '14px', 
                     border: '1px solid #CBD5E1', 
+                    borderBottom: viewMode === 'list' ? '1px solid #E2E8F0' : '1px solid #CBD5E1',
                     gap: '0.85rem', 
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)', 
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)', 
                     position: 'sticky', 
-                    top: '85px', 
+                    top: '84px', 
                     zIndex: 40,
                     transition: 'all 0.2s ease-in-out',
                     flexWrap: 'wrap'
@@ -1323,6 +1367,7 @@ export default function HRManagement() {
                             <Search size={15} strokeWidth={2} />
                         </div>
                         <input 
+                            ref={searchInputRef}
                             type="text"
                             placeholder="Buscar por nombre, cédula (#), cargo (@rol) o sede..."
                             value={searchTerm}
@@ -1841,18 +1886,75 @@ export default function HRManagement() {
                     ======================================================== */
                     <div style={{ 
                         backgroundColor: '#FFFFFF', 
-                        borderRadius: '16px', 
-                        border: '1px solid #E2E8F0', 
+                        borderRadius: '0 0 14px 14px', 
+                        border: '1px solid #CBD5E1', 
+                        borderTop: 'none',
                         overflow: 'visible', 
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)' 
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.03)' 
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                            <thead style={{ backgroundColor: '#F8FAFC' }}>
+                            <thead>
                                 <tr>
-                                    <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>Colaborador</th>
-                                    <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>Rol & Sede</th>
-                                    <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>Contacto</th>
-                                    <th style={{ ...styles.th, position: 'sticky', top: '145px', zIndex: 30, backgroundColor: '#F8FAFC', borderBottom: '2px solid #E2E8F0', textAlign: 'right' }}>Acciones</th>
+                                    <th style={{ ...styles.th, position: 'sticky', top: '140px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '2px solid #CBD5E1', userSelect: 'none' }}>
+                                        <div
+                                            onClick={() => handleSort('name')}
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: sortField === 'name' ? '#0D7A57' : '#0F172A' }}
+                                            title="Ordenar por Colaborador (Asc / Desc / Natural)"
+                                        >
+                                            <span>Colaborador</span>
+                                            {sortField === 'name' ? (
+                                                sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} color="#0D7A57" /> : <ArrowDown size={12} strokeWidth={2.5} color="#0D7A57" />
+                                            ) : (
+                                                <ArrowUpDown size={11} strokeWidth={2} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+                                    <th style={{ ...styles.th, position: 'sticky', top: '140px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '2px solid #CBD5E1', userSelect: 'none' }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+                                            <span
+                                                onClick={() => handleSort('role')}
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: sortField === 'role' ? '#0D7A57' : '#0F172A' }}
+                                                title="Ordenar por Rol"
+                                            >
+                                                <span>Rol</span>
+                                                {sortField === 'role' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} color="#0D7A57" /> : <ArrowDown size={12} strokeWidth={2.5} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} strokeWidth={2} color="#94A3B8" />
+                                                )}
+                                            </span>
+                                            <span style={{ color: '#CBD5E1' }}>/</span>
+                                            <span
+                                                onClick={() => handleSort('specialty')}
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: sortField === 'specialty' ? '#0D7A57' : '#0F172A' }}
+                                                title="Ordenar por Sede"
+                                            >
+                                                <span>Sede</span>
+                                                {sortField === 'specialty' ? (
+                                                    sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} color="#0D7A57" /> : <ArrowDown size={12} strokeWidth={2.5} color="#0D7A57" />
+                                                ) : (
+                                                    <ArrowUpDown size={11} strokeWidth={2} color="#94A3B8" />
+                                                )}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th style={{ ...styles.th, position: 'sticky', top: '140px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '2px solid #CBD5E1', userSelect: 'none' }}>
+                                        <div
+                                            onClick={() => handleSort('contact')}
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: sortField === 'contact' ? '#0D7A57' : '#0F172A' }}
+                                            title="Ordenar por Contacto / Correo"
+                                        >
+                                            <span>Contacto</span>
+                                            {sortField === 'contact' ? (
+                                                sortOrder === 'asc' ? <ArrowUp size={12} strokeWidth={2.5} color="#0D7A57" /> : <ArrowDown size={12} strokeWidth={2.5} color="#0D7A57" />
+                                            ) : (
+                                                <ArrowUpDown size={11} strokeWidth={2} color="#94A3B8" />
+                                            )}
+                                        </div>
+                                    </th>
+                                    <th style={{ ...styles.th, position: 'sticky', top: '140px', zIndex: 30, backgroundColor: '#F1F5F9', color: '#0F172A', fontWeight: '800', fontSize: '0.72rem', letterSpacing: '0.04em', borderBottom: '2px solid #CBD5E1', textAlign: 'right' }}>
+                                        Acciones
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
