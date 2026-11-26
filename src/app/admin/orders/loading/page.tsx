@@ -1774,7 +1774,7 @@ useEffect(() => {
             try {
                 let query = supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
+                    .select('*, billing_invoices!orders_invoice_id_fkey(invoice_number, status), profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
                     .not('status', 'in', '(cancelled,billing_only)');
 
 
@@ -2021,7 +2021,7 @@ useEffect(() => {
             setIsGlobalSearching(true);
             try {
                 const token = raw.split(',')[0].trim();
-                const safeToken = token.replace(/[,%()]/g, '').trim();
+                const safeToken = token.replace(/[,%()"\\]/g, '').trim();
                 if (safeToken.length < 2) {
                     if (!cancelled) {
                         setGlobalSearchOrders(null);
@@ -2041,7 +2041,6 @@ useEffect(() => {
                 const orParts = [
                     `purchase_order_number.ilike.%${safeToken}%`,
                     `admin_notes.ilike.%${safeToken}%`,
-                    `customer_name.ilike.%${safeToken}%`,
                     `shipping_address.ilike.%${safeToken}%`,
                     `special_notes.ilike.%${safeToken}%`
                 ];
@@ -2054,13 +2053,13 @@ useEffect(() => {
 
                 const { data: globalRows, error } = await supabase
                     .from('orders')
-                    .select('*, profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
+                    .select('*, billing_invoices!orders_invoice_id_fkey(invoice_number, status), profiles:profiles(id, created_at, role, contact_phone, latitude, longitude, company_name, contact_name, nit, email, address, pricing_model_id, parent_id, payment_days, logistics_data, delivery_restrictions, document_type, remission_with_prices, print_invoice), order_items(id, product_id, quantity, unit, unit_price, nickname, products(id, name, sku, weight_kg, unit_of_measure, accounting_id, category, purchase_sublist, inventory_group, requires_label))')
                     .or(orParts.join(','))
                     .order('created_at', { ascending: false })
                     .limit(60);
 
                 if (error) {
-                    console.error('Error en búsqueda global de pedidos:', error);
+                    console.error('Error en búsqueda global de pedidos:', error.message || JSON.stringify(error));
                     return;
                 }
 
@@ -5104,35 +5103,60 @@ useEffect(() => {
                                                                             </span>
                                                                         )}
 
-                                                                        {/* SPEC.md Escenario 432 & 437: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) */}
+                                                                        {/* SPEC.md Escenario 432, 437 & 498: Señalización Cromática de Documento de Despacho (FAC-IMP, REM-$, REM-S/S) + Factura Emitida */}
                                                                         {(() => {
                                                                             const prof = Array.isArray(order.profiles) ? order.profiles[0] : (order.profiles || {});
-                                                                            const isHogarOrder = order.type === 'b2c' || order.type === 'b2c_wompi' || order.type === 'hogar' || prof?.role === 'b2c_client' || prof?.role === 'client' || (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR'));
-                                                                            const rawDoc = isHogarOrder ? 'remission' : (order.document_type || prof?.document_type || 'remission');
-                                                                            const withPrices = isHogarOrder ? true : ((prof?.remission_with_prices !== false) && (order.remission_with_prices !== false));
+                                                                            const isB2BProfile = prof?.role === 'b2b_client';
+                                                                            const isHogarOrder = !isB2BProfile && (order.type === 'b2c' || order.type === 'b2c_wompi' || order.type === 'hogar' || prof?.role === 'b2c_client' || prof?.role === 'client' || (order.admin_notes && order.admin_notes.includes('CLIENTE HOGAR')));
+                                                                            const rawDoc = isHogarOrder ? 'remission' : (order.logistics_data?.document_type_override || prof?.document_type || 'remission');
+                                                                            const withPrices = isHogarOrder ? true : ((order.logistics_data?.remission_with_prices_override ?? prof?.remission_with_prices) !== false);
                                                                             const docBadge = getDocumentBadgeStyle(rawDoc, withPrices);
+                                                                            const invObj = Array.isArray(order.billing_invoices) ? order.billing_invoices[0] : order.billing_invoices;
 
                                                                             return (
-                                                                                <span 
-                                                                                    title={docBadge.title}
-                                                                                    style={{
-                                                                                        fontSize: '0.62rem',
-                                                                                        fontWeight: '900',
-                                                                                        backgroundColor: docBadge.bg,
-                                                                                        color: docBadge.color,
-                                                                                        border: `1px solid ${docBadge.border}`,
-                                                                                        padding: '1px 6px',
-                                                                                        borderRadius: '4px',
-                                                                                        display: 'inline-flex',
-                                                                                        alignItems: 'center',
-                                                                                        gap: '3px',
-                                                                                        letterSpacing: '0.02em',
-                                                                                        boxShadow: rawDoc === 'invoice' ? '0 1px 2px rgba(239, 68, 68, 0.2)' : 'none'
-                                                                                    }}
-                                                                                >
-                                                                                    <FileText size={10} strokeWidth={2} />
-                                                                                    {docBadge.label}
-                                                                                </span>
+                                                                                <>
+                                                                                    <span 
+                                                                                        title={docBadge.title}
+                                                                                        style={{
+                                                                                            fontSize: '0.62rem',
+                                                                                            fontWeight: '900',
+                                                                                            backgroundColor: docBadge.bg,
+                                                                                            color: docBadge.color,
+                                                                                            border: `1px solid ${docBadge.border}`,
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            display: 'inline-flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px',
+                                                                                            letterSpacing: '0.02em',
+                                                                                            boxShadow: rawDoc === 'invoice' ? '0 1px 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                                                                        }}
+                                                                                    >
+                                                                                        <FileText size={10} strokeWidth={2} />
+                                                                                        {docBadge.label}
+                                                                                    </span>
+                                                                                    {invObj?.invoice_number && (
+                                                                                        <span
+                                                                                            title={`Factura emitida: ${invObj.invoice_number} (${invObj.status || 'pending'})`}
+                                                                                            style={{
+                                                                                                fontSize: '0.62rem',
+                                                                                                fontWeight: '900',
+                                                                                                backgroundColor: '#ECFDF5',
+                                                                                                color: '#065F46',
+                                                                                                border: '1px solid #6EE7B7',
+                                                                                                padding: '1px 6px',
+                                                                                                borderRadius: '4px',
+                                                                                                display: 'inline-flex',
+                                                                                                alignItems: 'center',
+                                                                                                gap: '3px',
+                                                                                                letterSpacing: '0.02em'
+                                                                                            }}
+                                                                                        >
+                                                                                            <FileText size={10} strokeWidth={2.2} />
+                                                                                            {invObj.invoice_number}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </>
                                                                             );
                                                                         })()}
 

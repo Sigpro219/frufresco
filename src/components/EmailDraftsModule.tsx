@@ -6333,10 +6333,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             (metadataForValidations?.attachments && metadataForValidations.attachments[0]?.url) ||
             null;
 
+          const resolvedAcuseClientRole = matchedProfile?.role || editableClientType || 'b2b_client';
           const { data: order, error: orderError } = await supabase
             .from('orders')
             .insert({
               profile_id: finalProfileId,
+              type: (resolvedAcuseClientRole === 'b2c_client' || resolvedAcuseClientRole === 'client') ? 'b2c' : 'b2b',
               total: totalAmount,
               total_weight_kg: totalWeight,
               status: 'pending_approval',
@@ -6883,6 +6885,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       const orderPayload: any = {
         profile_id: finalProfileId,
+        type: (resolvedDraftClientRole === 'b2c_client' || resolvedDraftClientRole === 'client') ? 'b2c' : 'b2b',
         total: primaryTotalAmount,
         total_weight_kg: primaryTotalWeight,
         status: 'pending_approval',

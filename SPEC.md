@@ -18405,3 +18405,32 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   4. **Módulo Digital OPS (`/ops/picking` y `/ops/picking/terminal`):**
      - Muestra pill compacto informativo `Fam: <X> <UM> (#<accounting_id>[+N])` (eligiendo el hermano con mayor stock) cuando `ownStock === 0 && familyStock > 0`.
      - **Inmutabilidad transaccional:** El pill es puramente informativo; **no** modifica `available_stock`, la compuerta `DT-17`, `picked_quantity` ni `inventory_movements`. En `terminal/page.tsx`, la consulta de `inventory_stocks` incluye los IDs de hermanos y filtra `.eq('status', 'available')` para paridad con `/api/inventory/stocks`.
+
+
+---
+
+### Escenario 497: 🔴 URGENTE P0 (Mañana a Primera Hora) — Conexión a Pasarela de Pago Wompi en Producción (`www.frufresco.co`) (SDD v1.9.452)
+- **Estado del Contrato:** `🔴 PENDIENTE URGENTE P0 — BLOQUEANTE DE COBRO EN PRODUCCIÓN`
+- **Contexto:** `https://www.frufresco.co` ya está publicada en vivo con SSL y blindaje de lanzamiento (`Escenario 490`), pero el checkout público ([`src/app/checkout/page.tsx`](file:///c:/Projects/frufresco/src/app/checkout/page.tsx)) actualmente redirige al simulador (`/payments/simulator`) y **no puede procesar cobros reales** con tarjeta/PSE/Nequi.
+- **Alcance Obligatorio (Primera Hora Mañana):**
+  1. **Credenciales Wompi Producción en Vercel:** Registrar `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` (`pub_prod_...`), `WOMPI_PRIVATE_KEY` (`prv_prod_...`), `WOMPI_INTEGRITY_SECRET` (`prod_integrity_...`) y `WOMPI_EVENTS_SECRET` (`prod_events_...`) en Vercel Environment Variables (Production).
+  2. **Checkout Real + Firma de Integridad (`SHA-256`):** Conectar `src/app/checkout/page.tsx` al Web Checkout / Widget oficial de Wompi con firma de integridad generada server-side (`reference + amountInCents + currency + integritySecret`) y `redirect-url = https://www.frufresco.co/checkout/result`, reemplazando `/payments/simulator` en producción.
+  3. **Webhook Oficial de Confirmación (`/api/payments/wompi`):** Validar firma `X-Event-Checksum` con `WOMPI_EVENTS_SECRET`, actualizar estado del pedido (`paid` / `declined` / `voided`) de forma idempotente y registrar la trazabilidad del pago en BD.
+  4. **Prueba End-to-End Real:** Ejecutar 1 transacción real de monto mínimo (ej. `$1.500 COP` vía PSE/Nequi/Tarjeta) en `https://www.frufresco.co` verificando confirmación automática por webhook y recibo en `/checkout/result`.
+  5. **Retiro del Simulador en Producción:** Bloquear `/payments/simulator` cuando `!isSandboxMode()` para evitar falsos pedidos aprobados en vivo.
+
+
+- **Deuda Técnica Menor (`DT-497-1` — Limpieza de Proyectos Vercel Legados en `sigpro219-8657's projects`):**
+  - Desconectar de GitHub (`Settings → Git → Disconnect`) o eliminar los 2 proyectos legados (`frufresco` y `frubana-express`) en el equipo personal `sigpro219-8657's projects` para detener las notificaciones de builds fallidos en cada push. La producción oficial (`www.frufresco.co` / `frufresco-liard.vercel.app`) opera exclusivamente en el equipo Pro `frufrescodigital-designs-projects`.
+
+
+---
+
+### Escenario 498: Blindaje de Tipo B2B en Email Ingest, Precedencia `Factura Impresa` y Badge de Factura `FV-XXXXX` en Torre de Control (SDD v1.9.453)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y DESPLEGADO (0 errores tsc · 10 ítems restaurados Pedido 2296 · 675 pedidos B2B saneados)`
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17725,17729`):** Autorización expresa del CTO (`.b`) para intervenir acotadamente:
+  - [`src/components/EmailDraftsModule.tsx`](file:///c:/Projects/frufresco/src/components/EmailDraftsModule.tsx): exclusivamente agregar `type: (role === 'b2c_client' || role === 'client') ? 'b2c' : 'b2b'` en las inserciones a `orders` (`L6336` y `L6884`, y split fuera de acuerdo si existe), **sin** incluir columnas inexistentes como `document_type`.
+  - [`src/app/admin/orders/loading/page.tsx`](file:///c:/Projects/frufresco/src/app/admin/orders/loading/page.tsx): exclusivamente (a) añadir el embed desambiguado `billing_invoices!orders_invoice_id_fkey(invoice_number, status)` en ambos `.select()` (`L1777` y `L2056`), (b) excluir `prof?.role === 'b2b_client'` de `isHogarOrder` y leer `order.logistics_data?.document_type_override` / `remission_with_prices_override` en `L5109-L5111`, y (c) renderizar el badge compacto `FV-XXXXX` cuando el pedido tenga factura emitida.
+- **Saneamiento Verificado en BD:**
+  - Restauración idempotente (solo si `order_items` está en `0`) de las 10 líneas del Pedido `2296` (`893a28c6-4153-48c9-9f3a-14ddaf10f426`, Aldimark Gimnasio José Joaquín Casas, `FV-70121`) cruzadas contra `order_drafts` + Acuerdo `#192`, verificando `SUM(quantity * unit_price) === 271640`.
+  - Backfill seguro `UPDATE orders SET type = 'b2b'` únicamente en pedidos con `type = 'b2c'` cuyo perfil asociado tenga `profiles.role = 'b2b_client'` (excluyendo `b2c_wompi`).
