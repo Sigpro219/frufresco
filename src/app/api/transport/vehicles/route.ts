@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { verifySessionAndPermission } from '@/lib/auth';
+import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
                 plate,
                 brand: String(vehicleData.brand || '').trim(),
                 model: String(vehicleData.model || '').trim(),
-                vehicle_type: String(vehicleData.vehicle_type || 'Furgón').trim(),
+                vehicle_type: normalizeFleetOwnership(vehicleData.vehicle_type),
                 capacity_kg: Number(vehicleData.capacity_kg) || 0,
                 max_crates_capacity: parseInt(String(vehicleData.max_crates_capacity)) || 0,
                 current_odometer: newOdometer
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
                 plate,
                 brand: String(vehicleData.brand || '').trim(),
                 model: String(vehicleData.model || '').trim(),
-                vehicle_type: String(vehicleData.vehicle_type || 'Furgón').trim(),
+                vehicle_type: normalizeFleetOwnership(vehicleData.vehicle_type),
                 capacity_kg: Number(vehicleData.capacity_kg) || 1000,
                 max_crates_capacity: parseInt(String(vehicleData.max_crates_capacity)) || 0,
                 current_odometer: Number(vehicleData.current_odometer) || 0,

@@ -8,6 +8,7 @@ import { Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { GOOGLE_MAPS_MAP_ID } from '@/lib/constants';
+import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
 import { 
     Truck, 
     CheckCircle2, 
@@ -873,7 +874,7 @@ export default function TransportControlTower() {
                                                         <div style={{ minWidth: 0 }}>
                                                             <div style={{ fontWeight: '900', fontSize: '0.84rem', color: THEME.colors.textMain }}>{v.plate}</div>
                                                             <div style={{ fontSize: '0.66rem', color: THEME.colors.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {drv?.contact_name || (v.vehicle_type || 'Furgón')}
+                                                                {drv?.contact_name || normalizeFleetOwnership(v.vehicle_type)}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1204,7 +1205,7 @@ export default function TransportControlTower() {
                                                                                 {v.plate}
                                                                             </span>
                                                                             <span style={{ fontSize: '0.62rem', fontWeight: '700', color: THEME.colors.textSecondary, backgroundColor: THEME.colors.background, padding: '1px 5px', borderRadius: '4px' }}>
-                                                                                {v.vehicle_type || 'Furgón'}
+                                                                                {normalizeFleetOwnership(v.vehicle_type)}
                                                                             </span>
                                                                         </div>
                                                                         <span style={{

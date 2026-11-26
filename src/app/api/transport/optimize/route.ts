@@ -20,6 +20,7 @@ import {
     resolveOrderDisplayWindow,
     BODEGA_CENTRAL,
 } from '@/lib/transport/gpsHygiene';
+import { isThirdPartyVehicle } from '@/lib/transport/fleetOwnership';
 
 const OptimizeRequestSchema = z.object({
     orders: z.array(z.any()).min(1, 'Se requiere al menos un pedido para optimizar rutas'),
@@ -104,11 +105,14 @@ export async function POST(request: Request) {
             b2c_default_window_end,
         };
 
-        let vehicleFixedCost = 500; // default balanced
+        let ownVehicleFixedCost = 500; // default balanced
+        let thirdPartyVehicleFixedCost = 20000;
         if (optimization_strategy === 'minimize_vehicles') {
-            vehicleFixedCost = 10000;
+            ownVehicleFixedCost = 10000;
+            thirdPartyVehicleFixedCost = 30000;
         } else if (optimization_strategy === 'minimize_time') {
-            vehicleFixedCost = 0;
+            ownVehicleFixedCost = 50;
+            thirdPartyVehicleFixedCost = 20000;
         }
 
         // Helper to compare HH:MM times
@@ -140,7 +144,12 @@ export async function POST(request: Request) {
         };
         const gcpDate = addDaysToDateStr(targetDate, shiftDays);
 
-        const getOrderTimeWindow = (o: any, datePart: string) => {
+        const getOrderTimeWindow = (o: any, datePart: string): {
+            startTime: string;
+            endTime: string;
+            allowB2CSoftStart: boolean;
+            softStartMs: number | null;
+        } => {
             const resolved = resolveOrderDisplayWindow(o, windowParams);
             const startLocal = resolved.startTime;
             const endLocal = resolved.endTime;
@@ -151,10 +160,34 @@ export async function POST(request: Request) {
             let sMins = parseTimeStr(startLocal);
             let eMins = parseTimeStr(endLocal);
 
+            const orderIsB2B = Boolean(o?.is_b2b) ||
+                (typeof o?.type === 'string' && o.type.toLowerCase().includes('b2b')) ||
+                o?.profiles?.role === 'b2b_client' ||
+                o?.profiles?.role === 'b2b';
+            const isB2CDefault = !orderIsB2B && resolved.slotType === 'segment_default';
+
+            let allowB2CSoftStart = false;
+            let softStartMins: number | null = null;
+
             if (isNaN(sMins) || isNaN(eMins) || sMins >= eMins) {
                 sMins = minFleetMins;
                 eMins = maxFleetMins;
             } else {
+                if (isB2CDefault) {
+                    const b2bStartMins = parseTimeStr(b2b_default_window_start);
+                    const hardStartMins = Math.max(Number.isFinite(b2bStartMins) ? b2bStartMins : 360, 8 * 60);
+                    const candidateSoftMins = parseTimeStr(b2c_default_window_start);
+                    if (
+                        Number.isFinite(hardStartMins) &&
+                        Number.isFinite(candidateSoftMins) &&
+                        hardStartMins < candidateSoftMins &&
+                        candidateSoftMins < eMins
+                    ) {
+                        sMins = hardStartMins;
+                        softStartMins = candidateSoftMins;
+                        allowB2CSoftStart = true;
+                    }
+                }
                 // Strictly clamp to fleet hours so time window is always served during driver shift
                 sMins = Math.max(minFleetMins, Math.min(sMins, maxFleetMins - 30));
                 eMins = Math.min(maxFleetMins, Math.max(eMins, sMins + 30));
@@ -168,11 +201,28 @@ export async function POST(request: Request) {
             try {
                 const startTime = new Date(`${datePart}T${sH}:${sM}:00-05:00`).toISOString();
                 const endTime = new Date(`${datePart}T${eH}:${eM}:00-05:00`).toISOString();
-                return { startTime, endTime };
-            } catch (err) {
+                const startMs = new Date(startTime).getTime();
+                const endMs = new Date(endTime).getTime();
+
+                let softStartMs: number | null = null;
+                if (allowB2CSoftStart && softStartMins !== null) {
+                    const softH = Math.floor(softStartMins / 60).toString().padStart(2, '0');
+                    const softM = (softStartMins % 60).toString().padStart(2, '0');
+                    const candidateMs = new Date(`${datePart}T${softH}:${softM}:00-05:00`).getTime();
+                    if (Number.isFinite(candidateMs) && startMs < candidateMs && candidateMs < endMs) {
+                        softStartMs = candidateMs;
+                    } else {
+                        allowB2CSoftStart = false;
+                    }
+                }
+
+                return { startTime, endTime, allowB2CSoftStart, softStartMs };
+            } catch {
                 return {
                     startTime: new Date(`${datePart}T${fleet_start}:00-05:00`).toISOString(),
-                    endTime: new Date(`${datePart}T${fleet_end}:00-05:00`).toISOString()
+                    endTime: new Date(`${datePart}T${fleet_end}:00-05:00`).toISOString(),
+                    allowB2CSoftStart: false,
+                    softStartMs: null
                 };
             }
         };
@@ -275,6 +325,8 @@ export async function POST(request: Request) {
             isPriority: boolean;
             isB2B: boolean;
             isCashOnDelivery: boolean;
+            allowB2CSoftStart: boolean;
+            softStartMs: number | null;
             startMs: number;
             endMs: number;
             timeWindow: { startTime: string; endTime: string };
@@ -332,6 +384,8 @@ export async function POST(request: Request) {
                 const parentWin = getOrderTimeWindow(parent, gcpDate);
                 let interStartMs = new Date(parentWin.startTime).getTime();
                 let interEndMs = new Date(parentWin.endTime).getTime();
+                let allowB2CSoftStart = parentWin.allowB2CSoftStart;
+                let softStartMs = parentWin.softStartMs;
                 for (const child of children) {
                     const cw = getOrderTimeWindow(child, gcpDate);
                     const cs = new Date(cw.startTime).getTime();
@@ -339,7 +393,18 @@ export async function POST(request: Request) {
                     if (Math.max(interStartMs, cs) < Math.min(interEndMs, ce)) {
                         interStartMs = Math.max(interStartMs, cs);
                         interEndMs = Math.min(interEndMs, ce);
+                        allowB2CSoftStart = allowB2CSoftStart && cw.allowB2CSoftStart;
+                        if (allowB2CSoftStart && softStartMs !== null && cw.softStartMs !== null) {
+                            softStartMs = Math.max(softStartMs, cw.softStartMs);
+                        } else {
+                            allowB2CSoftStart = false;
+                            softStartMs = null;
+                        }
                     }
+                }
+                if (isPriority || isB2B || !allowB2CSoftStart || softStartMs === null || !(interStartMs < softStartMs && softStartMs < interEndMs)) {
+                    allowB2CSoftStart = false;
+                    softStartMs = null;
                 }
                 const unitWindow = {
                     startTime: new Date(interStartMs).toISOString(),
@@ -364,6 +429,8 @@ export async function POST(request: Request) {
                     isPriority,
                     isB2B,
                     isCashOnDelivery,
+                    allowB2CSoftStart,
+                    softStartMs,
                     startMs: interStartMs,
                     endMs: interEndMs,
                     timeWindow: unitWindow,
@@ -389,6 +456,8 @@ export async function POST(request: Request) {
             isPriority: boolean;
             isB2B: boolean;
             isCashOnDelivery: boolean;
+            allowB2CSoftStart: boolean;
+            softStartMs: number | null;
             startMs: number;
             endMs: number;
             timeWindow: { startTime: string; endTime: string };
@@ -435,6 +504,23 @@ export async function POST(request: Request) {
                         batch.isCashOnDelivery = batch.isCashOnDelivery || u.isCashOnDelivery;
                         batch.startMs = interStart;
                         batch.endMs = interEnd;
+                        const combinedAllowSoft =
+                            !batch.isPriority &&
+                            !batch.isB2B &&
+                            batch.allowB2CSoftStart &&
+                            u.allowB2CSoftStart &&
+                            batch.softStartMs !== null &&
+                            u.softStartMs !== null;
+                        const combinedSoftStartMs = combinedAllowSoft
+                            ? Math.max(batch.softStartMs as number, u.softStartMs as number)
+                            : null;
+                        if (combinedAllowSoft && combinedSoftStartMs !== null && interStart < combinedSoftStartMs && combinedSoftStartMs < interEnd) {
+                            batch.allowB2CSoftStart = true;
+                            batch.softStartMs = combinedSoftStartMs;
+                        } else {
+                            batch.allowB2CSoftStart = false;
+                            batch.softStartMs = null;
+                        }
                         batch.timeWindow = {
                             startTime: new Date(interStart).toISOString(),
                             endTime: new Date(interEnd).toISOString()
@@ -457,6 +543,8 @@ export async function POST(request: Request) {
                         isPriority: u.isPriority,
                         isB2B: u.isB2B,
                         isCashOnDelivery: u.isCashOnDelivery,
+                        allowB2CSoftStart: u.allowB2CSoftStart,
+                        softStartMs: u.softStartMs,
                         startMs: u.startMs,
                         endMs: u.endMs,
                         timeWindow: { ...u.timeWindow },
@@ -557,7 +645,7 @@ export async function POST(request: Request) {
                     const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cluster.crates) + cashDwellDelta;
                     const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 180));
 
-                    let shipmentTimeWindow: Record<string, any> = cluster.timeWindow;
+                    let shipmentTimeWindow: Record<string, string | number> = cluster.timeWindow;
                     if (cluster.isPriority) {
                         const startMs = cluster.startMs;
                         const endMs = cluster.endMs;
@@ -579,6 +667,18 @@ export async function POST(request: Request) {
                                 costPerHourAfterSoftEndTime: 250
                             };
                         }
+                    } else if (
+                        cluster.allowB2CSoftStart &&
+                        cluster.softStartMs !== null &&
+                        Number.isFinite(cluster.softStartMs) &&
+                        cluster.startMs < cluster.softStartMs &&
+                        cluster.softStartMs < cluster.endMs
+                    ) {
+                        shipmentTimeWindow = {
+                            ...cluster.timeWindow,
+                            softStartTime: new Date(cluster.softStartMs).toISOString(),
+                            costPerHourBeforeSoftStartTime: 48
+                        };
                     }
 
                     const demands: Record<string, { amount: string }> = {
@@ -622,8 +722,8 @@ export async function POST(request: Request) {
                         limits["refrigerated"] = { "maxLoad": v.is_refrigerated ? String(v.max_crates_capacity || 483) : "0" };
                     }
                     if (hasPriorityOrders) {
-                        const prioritySoftCost = vehicleFixedCost > 0
-                            ? Math.min(50000, Math.max(800, Math.round(vehicleFixedCost * 0.4)))
+                        const prioritySoftCost = ownVehicleFixedCost > 0
+                            ? Math.min(50000, Math.max(800, Math.round(ownVehicleFixedCost * 0.4)))
                             : 1500;
                         limits["priority_slots"] = {
                             softMaxLoad: "1",
@@ -631,11 +731,15 @@ export async function POST(request: Request) {
                         };
                     }
 
+                    const thisVehicleFixedCost = isThirdPartyVehicle(v.vehicle_type)
+                        ? thirdPartyVehicleFixedCost
+                        : ownVehicleFixedCost;
+
                     const vehicleObj: any = {
                         startLocation: { latitude: BODEGA_CENTRAL.lat, longitude: BODEGA_CENTRAL.lng },
                         endLocation: { latitude: BODEGA_CENTRAL.lat, longitude: BODEGA_CENTRAL.lng },
                         loadLimits: limits,
-                        fixedCost: vehicleFixedCost,
+                        fixedCost: thisVehicleFixedCost,
                         costPerKilometer: 2.0,
                         costPerHour: 40.0,
                         costPerTraveledHour: 20.0,
@@ -990,7 +1094,9 @@ export async function POST(request: Request) {
             })),
             priorityOrderIds: consolidatedClusters.filter(c => c.isPriority).flatMap(c => c.memberOrderIds),
             refrigeratedOrderIds: Array.from(refrigeratedOrderIds).map(String),
-            geocodingWarnings
+            geocodingWarnings,
+            optimizationStrategy: optimization_strategy,
+            routeMetrics
         });
 
         const aggMetrics = gcpData.metrics?.aggregatedRouteMetrics || {};
@@ -1041,6 +1147,8 @@ async function generateAiExplanation(
         priorityOrderIds?: string[];
         refrigeratedOrderIds?: string[];
         geocodingWarnings?: Array<{ orderId: string; customerName: string; reason: string }>;
+        optimizationStrategy?: string;
+        routeMetrics?: Record<string, { distance_km?: number; travel_min?: number; total_min?: number }>;
     }
 ) {
     const orderById = new Map(orders.map(o => [String(o.id), o]));
@@ -1048,6 +1156,33 @@ async function generateAiExplanation(
     const prioritySet = new Set((context?.priorityOrderIds || []).map(String));
     const refrigeratedSet = new Set((context?.refrigeratedOrderIds || []).map(String));
     const geoWarnings = context?.geocodingWarnings || [];
+    const routeMetrics = context?.routeMetrics || {};
+
+    const idleOwnVehicles = vehicles.filter(
+        v => !(assignments[v.id]?.length > 0) && !isThirdPartyVehicle(v.vehicle_type)
+    );
+    const overloadedActiveVehicles = Object.entries(assignments)
+        .filter(([, ids]) => ids.length > 0)
+        .map(([vid, ids]) => {
+            const v = vehicles.find(veh => veh.id === vid);
+            const kg = ids.reduce((s, id) => s + (Number(orderById.get(String(id))?.total_weight_kg) || 0), 0);
+            const cr = ids.reduce((s, id) => s + (Number(orderById.get(String(id))?.crates) || 1), 0);
+            const capKg = Number(v?.capacity_kg) || 0;
+            const capCrates = Number(v?.max_crates_capacity) || 0;
+            const totalMin = Number(routeMetrics[vid]?.total_min) || 0;
+            const pctKg = capKg > 0 ? (kg / capKg) * 100 : 0;
+            const pctCrates = capCrates > 0 ? (cr / capCrates) * 100 : 0;
+            const isOverloaded = totalMin > 240 || pctKg > 85 || pctCrates > 85;
+            return { plate: v?.plate || vid, totalMin, pctKg: Math.round(pctKg), pctCrates: Math.round(pctCrates), isOverloaded };
+        })
+        .filter(item => item.isOverloaded);
+
+    const speedRecommendationText =
+        context?.optimizationStrategy !== 'minimize_time' &&
+        idleOwnVehicles.length >= 1 &&
+        overloadedActiveVehicles.length > 0
+            ? `Tienes ${idleOwnVehicles.length} camión(es) propio(s) libre(s) (${idleOwnVehicles.map(v => v.plate).join(', ')}) mientras ${overloadedActiveVehicles.map(o => o.plate).join(', ')} supera ${overloadedActiveVehicles[0].totalMin > 240 ? `${overloadedActiveVehicles[0].totalMin} min` : `${Math.max(overloadedActiveVehicles[0].pctKg, overloadedActiveVehicles[0].pctCrates)}% de carga`}; si quieres acabar más temprano, prueba la estrategia **Terminar más rápido (Velocidad)**.`
+            : null;
 
     const buildDeterministicSummary = (fallbackReason?: string) => {
         const totalAssigned = Object.values(assignments).reduce((s, ids) => s + ids.length, 0);
@@ -1078,6 +1213,9 @@ async function generateAiExplanation(
         }
         if (geoWarnings.length > 0) {
             lines.push(`- **Alertas GPS:** **${geoWarnings.length}** pedido(s) sin coordenadas exactas (${geoWarnings.slice(0, 3).map(w => w.customerName).join(', ')}).`);
+        }
+        if (speedRecommendationText) {
+            lines.push(`- **Sugerencia de velocidad:** ${speedRecommendationText}`);
         }
         if (unassignedOrders.length > 0) {
             lines.unshift(
@@ -1119,11 +1257,12 @@ ${multiOrderClusters.length > 0 ? `CONSOLIDACIONES MISMA SEDE (EN 1 PARADA):\n${
 ${prioritySet.size > 0 ? `PEDIDOS PRIORITARIOS MARCADOS: ${prioritySet.size}\n` : ''}
 ${refrigeratedSet.size > 0 ? `PEDIDOS CON CADENA DE FRÍO (REFRIGERADOS): ${refrigeratedSet.size}\n` : ''}
 ${geoWarnings.length > 0 ? `ALERTAS GPS (${geoWarnings.length}): ${geoWarnings.slice(0, 5).map(w => `${w.customerName} (${w.reason})`).join('; ')}\n` : ''}
+${speedRecommendationText ? `RECOMENDACIÓN PROACTIVA DE VELOCIDAD: ${speedRecommendationText}\n` : ''}
 
 INSTRUCCIONES ESTRICTAS:
 1. PROHIBIDO usar emojis unicode.
 2. Usa exactamente 4 a 5 viñetas cortas con guion ("- ") y negritas (**dato**) en placas, pesos en **kg**, porcentajes de ocupación, zonas/municipios y alertas reales.
-3. Menciona: (a) uso de flota y camiones libres, (b) zonas geográficas reales por camión o alertas de rutas largas, (c) consolidaciones de misma sede y prioritarios si existen, (d) cualquier cuello de botella de ocupación (>90%) o alerta GPS.`;
+3. Menciona: (a) uso de flota y camiones libres, (b) zonas geográficas reales por camión o alertas de rutas largas, (c) consolidaciones de misma sede y prioritarios si existen, (d) cualquier cuello de botella de ocupación (>90%) o alerta GPS${speedRecommendationText ? ', y (e) incluye en una viñeta la recomendación proactiva de probar "Terminar más rápido (Velocidad)"' : ''}.`;
 
         if (unassignedOrders && unassignedOrders.length > 0) {
             summaryText += `\n\nATENCIÓN — PEDIDOS SIN ASIGNAR (${unassignedOrders.length}):

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
 import { 
     Search, 
     X, 
@@ -73,7 +74,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
         plate: '',
         brand: '',
         model: '',
-        vehicle_type: 'Furgón',
+        vehicle_type: 'Propio',
         capacity_kg: 1000,
         max_crates_capacity: 0,
         current_odometer: 0
@@ -291,7 +292,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             });
             setShowAdd(false);
             fetchVehicles();
-            setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Furgón', capacity_kg: 1000, max_crates_capacity: 0, current_odometer: 0 });
+            setNewVehicle({ plate: '', brand: '', model: '', vehicle_type: 'Propio', capacity_kg: 1000, max_crates_capacity: 0, current_odometer: 0 });
             showFeedback('success', 'Vehículo agregado exitosamente a la flota.');
         } catch (err: any) {
             console.error('Error adding vehicle:', err);
@@ -307,7 +308,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
             plate: v.plate,
             brand: v.brand,
             model: v.model,
-            vehicle_type: v.vehicle_type,
+            vehicle_type: normalizeFleetOwnership(v.vehicle_type),
             capacity_kg: v.capacity_kg,
             max_crates_capacity: v.max_crates_capacity || 0,
             current_odometer: v.current_odometer
@@ -390,7 +391,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                 v.plate,
                 v.brand,
                 v.model,
-                v.vehicle_type,
+                normalizeFleetOwnership(v.vehicle_type),
                 v.status,
                 v.driver?.contact_name || '',
                 String(v.capacity_kg),
@@ -520,12 +521,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                             <input required placeholder="Ej: 2024 NHR" value={newVehicle.model} onChange={e => setNewVehicle({...newVehicle, model: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600' }} />
                         </div>
                         <div>
-                            <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>TIPO DE CARROCERÍA</label>
+                            <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>PROPIEDAD DEL VEHÍCULO</label>
                             <select value={newVehicle.vehicle_type} onChange={e => setNewVehicle({...newVehicle, vehicle_type: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', backgroundColor: 'white' }}>
-                                <option value="Furgón">Furgón</option>
-                                <option value="Camión">Camión</option>
-                                <option value="Turbo">Turbo</option>
-                                <option value="Refrigerado">Refrigerado</option>
+                                <option value="Propio">Propio (Flota interna)</option>
+                                <option value="Tercero">Tercero (Alquilado / Flete)</option>
                             </select>
                         </div>
                         <div>
@@ -626,7 +625,25 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                         </td>
                                         <td style={{ padding: '1rem' }}>
                                             <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{v.capacity_kg?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KG</span> • <span style={{ color: '#0F766E' }}>{v.max_crates_capacity || 0} <span style={{ color: '#94A3B8' }}>CANASTAS</span></span></div>
-                                            <div style={{ fontSize: '0.7rem', color: '#0891B2', fontWeight: '900' }}>{v.vehicle_type.toUpperCase()}</div>
+                                            {(() => {
+                                                const ownership = normalizeFleetOwnership(v.vehicle_type);
+                                                const isThirdParty = ownership === 'Tercero';
+                                                return (
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        marginTop: '4px',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.68rem',
+                                                        fontWeight: '900',
+                                                        color: isThirdParty ? '#B45309' : '#0891B2',
+                                                        backgroundColor: isThirdParty ? '#FEF3C7' : '#ECFEFF',
+                                                        border: `1px solid ${isThirdParty ? '#FDE68A' : '#A5F3FC'}`
+                                                    }}>
+                                                        {ownership.toUpperCase()}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td style={{ padding: '1rem' }}>
                                             <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>{v.current_odometer?.toLocaleString()} <span style={{ color: '#94A3B8' }}>KM</span></div>
@@ -727,12 +744,10 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                     <input required value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', boxSizing: 'border-box' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>TIPO DE CARROCERÍA</label>
+                                    <label style={{ fontSize: '0.75rem', fontWeight: '900', color: '#374151', display: 'block', marginBottom: '0.6rem', letterSpacing: '0.05rem' }}>PROPIEDAD DEL VEHÍCULO</label>
                                     <select value={editForm.vehicle_type} onChange={e => setEditForm({...editForm, vehicle_type: e.target.value})} style={{ width: '100%', padding: '0.9rem 1.2rem', borderRadius: '14px', border: '1px solid #D1D5DB', fontWeight: '600', backgroundColor: 'white', boxSizing: 'border-box' }}>
-                                        <option value="Furgón">Furgón</option>
-                                        <option value="Camión">Camión</option>
-                                        <option value="Turbo">Turbo</option>
-                                        <option value="Refrigerado">Refrigerado</option>
+                                        <option value="Propio">Propio (Flota interna)</option>
+                                        <option value="Tercero">Tercero (Alquilado / Flete)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -866,7 +881,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                 }}><Truck size={48} /></div>
                                 <div>
                                     <h2 style={{ fontSize: '2.2rem', fontWeight: '900', color: '#1E293B', margin: 0 }}>{selectedVehicle.plate}</h2>
-                                    <p style={{ color: '#64748B', fontSize: '1.1rem', margin: '4px 0', fontWeight: '700' }}>{selectedVehicle.brand} {selectedVehicle.model} • {selectedVehicle.vehicle_type}</p>
+                                    <p style={{ color: '#64748B', fontSize: '1.1rem', margin: '4px 0', fontWeight: '700' }}>{selectedVehicle.brand} {selectedVehicle.model} • {normalizeFleetOwnership(selectedVehicle.vehicle_type)}</p>
                                 </div>
                             </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
@@ -10,6 +11,7 @@ import {
     resolveOrderDisplayWindow,
     buildGoogleMapsDirectionChunks
 } from '@/lib/transport/gpsHygiene';
+import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
 import { RouteSpaghettiMapModal } from '@/components/RouteSpaghettiMapModal';
 import { 
     Calendar, 
@@ -207,6 +209,36 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [spaghettiVehicleId, setSpaghettiVehicleId] = useState<string | null>(null);
 
     const isMounted = useRef(true);
+    const isSandbox = isSandboxMode();
+    const activeDraftScope = (showAllDates || !selectedDeliveryDate) ? 'ALL' : selectedDeliveryDate;
+    const loadedDraftScopeRef = useRef<string | null>(null);
+    const lastSavedJsonRef = useRef<string>('');
+    const fetchSeqRef = useRef<number>(0);
+    const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearDraftForScope = async (scope: string) => {
+        if (saveDebounceRef.current) {
+            clearTimeout(saveDebounceRef.current);
+            saveDebounceRef.current = null;
+        }
+        lastSavedJsonRef.current = '';
+        try {
+            if (isSandbox) {
+                localStorage.removeItem(`frufresco_route_planner_draft_${scope}`);
+            } else {
+                localStorage.removeItem('frufresco_route_planner_draft');
+            }
+        } catch (_) {}
+        if (isSandbox) {
+            const { error } = await supabase
+                .from('app_settings')
+                .delete()
+                .eq('key', `route_planner_draft_${scope}`);
+            if (error) {
+                console.warn('Error limpiando borrador Sandbox en app_settings:', error.message);
+            }
+        }
+    };
 
     useEffect(() => {
         isMounted.current = true;
@@ -215,6 +247,23 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     }, [selectedDeliveryDate, showAllDates]);
 
     const fetchInitialData = async () => {
+        const mySeq = ++fetchSeqRef.current;
+        const scopeForFetch = (showAllDates || !selectedDeliveryDate) ? 'ALL' : selectedDeliveryDate;
+        if (isSandbox) {
+            loadedDraftScopeRef.current = null;
+            lastSavedJsonRef.current = '';
+            setAssignments({});
+            setIsOptimized(false);
+            setOptimizationSource(null);
+            setStopEtas({});
+            setRouteStartTimes({});
+            setTheoreticalMetrics(null);
+            setRouteMetrics({});
+            setStopLegMetrics({});
+            setTrafficMode(null);
+            setRoutePolylines({});
+            setAiReportText('');
+        }
         try {
             setLoading(true);
             
@@ -223,7 +272,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             if (pErr) console.warn('Note: Could not fetch logistic parameters:', pErr.message);
             
             let avgCrateWeight = 12.5; // default fallback
-            if (paramData && isMounted.current) {
+            if (paramData && isMounted.current && fetchSeqRef.current === mySeq) {
                 const pMap: Record<string, any> = {};
                 paramData.forEach((p: any) => {
                     const valFloat = parseFloat(p.value);
@@ -259,7 +308,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 `)
                 .eq('status', 'available');
 
-            if (!isMounted.current) return;
+            if (!isMounted.current || fetchSeqRef.current !== mySeq) return;
             if (fErr) throw fErr;
 
             if (isMounted.current) {
@@ -273,6 +322,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
             const enhancedFleet = (fleetData || []).map(v => ({
                 ...v,
+                vehicle_type: normalizeFleetOwnership(v.vehicle_type),
                 driver_name: v.driver?.contact_name || 'Sin Asignar'
             }));
 
@@ -386,60 +436,115 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             });
             setOrders(mappedOrders);
 
-            // Cargar asignaciones guardadas de localStorage si existen para el día de hoy
+            // Cargar asignaciones guardadas (Sandbox: app_settings + localStorage por fecha; Prod: localStorage legado)
             try {
-                const savedDataStr = localStorage.getItem('frufresco_route_planner_draft');
-                if (savedDataStr) {
-                    const savedData = JSON.parse(savedDataStr);
-                    if (savedData.targetDate === selectedDeliveryDate) {
-                        const validOrderIds = new Set(mappedOrders.map((o: any) => String(o.id)));
-                        const filteredAssignments: Record<string, string[]> = {};
-                        
-                        Object.keys(savedData.assignments || {}).forEach(vehicleId => {
-                            const oids = (savedData.assignments[vehicleId] || []).filter((oid: string) => validOrderIds.has(String(oid)));
-                            if (oids.length > 0) {
-                                filteredAssignments[vehicleId] = oids;
-                            }
-                        });
-                        
-                        setAssignments(filteredAssignments);
-                        const isGoogleSaved = savedData.optimizationSource === 'google';
-                        setIsOptimized(isGoogleSaved && Boolean(savedData.isOptimized));
-                        setOptimizationSource(isGoogleSaved ? 'google' : null);
-                        if (savedData.stopEtas && typeof savedData.stopEtas === 'object') {
-                            setStopEtas(savedData.stopEtas);
+                const validOrderIds = new Set(mappedOrders.map((o: any) => String(o.id)));
+                const applyDraftState = (savedData: any) => {
+                    const filteredAssignments: Record<string, string[]> = {};
+                    Object.keys(savedData.assignments || {}).forEach(vehicleId => {
+                        const oids = (savedData.assignments[vehicleId] || []).filter((oid: string) => validOrderIds.has(String(oid)));
+                        if (oids.length > 0) {
+                            filteredAssignments[vehicleId] = oids;
                         }
-                        if (savedData.routeStartTimes && typeof savedData.routeStartTimes === 'object') {
-                            setRouteStartTimes(savedData.routeStartTimes);
+                    });
+                    setAssignments(filteredAssignments);
+                    const isGoogleSaved = savedData.optimizationSource === 'google';
+                    setIsOptimized(isGoogleSaved && Boolean(savedData.isOptimized));
+                    setOptimizationSource(isGoogleSaved ? 'google' : null);
+                    if (savedData.stopEtas && typeof savedData.stopEtas === 'object') {
+                        setStopEtas(savedData.stopEtas);
+                    }
+                    if (savedData.routeStartTimes && typeof savedData.routeStartTimes === 'object') {
+                        setRouteStartTimes(savedData.routeStartTimes);
+                    }
+                    if (savedData.theoreticalMetrics) {
+                        setTheoreticalMetrics(savedData.theoreticalMetrics);
+                    }
+                    if (savedData.routeMetrics && typeof savedData.routeMetrics === 'object') {
+                        setRouteMetrics(savedData.routeMetrics);
+                    }
+                    if (savedData.stopLegMetrics && typeof savedData.stopLegMetrics === 'object') {
+                        setStopLegMetrics(savedData.stopLegMetrics);
+                    }
+                    if (savedData.trafficMode === 'live_predictive' || savedData.trafficMode === 'weekday_projected') {
+                        setTrafficMode(savedData.trafficMode);
+                    }
+                    if (savedData.routePolylines && typeof savedData.routePolylines === 'object') {
+                        setRoutePolylines(savedData.routePolylines);
+                    }
+                    if (savedData.aiReportText) {
+                        setAiReportText(savedData.aiReportText);
+                    }
+                    return filteredAssignments;
+                };
+
+                if (isSandbox) {
+                    let localDraft: any = null;
+                    try {
+                        const localStr = localStorage.getItem(`frufresco_route_planner_draft_${scopeForFetch}`);
+                        if (localStr) localDraft = JSON.parse(localStr);
+                    } catch (_) {}
+
+                    let remoteDraft: any = null;
+                    let remoteUpdatedAt = '';
+                    try {
+                        const { data: remoteRow } = await supabase
+                            .from('app_settings')
+                            .select('value, updated_at')
+                            .eq('key', `route_planner_draft_${scopeForFetch}`)
+                            .maybeSingle();
+                        if (!isMounted.current || fetchSeqRef.current !== mySeq) return;
+                        if (remoteRow?.value) {
+                            remoteDraft = JSON.parse(remoteRow.value);
+                            remoteUpdatedAt = remoteRow.updated_at || '';
                         }
-                        if (savedData.theoreticalMetrics) {
-                            setTheoreticalMetrics(savedData.theoreticalMetrics);
-                        }
-                        if (savedData.routeMetrics && typeof savedData.routeMetrics === 'object') {
-                            setRouteMetrics(savedData.routeMetrics);
-                        }
-                        if (savedData.stopLegMetrics && typeof savedData.stopLegMetrics === 'object') {
-                            setStopLegMetrics(savedData.stopLegMetrics);
-                        }
-                        if (savedData.trafficMode === 'live_predictive' || savedData.trafficMode === 'weekday_projected') {
-                            setTrafficMode(savedData.trafficMode);
-                        }
-                        if (savedData.routePolylines && typeof savedData.routePolylines === 'object') {
-                            setRoutePolylines(savedData.routePolylines);
-                        }
-                        if (savedData.aiReportText) {
-                            setAiReportText(savedData.aiReportText);
+                    } catch (remoteErr) {
+                        console.warn('Error leyendo borrador Sandbox desde app_settings:', remoteErr);
+                    }
+
+                    const remoteTs = remoteDraft ? String(remoteDraft.savedAt || remoteUpdatedAt || '') : '';
+                    const localTs = localDraft ? String(localDraft.savedAt || '') : '';
+                    const winningDraft = remoteDraft && (!localDraft || remoteTs >= localTs)
+                        ? remoteDraft
+                        : localDraft;
+
+                    if (winningDraft) {
+                        const hydratedAssignments = applyDraftState(winningDraft);
+                        const canonicalHydrated = {
+                            targetDate: scopeForFetch,
+                            assignments: hydratedAssignments,
+                            isOptimized: (winningDraft.optimizationSource === 'google') && Boolean(winningDraft.isOptimized),
+                            optimizationSource: winningDraft.optimizationSource === 'google' ? 'google' : null,
+                            stopEtas: winningDraft.stopEtas || {},
+                            routeStartTimes: winningDraft.routeStartTimes || {},
+                            theoreticalMetrics: winningDraft.theoreticalMetrics || null,
+                            routeMetrics: winningDraft.routeMetrics || {},
+                            stopLegMetrics: winningDraft.stopLegMetrics || {},
+                            trafficMode: (winningDraft.trafficMode === 'live_predictive' || winningDraft.trafficMode === 'weekday_projected') ? winningDraft.trafficMode : null,
+                            aiReportText: winningDraft.aiReportText || '',
+                            routePolylines: winningDraft.routePolylines || {}
+                        };
+                        lastSavedJsonRef.current = JSON.stringify(canonicalHydrated);
+                    }
+                    loadedDraftScopeRef.current = scopeForFetch;
+                } else {
+                    const savedDataStr = localStorage.getItem('frufresco_route_planner_draft');
+                    if (savedDataStr) {
+                        const savedData = JSON.parse(savedDataStr);
+                        if (savedData.targetDate === selectedDeliveryDate) {
+                            applyDraftState(savedData);
                         }
                     }
                 }
             } catch (e) {
-                console.error("Error al cargar borrador de localStorage:", e);
+                console.error("Error al cargar borrador:", e);
+                if (isSandbox) loadedDraftScopeRef.current = scopeForFetch;
             }
 
         } catch (err: any) {
             console.error('Error fetching planner data:', err.message || err.details || err);
         } finally {
-            if (isMounted.current) setLoading(false);
+            if (isMounted.current && fetchSeqRef.current === mySeq) setLoading(false);
         }
     };
 
@@ -448,9 +553,84 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [dragOverVehicleId, setDragOverVehicleId] = useState<string | null>(null);
     const [dragOverSidebar, setDragOverSidebar] = useState<boolean>(false);
 
-    // Guardar automáticamente el borrador en localStorage cuando cambie la asignación
+    // Guardar automáticamente el borrador (Sandbox: app_settings debounced + localStorage por fecha; Prod: localStorage legado)
     useEffect(() => {
         if (loading) return;
+        if (isSandbox) {
+            if (readOnly || loadedDraftScopeRef.current !== activeDraftScope) return;
+            const hasAnyAssignment = Object.values(assignments).some(arr => Array.isArray(arr) && arr.length > 0);
+            if (!hasAnyAssignment) return;
+
+            const canonicalDraft = {
+                targetDate: activeDraftScope,
+                assignments,
+                isOptimized,
+                optimizationSource,
+                stopEtas,
+                routeStartTimes,
+                theoreticalMetrics,
+                routeMetrics,
+                stopLegMetrics,
+                trafficMode,
+                aiReportText,
+                routePolylines
+            };
+            const canonicalJson = JSON.stringify(canonicalDraft);
+            if (canonicalJson === lastSavedJsonRef.current) return;
+
+            const savedAt = new Date().toISOString();
+            const fullPayload = JSON.stringify({ ...canonicalDraft, savedAt });
+            const baseWithoutPolylines = JSON.stringify({
+                ...canonicalDraft,
+                routePolylines: {},
+                savedAt
+            });
+
+            try {
+                localStorage.setItem(
+                    `frufresco_route_planner_draft_${activeDraftScope}`,
+                    fullPayload.length < 200000 ? fullPayload : baseWithoutPolylines
+                );
+            } catch (_) {
+                try {
+                    localStorage.setItem(`frufresco_route_planner_draft_${activeDraftScope}`, baseWithoutPolylines);
+                } catch (fallbackErr) {
+                    console.error("Error al guardar borrador en localStorage:", fallbackErr);
+                }
+            }
+
+            if (saveDebounceRef.current) {
+                clearTimeout(saveDebounceRef.current);
+            }
+            const scopeToSave = activeDraftScope;
+            const payloadToSave = fullPayload.length < 350000 ? fullPayload : baseWithoutPolylines;
+            saveDebounceRef.current = setTimeout(async () => {
+                if (readOnly || loadedDraftScopeRef.current !== scopeToSave) return;
+                const { error } = await supabase
+                    .from('app_settings')
+                    .upsert(
+                        {
+                            key: `route_planner_draft_${scopeToSave}`,
+                            value: payloadToSave,
+                            description: `Borrador persistente Planeación Transporte Sandbox (${scopeToSave})`
+                        },
+                        { onConflict: 'key' }
+                    );
+                if (error) {
+                    console.warn('Error guardando borrador Sandbox en app_settings:', error.message);
+                } else {
+                    lastSavedJsonRef.current = canonicalJson;
+                }
+            }, 700);
+
+            return () => {
+                if (saveDebounceRef.current) {
+                    clearTimeout(saveDebounceRef.current);
+                    saveDebounceRef.current = null;
+                }
+            };
+        }
+
         const targetDate = selectedDeliveryDate || getOperationalTargetDate(20);
         const baseDraft = {
             targetDate,
@@ -483,7 +663,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 console.error("Error al guardar borrador en localStorage:", fallbackErr);
             }
         }
-    }, [assignments, isOptimized, optimizationSource, stopEtas, routeStartTimes, theoreticalMetrics, routeMetrics, stopLegMetrics, trafficMode, routePolylines, aiReportText, loading, selectedDeliveryDate]);
+    }, [assignments, isOptimized, optimizationSource, stopEtas, routeStartTimes, theoreticalMetrics, routeMetrics, stopLegMetrics, trafficMode, routePolylines, aiReportText, loading, selectedDeliveryDate, showAllDates, readOnly]);
 
     const handleAutoOptimize = async () => {
         if (readOnly) return;
@@ -649,7 +829,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             }
             
             // Limpiar borrador del día al confirmar
-            try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
+            await clearDraftForScope(activeDraftScope);
             setAssignments({});
             setStopEtas({});
             setTheoreticalMetrics(null);
@@ -1707,9 +1887,9 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         )}
                         {Object.keys(assignments).some(k => assignments[k].length > 0) && (
                             <button
-                                onClick={() => {
+                                onClick={async () => {
                                     if (confirm('¿Seguro que quieres limpiar todas las asignaciones? Los pedidos volverán al tablero sin asignar.')) {
-                                        try { localStorage.removeItem('frufresco_route_planner_draft'); } catch (_) {}
+                                        await clearDraftForScope(activeDraftScope);
                                         setAssignments({});
                                         setPriorityOrderIds([]);
                                         clearGoogleRouteTelemetry();

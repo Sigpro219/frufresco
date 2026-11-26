@@ -18409,15 +18409,34 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Escenario 497: 🔴 URGENTE P0 (Mañana a Primera Hora) — Conexión a Pasarela de Pago Wompi en Producción (`www.frufresco.co`) (SDD v1.9.452)
-- **Estado del Contrato:** `🔴 PENDIENTE URGENTE P0 — BLOQUEANTE DE COBRO EN PRODUCCIÓN`
+### Escenario 497: Conexión a Pasarela de Pago Wompi en Producción (`www.frufresco.co`) + UX Premium de Checkout y Recibo (SDD v1.9.452)
+- **Estado del Contrato:** `🟢 CÓDIGO IMPLEMENTADO Y VERIFICADO (0 errores tsc · Pendiente únicamente cargar llaves Wompi Producción en Vercel y Webhook URL)`
 - **Contexto:** `https://www.frufresco.co` ya está publicada en vivo con SSL y blindaje de lanzamiento (`Escenario 490`), pero el checkout público ([`src/app/checkout/page.tsx`](file:///c:/Projects/frufresco/src/app/checkout/page.tsx)) actualmente redirige al simulador (`/payments/simulator`) y **no puede procesar cobros reales** con tarjeta/PSE/Nequi.
-- **Alcance Obligatorio (Primera Hora Mañana):**
-  1. **Credenciales Wompi Producción en Vercel:** Registrar `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` (`pub_prod_...`), `WOMPI_PRIVATE_KEY` (`prv_prod_...`), `WOMPI_INTEGRITY_SECRET` (`prod_integrity_...`) y `WOMPI_EVENTS_SECRET` (`prod_events_...`) en Vercel Environment Variables (Production).
-  2. **Checkout Real + Firma de Integridad (`SHA-256`):** Conectar `src/app/checkout/page.tsx` al Web Checkout / Widget oficial de Wompi con firma de integridad generada server-side (`reference + amountInCents + currency + integritySecret`) y `redirect-url = https://www.frufresco.co/checkout/result`, reemplazando `/payments/simulator` en producción.
-  3. **Webhook Oficial de Confirmación (`/api/payments/wompi`):** Validar firma `X-Event-Checksum` con `WOMPI_EVENTS_SECRET`, actualizar estado del pedido (`paid` / `declined` / `voided`) de forma idempotente y registrar la trazabilidad del pago en BD.
-  4. **Prueba End-to-End Real:** Ejecutar 1 transacción real de monto mínimo (ej. `$1.500 COP` vía PSE/Nequi/Tarjeta) en `https://www.frufresco.co` verificando confirmación automática por webhook y recibo en `/checkout/result`.
-  5. **Retiro del Simulador en Producción:** Bloquear `/payments/simulator` cuando `!isSandboxMode()` para evitar falsos pedidos aprobados en vivo.
+- **Alcance Contractual Blindado (Goldfish Pre-Vuelo):**
+  1. **Credenciales Wompi Producción en Vercel (`Production`):** Registrar `NEXT_PUBLIC_WOMPI_PUBLIC_KEY` (`pub_prod_...`), `WOMPI_INTEGRITY_SECRET` (`prod_integrity_...`) y `WOMPI_EVENTS_SECRET` (`prod_events_...`) en Vercel Environment Variables, más Webhook URL `https://www.frufresco.co/api/payments/wompi/webhook` en `comercios.wompi.co`.
+  2. **Firma de Integridad Server-Side ([`src/app/api/payments/wompi/integrity/route.ts`](file:///c:/Projects/frufresco/src/app/api/payments/wompi/integrity/route.ts)):**
+     - Validar `reference` como UUID (`400`), consultar `public.orders` (`404`), exigir `order.total > 0` (`422`) y bloquear doble cobro si `order.payment_status === 'Pagado'` (`409`).
+     - Eliminar secreto dummy de fallback fuera de `isSandboxMode()`; calcular `amountInCents = Math.round(Number(order.total) * 100)`, firmar `SHA-256(${reference}${amountInCents}${currency}${integritySecret})` y retornar `{ hash, publicKey, amountInCents, currency: 'COP' }`.
+  3. **Checkout Web Wompi + Pre-llenado + Carrito Intacto ([`src/app/checkout/page.tsx`](file:///c:/Projects/frufresco/src/app/checkout/page.tsx)):**
+     - Usar `amountInCents` y `publicKey` devueltos por `/api/payments/wompi/integrity` (nunca recalcular en cliente).
+     - Redirigir a `https://checkout.wompi.co/p/` con `redirect-url=${window.location.origin}/checkout/result` (reservando `/payments/simulator` solo cuando `isSandboxMode()`).
+     - **NO** llamar `clearCart()` ni limpiar las 8 llaves transitorias antes de salir a Wompi (solo al confirmar `APPROVED` en `/checkout/result`). *Política de reintento explícita:* ante rechazo o abandono, el usuario conserva su carrito y al reintentar en `/checkout` crea una nueva orden mientras la rechazada pasa a `status='cancelled', payment_status='Rechazado'` vía webhook.
+     - Pre-llenar parámetros oficiales Wompi: `customer-data:email`, `full-name`, `phone-number` (exactamente 10 dígitos sin `+57`, omitir si no cumple), `phone-number-prefix=+57`, `legal-id` (solo dígitos, omitir si es `'222222222222'`), `legal-id-type` (`'NIT'` si `isB2B || requiresInvoiceWithNit`, `'CC'` en otro caso), `shipping-address:address-line-1`, `city='Bogotá'`, `region='Bogotá D.C.'`, `country='CO'`.
+     - Chips visuales en tarjeta `Pago Seguro Online`: `PSE`, `Nequi`, `Visa / Mastercard`, `Bancolombia` (exclusivamente `lucide-react`, cero emojis).
+  4. **Webhook Criptográfico Idempotente ([`src/app/api/payments/wompi/webhook/route.ts`](file:///c:/Projects/frufresco/src/app/api/payments/wompi/webhook/route.ts)):**
+     - Validar firma oficial usando `signature.properties` dinámicos sobre `data` + `timestamp` + `WOMPI_EVENTS_SECRET`, verificando formato hex y longitud antes de `crypto.timingSafeEqual` (`401` si inválida o falta secreto fuera de Sandbox).
+     - En `APPROVED`: actualizar `payment_status='Pagado'` + sello `[PAGO: Wompi <método> APPROVED | ID: <txId>]` en `admin_notes` **sin degradar `orders.status`** si ya avanzó más allá de `'pending_approval'`.
+     - En `DECLINED`/`VOIDED`/`ERROR`: marcar `status='cancelled', payment_status='Rechazado'` (**nunca** si `order.payment_status === 'Pagado'`).
+     - Corregir creación automática de perfil guest: eliminar columna inexistente `document_id` en `profiles` y usar `.limit(1).maybeSingle()` en búsqueda por `contact_phone`.
+  5. **Status Dual Wompi API + Sandbox ([`src/app/api/payments/status/route.ts`](file:///c:/Projects/frufresco/src/app/api/payments/status/route.ts)):**
+     - Diferenciar `?id=<order-uuid>` (simulador Sandbox) vs `?id=<wompi-tx-id>` (consulta `GET https://production.wompi.co/v1/transactions/${id}`, o `sandbox.wompi.co` si `publicKey` inicia por `pub_test_`); degradar a `PENDING` ante timeout/error HTTP.
+     - Verificar `Number(wompiTx.amount_in_cents) === Math.round(Number(order.total) * 100)` antes de sincronizar idempotentemente `payment_status='Pagado'`; mapear `APPROVED` desde `payment_status === 'Pagado'` (además de `approved`/`paid`); retornar `{ status, amount_in_cents, currency, reference, order_id, order_sequence, order_created_at, delivery_date, payment_method_type }`.
+  6. **Recibo Premium + Auto-Polling ([`src/app/checkout/result/page.tsx`](file:///c:/Projects/frufresco/src/app/checkout/result/page.tsx)):**
+     - Auto-polling cada `3s` (máx. 10 intentos / `30s`) con cleanup en unmount cuando `status === 'pending'`.
+     - Ejecutar `clearCart()` + limpieza exclusiva de las **8 llaves transitorias** (preservando identidad cookie-less `SPEC.md §25.2`) **una sola vez** vía `useRef(false)` cuando `status === 'success' && codStatus !== 'cod_success'`.
+     - Mostrar `# Pedido` copiable, monto, método real usado, fecha de entrega, botón WhatsApp SAC **`573167022898`** con pedido pre-llenado y botón **"Reintentar pago"** ante rechazo.
+  7. **Bloqueo del Simulador en Producción ([`src/app/payments/simulator/page.tsx`](file:///c:/Projects/frufresco/src/app/payments/simulator/page.tsx)):**
+     - Guard SSR-safe dentro de `useEffect(() => { if (!isSandboxMode()) router.replace('/checkout'); }, [router])`, retornando `null` cuando `!isSandboxMode()`.
 
 
 - **Deuda Técnica Menor (`DT-497-1` — Limpieza de Proyectos Vercel Legados en `sigpro219-8657's projects`):**
@@ -18493,3 +18512,39 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   2. **Ordenadores Tri-Estado (`Asc → Desc → Natural`):**
      - Implementado `handleSort` con iconos `ArrowUp`, `ArrowDown` y `ArrowUpDown` (`lucide-react`) en **Colaborador** (`name`), **Rol / Sede** (`role` y `specialty` independientes) y **Contacto** (`contact`).
   3. **Atajo `/`:** Presionar `/` enfoca el Superbuscador Omnibox cuando el foco no está en un campo de entrada.
+
+
+---
+
+### Escenario 501: Estandarización Binaria de Flota (Propio vs. Tercero), Ventana Blanda B2C en Ruta y Recomendación Proactiva de Velocidad IA (SDD v1.9.456)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO, VERIFICADO (\`tsc --noEmit\` EXIT 0) Y CERTIFICADO POR /tirano (100%)`
+- **Archivos en Alcance (libres de `READ-ONLY LOCK`):**
+  - `src/lib/transport/fleetOwnership.ts` (nuevo helper puro compartido sin dependencias Node/DOM)
+  - `src/components/FleetManagement.tsx`
+  - `src/app/api/transport/vehicles/route.ts`
+  - `src/app/admin/transport/page.tsx`
+  - `src/components/RoutePlanner.tsx`
+  - `src/app/api/transport/optimize/route.ts`
+- **Alcance Contractual:**
+  1. **Estandarización Binaria de `fleet_vehicles.vehicle_type` (`0 DDL`):**
+     - Crear el helper puro `normalizeFleetOwnership(val?: string | null): 'Propio' | 'Tercero'` en `src/lib/transport/fleetOwnership.ts`: retorna `'Tercero'` si `String(val || '').toLowerCase().includes('tercero')`, y `'Propio'` en cualquier otro caso (absorbiendo valores legacy como `'Furgón'`, `'Camión'`, `'Turbo'`, `'Refrigerado'`, `null`, `''`).
+     - `src/components/FleetManagement.tsx`: reemplazar el selector de carrocería en formularios de creación (`L524`) y edición (`L731`) por selector de Propiedad con únicas opciones `'Propio'` (`"Propio (Flota interna)"`) y `'Tercero'` (`"Tercero (Alquilado / Flete)"`); normalizar `editForm.vehicle_type` al abrir edición; renderizar badge normalizado (`PROPIO` cyan vs `TERCERO` ámbar) en fila de tabla (`L629`) y modal de detalle (`L869`); normalizar el `haystack` del buscador `filteredVehicles` (`L393`).
+     - `src/app/api/transport/vehicles/route.ts`: normalizar `vehicle_type` con `normalizeFleetOwnership` en `create` (`L122`) y `update` (`L69`).
+     - `src/app/admin/transport/page.tsx`: reemplazar fallbacks `'Furgón'` (`L876`, `L1207`) por `normalizeFleetOwnership(v.vehicle_type)`.
+     - `src/components/RoutePlanner.tsx`: normalizar `vehicle_type` en `enhancedFleet` antes de enviarlo a `/api/transport/optimize`, manteniendo además normalización server-side en `optimize/route.ts` (defensa en profundidad).
+  2. **Costos Fijos Diferenciados Propio vs. Tercero en `src/app/api/transport/optimize/route.ts`:**
+     - `balanced`: Propio `fixedCost: 500` | Tercero `fixedCost: 20000`.
+     - `minimize_time`: Propio `fixedCost: 50` | Tercero `fixedCost: 20000`.
+     - `minimize_vehicles`: Propio `fixedCost: 10000` | Tercero `fixedCost: 30000`.
+     - `prioritySoftCost` calculado exclusivamente desde `ownVehicleFixedCost` (nunca desde el `fixedCost` de un vehículo `Tercero`).
+  3. **Ventana Blanda Hogar (B2C en Ruta) con Guardas Anti-`HTTP 400`:**
+     - Solo aplica a pedidos B2C con `slotType === 'segment_default'` (manteniendo `resolveOrderDisplayWindow` en `src/lib/transport/gpsHygiene.ts` intacto para que la UI siga mostrando `10:00 - 14:00`).
+     - Calcular `hardStart = max(b2b_default_window_start, '08:00')` y `softStart = b2c_default_window_start` (default `'10:00'`).
+     - Ensanchar `startLocal` a `hardStart` **solo si** `hardStartMins < softStartMins && softStartMins < endMins`; de lo contrario conservar `b2c_default_window_start` sin `softStartTime`.
+     - Penalidad antes de `softStartTime`: `costPerHourBeforeSoftStartTime = 48` (estrictamente mayor que `costPerHour = 40`).
+     - Propagar `allowB2CSoftStart` y `softStartMs` por conjunción estricta (`&&`) en Fase 1 (splits `10A+10B`) y Fase 2 (*Same-Site Co-Routing*).
+     - Guardas anti-`HTTP 400 INVALID_ARGUMENT` de Google `optimizeTours` v1: jamás emitir `softStartTime` si `cluster.isPriority === true`; exigir `startMs < softStartMs && softStartMs < endMs` y, si existe `softEndMs`, `softStartMs <= softEndMs`.
+  4. **Recomendación Proactiva de Estrategia en `generateAiExplanation` (`src/app/api/transport/optimize/route.ts`):**
+     - Pasar `optimizationStrategy` y `routeMetrics` dentro de `context` a `generateAiExplanation`.
+     - Condición de disparo: `optimizationStrategy !== 'minimize_time'` AND `idleOwnVehicles.length >= 1` (vehículos `Propio` disponibles en el request pero no usados en el plan) AND al menos un vehículo activo cumple `routeMetrics[vid]?.total_min > 240` O `(v.capacity_kg > 0 && usedWeight / v.capacity_kg > 0.85)` O `(v.max_crates_capacity > 0 && usedCrates / v.max_crates_capacity > 0.85)`.
+     - Inyectar la sugerencia explícita de probar **"Terminar más rápido (Velocidad)"** tanto en el prompt de **Gemini** como en el fallback determinista `buildDeterministicSummary`.
