@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 import { resolveCanonicalConversion } from '@/lib/orders/unitConversionEngine';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
+import { buildBogotaCalendarContext, getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from '@/lib/orders/bogotaDateParser';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -112,6 +113,7 @@ export async function POST(req: Request) {
           });
 
           const prompt = `Eres un asistente experto en logística para FruFresco.
+${buildBogotaCalendarContext()}
 Analiza este archivo Excel adjunto ("${att.name}") y extrae la orden de compra de alimentos (Fruver y abarrotes).
 
 TAREA:
@@ -193,6 +195,7 @@ ${csvContent}`;
           const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
           const prompt = `Eres un asistente experto en digitalización de órdenes de compra B2B de alimentos para FruFresco.
+${buildBogotaCalendarContext()}
 Analiza este documento adjunto ("${att.name}") y extrae la orden de compra en formato JSON estricto:
 - clientName: Razón social del cliente o empresa compradora matriz.
 - nit: NIT o documento de identificación fiscal.
@@ -256,7 +259,7 @@ Responde ÚNICAMENTE en JSON válido:
       }
 
       const textPrompt = `Eres un experto en digitalización de órdenes de compra B2B de alimentos para FruFresco.
-FECHA ACTUAL: ${new Date().toISOString().split('T')[0]}
+${buildBogotaCalendarContext()}
 
 ASUNTO DEL CORREO: "${emailSubject}"
 
@@ -407,7 +410,19 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     if (extractedData.clientName) metadata.clientInDocument = extractedData.clientName;
     if (extractedData.nit) metadata.nit = extractedData.nit;
     if (extractedData.address) metadata.address = extractedData.address;
-    if (extractedData.deliveryDate) metadata.deliveryDate = extractedData.deliveryDate;
+
+    const refDate = draft.created_at ? new Date(draft.created_at) : new Date();
+    const todayBogotaStr = getBogotaDateStr(refDate);
+    const relMatch = resolveExplicitRelativeDeliveryDate(`${draft.email_subject || ''}\n${draft.email_body || ''}`, refDate);
+    if (relMatch) {
+      metadata.deliveryDate = relMatch.date;
+      metadata.deliveryDateSourcePhrase = relMatch.matchedPhrase;
+    } else if (extractedData.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(extractedData.deliveryDate).trim())) {
+      const cleanD = String(extractedData.deliveryDate).trim();
+      if (cleanD > todayBogotaStr) {
+        metadata.deliveryDate = cleanD;
+      }
+    }
     
     const resolvedPo = extractedData.purchaseOrder
       || (cleanItems.find(it => it.purchase_order)?.purchase_order)
@@ -441,6 +456,7 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       clientName: metadata.clientInDocument,
       nit: metadata.nit,
       address: metadata.address,
+      deliveryDate: metadata.deliveryDate || null,
       items: cleanItems
     });
 

@@ -14,6 +14,7 @@ const getSupabaseAdmin = () => {
 
 import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 import { hasExplicitLibraWord, isKgUnitName } from '@/lib/orders/unitConversionEngine';
+import { buildBogotaCalendarContext, getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from '@/lib/orders/bogotaDateParser';
 import {
   extractDraftSummary,
   filterCandidateDraftsForClient,
@@ -776,7 +777,7 @@ export async function POST(req: Request) {
       // Define standard generic extraction prompt template
       const genericPrompt = `
         Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
-        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+        FECHA ACTUAL DEL SISTEMA: ${buildBogotaCalendarContext()}
         
         ASUNTO DEL CORREO: "${subject}"
         
@@ -959,7 +960,7 @@ export async function POST(req: Request) {
         } else {
           const excelPrompt = `
           Eres un asistente de logística experto en digitalización de pedidos para FruFresco.
-          FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+          FECHA ACTUAL DEL SISTEMA: ${buildBogotaCalendarContext()}
           ASUNTO DEL CORREO: "${subject}"
           CONTEXTO ADICIONAL (Texto del cuerpo del correo enviado por el cliente):
           """
@@ -1115,7 +1116,7 @@ export async function POST(req: Request) {
       // Parse the email text body directly
       const prompt = `
         Eres un asistente de logística para FruFresco.
-        FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}
+        FECHA ACTUAL DEL SISTEMA: ${buildBogotaCalendarContext()}
         
         ASUNTO DEL CORREO: "${subject}"
         
@@ -1563,9 +1564,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // Escenario 454 SDD: Sanitización D+1 en ingesta — descartar fechas <= HOY (ej. fecha de emisión OC) salvo petición explícita de entrega hoy
-    const todayBogotaStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-    const explicitSameDayRequested = /\b(para hoy|entrega hoy|mismo d[ií]a|hoy mismo|despacho hoy)\b/i.test(`${subject || ''} ${currentPlainText || ''}`);
+    // Escenario 454 & 502 SDD: Sanitización Bogotá + parser determinístico de frases relativas
+    const todayBogotaStr = getBogotaDateStr();
+    const combinedDateText = `${subject || ''}\n${currentPlainText || ''}`;
+    const deterministicRelativeDate = resolveExplicitRelativeDeliveryDate(combinedDateText);
+    const explicitSameDayRequested = Boolean(deterministicRelativeDate?.isSameDay) || /\b(para hoy|entrega hoy|mismo d[ií]a|hoy mismo|despacho hoy)\b/i.test(combinedDateText);
     const sanitizeIngestedDeliveryDate = (rawDate: string | null | undefined): string | null => {
       if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(rawDate).trim())) return null;
       const cleanDate = String(rawDate).trim();
@@ -1575,6 +1578,8 @@ export async function POST(req: Request) {
 
     // Extract date from subject or body if present as fallback/override
     let targetDeliveryDate = sanitizeIngestedDeliveryDate(extractedData.deliveryDate);
+    let deliveryDateSourcePhrase: string | null = deterministicRelativeDate?.matchedPhrase || null;
+    let hasExplicitNumericSubjectDate = false;
     if (subject) {
       const dateMatchSlash = subject.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
       if (dateMatchSlash) {
@@ -1582,12 +1587,17 @@ export async function POST(req: Request) {
         const month = dateMatchSlash[2];
         const year = dateMatchSlash[3];
         targetDeliveryDate = sanitizeIngestedDeliveryDate(`${year}-${month}-${day}`);
+        hasExplicitNumericSubjectDate = true;
       } else {
         const dateMatchDash = subject.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
         if (dateMatchDash) {
           targetDeliveryDate = sanitizeIngestedDeliveryDate(`${dateMatchDash[1]}-${dateMatchDash[2]}-${dateMatchDash[3]}`);
+          hasExplicitNumericSubjectDate = true;
         }
       }
+    }
+    if (!hasExplicitNumericSubjectDate && deterministicRelativeDate) {
+      targetDeliveryDate = sanitizeIngestedDeliveryDate(deterministicRelativeDate.date);
     }
 
     // 5. Build drafts for public.order_drafts (Opción B: Cada adjunto con productos es un borrador independiente)
@@ -1700,6 +1710,7 @@ export async function POST(req: Request) {
               addressDetected: addressDetected,
               deliverySlot: att.deliverySlot || finalDeliverySlot,
               deliveryDate: sanitizeIngestedDeliveryDate(att.deliveryDate) || targetDeliveryDate || null,
+              deliveryDateSourcePhrase,
               phone: att.phone || extractedData.phone || null,
               nit: att.nit || extractedData.nit || null,
               clientType: att.clientType || clientType,
@@ -1772,6 +1783,7 @@ export async function POST(req: Request) {
             addressDetected: addressDetected,
             deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
             deliveryDate: sanitizeIngestedDeliveryDate(primarySource.deliveryDate) || targetDeliveryDate || null,
+            deliveryDateSourcePhrase,
             phone: primarySource.phone || extractedData.phone || null,
             nit: primarySource.nit || extractedData.nit || null,
             clientType: primarySource.clientType || clientType,

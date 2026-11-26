@@ -11,6 +11,8 @@ import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { ShieldAlert, Loader2 } from 'lucide-react';
 import EmailDraftsModule from '@/components/EmailDraftsModule';
 import EmailOutboxModule from '@/components/EmailOutboxModule';
+import FrequencyRadarDrawer from '@/components/orders/FrequencyRadarDrawer';
+import OrdersAiCopilot from '@/components/orders/OrdersAiCopilot';
 import VariantModal from '@/components/VariantModal';
 import ManualDispatchWizardModal from '@/components/ManualDispatchWizardModal';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
@@ -3771,6 +3773,10 @@ useEffect(() => {
                             )}
                         </button>
                         </div>
+
+                        <FrequencyRadarDrawer
+                            targetDate={selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr()}
+                        />
 
                         {/* PILL UNIFICADO COMPACTO: TANDA ACTIVA + RELOJ CIERRE (1 SOLA LÍNEA) */}
                         {activeTab === 'orders' && (() => {
@@ -9631,6 +9637,9 @@ useEffect(() => {
                     </div>
                 )}
             </div>
+            <OrdersAiCopilot
+                targetDate={selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr()}
+            />
         </div>
     );
 }

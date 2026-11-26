@@ -18548,3 +18548,86 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Pasar `optimizationStrategy` y `routeMetrics` dentro de `context` a `generateAiExplanation`.
      - Condición de disparo: `optimizationStrategy !== 'minimize_time'` AND `idleOwnVehicles.length >= 1` (vehículos `Propio` disponibles en el request pero no usados en el plan) AND al menos un vehículo activo cumple `routeMetrics[vid]?.total_min > 240` O `(v.capacity_kg > 0 && usedWeight / v.capacity_kg > 0.85)` O `(v.max_crates_capacity > 0 && usedCrates / v.max_crates_capacity > 0.85)`.
      - Inyectar la sugerencia explícita de probar **"Terminar más rápido (Velocidad)"** tanto en el prompt de **Gemini** como en el fallback determinista `buildDeterministicSummary`.
+
+
+---
+
+### Candado de Propagación (Ventana Nocturna Obligatoria — Escenarios 502, 503 y 504)
+- **Regla Innegociable de Operación:** Queda estrictamente prohibido ejecutar `git push` o desplegar a producción (`origin main:main` / `origin main:liard` / Vercel) los Escenarios **502**, **503** y **504** antes de las **`00:00 COT` del `2026-11-27`**, garantizando cero interrupciones durante la jornada activa de captura de pedidos. Todo el desarrollo se valida y commitea exclusivamente en local (`npx.cmd tsc --noEmit` exit `0`).
+
+---
+
+### Escenario 502: Bloque 1 — Blindaje de Fechas Bogotá, Cero Reprogramación Silenciosa & Decisión Humana en Pedidos (SDD v1.9.457)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+- **Archivos en Alcance:**
+  - `src/lib/orders/bogotaDateParser.ts` *(nuevo helper puro)*
+  - `src/app/api/orders/email-ingest/route.ts`
+  - `src/app/api/orders/reparse-draft/route.ts`
+  - `src/components/EmailDraftsModule.tsx`
+- **Alcance Contractual:**
+  1. **Helper Puro de Calendario Bogotá (`src/lib/orders/bogotaDateParser.ts`):**
+     - `getBogotaDateStr(now?: Date): string`: retorna `YYYY-MM-DD` en zona `America/Bogota` (nunca UTC).
+     - `buildBogotaCalendarContext(now?: Date): string`: genera la fecha actual en Bogotá con su día de la semana en español + tabla explícita de los próximos 7 días (`HOY: miércoles 2026-11-25 | jueves = 2026-11-26 | viernes = 2026-11-27 ...`) para eliminar aritmética de calendario en Gemini.
+     - `resolveExplicitRelativeDeliveryDate(text: string, refDate?: Date): { date: string; matchedPhrase: string } | null`: parser determinístico para frases explícitas en español (`"para hoy"`, `"para mañana"`, `"para pasado mañana"`, `"para el (lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)"`, `"entrega (el )?<día>"`) cuando no exista una fecha numérica explícita (`DD/MM/YYYY` o `YYYY-MM-DD`) en asunto/cuerpo.
+  2. **Blindaje en `src/app/api/orders/email-ingest/route.ts` y `src/app/api/orders/reparse-draft/route.ts`:**
+     - Reemplazar `FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}` (en los 3 prompts de `email-ingest` y en `reparse-draft`) por `buildBogotaCalendarContext()`.
+     - Aplicar override determinístico con `resolveExplicitRelativeDeliveryDate(subject + '\n' + cleanedBodyText)` cuando se detecte frase relativa explícita sin fecha numérica explícita, guardando `deliveryDateSourcePhrase` en la metadata del borrador.
+  3. **Cero Reprogramación Silenciosa & Compuerta de Decisión Humana (`src/components/EmailDraftsModule.tsx`):**
+     - Ampliar lista `forbidden` en `extractPoFallback` con `'para'`, `'del'`, `'los'`, `'las'`, `'por'`, `'con'`, `'gracias'`, `'verdura'`, `'hoy'`, `'manana'`, `'mañana'`, `'jueves'`, `'viernes'`, `'sabado'`, `'sábado'`, `'lunes'`, `'martes'`, `'miercoles'`, `'miércoles'` para evitar falsos OC como `"para"`.
+     - Eliminar la sobreescritura silenciosa de `docDate` por `getNextAllowedDeliveryDate` al abrir un borrador:
+       - Si `docDate` es válido (`YYYY-MM-DD` y `>= minDeliveryDate`), conservar `docDate` intacto con `deliveryDateSource = 'email'`.
+       - Invocar `getNextAllowedDeliveryDate(minDeliveryDate, allowedDays)` **únicamente** cuando `!docDate` (`deliveryDateSource = 'frequency_suggested'`).
+       - Al editar manualmente `<input type="date">`, actualizar `deliveryDateSource = 'manual'`.
+     - Mostrar junto al selector de fecha el día de la semana (`LUN/MAR/MIÉ/JUE/VIE/SÁB/DOM`) + píldora de origen (`Del correo`, `Sugerida por frecuencia`, `Editada manual`).
+     - Reemplazar los `window.confirm` de restricción logística por un modal explícito de 2 botones (`dateConflictModal`) siempre que `(matchedProfile && !deliveryRestrictionStatus.isValid)` O `(deliveryDateSource === 'frequency_suggested' && deliveryDate > minDeliveryDate)`:
+       - Botón 1: `Usar fecha actual (Despacho excepcional)`
+       - Botón 2: `Reprogramar al próximo día de frecuencia`
+       - Anexar traza `[DECISIÓN FECHA: ...]` en `admin_notes`.
+
+---
+
+### Escenario 503: Bloque 2 — Motor de Frecuencias & Radar de Clientes Silenciosos ($0 / 0 Tokens) (SDD v1.9.457)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+- **Archivos en Alcance:**
+  - `src/lib/orders/frequencyEngine.ts` *(nuevo helper puro)*
+  - `src/app/api/orders/frequency-radar/route.ts` *(nuevo endpoint GET)*
+  - `src/components/orders/FrequencyRadarDrawer.tsx` *(nuevo componente UI)*
+  - `src/app/admin/orders/loading/page.tsx` *(montaje de píldora y drawer)*
+- **Alcance Contractual:**
+  1. **Motor Determinístico (`src/lib/orders/frequencyEngine.ts`):**
+     - `computeFrequencyRadar({ targetDate, profiles, recentOrders, recentDrafts })`: evalúa cada perfil B2B activo sobre ventana histórica de 56 días (8 semanas) + `logistics_data.days`/`allowed_days`.
+     - Clasifica en 4 estados de anomalía para `targetDate`:
+       - `'covered'`: ya tiene pedido en `orders` para `targetDate`.
+       - `'other_date_anomaly'`: no tiene pedido para `targetDate`, pero en las últimas 36h registró un pedido o borrador aprobado con `delivery_date !== targetDate` (ej. caso `#2312`).
+       - `'stuck_draft'`: tiene borrador en `order_drafts` (últimas 48h) en estado `'pending'` sin aprobar.
+       - `'silent_missing'`: cliente habitual para el día de la semana de `targetDate` (tasa histórica `>= 60%` o configurado en `logistics_data.days`/`allowed_days` con `>= 2` pedidos en los últimos 30 días) sin pedido ni borrador reciente, reportando su hora promedio histórica de envío.
+  2. **Endpoint Autenticado (`src/app/api/orders/frequency-radar/route.ts`):**
+     - Protegido con `verifyStaffBearer(req, supabaseAdmin)` (`401`/`403` si falla).
+     - Parámetro `?date=YYYY-MM-DD` (default fecha operativa Bogotá). Retorna `{ targetDate, weekdayName, summary, anomalies, covered }`.
+  3. **Interfaz Industrial (`src/components/orders/FrequencyRadarDrawer.tsx` + `src/app/admin/orders/loading/page.tsx`):**
+     - Píldora compacta `Radar Frecuencias` en la cabecera de `/admin/orders/loading` con contador de anomalías.
+     - Drawer lateral con pestañas (`Anomalías`, `Correo otra fecha`, `Borrador atascado`, `Faltan por pedir`, `Cubiertos`), buscador y 100% íconos `lucide-react` (cero emojis).
+
+---
+
+### Escenario 504: Bloque 3 — Copiloto IA de Pedidos & Emails en Ciclo Cerrado (Patrón SECOP §62) (SDD v1.9.457)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+- **Archivos en Alcance:**
+  - `src/lib/orders/ordersCopilotContextBuilder.ts` *(nuevo ensamblador server-side)*
+  - `src/app/api/orders/copilot/route.ts` *(nuevo endpoint POST)*
+  - `src/components/orders/OrdersAiCopilot.tsx` *(nuevo componente UI)*
+  - `src/app/admin/orders/loading/page.tsx` *(montaje exclusivo del widget)*
+- **Alcance Contractual:**
+  1. **Ensamblador Determinista Server-Side (`src/lib/orders/ordersCopilotContextBuilder.ts`):**
+     - Lectura 100% pasiva en servidor desde Supabase (jamás acepta pedidos ni correos enviados por JSON desde el navegador, jamás lee `src/**`, cero `fetch` externos).
+     - Ensambla snapshot acotado (`< 5.000` tokens) para `targetDate`:
+       1. Pedidos del día `targetDate` agrupados por estado (`pending_approval`, `para_compra`, `picking`, `shipped`, splits `$0`, sin espacio de bodega).
+       2. Pedidos creados en últimas 36h para otras fechas (`!== targetDate`).
+       3. Borradores `order_drafts` de últimas 48h (asunto, remitente, estado, fecha extraída y extracto de 220 caracteres).
+       4. Salida del Motor de Frecuencias (`computeFrequencyRadar`).
+       5. Foco dinámico (`focusQuery`): si el usuario menciona un `#sequence_id` o nombre de cliente, adjunta sus últimos 5 pedidos, últimos 5 borradores y `logistics_data.days`.
+  2. **Endpoint Read-Only (`src/app/api/orders/copilot/route.ts`):**
+     - Protegido con `verifyStaffBearer(req, supabaseAdmin)`.
+     - Invoca `gemini-2.5-flash` con prompt estricto de ciclo cerrado (solo lectura, cita exacta de `#sequence_id` y `[EML-...]`, cero alucinaciones).
+  3. **Widget Flotante Exclusivo (`src/components/orders/OrdersAiCopilot.tsx`):**
+     - Montado únicamente en `src/app/admin/orders/loading/page.tsx` (`bottom-4 right-4 z-[60]`, íconos `lucide-react` sin emojis, superficie sólida industrial clara, chips de consulta rápida y micrófono opcional `Web Speech API` `es-CO` que hidrata el input sin envío automático).

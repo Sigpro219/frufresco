@@ -22,6 +22,7 @@ import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, 
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import { useAuth } from '@/lib/authContext';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
+import { getBogotaWeekdayShort } from '@/lib/orders/bogotaDateParser';
 import { fetchPendingDraftsComplete, fetchDraftsByStatusPage, fetchDraftTabCounts, searchOrderDraftsServer, detectPoSubjectMismatch, type DraftTabCounts } from '@/lib/orders/draftInboxQuery';
 import {
     matchItemsToTextLines,
@@ -210,7 +211,7 @@ const extractPoFallback = (text: string): string => {
   const m = clean.match(rx) || clean.match(rx2) || clean.match(rx3);
   if (m && m[1]) {
     const cand = m[1].trim();
-    const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+    const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|para|del|los|las|por|con|gracias|verdura|hoy|manana|mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
     if (!forbidden.test(cand) && cand.length >= 3) {
       return cand;
     }
@@ -1964,6 +1965,16 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
   const skipNextSkuBlurRef = useRef<number | null>(null);
   const skipNextQtyBlurRef = useRef<string | number | null>(null);
   const [deliveryDate, setDeliveryDate] = useState<string>(minDeliveryDate);
+  const [deliveryDateSource, setDeliveryDateSource] = useState<'email' | 'frequency_suggested' | 'manual' | 'default'>('default');
+  const [deliveryDateSourcePhrase, setDeliveryDateSourcePhrase] = useState<string | null>(null);
+  const [dateConflictModal, setDateConflictModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    currentDate: string;
+    suggestedNextDate: string;
+    onChoose: (chosenDate: string, mode: 'exceptional' | 'rescheduled') => void;
+  } | null>(null);
+  const dateDecisionTraceRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [b2cPolygon, setB2cPolygon] = useState<any[]>([]);
   const [editableAddress, setEditableAddress] = useState<string>('');
@@ -5485,19 +5496,23 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         }
       }
       const docDate = currentAtt?.deliveryDate || meta?.deliveryDate || '';
+      const allowedDays = matchedProfile?.logistics_data?.allowed_days || matchedProfile?.logistics_data?.days;
       let initialDateStr = '';
-      // Escenario 454 SDD: Regla D+1 por defecto; HOY (D+0) solo se aplica por selección manual explícita del operador
+      let nextSource: 'email' | 'frequency_suggested' | 'manual' | 'default' = 'default';
+      // Escenario 502 SDD: El mensaje manda. Jamás sobreescribir silenciosamente docDate con allowed_days.
       if (docDate && /^\d{4}-\d{2}-\d{2}$/.test(docDate) && docDate >= minDeliveryDate) {
         initialDateStr = docDate;
+        nextSource = 'email';
+      } else if (allowedDays && allowedDays.length > 0) {
+        initialDateStr = getNextAllowedDeliveryDate(minDeliveryDate, allowedDays);
+        nextSource = 'frequency_suggested';
       } else {
         initialDateStr = minDeliveryDate;
+        nextSource = 'default';
       }
-      if (matchedProfile?.logistics_data) {
-        const allowedDays = matchedProfile.logistics_data.allowed_days || matchedProfile.logistics_data.days;
-        if (allowedDays && allowedDays.length > 0) {
-          initialDateStr = getNextAllowedDeliveryDate(initialDateStr, allowedDays);
-        }
-      }
+      dateDecisionTraceRef.current = null;
+      setDeliveryDateSourcePhrase((meta as any)?.deliveryDateSourcePhrase || null);
+      setDeliveryDateSource(nextSource);
       setDeliveryDate(initialDateStr);
     } else {
       lastHydratedScopeKeyRef.current = null;
@@ -6201,17 +6216,36 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       }
     }
 
-    if (matchedProfile && !deliveryRestrictionStatus.isValid) {
-      const confirmExcepcion = window.confirm(
-        `ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
-        `${deliveryRestrictionStatus.message}\n\n` +
-        `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
-        `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
-      );
-      if (!confirmExcepcion) {
-        showToast('Aprobación de pedido cancelada debido a restricción logística.', 'info');
-        return;
-      }
+    const needsHumanDateDecision =
+      (matchedProfile && !deliveryRestrictionStatus.isValid) ||
+      (deliveryDateSource === 'frequency_suggested' && deliveryDate > minDeliveryDate);
+
+    if (needsHumanDateDecision && !dateDecisionTraceRef.current) {
+      const allowedDays = matchedProfile?.logistics_data?.allowed_days || matchedProfile?.logistics_data?.days || [];
+      const suggestedNextDate = allowedDays.length > 0 ? getNextAllowedDeliveryDate(deliveryDate, allowedDays) : minDeliveryDate;
+      const msg = !deliveryRestrictionStatus.isValid && deliveryRestrictionStatus.message
+        ? `${deliveryRestrictionStatus.message} (Fecha actual: ${deliveryDate}).`
+        : `El correo no especificó fecha y el sistema sugirió ${deliveryDate} por frecuencia habitual (> ${minDeliveryDate}).`;
+      setDateConflictModal({
+        isOpen: true,
+        message: msg,
+        currentDate: deliveryDate,
+        suggestedNextDate,
+        onChoose: (chosenDate, mode) => {
+          dateDecisionTraceRef.current = mode === 'exceptional'
+            ? `[DECISIÓN FECHA: Mantiene ${chosenDate} (${deliveryDateSource}) - Despacho excepcional]`
+            : `[DECISIÓN FECHA: Reprogramado a ${chosenDate} por frecuencia habitual]`;
+          setDateConflictModal(null);
+          if (mode === 'exceptional') {
+            setTimeout(() => handleApprove(), 0);
+          } else {
+            setDeliveryDate(chosenDate);
+            setDeliveryDateSource('manual');
+            showToast(`Fecha reprogramada a ${chosenDate}. Confirma nuevamente para registrar.`, 'info');
+          }
+        }
+      });
+      return;
     }
 
     setActionConfirm({
@@ -6231,6 +6265,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
           if (matchedProfile && !deliveryRestrictionStatus.isValid) {
             finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.message})]\n` + finalAdminNotes;
+          }
+          if (dateDecisionTraceRef.current) {
+            finalAdminNotes = `${dateDecisionTraceRef.current}\n` + finalAdminNotes;
           }
 
           // A. Crear perfil de cliente si no existe
@@ -6669,17 +6706,36 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       return;
     }
 
-    if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
-      const confirmExcepcion = window.confirm(
-        `ADVERTENCIA DE RESTRICCIÓN LOGÍSTICA DE ENTREGA:\n\n` +
-        `${deliveryRestrictionStatus.message}\n\n` +
-        `Fecha de entrega seleccionada: ${deliveryDate}\n\n` +
-        `¿Deseas autorizar esta entrega como un DESPACHO EXCEPCIONAL fuera de la política habitual de la sucursal?`
-      );
-      if (!confirmExcepcion) {
-        showToast('Aprobación de pedido cancelada debido a restricción logística.', 'info');
-        return;
-      }
+    const needsHumanDateDecisionDirect =
+      (currentMatchedProfile && !deliveryRestrictionStatus.isValid) ||
+      (deliveryDateSource === 'frequency_suggested' && deliveryDate > minDeliveryDate);
+
+    if (needsHumanDateDecisionDirect && !dateDecisionTraceRef.current) {
+      const allowedDays = currentMatchedProfile?.logistics_data?.allowed_days || currentMatchedProfile?.logistics_data?.days || [];
+      const suggestedNextDate = allowedDays.length > 0 ? getNextAllowedDeliveryDate(deliveryDate, allowedDays) : minDeliveryDate;
+      const msg = !deliveryRestrictionStatus.isValid && deliveryRestrictionStatus.message
+        ? `${deliveryRestrictionStatus.message} (Fecha actual: ${deliveryDate}).`
+        : `El correo no especificó fecha y el sistema sugirió ${deliveryDate} por frecuencia habitual (> ${minDeliveryDate}).`;
+      setDateConflictModal({
+        isOpen: true,
+        message: msg,
+        currentDate: deliveryDate,
+        suggestedNextDate,
+        onChoose: (chosenDate, mode) => {
+          dateDecisionTraceRef.current = mode === 'exceptional'
+            ? `[DECISIÓN FECHA: Mantiene ${chosenDate} (${deliveryDateSource}) - Despacho excepcional]`
+            : `[DECISIÓN FECHA: Reprogramado a ${chosenDate} por frecuencia habitual]`;
+          setDateConflictModal(null);
+          if (mode === 'exceptional') {
+            setTimeout(() => handleConfirmOrderDirectly(), 0);
+          } else {
+            setDeliveryDate(chosenDate);
+            setDeliveryDateSource('manual');
+            showToast(`Fecha reprogramada a ${chosenDate}. Confirma nuevamente para registrar.`, 'info');
+          }
+        }
+      });
+      return;
     }
 
     setConfirmingOrder(true);
@@ -6695,6 +6751,9 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
 
       if (currentMatchedProfile && !deliveryRestrictionStatus.isValid) {
         finalAdminNotes = `[DESPACHO EXCEPCIONAL AUTORIZADO: Entrega en día no habitual (${deliveryRestrictionStatus.message})]\n` + finalAdminNotes;
+      }
+      if (dateDecisionTraceRef.current) {
+        finalAdminNotes = `${dateDecisionTraceRef.current}\n` + finalAdminNotes;
       }
 
       // 1. If no profile exists (new client), create one
@@ -9439,7 +9498,28 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   <Calendar size={14} color="#0D7A57" />
                   <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#166534', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Entrega:</span>
                   <span style={{ fontSize: '0.84rem', fontWeight: '800', color: '#0F172A', whiteSpace: 'nowrap' }}>
-                    {formatDeliveryDateLabel(deliveryDate)}
+                    {getBogotaWeekdayShort(deliveryDate) ? `${getBogotaWeekdayShort(deliveryDate)} · ` : ''}{formatDeliveryDateLabel(deliveryDate)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.66rem',
+                      fontWeight: '800',
+                      padding: '1px 6px',
+                      borderRadius: '999px',
+                      backgroundColor:
+                        deliveryDateSource === 'email' ? '#DBEAFE' :
+                        deliveryDateSource === 'frequency_suggested' ? '#FEF3C7' :
+                        deliveryDateSource === 'manual' ? '#E2E8F0' : '#F1F5F9',
+                      color:
+                        deliveryDateSource === 'email' ? '#1E40AF' :
+                        deliveryDateSource === 'frequency_suggested' ? '#92400E' : '#334155',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title={deliveryDateSourcePhrase ? `Detectado en correo: "${deliveryDateSourcePhrase}"` : undefined}
+                  >
+                    {deliveryDateSource === 'email' ? 'Del correo' :
+                     deliveryDateSource === 'frequency_suggested' ? 'Sugerida frecuencia' :
+                     deliveryDateSource === 'manual' ? 'Manual' : 'Por defecto'}
                   </span>
                   <ChevronDown size={13} color="#0D7A57" style={{ marginLeft: '2px' }} />
 
@@ -9464,6 +9544,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           setDeliveryDate(formatDateToYYYYMMDD(nextV));
                           return;
                         }
+                        setDeliveryDateSource('manual');
                         setDeliveryDate(newDate);
                       }
                     }}
@@ -16148,6 +16229,96 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           </div>
         );
       })()}
+
+      {/* Escenario 502 SDD: Compuerta Explícita de Decisión Humana sobre Fecha */}
+      {dateConflictModal?.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1300,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setDateConflictModal(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 20px 45px rgba(15, 23, 42, 0.25)',
+              border: '1px solid #E2E8F0',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B45309', fontWeight: 800, fontSize: '0.96rem', marginBottom: '0.5rem' }}>
+              <AlertTriangle size={18} />
+              <span>Decisión Explícita de Fecha de Entrega</span>
+            </div>
+            <p style={{ fontSize: '0.84rem', color: '#334155', lineHeight: 1.45, margin: '0 0 1rem' }}>
+              {dateConflictModal.message}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => dateConflictModal.onChoose(dateConflictModal.currentDate, 'exceptional')}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#0D7A57',
+                  color: '#FFFFFF',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                Usar fecha actual ({dateConflictModal.currentDate}) — Despacho excepcional
+              </button>
+              <button
+                type="button"
+                onClick={() => dateConflictModal.onChoose(dateConflictModal.suggestedNextDate, 'rescheduled')}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#F8FAFC',
+                  color: '#0F172A',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                Reprogramar al próximo día de frecuencia ({dateConflictModal.suggestedNextDate})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateConflictModal(null)}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#64748B',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar y revisar manualmente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
