@@ -63,6 +63,7 @@ import {
     Navigation,
     Edit3,
     ChevronDown,
+    Inbox,
     ChevronUp,
     RotateCcw,
     Filter,
@@ -249,6 +250,9 @@ function OrderLoadingContent() {
     const [sentEmailCount, setSentEmailCount] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [activeTab, setActiveTab] = useState<'orders' | 'emails' | 'outbox'>('orders');
+    const [kpisCollapsed, setKpisCollapsed] = useState(false);
+    const [radarUrgentCount, setRadarUrgentCount] = useState(0);
+    const [radarOpenTrigger, setRadarOpenTrigger] = useState(0);
 
     const hasPermission = (permission: string) => {
         return checkUserPermission(profile, permission, roles);
@@ -2198,6 +2202,10 @@ useEffect(() => {
                         if (['email', 'correo'].includes(command)) return order.origin_source === 'email' || notes.includes('[origin: email]');
                         if (['web', 'app'].includes(command)) return order.origin_source?.startsWith('web') || notes.includes('[origin: web');
                         if (['alerta', 'incompleto', 'sin_completar'].includes(command)) return !order.isComplete;
+                        if (['alertas_reales', 'alertas', 'riesgo'].includes(command)) {
+                            const isZeroAlert = order.status !== 'cancelled' && !order.logistics_data?.is_replacement && !order.logistics_data?.off_agreement_priced && (order.total || 0) <= 0;
+                            return duplicatesMap.has(order.id) || !order.isComplete || isZeroAlert;
+                        }
                         if (['duplicado', 'duplicados', 'repetido', 'repetidos', 'doble', 'duplicada'].includes(command)) {
                             return duplicatesMap.has(order.id);
                         }
@@ -3529,12 +3537,22 @@ useEffect(() => {
     };
 
     // Summary Metrics (Dashboard)
+    const isZeroPriceAlert = (o: any) =>
+        o.status !== 'cancelled' &&
+        !o.logistics_data?.is_replacement &&
+        !o.logistics_data?.off_agreement_priced &&
+        (o.total || 0) <= 0;
+
     const totalOrders = orders.length;
     const totalSales = orders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalWeightTons = (orders.reduce((sum, o) => sum + (o.total_weight_kg || 0), 0) / 1000);
-    const approvedCount = orders.filter(o => ['approved', 'shipped', 'delivered'].includes(o.status)).length;
+    const pendingProcessCount = orders.filter(o => ['pending_approval', 'pending'].includes(o.status)).length;
     const incompleteCount = orders.filter(o => !o.isComplete).length;
-    const approvalRate = totalOrders > 0 ? (approvedCount / totalOrders) * 100 : 0;
+    const zeroPriceAlertCount = orders.filter(isZeroPriceAlert).length;
+    const realAlertsCount = new Set(
+        orders.filter(o => duplicatesMap.has(o.id) || !o.isComplete || isZeroPriceAlert(o)).map(o => o.id)
+    ).size;
+    const toManageTotal = pendingEmailCount + radarUrgentCount;
 
     let deliveryDateSubtitle = 'Todos los registros';
     if (selectedDate === getTomorrowDateStr()) deliveryDateSubtitle = 'Para entrega mañana';
@@ -3548,7 +3566,7 @@ useEffect(() => {
         <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.4rem 2rem' }}>
-                <header style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <header style={{ marginBottom: '0.65rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: THEME.radius.md, backgroundColor: THEME.colors.primaryLight, color: THEME.colors.primary }}>
@@ -3557,21 +3575,146 @@ useEffect(() => {
                             <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: THEME.colors.textMain, margin: 0, letterSpacing: '-0.02em' }}>Cargue de Pedidos</h1>
                         </div>
                     </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {/* BADGE VISUAL DE CIERRE DE INVENTARIO DE HOY (MOVIDO AL HEADER PARA 0PX EN EJE Y) */}
+                        {todayClosingState && (() => {
+                            const todayStr = getBogotaDateString();
+                            const shortToday = `${todayStr.slice(8, 10)}/${todayStr.slice(5, 7)}`;
+                            const isLocked = todayClosingState === 'locked';
+                            const isPartial = todayClosingState === 'partial';
+                            const isReopened = todayClosingState === 'reopened';
+                            const bg = isLocked ? '#ECFDF5' : (isPartial || isReopened) ? '#FFFBEB' : '#FEF2F2';
+                            const border = isLocked ? '#86EFAC' : (isPartial || isReopened) ? '#FCD34D' : '#FCA5A5';
+                            const color = isLocked ? '#065F46' : (isPartial || isReopened) ? '#92400E' : '#991B1B';
+                            const dot = isLocked ? '#10B981' : (isPartial || isReopened) ? '#F59E0B' : '#EF4444';
+                            const label = isLocked
+                                ? `Inv. Hoy (${shortToday}): Cerrado`
+                                : isPartial
+                                    ? `Inv. Hoy (${shortToday}): Parcial (Listo)`
+                                    : isReopened
+                                        ? `Inv. Hoy (${shortToday}): Reabierto`
+                                        : `Inv. Hoy (${shortToday}): Sin cerrar`;
+                            const tooltip = isLocked
+                                ? `El inventario de hoy (${todayStr}) ya fue cerrado oficialmente.`
+                                : isPartial
+                                    ? `Cierre parcial del ${todayStr}: Conteo Físico avalado para lanzar la operación. Pendiente completar cierre contable definitivo.`
+                                    : isReopened
+                                        ? `El inventario de hoy (${todayStr}) fue reabierto y falta volver a sellarlo.`
+                                        : `Aún no se ha ejecutado el cierre de inventario de hoy (${todayStr}).`;
+
+                            return (
+                                <Link
+                                    href={`/admin/commercial/inventory?date=${todayStr}`}
+                                    title={tooltip}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '5px 11px',
+                                        borderRadius: '8px',
+                                        whiteSpace: 'nowrap',
+                                        textDecoration: 'none',
+                                        backgroundColor: bg,
+                                        border: `1px solid ${border}`,
+                                        color,
+                                        fontSize: '0.73rem',
+                                        fontWeight: '800',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                    }}
+                                >
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: dot }} />
+                                    <span>{label}</span>
+                                </Link>
+                            );
+                        })()}
+
+                        <button
+                            type="button"
+                            onClick={() => setKpisCollapsed(v => !v)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '5px 11px',
+                                borderRadius: '8px',
+                                border: `1px solid ${THEME.colors.border}`,
+                                backgroundColor: '#FFFFFF',
+                                color: THEME.colors.textSecondary,
+                                fontSize: '0.73rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            }}
+                            title={kpisCollapsed ? 'Mostrar indicadores KPI' : 'Colapsar indicadores KPI'}
+                        >
+                            {kpisCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                            <span>{kpisCollapsed ? 'Mostrar KPIs' : 'Colapsar KPIs'}</span>
+                        </button>
+                    </div>
                 </header>
 
-                {/* DASHBOARD INDICATORS (SLIM & PREMIUM) */}
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(5, 1fr)', 
-                    gap: '1.2rem', 
-                    marginBottom: '1rem'
-                }}>
-                    <KPICard title="Total Pedidos" value={formatNumber(totalOrders)} icon={<Package size={18} strokeWidth={1.5} />} color="#6366F1" subtitle={deliveryDateSubtitle} />
-                    <KPICard title="Valor Carga" value={formatMoney(totalSales)} icon={<Coins size={18} strokeWidth={1.5} />} color="#10B981" subtitle="Monto bruto" />
-                    <KPICard title="Peso Total" value={`${formatNumber(totalWeightTons, 2)} TON`} icon={<Truck size={18} strokeWidth={1.5} />} color="#FBBF24" subtitle="Logística" />
-                    <KPICard title="Efectividad" value={`${formatNumber(approvalRate, 0)}%`} icon={<CheckCircle2 size={18} strokeWidth={1.5} />} color="#0891B2" subtitle="Tasa de aprobación" />
-                    <KPICard title="Alertas" value={formatNumber(incompleteCount)} icon={<AlertTriangle size={18} strokeWidth={1.5} />} color="#EF4444" subtitle="Info incompleta" />
-                </div>
+                {/* DASHBOARD INDICATORS (COMPACT & ACTIONABLE) */}
+                {!kpisCollapsed && (
+                    <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(5, 1fr)', 
+                        gap: '0.85rem', 
+                        marginBottom: '0.75rem'
+                    }}>
+                        <KPICard
+                            title="Total Pedidos"
+                            value={formatNumber(totalOrders)}
+                            icon={<Package size={17} strokeWidth={1.6} />}
+                            color="#6366F1"
+                            subtitle={pendingProcessCount > 0 ? `${deliveryDateSubtitle} · ${pendingProcessCount} por procesar` : deliveryDateSubtitle}
+                        />
+                        <KPICard
+                            title="Valor Carga"
+                            value={formatMoney(totalSales)}
+                            icon={<Coins size={17} strokeWidth={1.6} />}
+                            color="#10B981"
+                            subtitle={zeroPriceAlertCount > 0 ? `${zeroPriceAlertCount} pedido(s) en $0` : 'Monto bruto'}
+                        />
+                        <KPICard
+                            title="Peso Total"
+                            value={`${formatNumber(totalWeightTons, 2)} TON`}
+                            icon={<Truck size={17} strokeWidth={1.6} />}
+                            color="#F59E0B"
+                            subtitle="Logística"
+                        />
+                        <KPICard
+                            title="Por Gestionar"
+                            value={formatNumber(toManageTotal)}
+                            icon={<Inbox size={17} strokeWidth={1.6} />}
+                            color={toManageTotal > 0 ? '#D97706' : '#0891B2'}
+                            subtitle={`${pendingEmailCount} correo(s) · ${radarUrgentCount} radar`}
+                            active={activeTab === 'emails'}
+                            onClick={() => {
+                                if (pendingEmailCount > 0) {
+                                    setActiveTab('emails');
+                                } else if (radarUrgentCount > 0) {
+                                    setRadarOpenTrigger(n => n + 1);
+                                } else {
+                                    setActiveTab('emails');
+                                }
+                            }}
+                        />
+                        <KPICard
+                            title="Alertas Reales"
+                            value={formatNumber(realAlertsCount)}
+                            icon={<AlertTriangle size={17} strokeWidth={1.6} />}
+                            color={realAlertsCount > 0 ? '#EF4444' : '#10B981'}
+                            subtitle={realAlertsCount > 0 ? `${duplicateOrdersCount} dup · ${zeroPriceAlertCount} en $0 · ${incompleteCount} inc` : 'Sin bloqueos operativos'}
+                            active={activeTab === 'orders' && searchTerm === '@alertas_reales'}
+                            onClick={() => {
+                                setActiveTab('orders');
+                                setSearchTerm(prev => (prev === '@alertas_reales' ? '' : '@alertas_reales'));
+                            }}
+                        />
+                    </div>
+                )}
 
                 {/* AI HEALTH ALERT BANNER (NON-INTRUSIVE) */}
                 {aiHealth && !aiBannerDismissed && (
@@ -3772,6 +3915,8 @@ useEffect(() => {
 
                         <FrequencyRadarDrawer
                             targetDate={selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr()}
+                            onCountChange={setRadarUrgentCount}
+                            openTrigger={radarOpenTrigger}
                         />
 
                         {/* PILL UNIFICADO COMPACTO: TANDA ACTIVA + RELOJ CIERRE (1 SOLA LÍNEA) */}
@@ -3885,58 +4030,6 @@ useEffect(() => {
                                 <span>{duplicateOrdersCount} DUPLICADO(S)</span>
                             </button>
                         )}
-
-                        {/* BADGE VISUAL DE CIERRE DE INVENTARIO DE HOY (FILA 1) */}
-                        {todayClosingState && (() => {
-                            const todayStr = getBogotaDateString();
-                            const shortToday = `${todayStr.slice(8, 10)}/${todayStr.slice(5, 7)}`;
-                            const isLocked = todayClosingState === 'locked';
-                            const isPartial = todayClosingState === 'partial';
-                            const isReopened = todayClosingState === 'reopened';
-                            const bg = isLocked ? '#ECFDF5' : (isPartial || isReopened) ? '#FFFBEB' : '#FEF2F2';
-                            const border = isLocked ? '#86EFAC' : (isPartial || isReopened) ? '#FCD34D' : '#FCA5A5';
-                            const color = isLocked ? '#065F46' : (isPartial || isReopened) ? '#92400E' : '#991B1B';
-                            const dot = isLocked ? '#10B981' : (isPartial || isReopened) ? '#F59E0B' : '#EF4444';
-                            const label = isLocked
-                                ? `Inv. Hoy (${shortToday}): Cerrado`
-                                : isPartial
-                                    ? `Inv. Hoy (${shortToday}): Parcial (Listo)`
-                                    : isReopened
-                                        ? `Inv. Hoy (${shortToday}): Reabierto`
-                                        : `Inv. Hoy (${shortToday}): Sin cerrar`;
-                            const tooltip = isLocked
-                                ? `El inventario de hoy (${todayStr}) ya fue cerrado oficialmente.`
-                                : isPartial
-                                    ? `Cierre parcial del ${todayStr}: Conteo Físico avalado para lanzar la operación. Pendiente completar cierre contable definitivo.`
-                                    : isReopened
-                                        ? `El inventario de hoy (${todayStr}) fue reabierto y falta volver a sellarlo.`
-                                        : `Aún no se ha ejecutado el cierre de inventario de hoy (${todayStr}).`;
-
-                            return (
-                                <Link
-                                    href={`/admin/commercial/inventory?date=${todayStr}`}
-                                    title={tooltip}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '4px 10px',
-                                        borderRadius: '8px',
-                                        whiteSpace: 'nowrap',
-                                        textDecoration: 'none',
-                                        backgroundColor: bg,
-                                        border: `1px solid ${border}`,
-                                        color,
-                                        fontSize: '0.72rem',
-                                        fontWeight: '800',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                                    }}
-                                >
-                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: dot }} />
-                                    <span>{label}</span>
-                                </Link>
-                            );
-                        })()}
 
 
                     </div>
@@ -9640,33 +9733,43 @@ useEffect(() => {
     );
 }
 
-function KPICard({ title, value, icon, color, subtitle }: { title: string, value: number | string, icon: any, color: string, subtitle: string }) {
+function KPICard({ title, value, icon, color, subtitle, onClick, active = false }: { title: string, value: number | string, icon: any, color: string, subtitle: string, onClick?: () => void, active?: boolean }) {
     return (
-        <div style={{
-            backgroundColor: THEME.colors.surface,
-            padding: '1.2rem',
-            borderRadius: THEME.radius.lg,
-            boxShadow: THEME.shadow.sm,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-            border: `1px solid ${THEME.colors.border}`,
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            cursor: 'pointer'
-        }} onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = THEME.shadow.lg;
-        }} onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = THEME.shadow.sm;
-        }}>
-            <div style={{ backgroundColor: `${color}10`, width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
+        <div
+            role={onClick ? 'button' : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onClick={onClick}
+            onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+            style={{
+                backgroundColor: active ? `${color}0D` : THEME.colors.surface,
+                padding: '0.75rem 0.95rem',
+                borderRadius: THEME.radius.lg,
+                boxShadow: THEME.shadow.sm,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem',
+                border: active ? `1.5px solid ${color}` : `1px solid ${THEME.colors.border}`,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                cursor: onClick ? 'pointer' : 'default'
+            }}
+            onMouseEnter={(e) => {
+                if (!onClick) return;
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = THEME.shadow.lg;
+            }}
+            onMouseLeave={(e) => {
+                if (!onClick) return;
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = THEME.shadow.sm;
+            }}
+        >
+            <div style={{ backgroundColor: `${color}15`, width: '38px', height: '38px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, flexShrink: 0 }}>
                 {icon}
             </div>
-            <div>
-                <div style={{ fontSize: '0.65rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: '700', color: THEME.colors.textMain, margin: '2px 0', lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: '0.65rem', color: '#9CA3AF', fontWeight: '700' }}>{subtitle}</div>
+            <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.62rem', color: THEME.colors.textSecondary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</div>
+                <div style={{ fontSize: '1.18rem', fontWeight: '800', color: THEME.colors.textMain, margin: '1px 0', lineHeight: 1.1 }}>{value}</div>
+                <div style={{ fontSize: '0.64rem', color: active ? color : '#64748B', fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>
             </div>
         </div>
     );

@@ -17,11 +17,17 @@ import type { FrequencyRadarEntry, FrequencyRadarResult } from '@/lib/orders/fre
 
 interface FrequencyRadarDrawerProps {
   targetDate: string;
+  onCountChange?: (urgentCount: number) => void;
+  openTrigger?: number;
 }
 
 type FilterTab = 'urgent' | 'other_date_anomaly' | 'stuck_draft' | 'silent_missing' | 'covered';
 
-export default function FrequencyRadarDrawer({ targetDate }: FrequencyRadarDrawerProps) {
+export default function FrequencyRadarDrawer({
+  targetDate,
+  onCountChange,
+  openTrigger = 0,
+}: FrequencyRadarDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +86,17 @@ export default function FrequencyRadarDrawer({ targetDate }: FrequencyRadarDrawe
 
   const urgentCount = data?.summary.urgentAnomaliesCount ?? 0;
   const hasCritical = (data?.summary.otherDateAnomalyCount ?? 0) > 0;
+
+  useEffect(() => {
+    onCountChange?.(urgentCount);
+  }, [urgentCount, onCountChange]);
+
+  useEffect(() => {
+    if (openTrigger > 0) {
+      setIsOpen(true);
+      fetchRadar();
+    }
+  }, [openTrigger, fetchRadar]);
 
   return (
     <>

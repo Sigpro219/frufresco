@@ -18781,3 +18781,17 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Caché en memoria TTL 120s para encabezados de `quotes` (`agreement`/`expired`), `special_agreement_models`, `special_agreement_model_clients` y `pricing_models` (`Clientes Hogar` y `General Institucional`), aplicando ciclo de vida `VENCIDO_GRACIA (<=30d)` vs `VENCIDO_CRITICO (>30d · Remisión $0)`.
      - Foco Dinámico mejorado (ubicado en **Sección 0 prioritaria**, inmune a truncamiento) con soporte multi-pedido (hasta 5 pedidos / 80 líneas c/u, patrones anclados `#seq`, `pedidos A, B y C`, `DDMM_seq`, `OC ...`), **sumatoria determinística de demanda por referencia sin tildes** (chunks de 40 `order_id`s), `admin_notes` y tarifas comparadas (3 niveles + `General Institucional` + `Clientes Hogar`) sin leer `products.base_price` ni usar la sigla `SKU`, con tope de `promptText <= 24.000` chars.
      - **Hotfix SQL `42703`:** `orders` no posee columna `customer_name` (resolución de cliente exclusivamente vía `profiles.company_name / contact_name`); `route.ts` extrae `message` explícito de objetos de error PostgREST.
+
+---
+
+### Escenario 506: Rediseño Compacto de Cabecera y KPIs Accionables en `Cargue de Pedidos` (`/admin/orders/loading`)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/components/orders/FrequencyRadarDrawer.tsx`
+  - `src/app/admin/orders/loading/page.tsx`
+- **Alcance Contractual (Aprobado por `/goldfish`):**
+  1. **Eliminación de segunda línea huérfana en dock sticky:** Se traslada el badge `Inv. Hoy (DD/MM)` a la derecha del `<header>` de `Cargue de Pedidos` junto al botón colapsador `Colapsar KPIs` / `Mostrar KPIs`.
+  2. **Compactación y colapso de KPIs:** `KPICard` compactada (~66px de altura) con soporte de `onClick` y estado `active`.
+  3. **KPIs de decisión real:**
+     - Tarjeta 4 (`POR GESTIONAR`): `pendingEmailCount + radarUrgentCount` (alimentado vía `onCountChange` de `FrequencyRadarDrawer`); clic abre Bandeja de Entrada o Radar (`openTrigger`).
+     - Tarjeta 5 (`ALERTAS REALES`): conteo único de pedidos con duplicado, info incompleta o `$0` (excluyendo `cancelled`, `logistics_data.is_replacement` y `off_agreement_priced`), sin sumar `todayClosingState` global para mantener correspondencia 1-a-1 al filtrar con `@alertas_reales`.
