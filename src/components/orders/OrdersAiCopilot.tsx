@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bot, Loader2, Mic, MicOff, Minimize2, RotateCcw, Send, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -54,7 +54,13 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, loading, error, isOpen]);
 
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? inputValue).trim();
@@ -310,6 +316,7 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
             {error}
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input bar */}
@@ -347,7 +354,7 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
           type="text"
           value={inputValue}
           onChange={e => setInputValue(e.target.value)}
-          placeholder="Pregunta por cliente, #pedido o correo..."
+          placeholder="Pregunta por #pedido, producto, acuerdo o correo..."
           style={{
             flex: 1,
             padding: '7px 10px',
