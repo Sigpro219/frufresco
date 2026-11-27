@@ -12,6 +12,7 @@ import {
   type FrequencyRadarProfileInput,
 } from '../../src/lib/orders/frequencyEngine';
 import { detectDraftDateDiscrepancies } from '../../src/lib/orders/ordersCopilotContextBuilder';
+import { sanitizeGeminiHistory } from '../../src/app/api/orders/copilot/route';
 
 test('Escenario 502: Gourmet Titán 2026-11-25 "para el jueves" -> 2026-11-26', () => {
   const ref = new Date('2026-11-25T20:20:06Z');
@@ -158,4 +159,43 @@ test('Escenario 504 v2: detectDraftDateDiscrepancies atrapa #2312 y omite fechas
   assert.equal(discrepancies[0].draftId, 'd-2312');
   assert.equal(discrepancies[0].expectedDate, '2026-11-26');
   assert.equal(discrepancies[0].savedDate, '2026-11-28');
+});
+
+test('Escenario 505: sanitizeGeminiHistory garantiza primer rol user, alternancia estricta y sin HTTP 500', () => {
+  // Caso 1: empieza en assistant (model) tras saludo inicial o recorte
+  const c1 = sanitizeGeminiHistory([
+    { role: 'assistant', content: 'Hola, soy el Copiloto' },
+    { role: 'user', content: 'cuantos correos hay?' },
+    { role: 'assistant', content: 'Hay 69 correos.' },
+    { role: 'user', content: 'y cuantos pendientes?' },
+  ]);
+  assert.equal(c1.lastUserMsg, 'y cuantos pendientes?');
+  assert.equal(c1.history.length, 2);
+  assert.equal(c1.history[0].role, 'user');
+  assert.equal(c1.history[1].role, 'model');
+
+  // Caso 2: 2 user consecutivos por error previo en cliente
+  const c2 = sanitizeGeminiHistory([
+    { role: 'user', content: 'pregunta fallida' },
+    { role: 'user', content: 'pregunta actual' },
+  ]);
+  assert.equal(c2.lastUserMsg, 'pregunta actual');
+  assert.equal(c2.history.length, 0);
+
+  // Caso 3: 6 mensajes con alternancia y múltiples user seguidos en medio
+  const c3 = sanitizeGeminiHistory([
+    { role: 'assistant', content: 'Saludo' },
+    { role: 'user', content: 'u1' },
+    { role: 'assistant', content: 'm1' },
+    { role: 'user', content: 'u2 fallido' },
+    { role: 'user', content: 'u3' },
+    { role: 'assistant', content: 'm2' },
+    { role: 'user', content: 'u4 final' },
+  ]);
+  assert.equal(c3.lastUserMsg, 'u4 final');
+  assert.equal(c3.history[0].role, 'user');
+  assert.equal(c3.history[c3.history.length - 1].role, 'model');
+  for (let i = 1; i < c3.history.length; i++) {
+    assert.notEqual(c3.history[i].role, c3.history[i - 1].role);
+  }
 });

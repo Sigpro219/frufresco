@@ -18756,3 +18756,27 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Registrar `/api/cron/purge-gps-logs` en `vercel.json` (`30 5 * * *` = 12:30 AM COT).
   6. **Verificación Read-Only (`scripts/verify-db-perf-503.mjs`):**
      - Medir KB y latencia de `app_settings` sin filtrar vs. filtrada, verificar `HTTP 200` en la consulta con `iva_rate` y medir `/auth/v1/health`, `profiles` y `products`.
+
+---
+
+### Escenario 505: Copiloto de Pedidos & Correos v3 (Sanitizador Gemini, Bandeja Exacta Bogotá, Radar Predictivo Multi-Día, Duplicados, Acuerdos & Precios Hogar)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/api/orders/copilot/route.ts`
+  - `src/lib/orders/ordersCopilotContextBuilder.ts`
+  - `tests/orders/ordersIntelligence502_504.test.ts`
+- **Alcance Contractual (Blindado por `/goldfish`):**
+  1. **Sanitizador Estricto Gemini (`src/app/api/orders/copilot/route.ts`):**
+     - `export const dynamic = 'force-dynamic';` y `export const maxDuration = 60;`, `maxOutputTokens = 2048`.
+     - `sanitizeGeminiHistory(messages)`: localiza `lastUserIdx` real, descarta prefijos `'model'`, colapsa roles consecutivos repetidos, y asegura terminación en `'model'` (o `[]`) antes de `chat.sendMessage(lastUserMsg)`, erradicando el error HTTP 500 `First content should be with role 'user', got model`.
+  2. **Bandeja de Entrada Email Exacta (`order_drafts` bajo `America/Bogota`):**
+     - Consulta ventana `[ayer, hoy]` con `getBogotaDayRangeUtcIso` (`.limit(300)`), separando `approved` (legalizados), `pending` (pendientes con lista completa y minutos de espera) y `rejected` (descartados) sin mezclar estados.
+  3. **Tablero de Carga + Duplicados + Calendario Futuro (30d) + Índice Compacto:**
+     - KPIs para HOY y `targetDate` (sin duplicar si `today === targetDate`), `% aprobación` y `% cobertura habituales`.
+     - Detector de duplicados (misma sede + fecha o misma OC normalizada), excluyendo `is_off_agreement_split` y reposiciones/obsequios.
+     - Calendario futuro 30d (`delivery_date > targetDate`), índice compacto y consulta acotada `.eq('unit_price', 0)` para ítems en `$0`.
+  4. **Radar Predictivo Multi-Día + Anomalías de Volumen:**
+     - Ejecuta `computeFrequencyRadar` en memoria para HOY, `targetDate` y `nextOperationalDate` (operación lun–sáb, saltando solo domingo), con ticket promedio 8 semanas para ordenar faltantes por riesgo económico, alerta de caída anormal `< 40%` y cruce contra borradores `pending`/`rejected`.
+  5. **Acuerdos Institucionales, Listas Maestras y Precios Hogar (Blindaje Disk IO Escenario 503):**
+     - Caché en memoria TTL 120s para encabezados de `quotes` (`agreement`/`expired`), `special_agreement_models`, `special_agreement_model_clients` y `pricing_models` (`Clientes Hogar` y `General Institucional`), aplicando ciclo de vida `VENCIDO_GRACIA (<=30d)` vs `VENCIDO_CRITICO (>30d · Remisión $0)`.
+     - Foco Dinámico mejorado con patrones anclados (`#seq`, `pedido seq`, `DDMM_seq`, `OC ...`), `admin_notes`, líneas y consulta de precios por acuerdo (3 niveles) + `General Institucional` + `Clientes Hogar` sin leer `products.base_price` ni usar la sigla `SKU`, con tope de `promptText <= 22.000` chars.
