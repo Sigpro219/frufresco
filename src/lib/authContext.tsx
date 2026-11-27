@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { logError } from './errorUtils';
 import { User, AuthError, AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [availableProfiles, setAvailableProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
+    const loadedProfileIdRef = useRef<string | null>(null);
+    const inFlightProfileRef = useRef<Map<string, Promise<void>>>(new Map());
 
     // Fetch profile and multi-profiles when user changes
     const fetchProfile = async (userId: string, signal?: AbortSignal, specificProfileId?: string) => {
@@ -68,9 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             (typeof window !== 'undefined' ? localStorage.getItem('frufresco_active_profile_id') : null) || 
             userId;
         
-        // Prevent redundant fetches if we already have the profile for this user and profileId
-        if (profile && profile.id === activeProfileId) {
+        // Prevent redundant fetches if we already fetched this profileId from DB
+        if (loadedProfileIdRef.current === activeProfileId && !specificProfileId) {
             return;
+        }
+
+        const existingInFlight = inFlightProfileRef.current.get(activeProfileId);
+        if (existingInFlight) {
+            return existingInFlight;
         }
         
         // Network pre-check
@@ -79,84 +86,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        console.log('Cargando perfil para ID:', activeProfileId);
-        // Timeout de seguridad de 6 segundos si no se provee signal
-        const internalController = !signal ? new AbortController() : null;
-        const effectiveSignal = signal || internalController?.signal;
-        const timeoutId = internalController ? setTimeout(() => internalController.abort(), 6000) : null;
+        const runFetch = (async () => {
+            console.log('Cargando perfil para ID:', activeProfileId);
+            // Timeout de seguridad de 12 segundos si no se provee signal
+            const internalController = !signal ? new AbortController() : null;
+            const effectiveSignal = signal || internalController?.signal;
+            const timeoutId = internalController ? setTimeout(() => internalController.abort(), 12000) : null;
 
-        try {
-            // 1. Cargar el perfil activo solicitado
-            let query = supabase
-                .from('profiles')
-                .select('*, parent:parent_id(pricing_model_id)')
-                .eq('id', activeProfileId);
-                
-            if (effectiveSignal) query = query.abortSignal(effectiveSignal);
+            try {
+                // 1. Cargar el perfil activo solicitado
+                let query = supabase
+                    .from('profiles')
+                    .select('*, parent:parent_id(pricing_model_id)')
+                    .eq('id', activeProfileId);
+                    
+                if (effectiveSignal) query = query.abortSignal(effectiveSignal);
 
-            const { data, error } = await query.maybeSingle();
+                const { data, error } = await query.maybeSingle();
 
-            if (error) {
-                const isNetworkError = error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('abort');
-                if (isNetworkError) {
-                    console.warn('Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
+                if (error) {
+                    const isNetworkError = error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('abort');
+                    if (isNetworkError) {
+                        console.warn('Falla de Red o Timeout en Supabase al cargar perfil. Continuando con sesión local...');
+                    } else {
+                        console.error('Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                    }
+                    logError('authContext fetchProfile', error);
+                } else if (data) {
+                    if (effectiveSignal?.aborted) return;
+                    if (data.is_active === false) {
+                        console.warn('El perfil de usuario está INACTIVO. Cerrando sesión...');
+                        loadedProfileIdRef.current = null;
+                        inFlightProfileRef.current.clear();
+                        setProfile(null);
+                        setUser(null);
+                        await supabase.auth.signOut();
+                        if (typeof window !== 'undefined') {
+                            localStorage.clear();
+                            window.location.href = '/login?error=deactivated';
+                        }
+                        return;
+                    }
+                    console.log('Perfil activo cargado:', data.role, data.company_name || 'Personal');
+                    const profileData = {
+                        ...data,
+                        pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
+                    };
+                    loadedProfileIdRef.current = activeProfileId;
+                    try {
+                        localStorage.setItem(`frufresco_cached_profile_${activeProfileId}`, JSON.stringify(profileData));
+                        localStorage.setItem('frufresco_active_profile_id', activeProfileId);
+                    } catch (e) {}
+                    setProfile(profileData as Profile);
+
+                    // 2. Si el perfil tiene email, buscar perfiles hermanos asociados a ese mismo correo
+                    if (data.email) {
+                        const { data: siblings } = await supabase
+                            .from('profiles')
+                            .select('id, company_name, role, profile_type, custom_permissions, email')
+                            .ilike('email', data.email.trim().toLowerCase())
+                            .neq('is_active', false);
+                        if (siblings && siblings.length > 0) {
+                            setAvailableProfiles(siblings as Profile[]);
+                        }
+                    }
                 } else {
-                    console.error('Error de Base de Datos al cargar perfil:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-                }
-                logError('authContext fetchProfile', error);
-            } else if (data) {
-                if (effectiveSignal?.aborted) return;
-                if (data.is_active === false) {
-                    console.warn('El perfil de usuario está INACTIVO. Cerrando sesión...');
-                    setProfile(null);
-                    setUser(null);
-                    await supabase.auth.signOut();
-                    if (typeof window !== 'undefined') {
-                        localStorage.clear();
-                        window.location.href = '/login?error=deactivated';
+                    console.warn('Perfil no encontrado en la tabla profiles para ID:', activeProfileId);
+                    // Si el activeProfileId falló pero no era el userId, intentar con userId
+                    if (activeProfileId !== userId) {
+                        localStorage.removeItem('frufresco_active_profile_id');
+                        await fetchProfile(userId, signal, userId);
                     }
-                    return;
                 }
-                console.log('Perfil activo cargado:', data.role, data.company_name || 'Personal');
-                const profileData = {
-                    ...data,
-                    pricing_model_id: data.parent_id ? data.parent?.pricing_model_id : data.pricing_model_id
-                };
-                try {
-                    localStorage.setItem(`frufresco_cached_profile_${activeProfileId}`, JSON.stringify(profileData));
-                    localStorage.setItem('frufresco_active_profile_id', activeProfileId);
-                } catch (e) {}
-                setProfile(profileData as Profile);
+            } catch (err: any) {
+                if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
+                    console.warn('️ fetchProfile excedió el tiempo límite (12s). Manteniendo perfil en caché.');
+                } else {
+                    console.error('Excepción crítica en fetchProfile:', err);
+                    logError('authContext fetchProfile exception', err);
+                }
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+                inFlightProfileRef.current.delete(activeProfileId);
+            }
+        })();
 
-                // 2. Si el perfil tiene email, buscar perfiles hermanos asociados a ese mismo correo
-                if (data.email) {
-                    const { data: siblings } = await supabase
-                        .from('profiles')
-                        .select('id, company_name, role, profile_type, custom_permissions, email')
-                        .ilike('email', data.email.trim().toLowerCase())
-                        .neq('is_active', false);
-                    if (siblings && siblings.length > 0) {
-                        setAvailableProfiles(siblings as Profile[]);
-                    }
-                }
-            } else {
-                console.warn('Perfil no encontrado en la tabla profiles para ID:', activeProfileId);
-                // Si el activeProfileId falló pero no era el userId, intentar con userId
-                if (activeProfileId !== userId) {
-                    localStorage.removeItem('frufresco_active_profile_id');
-                    await fetchProfile(userId, signal, userId);
-                }
-            }
-        } catch (err: any) {
-            if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
-                console.warn('️ fetchProfile excedió el tiempo límite (6s). Manteniendo perfil en caché.');
-            } else {
-                console.error('Excepción crítica en fetchProfile:', err);
-                logError('authContext fetchProfile exception', err);
-            }
-        } finally {
-            if (timeoutId) clearTimeout(timeoutId);
-        }
+        inFlightProfileRef.current.set(activeProfileId, runFetch);
+        return runFetch;
     };
 
     useEffect(() => {
@@ -203,9 +219,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             }
                         } catch (e) {}
 
-                        // Revalidar en segundo plano (o esperar si no había caché) con timeout de 6s
+                        // Revalidar en segundo plano (o esperar si no había caché) con timeout de 12s
                         const profileController = new AbortController();
-                        const profileTimeout = setTimeout(() => profileController.abort(), 6000);
+                        const profileTimeout = setTimeout(() => profileController.abort(), 12000);
                         try {
                             await fetchProfile(currentUser.id, profileController.signal);
                         } finally {
@@ -237,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     } else if (event === 'SIGNED_OUT') {
                         // Confirmed sign out action por el usuario
                         console.log('Cierre de sesión confirmado (SIGNED_OUT)');
+                        loadedProfileIdRef.current = null;
+                        inFlightProfileRef.current.clear();
                         setUser(null);
                         setProfile(null);
                         setLoading(false);
@@ -344,6 +362,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.removeItem('frufresco_active_profile_id');
         }
         await supabase.auth.signOut();
+        loadedProfileIdRef.current = null;
+        inFlightProfileRef.current.clear();
         setUser(null);
         setProfile(null);
         setAvailableProfiles([]);

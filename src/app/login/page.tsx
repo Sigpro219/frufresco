@@ -409,7 +409,7 @@ export default function LoginPage() {
                 setLoading(false);
                 setError('La validación está tardando más de lo esperado. Por favor reintenta.');
             }
-        }, 10000);
+        }, 15000);
 
         try {
             const cleanEmail = email.trim().toLowerCase();

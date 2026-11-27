@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
 import { isOrderUnpricedOffAgreement } from '@/lib/commercial/billingOrderUtils';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     DollarSign,
     TrendingUp,
@@ -644,7 +645,7 @@ export default function CommercialUnifiedDashboard({
                     .maybeSingle(),
                 supabase
                     .from('orders')
-                    .select('id, sequence_id, created_at, delivery_date, subtotal, tax, total, admin_notes, logistics_data, order_items(id, product_id, quantity, unit_price, unit, selected_options, products(id, name, accounting_id, unit_of_measure, tax_rate)), profiles (company_name, contact_name)')
+                    .select('id, sequence_id, created_at, delivery_date, subtotal, tax, total, admin_notes, logistics_data, order_items(id, product_id, quantity, unit_price, unit, selected_options, products(id, name, accounting_id, unit_of_measure, iva_rate)), profiles (company_name, contact_name)')
                     .or('admin_notes.ilike.%DESPACHADO SIN PRECIO%,admin_notes.ilike.%SE DESPACHÓ SIN PRECIO%')
                     .neq('status', 'cancelled')
                     .order('created_at', { ascending: false })
@@ -1007,7 +1008,7 @@ export default function CommercialUnifiedDashboard({
 
             // --- BUILD CLIENT CONSUMPTION LIST ---
             const activeProfileIds = Array.from(clientAggMap.keys());
-            const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const sixtyDaysAgo = addBogotaDays(getBogotaDateString(), -60);
             const { data: recentPqrsData } = activeProfileIds.length > 0
                 ? await supabase
                     .from('customer_service_pqrs')
@@ -1363,7 +1364,7 @@ export default function CommercialUnifiedDashboard({
                             severity: daysSinceCreated >= 7 ? 'critical' : 'warning',
                             title: `Prospecto sin Contacto (${daysSinceCreated}d)`,
                             subtitle: l.company_name || l.contact_name || 'Prospecto sin nombre',
-                            dateInfo: `Registrado el ${cDate.toLocaleDateString('es-CO')}`,
+                            dateInfo: `Registrado el ${formatBogotaDate(cDate)}`,
                             linkUrl: `/admin/commercial?tab=clients`,
                             linkText: 'Contactar'
                         });
@@ -1768,7 +1769,7 @@ export default function CommercialUnifiedDashboard({
                                         </div>
                                         {lastBulletinDispatch ? (
                                             <span style={{ fontSize: '0.68rem', fontWeight: '800', backgroundColor: '#064E3B', color: '#6EE7B7', padding: '2px 7px', borderRadius: '6px' }}>
-                                                Despachado: {new Date(lastBulletinDispatch.dispatched_at).toLocaleDateString('es-CO')}
+                                                Despachado: {formatBogotaDate(lastBulletinDispatch.dispatched_at)}
                                             </span>
                                         ) : (
                                             <span style={{ fontSize: '0.68rem', fontWeight: '800', backgroundColor: '#78350F', color: '#FDE68A', padding: '2px 7px', borderRadius: '6px' }}>
@@ -3707,7 +3708,7 @@ export default function CommercialUnifiedDashboard({
                                                 if (parsedPrice <= 0) allPriced = false;
 
                                                 const qty = Number(it.quantity || 0);
-                                                const taxRate = Number(it.products?.tax_rate || 0);
+                                                const taxRate = Number(it.products?.iva_rate || 0);
                                                 newSubtotal += qty * parsedPrice;
                                                 newTax += (qty * parsedPrice) * (taxRate / 100);
 

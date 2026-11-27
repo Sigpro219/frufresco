@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
 import { isSandboxMode } from '@/lib/sandboxGuard';
@@ -99,6 +99,7 @@ async function handleSync(request: Request) {
         }
 
         try {
+            (revalidateTag as any)('products');
             revalidatePath('/');
             revalidatePath('/products');
         } catch (revErr) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { recalculateAndSyncProductPrices, batchRecalculateAndSyncPrices } from '@/lib/pricingUtils';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
             
             // Revalidar rutas del catálogo
             try {
+                (revalidateTag as any)('products');
                 revalidatePath('/');
                 revalidatePath('/products');
                 revalidatePath('/admin/commercial');
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
 
         // Revalidar la página del producto específico y el catálogo
         try {
+            (revalidateTag as any)('products');
             revalidatePath(`/products/${productId}`);
             revalidatePath('/');
             revalidatePath('/products');
