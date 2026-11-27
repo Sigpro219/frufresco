@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { resolveLatestProductCost, applyProductUnitConversion, CLIENTES_HOGAR_ID, GENERAL_INSTITUCIONAL_ID, FAMILIA_CORTES_CORPORATIVO_ID, DEFAULT_INSTITUTIONAL_MARGIN_PCT } from '@/lib/pricingUtils';
 
 const computeEffectiveCost = (baseCost: number, shrinkagePct: number): number => {
@@ -1384,7 +1385,7 @@ export default function PricingSettingsPage({
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Matriz de Precios");
-        XLSX.writeFile(wb, `Planilla_Margenes_${selectedModel.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        XLSX.writeFile(wb, `Planilla_Margenes_${selectedModel.name.replace(/\s+/g, '_')}_${getBogotaDateString()}.xlsx`);
     };
 
     const importFromExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {

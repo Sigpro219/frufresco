@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import { getOrderReplacementInfo } from '@/lib/orderUtils';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
 
             if (orderModified) {
                 const orderTotal = orderSubtotal + orderTax;
-                const nowStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const nowStr = formatBogotaDate(new Date(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 
                 // Actualizar totales de la orden
                 const { data: currentOrder } = await supabaseAdmin

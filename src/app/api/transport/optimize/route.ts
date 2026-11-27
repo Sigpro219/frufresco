@@ -15,6 +15,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { verifySessionAndPermission } from '@/lib/auth';
 import { isSandboxMode, areSandboxExternalApisAllowed } from '@/lib/sandboxGuard';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import {
     classifyOrderGps,
     resolveOrderDisplayWindow,
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
         // 2. Map to Google OptimizeTours Request Schema
         // Ref: https://developers.google.com/maps/documentation/route-optimization/reference/rest/v1/projects.locations/optimizeTours
         
-        const targetDate = orders[0]?.delivery_date ? orders[0].delivery_date.split('T')[0] : new Date().toISOString().split('T')[0];
+        const targetDate = orders[0]?.delivery_date ? orders[0].delivery_date.split('T')[0] : getBogotaDateString();
 
         // Proyección en múltiplos de 7 días si la ventana de salida ya pasó (mantiene día de semana en America/Bogota)
         const fleetStartMs = new Date(`${targetDate}T${fleet_start}:00-05:00`).getTime();
@@ -135,14 +136,7 @@ export async function POST(request: Request) {
             shiftDays = Math.max(1, weeks) * 7;
         }
         const trafficMode: 'live_predictive' | 'weekday_projected' = isFutureWindow ? 'live_predictive' : 'weekday_projected';
-        const addDaysToDateStr = (dateStr: string, days: number): string => {
-            if (!days) return dateStr;
-            const base = new Date(`${dateStr}T12:00:00-05:00`);
-            if (isNaN(base.getTime())) return dateStr;
-            base.setUTCDate(base.getUTCDate() + days);
-            return base.toISOString().split('T')[0];
-        };
-        const gcpDate = addDaysToDateStr(targetDate, shiftDays);
+        const gcpDate = shiftDays ? addBogotaDays(targetDate, shiftDays) : targetDate;
 
         const getOrderTimeWindow = (o: any, datePart: string): {
             startTime: string;

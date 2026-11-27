@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 
 // Types
 interface Order {
@@ -36,10 +37,7 @@ interface Order {
 }
 
 const getBogotaDate = (offsetDays: number = 0): string => {
-    const now = new Date();
-    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-    bogotaTime.setDate(bogotaTime.getDate() + offsetDays);
-    return bogotaTime.toISOString().split('T')[0];
+    return addBogotaDays(getBogotaDateString(), offsetDays);
 };
 
 const getStatusStyle = (status: string) => {

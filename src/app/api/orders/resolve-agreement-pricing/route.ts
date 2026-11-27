@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { diffBogotaDays } from '@/lib/dateUtils';
 
 export const revalidate = 0; // Dynamic route
 
@@ -237,7 +238,7 @@ async function handleResolve(clientId: string | null, deliveryDate: string, clie
             const end = ag.valid_until?.split('T')[0];
             if (start && start > checkDate) return { isExpired: true, daysExpired: 0, lifecycle: 'future' };
             if (end && end < checkDate) {
-                const daysExpired = Math.max(0, Math.floor((Date.parse(`${checkDate}T00:00:00Z`) - Date.parse(`${end}T00:00:00Z`)) / 86400000));
+                const daysExpired = Math.max(0, diffBogotaDays(end, checkDate));
                 if (daysExpired > 30) {
                     return { isExpired: true, daysExpired, lifecycle: 'expired_over_30d' };
                 }

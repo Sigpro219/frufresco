@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import Letterhead from './Letterhead';
 import { X, Printer, CheckCircle2, Clock, AlertTriangle, FileText, Truck } from 'lucide-react';
 import { printViaNewWindow } from '@/components/print';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface OrderItem {
     id?: string;
@@ -36,17 +37,17 @@ export default function InvoiceDocumentModal({
     if (!isOpen || !order) return null;
 
     const orderDate = order.created_at
-        ? new Date(order.created_at).toLocaleDateString('es-CO', {
+        ? formatBogotaDate(order.created_at, {
               day: 'numeric',
               month: 'long',
               year: 'numeric',
               hour: '2-digit',
               minute: '2-digit'
-          })
+          }, 'Fecha N/A')
         : 'Fecha N/A';
 
     const deliveryDateStr = order.delivery_date
-        ? new Date(order.delivery_date).toLocaleDateString('es-CO', {
+        ? formatBogotaDate(order.delivery_date, {
               day: 'numeric',
               month: 'long',
               year: 'numeric'

@@ -19,13 +19,14 @@ import {
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 
 export default function WorldOfficeExportPage() {
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<{msg: string, type: 'info' | 'success' | 'error'}[]>([]);
     const [exportType, setExportType] = useState<'cuts' | 'cash' | 'expenses' | 'providers'>('cuts');
-    const [dateRange, setDateRange] = useState({ start: new Date().toISOString().split('T')[0], end: new Date().toISOString().split('T')[0] });
+    const [dateRange, setDateRange] = useState({ start: getBogotaDateString(), end: getBogotaDateString() });
 
     useEffect(() => {
         setMounted(true);
@@ -42,8 +43,8 @@ export default function WorldOfficeExportPage() {
 
         try {
             let data: any[] = [];
-            const startIso = `${dateRange.start}T00:00:00`;
-            const endIso = `${dateRange.end}T23:59:59.999`;
+            const { startUtcIso: startIso } = getBogotaDayRangeUtcIso(dateRange.start);
+            const { endUtcIso: endIso } = getBogotaDayRangeUtcIso(dateRange.end);
             
             if (exportType === 'cuts') {
                 addLog('Consultando cortes de facturación activos...', 'info');
@@ -135,7 +136,7 @@ export default function WorldOfficeExportPage() {
                     row['TipoDocumento'] = 'TER'; 
                     row['Prefijo'] = 'PRV';
                     row['Numero'] = item.world_office_id || (index + 1);
-                    row['Fecha'] = new Date().toISOString().split('T')[0];
+                    row['Fecha'] = getBogotaDateString();
                     row['NitTercero'] = item.tax_id || '111111111';
                     row['NombreTercero'] = item.name || 'PROVEEDOR';
                     row['Ciudad'] = item.city || 'Bogotá D.C.';
@@ -195,7 +196,7 @@ export default function WorldOfficeExportPage() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "WorldOffice");
 
-            const fileName = `Export_WO_${exportType}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const fileName = `Export_WO_${exportType}_${getBogotaDateString()}.xlsx`;
             XLSX.writeFile(wb, fileName);
             
             addLog(`¡Exportación exitosa! Archivo: ${fileName}`, 'success');

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Printer, FileText, ShieldCheck } from 'lucide-react';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow } from '@/components/print';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 const formatCategoryTitle = (cat?: string) => {
     if (!cat) return 'Otros Productos';
@@ -212,7 +213,7 @@ export default function PublicPrintQuotePage() {
         ? `${quote.payment_terms_days} Días de Crédito` 
         : (clientInfo?.payment_days ? `${clientInfo.payment_days} Días de Crédito` : 'Contado contra entrega');
     const validityText = isAgreement && quote.valid_until
-        ? `Vigente hasta ${new Date(quote.valid_until).toLocaleDateString('es-CO')}`
+        ? `Vigente hasta ${formatBogotaDate(quote.valid_until)}`
         : '8 Días Calendario (Sujeto a Cosecha)';
 
     let globalCounter = 0;
@@ -287,7 +288,7 @@ export default function PublicPrintQuotePage() {
                 <Letterhead
                     title={isAgreement ? 'ACUERDO COMERCIAL INSTITUCIONAL' : 'COTIZACIÓN COMERCIAL'}
                     subtitle="INVESTMENTS CORTES S.A.S. • Abastecimiento Agrícola & Dotación B2B"
-                    date={quote.start_date || new Date(quote.created_at).toLocaleDateString('es-CO')}
+                    date={quote.start_date || formatBogotaDate(quote.created_at)}
                     reference={`#${docNumber}`}
                     badge={isAgreement ? 'ACUERDO VIGENTE' : (quote.lead_id ? 'PROSPECTO B2B' : 'PROPUESTA OFICIAL')}
                     badgeVariant={isAgreement ? 'emerald' : 'dark'}
@@ -329,7 +330,7 @@ export default function PublicPrintQuotePage() {
                                 <strong style={{ color: '#0F172A' }}>DOCUMENTO:</strong> #{docNumber}
                             </div>
                             <div style={{ lineHeight: 1.3 }}>
-                                <strong style={{ color: '#0F172A' }}>FECHA EMISIÓN:</strong> {new Date(quote.created_at).toLocaleDateString('es-CO')}
+                                <strong style={{ color: '#0F172A' }}>FECHA EMISIÓN:</strong> {formatBogotaDate(quote.created_at)}
                             </div>
                             <div style={{ lineHeight: 1.3 }}>
                                 <strong style={{ color: '#0F172A' }}>VIGENCIA:</strong> <span style={{ color: '#0D7A57', fontWeight: 800 }}>{validityText}</span>

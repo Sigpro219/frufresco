@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 
 export default function ProcurementHub() {
     const [mounted, setMounted] = useState(false);
@@ -32,9 +33,8 @@ export default function ProcurementHub() {
     const loadLiveStats = async () => {
         try {
             setLoading(true);
-            const today = new Date().toISOString().split('T')[0];
-            const startIso = `${today}T00:00:00`;
-            const endIso = `${today}T23:59:59.999`;
+            const today = getBogotaDateString();
+            const { startUtcIso: startIso, endUtcIso: endIso } = getBogotaDayRangeUtcIso(today);
 
             // 1. Presupuesto autorizado de hoy
             const { data: budgets } = await supabase

@@ -5,6 +5,7 @@ import { isInsidePolygon, Point } from '@/lib/geoUtils';
 import { translations, Locale } from '@/lib/translations';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import { sanitizeDocText, resolveClientProfile, findBestProductMatch, findBestProductMatchDetails, recordLearningMemory } from '@/lib/orders/order-parser-engine';
 import { GENERAL_INSTITUCIONAL_ID, CLIENTES_HOGAR_ID } from '@/lib/pricingUtils';
 import { formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
@@ -3249,7 +3250,7 @@ function CreateOrderContent() {
                 }
             }
 
-            const todayStr = new Date().toLocaleDateString('es-CO');
+            const todayStr = formatBogotaDate(new Date());
             const ocText = importValidation?.poNumber ? `OC: ${importValidation.poNumber}` : '';
             const solpedText = importValidation?.solpedNumber ? `SOLPED: ${importValidation.solpedNumber}` : '';
             const refDetails = [ocText, solpedText].filter(Boolean).join(' | ');
@@ -3590,7 +3591,7 @@ function CreateOrderContent() {
                     } else {
                         const parsedTs = Date.parse(rawDate);
                         if (!isNaN(parsedTs)) {
-                            parsedDelivery = new Date(parsedTs).toISOString().split('T')[0];
+                            parsedDelivery = getBogotaDateString(new Date(parsedTs));
                         }
                     }
 
@@ -3635,7 +3636,7 @@ function CreateOrderContent() {
                     console.log('document_learning_memory not ready yet');
                 }
                 try {
-                    const checkDate = (deliveryDate || minDeliveryDate || new Date().toISOString().split('T')[0]).split('T')[0];
+                    const checkDate = (deliveryDate || minDeliveryDate || getBogotaDateString()).split('T')[0];
                     const todayBogota = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
                     const agrRes = await fetch(`/api/orders/resolve-agreement-pricing?client_id=${encodeURIComponent(targetClientId)}&order_date=${encodeURIComponent(todayBogota)}&delivery_date=${encodeURIComponent(checkDate)}&client_type=B2B`);
                     if (agrRes.ok) {
@@ -3808,7 +3809,7 @@ function CreateOrderContent() {
 
             // Inicializar fechas para pedidos relacionados si se detecta entrega diferida
             const secondaryItem = suggested.find((i: any) => i && i.deliverySchedule);
-            const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+            const baseDate = deliveryDate || getBogotaDateString();
             if (secondaryItem) {
                 setMultiOrderDate1(baseDate);
                 const calcDate2 = calculateTargetDeliveryDate(baseDate, secondaryItem.deliverySchedule);
@@ -4477,7 +4478,7 @@ function CreateOrderContent() {
                         description: `El pedido incluye productos fuera de acuerdo comercial con tarifa provisional $0 COP: ${offAgreementNamesList}. Asignar precio comercial antes del cierre de corte de facturación.`,
                         assigned_to: 'Área Comercial',
                         priority: 'critical',
-                        due_date: targetDeliveryDate || new Date().toISOString().split('T')[0],
+                        due_date: targetDeliveryDate || getBogotaDateString(),
                         status: 'pending'
                     });
                 } catch (taskErr) {
@@ -8395,7 +8396,7 @@ ${primaryAdminNotes}`.trim();
                                                         )}
                                                     </div>
                                                     <div style={{ fontSize: '0.88rem', color: '#7F1D1D', marginTop: '4px', lineHeight: 1.4 }}>
-                                                        El documento referencia el código <b>{duplicateOrderMatch.matchedCode}</b>, el cual ya fue registrado previamente en el <b>Pedido #{duplicateOrderMatch.order.sequence_id || duplicateOrderMatch.order.id.slice(0, 8)}</b> (${(duplicateOrderMatch.order.total || 0).toLocaleString('es-CO')}) creado el <b>{new Date(duplicateOrderMatch.order.created_at).toLocaleDateString('es-CO')}</b> (Estado: <i>{duplicateOrderMatch.order.status}</i>).
+                                                        El documento referencia el código <b>{duplicateOrderMatch.matchedCode}</b>, el cual ya fue registrado previamente en el <b>Pedido #{duplicateOrderMatch.order.sequence_id || duplicateOrderMatch.order.id.slice(0, 8)}</b> (${(duplicateOrderMatch.order.total || 0).toLocaleString('es-CO')}) creado el <b>{formatBogotaDate(duplicateOrderMatch.order.created_at)}</b> (Estado: <i>{duplicateOrderMatch.order.status}</i>).
                                                     </div>
                                                 </div>
                                             </div>
@@ -8512,7 +8513,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="button"
                                                     onClick={() => {
                                                         const secItem = stagedItems.find(i => i.deliverySchedule);
-                                                        const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+                                                        const baseDate = deliveryDate || getBogotaDateString();
                                                         setMultiOrderDate1(baseDate);
                                                         if (secItem) {
                                                             const calcDate = calculateTargetDeliveryDate(baseDate, secItem.deliverySchedule);
@@ -9620,7 +9621,7 @@ ${primaryAdminNotes}`.trim();
                                                     type="button"
                                                     onClick={() => {
                                                         const secItem = stagedItems.find(i => i.deliverySchedule);
-                                                        const baseDate = deliveryDate || new Date().toISOString().split('T')[0];
+                                                        const baseDate = deliveryDate || getBogotaDateString();
                                                         setMultiOrderDate1(baseDate);
                                                         if (secItem) {
                                                             const calcDate = calculateTargetDeliveryDate(baseDate, secItem.deliverySchedule);

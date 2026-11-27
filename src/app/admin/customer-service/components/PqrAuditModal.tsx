@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatMoney } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     X, Check, AlertTriangle, ShieldCheck, ShieldAlert, FileText, Camera,
     Truck, Store, Warehouse, Layers, User, Building2, HelpCircle,
@@ -115,9 +116,7 @@ export default function PqrAuditModal({
 
     // Replacement Order Configurator State (Escenario 246)
     const getBogotaFutureDate = (daysAhead: number): string => {
-        const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const [bY, bM, bD] = bogotaToday.split('-').map(Number);
-        return new Date(Date.UTC(bY, bM - 1, bD + daysAhead)).toISOString().split('T')[0];
+        return addBogotaDays(getBogotaDateString(), daysAhead);
     };
 
     const branchScheduleInfo = useMemo(() => {
@@ -695,7 +694,7 @@ export default function PqrAuditModal({
                     restoredFromDraft = true;
                     setIsDraftRestored(true);
                     if (draft.updatedAt) {
-                        setLastSavedDraftTime(new Date(draft.updatedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
+                        setLastSavedDraftTime(new Date(draft.updatedAt).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }));
                     }
                     setTimeout(() => {
                         isRestoringDraftRef.current = false;
@@ -1064,7 +1063,7 @@ export default function PqrAuditModal({
                     updatedAt: new Date().toISOString()
                 };
                 localStorage.setItem(`pqr_audit_draft_${pqr.id}`, JSON.stringify(draftData));
-                setLastSavedDraftTime(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }));
+                setLastSavedDraftTime(new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }));
             } catch (err) {
                 console.error('Error auto-saving PQR draft:', err);
             }
@@ -1286,9 +1285,7 @@ export default function PqrAuditModal({
                 ? orderItems.find(i => i.id === substituteTargetItemId)
                 : (orderItems[0] || null);
 
-            const bogotaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-            const [bY, bM, bD] = bogotaToday.split('-').map(Number);
-            const tomorrow = new Date(Date.UTC(bY, bM - 1, bD + 1)).toISOString().split('T')[0];
+            const tomorrow = addBogotaDays(getBogotaDateString(), 1);
             const { data: futureOrders } = await supabase
                 .from('orders')
                 .select('*')
@@ -4034,7 +4031,7 @@ export default function PqrAuditModal({
                                             Radicación & Asunto
                                         </span>
                                         <span style={{ fontSize: '0.68rem', color: '#94A3B8', fontFamily: 'monospace' }}>
-                                            {new Date(pqr.created_at).toLocaleString('es-CO')}
+                                            {new Date(pqr.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                         </span>
                                     </div>
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#0F172A' }}>{formatCleanPqrSubject(pqr.subject)}</div>
@@ -4176,7 +4173,7 @@ export default function PqrAuditModal({
                                                                     return {
                                                                         value: o.id,
                                                                         label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` [Coincide: ${matchedList.join(', ')}]` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
-                                                                        sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || 'Sede')}`,
+                                                                        sublabel: `${formatBogotaDate(o.delivery_date || o.created_at)} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || 'Sede')}`,
                                                                         badge: formatMoney(o.total || 0)
                                                                     };
                                                                 })}
@@ -4250,7 +4247,7 @@ export default function PqrAuditModal({
                                                             return {
                                                                 value: o.id,
                                                                 label: `Pedido #${o.sequence_id}${matchedList.length > 0 ? ` [Coincide: ${matchedList.join(', ')}]` : ''}${isZeroRep ? ' [REPOSICIÓN $0]' : ''}`,
-                                                                sublabel: `${new Date(o.delivery_date || o.created_at).toLocaleDateString('es-CO')} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || o.shipping_address || 'Sede')}`,
+                                                                sublabel: `${formatBogotaDate(o.delivery_date || o.created_at)} • ${previewProds ? `Prod: ${previewProds}` : (o.branch_name || o.shipping_address || 'Sede')}`,
                                                                 badge: formatMoney(o.total || 0)
                                                             };
                                                         })}

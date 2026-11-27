@@ -355,7 +355,7 @@ export default function ManageAttributesModal({ onClose }: ManageAttributesModal
             XLSX.utils.book_append_sheet(workbook, wsMatrix, "Matriz_Atributos");
             XLSX.utils.book_append_sheet(workbook, wsDetail, "Opciones_Desglosadas");
 
-            const dateStr = new Date().toISOString().split('T')[0];
+            const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
             XLSX.writeFile(workbook, `Matriz_Variantes_FruFresco_${dateStr}.xlsx`);
 
             showModalToast('Matriz de atributos exportada en Excel con éxito', 'success');

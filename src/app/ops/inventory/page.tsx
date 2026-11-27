@@ -439,7 +439,7 @@ export default function OpsInventoryPage() {
     const fetchTasks = useCallback(async () => {
         try {
             setLoading(true);
-            const today = new Date().toISOString().split('T')[0];
+            const today = getBogotaDateString();
             const { data, error } = await supabase
                 .from('inventory_random_tasks')
                 .select(`

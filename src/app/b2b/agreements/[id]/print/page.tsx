@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 import Letterhead from '@/components/Letterhead';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { CheckCircle2, Building2, Calendar, Tag, ShieldCheck } from 'lucide-react';
 
 export default function PrintAgreementPage() {
@@ -112,11 +113,11 @@ export default function PrintAgreementPage() {
     }
 
     const createdDate = agreement.created_at
-        ? new Date(agreement.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+        ? formatBogotaDate(agreement.created_at, { day: 'numeric', month: 'long', year: 'numeric' }, 'Fecha N/A')
         : 'Fecha N/A';
 
     const validUntilDate = agreement.valid_until
-        ? new Date(agreement.valid_until).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+        ? formatBogotaDate(agreement.valid_until, { day: 'numeric', month: 'long', year: 'numeric' }, 'Vigencia Continua (Renovación Trimestral)')
         : 'Vigencia Continua (Renovación Trimestral)';
 
     const refCode = agreement.quote_number

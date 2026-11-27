@@ -101,10 +101,10 @@ export default function RecogidaPage() {
 
     const formatDateFriendly = (dateStr: string) => {
         if (!dateStr) return "";
-        const date = new Date(`${dateStr}T12:00:00`); // Force mid-day to avoid TZ shifts
-        const dayName = date.toLocaleDateString("es-ES", { weekday: "long" });
-        const day = date.getDate();
-        const month = date.toLocaleDateString("es-ES", { month: "short" });
+        const date = new Date(`${dateStr}T12:00:00-05:00`);
+        const dayName = date.toLocaleDateString("es-ES", { timeZone: "America/Bogota", weekday: "long" });
+        const day = date.getUTCDate();
+        const month = date.toLocaleDateString("es-ES", { timeZone: "America/Bogota", month: "short" });
         // Capitalize first letter
         return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day} ${month}`;
     };

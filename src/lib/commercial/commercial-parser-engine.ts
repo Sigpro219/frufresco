@@ -7,6 +7,7 @@ import {
 } from '@/lib/ai/aiModelConfig';
 import { sanitizeDocText, findBestProductMatchDetails, resolveClientProfile } from '@/lib/orders/order-parser-engine';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import * as XLSX from 'xlsx';
 
 export interface CommercialExtractedItem {
@@ -49,7 +50,7 @@ export async function extractCommercialProposalAI(
 ): Promise<CommercialProposalExtraction> {
   const prompt = `
     Eres un analista comercial senior experto en negociación B2B de alimentos para FruFresco (Investments Cortés SAS).
-    FECHA ACTUAL: ${new Date().toISOString().split('T')[0]}
+    FECHA ACTUAL: ${getBogotaDateString()}
     
     ASUNTO DEL CORREO: "${subject}"
     

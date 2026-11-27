@@ -8,6 +8,7 @@ import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface ProductItem {
     id: string;
@@ -47,8 +48,8 @@ export default function PhysicalCountPrintPage() {
 
     useEffect(() => {
         const now = new Date();
-        const datePart = now.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timePart = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const datePart = formatBogotaDate(now, { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timePart = now.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
         setGeneratedAt(`${datePart} ${timePart}`);
     }, [selectedDate]);
 

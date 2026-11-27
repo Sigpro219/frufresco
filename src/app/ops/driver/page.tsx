@@ -6,6 +6,7 @@ import { isAbortError } from '@/lib/errorUtils';
 import Link from 'next/link';
 import ActivityLog from '@/components/ActivityLog';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
+import { addBogotaDays } from '@/lib/dateUtils';
 import { Gauge, AlertTriangle, AlertOctagon, MapPin, Key, ChevronRight } from 'lucide-react';
 
 interface Route {
@@ -122,9 +123,7 @@ export default function DriverDashboard() {
             
             if (routeError) throw routeError;
 
-            const yesterdayDate = new Date(new Date(`${opTargetDate}T00:00:00Z`).getTime() - 24 * 60 * 60 * 1000)
-                .toISOString()
-                .slice(0, 10);
+            const yesterdayDate = addBogotaDays(opTargetDate, -1);
 
             const filteredRoutes = (routeData || []).filter((r: any) => {
                 const stops = Array.isArray(r.route_stops) ? r.route_stops : [];
@@ -427,7 +426,7 @@ export default function DriverDashboard() {
                                         </div>
 
                                         <div style={{ marginBottom: '1rem' }}>
-                                            <div style={{ fontSize: '0.9rem', color: 'var(--ops-text-muted)', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString()}</div>
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--ops-text-muted)', marginTop: '0.2rem' }}>Iniciada: {new Date(route.start_time || Date.now()).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })}</div>
                                         </div>
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>

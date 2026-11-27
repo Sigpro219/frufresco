@@ -12,6 +12,7 @@ import { formatMoney } from '@/lib/adminTheme';
 import { PQR, formatPqrFolio, getPqrPhotos } from '../utils';
 import { parseRcaFromRecord, RCA_CATEGORIES_L1, RESPONSIBLE_PARTIES } from '@/lib/rcaTaxonomy';
 import { printViaNewWindow } from '@/components/print/printViaNewWindow';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 
 interface PqrDailyShiftReportProps {
     pqrs: PQR[];
@@ -29,25 +30,9 @@ export default function PqrDailyShiftReport({
     onZoomPhoto
 }: PqrDailyShiftReportProps) {
     // 1. Date selection: Default to today in Colombia time (YYYY-MM-DD)
-    const getTodayBogota = () => {
-        try {
-            const now = new Date();
-            const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
-            return formatter.format(now);
-        } catch {
-            return new Date().toISOString().split('T')[0];
-        }
-    };
+    const getTodayBogota = () => getBogotaDateString();
 
-    const getYesterdayBogota = () => {
-        try {
-            const now = new Date(Date.now() - 86400000);
-            const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
-            return formatter.format(now);
-        } catch {
-            return new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        }
-    };
+    const getYesterdayBogota = () => addBogotaDays(getBogotaDateString(), -1);
 
     const [selectedDate, setSelectedDate] = useState<string>(getTodayBogota);
     const [viewMode, setViewMode] = useState<'executive' | 'table'>('executive');
@@ -558,7 +543,7 @@ export default function PqrDailyShiftReport({
             return;
         }
 
-        const formattedDate = new Date(selectedDate + 'T12:00:00Z').toLocaleDateString('es-CO', {
+        const formattedDate = formatBogotaDate(selectedDate, {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
@@ -639,7 +624,7 @@ export default function PqrDailyShiftReport({
                             ${formattedDate}
                         </div>
                         <div style="font-size: 7pt; color: #64748B;">
-                            Hora de emisión: ${new Date().toLocaleTimeString('es-CO')}
+                            Hora de emisión: ${new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })}
                         </div>
                     </div>
                 </div>

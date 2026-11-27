@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import {
     DollarSign,
     Package,
@@ -197,34 +198,29 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
     const noveltyMenuRef = useRef<HTMLDivElement>(null);
 
     const getDateRange = (range: TimeRange) => {
-        const now = new Date();
-        let start = new Date();
-        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
+        const todayStr = getBogotaDateString();
+        let startStr = todayStr;
         switch (range) {
             case 'today':
-                start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                startStr = todayStr;
                 break;
             case '7d':
-                start.setDate(now.getDate() - 7);
-                start.setHours(0, 0, 0, 0);
+                startStr = addBogotaDays(todayStr, -7);
                 break;
             case '15d':
-                start.setDate(now.getDate() - 15);
-                start.setHours(0, 0, 0, 0);
+                startStr = addBogotaDays(todayStr, -15);
                 break;
             case '30d':
-                start.setDate(now.getDate() - 30);
-                start.setHours(0, 0, 0, 0);
+                startStr = addBogotaDays(todayStr, -30);
                 break;
             case 'this_month':
-                start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+                startStr = `${todayStr.slice(0, 7)}-01`;
                 break;
         }
 
         return {
-            startIso: start.toISOString(),
-            endIso: end.toISOString()
+            startIso: getBogotaDayRangeUtcIso(startStr).startUtcIso,
+            endIso: getBogotaDayRangeUtcIso(todayStr).endUtcIso
         };
     };
 
@@ -234,9 +230,9 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
 
         try {
             const { startIso, endIso } = getDateRange(timeRange);
-            const now = new Date();
-            const quarterStart = new Date(now.getFullYear(), now.getMonth() - 2, 1, 0, 0, 0, 0);
-            const quarterStartIso = quarterStart.toISOString();
+            const [qYear, qMonth] = getBogotaDateString().split('-').map(Number);
+            const quarterStartStr = getBogotaDateString(new Date(Date.UTC(qYear, qMonth - 3, 1, 12, 0, 0)));
+            const quarterStartIso = getBogotaDayRangeUtcIso(quarterStartStr).startUtcIso;
 
             const [
                 cellsRes,
@@ -1085,7 +1081,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
         try {
             setExportingReport(type);
             const XLSX = await import('xlsx');
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getBogotaDateString();
 
             if (type === 'stock') {
                 const rows = products.map(p => {
@@ -1112,7 +1108,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                 const rows = movements.map(m => {
                     const p = products.find(prod => prod.id === m.product_id);
                     return {
-                        'Fecha Transacción': new Date(m.created_at).toLocaleString(),
+                        'Fecha Transacción': new Date(m.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
                         'Producto': p?.name || m.product_id,
                         'SKU': p?.sku || '-',
                         'Tipo Movimiento': m.type === 'entry' ? 'Entrada (+)' : (m.type === 'exit' ? 'Salida (-)' : 'Ajuste (+/-)'),
@@ -1132,7 +1128,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     const cost = costMatrix[m.product_id] || 0;
                     const q = Math.abs(Number(m.quantity || 0));
                     return {
-                        'Fecha': new Date(m.created_at).toLocaleDateString(),
+                        'Fecha': formatBogotaDate(m.created_at),
                         'Producto': p?.name || m.product_id,
                         'Cantidad (Kg)': q,
                         'Costo Base': cost,
@@ -3423,6 +3419,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                                                 </span>
                                                 <span style={{ fontSize: '0.72rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
                                                     {new Date(entry.timestamp).toLocaleString('es-CO', {
+                                                        timeZone: 'America/Bogota',
                                                         year: 'numeric',
                                                         month: 'short',
                                                         day: 'numeric',
@@ -3546,7 +3543,7 @@ export default function InventoryUnifiedDashboard({ onSelectProduct }: Inventory
                     setToastMessage('Compras en plaza registradas y sincronizadas.');
                     setTimeout(() => setToastMessage(null), 3000);
                 }}
-                currentDate={new Date().toISOString().split('T')[0]}
+                currentDate={getBogotaDateString()}
                 products={products}
                 workCells={workCells}
             />

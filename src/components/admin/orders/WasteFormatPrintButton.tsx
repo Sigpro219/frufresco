@@ -7,6 +7,7 @@ import {
     isProductWasteSusceptible
 } from '@/lib/inventory/wasteSusceptibleCatalog';
 import { Printer } from 'lucide-react';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 interface WasteFormatPrintButtonProps {
     deliveryDate: string;
@@ -37,7 +38,7 @@ export default function WasteFormatPrintButton({ deliveryDate }: WasteFormatPrin
     const handlePrintFormat = async () => {
         setPrinting(true);
         try {
-            const targetDate = deliveryDate || new Date().toISOString().split('T')[0];
+            const targetDate = deliveryDate || getBogotaDateString();
 
             const [settingsRes, catalogRes, ordersRes] = await Promise.all([
                 supabase

@@ -6,6 +6,7 @@ import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { THEME } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import Letterhead from '@/components/Letterhead';
 import {
     Sparkles,
@@ -868,8 +869,8 @@ function CreateQuotePageContent() {
                     total_tax_amount: totalTax,
                     total_amount: totalAmount,
                     status: targetStatus,
-                    start_date: new Date().toISOString().split('T')[0],
-                    valid_until: (() => { const d = new Date(); d.setDate(d.getDate() + 8); return d.toISOString().split('T')[0]; })(),
+                    start_date: getBogotaDateString(),
+                    valid_until: addBogotaDays(getBogotaDateString(), 8),
                     parent_quote_id: parentQuoteId,
                     version: parentQuoteId ? originalQuoteVersion + 1 : 1,
                 })
@@ -1072,11 +1073,7 @@ function CreateQuotePageContent() {
     const clientPhone = selectedClientInfo?.contact_phone || selectedClientInfo?.phone || selectedLeadInfo?.phone || 'Sin registrar';
     const clientEmail = selectedClientInfo?.email || selectedLeadInfo?.email || 'contacto@cliente.com';
     const clientAddress = selectedClientInfo?.address || selectedLeadInfo?.address || 'Bogotá D.C., Colombia';
-    const validityUntilDate = (() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 8);
-        return d.toLocaleDateString('es-CO');
-    })();
+    const validityUntilDate = formatBogotaDate(addBogotaDays(getBogotaDateString(), 8));
 
     let globalRowCounter = 0;
 
@@ -1735,7 +1732,7 @@ function CreateQuotePageContent() {
                     <Letterhead
                         title={parentQuoteId ? 'PROPUESTA COMERCIAL DE PRECIOS (RECOTIZACIÓN)' : 'PROPUESTA COMERCIAL DE PRECIOS'}
                         subtitle="INVESTMENTS CORTES S.A.S. • Abastecimiento Agrícola & Dotación B2B"
-                        date={new Date().toLocaleDateString('es-CO')}
+                        date={formatBogotaDate(new Date())}
                         reference={`#${docNumberStr}`}
                         badge={selectedLeadId ? 'PROSPECTO B2B' : 'PROPUESTA OFICIAL'}
                         badgeVariant="emerald"
@@ -1778,7 +1775,7 @@ function CreateQuotePageContent() {
                                     <strong style={{ color: '#0F172A' }}>DOCUMENTO:</strong> #{docNumberStr}
                                 </div>
                                 <div style={{ lineHeight: 1.4 }}>
-                                    <strong style={{ color: '#0F172A' }}>FECHA EMISIÓN:</strong> {new Date().toLocaleDateString('es-CO')}
+                                    <strong style={{ color: '#0F172A' }}>FECHA EMISIÓN:</strong> {formatBogotaDate(new Date())}
                                 </div>
                                 <div style={{ lineHeight: 1.4 }}>
                                     <strong style={{ color: '#0F172A' }}>VIGENCIA OFERTA:</strong>{' '}

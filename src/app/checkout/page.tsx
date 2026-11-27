@@ -10,6 +10,7 @@ import { Polygon } from '@/components/admin/GeofencingManager';
 import { isAbortError } from '../../lib/errorUtils';
 import { isInsidePolygon, Point } from '../../lib/geoUtils';
 import { DEFAULT_CUTOFF_HOUR, GOOGLE_MAPS_MAP_ID } from '../../lib/constants';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 import { translations, Locale } from '../../lib/translations';
  import { useSearchParams } from 'next/navigation';
 import { 
@@ -61,7 +62,8 @@ import {
     BookmarkCheck
 } from 'lucide-react';
 import { useAuth } from '../../lib/authContext';
-import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig, getMaxFutureDeliveryDate } from '@/lib/colombianHolidays';
+import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig, getMaxFutureDeliveryDate, formatDateToYYYYMMDD } from '@/lib/colombianHolidays';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import dynamic from 'next/dynamic';
 import GooglePlacesAddressInput from '@/components/checkout/GooglePlacesAddressInput';
 
@@ -394,8 +396,8 @@ export default function CheckoutPage() {
             const dd = String(current.getUTCDate()).padStart(2, '0');
             const str = `${yyyy}-${mm}-${dd}`;
             if (isValidDeliveryDate(str, allowSundays, allowHolidays, vacationConfig, b2cAllowedDays)) {
-                const dayName = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { weekday: 'short', timeZone: 'UTC' });
-                const monthDay = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+                const dayName = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { weekday: 'short', timeZone: 'America/Bogota' });
+                const monthDay = current.toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
                 dates.push({
                     dateStr: str,
                     label: monthDay,
@@ -1000,21 +1002,7 @@ export default function CheckoutPage() {
 
     // --- ROBUST DATE CALCULATOR (UTC-5) ---
     const getSafeBogotaDate = (daysToAdd = 1) => {
-        const now = new Date();
-        // Bogota is UTC-5 fixed. 
-        // We calculate Bogota time by adjusting UTC time.
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const bogotaNow = new Date(utc + (3600000 * -5));
-        
-        // bogotaNow.getHours();
-        
-        // If it's already late (e.g. after 5 PM in Bogota), 
-        // we might want to default to +2 days if rules are on.
-        // For now, we'll just calculate a safe tomorrow.
-        const result = new Date(bogotaNow);
-        result.setDate(bogotaNow.getDate() + daysToAdd);
-        
-        return result.toISOString().split('T')[0];
+        return addBogotaDays(getBogotaDateString(), daysToAdd);
     };
 
     // Initial default value to avoid empty state (skipping Sundays, 19 Colombian holidays & Vacation Recess)
@@ -1069,7 +1057,7 @@ export default function CheckoutPage() {
                 baseTarget.setDate(bogotaNow.getDate() + daysToAdd);
 
                 const validDate = getNextValidDeliveryDate(baseTarget, sundaysAllowed, holidaysAllowed, parsedVac, activeB2cDays);
-                const dateStr = validDate.toISOString().split('T')[0];
+                const dateStr = formatDateToYYYYMMDD(validDate);
 
                 setMinDeliveryDate(dateStr);
                 setDate(prev => (!prev || prev < dateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac, activeB2cDays)) ? dateStr : prev);
@@ -1279,7 +1267,7 @@ export default function CheckoutPage() {
             return;
         }
         if (date < minDeliveryDate || !isValidDeliveryDate(date, allowSundays, allowHolidays, vacationConfig)) {
-            const corrected = getNextValidDeliveryDate(date < minDeliveryDate ? minDeliveryDate : date, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+            const corrected = formatDateToYYYYMMDD(getNextValidDeliveryDate(date < minDeliveryDate ? minDeliveryDate : date, allowSundays, allowHolidays, vacationConfig));
             setDate(corrected);
             notify(locale === 'es' 
                 ? `La fecha seleccionada cae en un día sin despacho (domingo, festivo o receso operativo). Se ha ajustado automáticamente a nuestra primera ruta disponible: ${corrected}.`
@@ -1491,23 +1479,61 @@ export default function CheckoutPage() {
                 throw requestError || new Error('No se pudo conectar con la pasarela de pagos tras varios intentos.');
             }
 
-            await response.json(); // Consume hash but not used directly here
-            console.log('4️⃣ Redirecting to simulator...');
-            
-            const wompiUrl = `/payments/simulator?reference=${orderData.id}&amount-in-cents=${amountInCents}&currency=COP`;
+            const integrityData = await response.json();
+            const hash = String(integrityData?.hash || '');
+            const publicKey = String(integrityData?.publicKey || '');
+            const serverAmountInCents = Number(integrityData?.amountInCents || amountInCents);
+            const serverCurrency = String(integrityData?.currency || 'COP');
 
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('checkout_specialNotes');
-                localStorage.removeItem('checkout_is_gift');
-                localStorage.removeItem('checkout_recipient_name');
-                localStorage.removeItem('checkout_recipient_phone');
-                localStorage.removeItem('checkout_address_details');
-                localStorage.removeItem('checkout_building_complex');
-                localStorage.removeItem('checkout_unit_details');
-                localStorage.removeItem('checkout_selected_beneficiary_idx');
+            if (isSandboxMode() && !publicKey) {
+                console.log('4️⃣ Redirecting to Sandbox simulator...');
+                window.location.href = `/payments/simulator?reference=${orderData.id}&amount-in-cents=${serverAmountInCents}&currency=${serverCurrency}`;
+                return;
             }
-            clearCart();
-            window.location.href = wompiUrl;
+
+            if (!publicKey || !hash) {
+                throw new Error(
+                    locale === 'es'
+                        ? 'La pasarela Wompi está en activación. Por favor usa Pago Contra Entrega o intenta más tarde.'
+                        : 'Wompi gateway is being activated. Please use Cash on Delivery.'
+                );
+            }
+
+            const wompiParams = new URLSearchParams();
+            wompiParams.set('public-key', publicKey);
+            wompiParams.set('currency', serverCurrency);
+            wompiParams.set('amount-in-cents', String(serverAmountInCents));
+            wompiParams.set('reference', orderData.id);
+            wompiParams.set('signature:integrity', hash);
+            wompiParams.set('redirect-url', `${window.location.origin}/checkout/result`);
+
+            if (email.trim()) wompiParams.set('customer-data:email', email.trim());
+            if (name.trim()) wompiParams.set('customer-data:full-name', name.trim());
+
+            let cleanPhone = phone.replace(/\D/g, '');
+            if (cleanPhone.length === 12 && cleanPhone.startsWith('57')) {
+                cleanPhone = cleanPhone.slice(2);
+            }
+            if (cleanPhone.length === 10) {
+                wompiParams.set('customer-data:phone-number', cleanPhone);
+                wompiParams.set('customer-data:phone-number-prefix', '+57');
+            }
+
+            const cleanLegalId = finalIdentification.replace(/\D/g, '');
+            if (cleanLegalId && cleanLegalId !== '222222222222') {
+                wompiParams.set('customer-data:legal-id', cleanLegalId);
+                wompiParams.set('customer-data:legal-id-type', (isB2B || requiresInvoiceWithNit) ? 'NIT' : 'CC');
+            }
+
+            if (fullShippingAddress.trim()) {
+                wompiParams.set('shipping-address:address-line-1', fullShippingAddress.trim());
+                wompiParams.set('shipping-address:city', 'Bogotá');
+                wompiParams.set('shipping-address:region', 'Bogotá D.C.');
+                wompiParams.set('shipping-address:country', 'CO');
+            }
+
+            // Mantener carrito e identidad intactos hasta confirmar APPROVED en /checkout/result
+            window.location.href = `https://checkout.wompi.co/p/?${wompiParams.toString()}`;
 
         } catch (err: unknown) {
             console.error('Checkout Failed:', err);
@@ -2510,7 +2536,7 @@ export default function CheckoutPage() {
                                                 const picked = e.target.value;
                                                 if (!picked) return;
                                                 if (picked < minDeliveryDate || !isValidDeliveryDate(picked, allowSundays, allowHolidays, vacationConfig)) {
-                                                    const nextValid = getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+                                                    const nextValid = formatDateToYYYYMMDD(getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig));
                                                     setDate(nextValid);
                                                     notify(
                                                         locale === 'es'
@@ -2845,8 +2871,26 @@ export default function CheckoutPage() {
                                     <ShieldCheck size={16} color={paymentMethod === 'wompi' ? 'var(--primary)' : '#94A3B8'} />
                                 </div>
                                 <p style={{ margin: 0, fontSize: '0.7rem', color: '#64748B' }}>
-                                    {locale === 'es' ? 'PSE, Nequi, Daviplata, Tarjetas Débito y Crédito (Wompi).' : 'Cards, PSE, Nequi.'}
+                                    {locale === 'es' ? 'Procesado por Wompi Bancolombia · Sin recargos' : 'Processed by Wompi Bancolombia · No extra fees'}
                                 </p>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                                    {['PSE', 'Nequi', 'Visa / Mastercard', 'Bancolombia'].map((chip) => (
+                                        <span
+                                            key={chip}
+                                            style={{
+                                                fontSize: '0.62rem',
+                                                fontWeight: '800',
+                                                color: '#065F46',
+                                                backgroundColor: '#ECFDF5',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '1px 6px',
+                                                borderRadius: '999px'
+                                            }}
+                                        >
+                                            {chip}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Contra Entrega */}

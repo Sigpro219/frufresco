@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { extractCommercialProposalAI, parseExcelPriceProposal, enrichCommercialProposal } from '@/lib/commercial/commercial-parser-engine';
 import { resolveClientProfile } from '@/lib/orders/order-parser-engine';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     let rawItems: any[] = [];
     let detectedClientName = resolvedProfile?.company_name || resolvedProfile?.contact_name || messageData.sender_name || 'Cliente Comercial';
-    let validityStart = new Date().toISOString().split('T')[0];
+    let validityStart = getBogotaDateString();
     let validityEnd = '';
 
     // Check for Excel attachment

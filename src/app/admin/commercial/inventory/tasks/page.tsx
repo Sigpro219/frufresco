@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { THEME } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface Role {
     value: string;
@@ -482,16 +483,16 @@ export default function KanbanTasksPage() {
                                                             <span style={{ fontSize: '0.72rem', fontWeight: '700', color: isOverdue ? '#991B1B' : '#475569', whiteSpace: 'nowrap' }}>
                                                                 {task.scheduled_start && task.due_date ? (
                                                                     <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>del</span> {new Date(task.scheduled_start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} 
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}> al </span> {new Date(task.due_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>del</span> {formatBogotaDate(task.scheduled_start, { day: 'numeric', month: 'short' })} 
+                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}> al </span> {formatBogotaDate(task.due_date, { day: 'numeric', month: 'short', year: 'numeric' })}
                                                                     </>
                                                                 ) : task.due_date ? (
                                                                     <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>vence </span> {new Date(task.due_date).toLocaleDateString()}
+                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>vence </span> {formatBogotaDate(task.due_date)}
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>creado </span> {new Date(task.created_at).toLocaleDateString()}
+                                                                        <span style={{ color: '#94A3B8', fontWeight: '400', fontSize: '0.65rem' }}>creado </span> {formatBogotaDate(task.created_at)}
                                                                     </>
                                                                 )}
                                                             </span>

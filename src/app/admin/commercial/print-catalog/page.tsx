@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     Printer, 
     ArrowLeft, 
@@ -430,7 +431,7 @@ export default function PrintCatalogPage() {
                         subtitle={`Tarifa de Precios Vigente • Modelo: ${activeModelName.toUpperCase()}`}
                         badge="TARIFA OFICIAL B2B"
                         badgeVariant="emerald"
-                        date={new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        date={formatBogotaDate(new Date(), { year: 'numeric', month: 'long', day: 'numeric' })}
                         reference={`CAT-${new Date().getFullYear()}-${new Date().getMonth() + 1}`}
                         showWatermark={false}
                     >

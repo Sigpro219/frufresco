@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { 
     FileCheck2, 
@@ -68,8 +69,7 @@ export default function ContingencyReconciliationPage() {
 
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         if (paramDate) return paramDate;
-        const now = new Date();
-        return now.toISOString().split('T')[0];
+        return getBogotaDateString();
     });
 
     const [orders, setOrders] = useState<OrderRecord[]>([]);

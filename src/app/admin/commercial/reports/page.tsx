@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase, fetchAllRows } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import {
     ArrowLeft,
     TrendingUp,
@@ -522,7 +523,7 @@ export default function CommercialReportsPage() {
             const wsComp = XLSX.utils.json_to_sheet(compExportData);
             XLSX.utils.book_append_sheet(wb, wsComp, 'Compresion_Margen');
 
-            const nowStr = new Date().toISOString().split('T')[0];
+            const nowStr = getBogotaDateString();
             XLSX.writeFile(wb, `Reporte_Comercial_Margen_Ventas_${nowStr}.xlsx`);
         } catch (err) {
             console.error('Error exporting report to Excel:', err);

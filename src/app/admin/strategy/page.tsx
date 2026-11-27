@@ -6,6 +6,7 @@ import Toast from '@/components/Toast';
 import { useAuth } from '@/lib/authContext';
 import GeofencingManager from '@/components/admin/GeofencingManager';
 import StrategyControlTower from '@/components/admin/StrategyControlTower';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     MapPin, 
     TrendingUp, 
@@ -589,7 +590,7 @@ function ITView({ requests, onRequest }: { requests: ITRequest[], onRequest: (ty
                                             </span>
                                         </td>
                                         <td style={{ padding: '0.65rem 1rem', fontSize: '0.78rem', color: THEME.colors.textSecondary, textAlign: 'right', fontWeight: '700' }}>
-                                            {new Date(r.created_at).toLocaleDateString('es-CO')}
+                                            {formatBogotaDate(r.created_at)}
                                         </td>
                                     </tr>
                                 ))

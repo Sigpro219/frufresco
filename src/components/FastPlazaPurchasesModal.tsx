@@ -16,6 +16,7 @@ import {
     ArrowRight
 } from 'lucide-react';
 import { formatNumber, formatMoney } from '@/lib/adminTheme';
+import { getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import { WorkCell } from '@/types/workCells';
 
 interface ProductItem {
@@ -254,13 +255,14 @@ export default function FastPlazaPurchasesModal({
                 const noteDesc = `[COMPRA PLAZA CORABASTOS - Canal A] Entrada: ${formatNumber(qty, 2)}${formulaAudit}${priceAudit}`;
 
                 // Buscar si ya existía un movimiento de compra para este producto en la fecha
+                const { startUtcIso, endUtcIso } = getBogotaDayRangeUtcIso(currentDate);
                 const { data: existingMovs } = await supabase
                     .from('inventory_movements')
                     .select('id')
                     .eq('product_id', productId)
                     .eq('reference_type', 'purchase_reception')
-                    .gte('created_at', `${currentDate}T00:00:00.000Z`)
-                    .lte('created_at', `${currentDate}T23:59:59.999Z`);
+                    .gte('created_at', startUtcIso)
+                    .lte('created_at', endUtcIso);
 
                 if (existingMovs && existingMovs.length > 0) {
                     const targetId = existingMovs[0].id;

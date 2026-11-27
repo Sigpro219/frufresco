@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+import { formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import { 
   Mail, 
   Search, 
@@ -372,7 +373,7 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
 
       // Fecha
       if (selectedDate) {
-        const emailDate = new Date(email.sent_at || email.created_at || Date.now()).toISOString().split('T')[0];
+        const emailDate = getBogotaDateString(email.sent_at || email.created_at || new Date());
         if (emailDate !== selectedDate) return false;
       }
 
@@ -1147,7 +1148,7 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                       }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.82rem', letterSpacing: '-0.01em' }}>
-                            {date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {formatBogotaDate(date, { day: '2-digit', month: '2-digit', year: 'numeric' })}
                           </span>
                           <span style={{
                             color: '#64748B',
@@ -1155,7 +1156,7 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                             fontWeight: 600,
                             fontFamily: 'monospace'
                           }}>
-                            {date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                            {date.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                           </span>
                         </div>
                       </td>
@@ -1467,7 +1468,7 @@ export default function EmailOutboxModule({ onOutboxChange, topOffset = 133 }: E
                     </h3>
                   </div>
                   <p style={{ margin: 0, color: '#64748B', fontSize: '0.82rem', fontWeight: 600 }}>
-                    Para: <strong style={{ color: '#0F172A' }}>{selectedEmail.to_email}</strong> • Enviado: {new Date(selectedEmail.sent_at || selectedEmail.created_at || Date.now()).toLocaleString('es-CO')}
+                    Para: <strong style={{ color: '#0F172A' }}>{selectedEmail.to_email}</strong> • Enviado: {new Date(selectedEmail.sent_at || selectedEmail.created_at || Date.now()).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>

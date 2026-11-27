@@ -150,7 +150,7 @@ export default function ExpressBeaconPage() {
                     {lastPing && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#34D399', fontWeight: 700 }}>
                             <CheckCircle2 size={15} />
-                            Último reporte: {lastPing.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            Último reporte: {lastPing.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </div>
                     )}
                     {queueSize > 0 && (

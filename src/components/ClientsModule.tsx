@@ -6,6 +6,7 @@ import { useAuth, checkUserPermission } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { parseLogisticsText, formatTimeWindow, LogisticsData } from '@/lib/logistics-parser';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { addBogotaDays, diffBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     AlertTriangle,
     Check,
@@ -311,7 +312,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
     const [conversionPhone, setConversionPhone] = useState('');
     const [conversionAddress, setConversionAddress] = useState('');
     const [conversionCreateAgreement, setConversionCreateAgreement] = useState(false);
-    const [conversionStartDate, setConversionStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [conversionStartDate, setConversionStartDate] = useState(getBogotaDateString());
     const [conversionDurationValue, setConversionDurationValue] = useState<number>(2);
     const [conversionDurationUnit, setConversionDurationUnit] = useState<string>('weeks');
     const [conversionFile, setConversionFile] = useState<File | null>(null);
@@ -700,8 +701,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
             return { status: 'none', daysRemaining: null, validUntil: null, isInherited: false };
         }
         
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
+        const todayStr = getBogotaDateString();
 
         // Sort by valid_until descending to prioritize most recent agreement
         const sorted = [...clientAgreements].sort((a, b) => {
@@ -715,12 +715,8 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
             return { status: 'active', daysRemaining: null, validUntil: null, isInherited };
         }
 
-        // Normalización exacta YYYY-MM-DD sin desfasaje horario
-        const cleanDateStr = String(latest.valid_until).split('T')[0];
-        const [y, m, d] = cleanDateStr.split('-').map(Number);
-        const expiry = new Date(y, m - 1, d, 23, 59, 59, 999);
-        const diffMs = expiry.getTime() - now.getTime();
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const cleanDateStr = getBogotaDateString(latest.valid_until);
+        const diffDays = diffBogotaDays(todayStr, cleanDateStr);
 
         if (diffDays < 0) {
             return { status: 'expired', daysRemaining: diffDays, validUntil: latest.valid_until, isInherited };
@@ -762,7 +758,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                 setConversionPhone(lead.phone || '');
                 setConversionAddress(parsedAddress);
                 setConversionCreateAgreement(false);
-                setConversionStartDate(new Date().toISOString().split('T')[0]);
+                setConversionStartDate(getBogotaDateString());
                 setConversionDurationValue(2);
                 setConversionDurationUnit('weeks');
                 setConversionFile(null);
@@ -1223,7 +1219,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
         XLSX.utils.book_append_sheet(workbook, wsClients, "Clientes_Master");
         XLSX.utils.book_append_sheet(workbook, wsGuide, "Guia_Campos");
 
-        XLSX.writeFile(workbook, `CRM_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(workbook, `CRM_Clientes_${getBogotaDateString()}.xlsx`);
         window.showToast?.('Base completa de clientes exportada con éxito', 'success');
     };
 
@@ -2528,7 +2524,7 @@ export default function ClientsModule({ initialTab }: { initialTab?: string } = 
                                             {Object.values(scarcityLockedMap).map((lockedItem: any) => {
                                                 const disabledDate = new Date(lockedItem.disabledAt || Date.now());
                                                 const daysElapsed = Math.floor((Date.now() - disabledDate.getTime()) / (1000 * 60 * 60 * 24));
-                                                const formattedDateStr = disabledDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+                                                const formattedDateStr = formatBogotaDate(disabledDate, { day: '2-digit', month: 'short' });
                                                 const isUrgentAlert = daysElapsed >= 3;
 
                                                 return (
@@ -4218,7 +4214,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {data?.created_at && !isNaN(new Date(data.created_at).getTime()) && (
                     <div style={{ fontSize: '0.7rem', color: '#64748B', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }} title="Fecha y hora de registro en el sistema">
                         <Calendar size={11} style={{ color: '#94A3B8' }} />
-                        <span>Reg: {new Date(data.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })} - {new Date(data.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                        <span>Reg: {formatBogotaDate(data.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' })} - {new Date(data.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                     </div>
                 )}
                 {isB2B && profileData?.razon_social && <p style={{ margin: '0.1rem 0', fontSize: '0.75rem', color: THEME.colors.textSecondary, fontStyle: 'italic', lineHeight: '1.2' }}>{profileData.razon_social}</p>}
@@ -4352,7 +4348,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {isB2C && profileData && profileData.total_orders !== undefined && (
                     <>
                         <InfoRow icon="" label="Actividad" value={`${formatNumber(profileData.total_orders || 0)} Pedidos | ${formatMoney(profileData.total_spent || 0)} totales`} />
-                        {profileData.last_order && <InfoRow icon="" label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
+                        {profileData.last_order && <InfoRow icon="" label="Último pedido" value={formatBogotaDate(profileData.last_order as string)} />}
                     </>
                 )}
                 {isLead && leadData && (
@@ -4398,7 +4394,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                             {leadData.last_contact_date && (
                                 <div style={{ flex: 2 }}>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', display: 'block' }}>ÚLTIMO CONTACTO</label>
-                                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{new Date(leadData.last_contact_date as string).toLocaleDateString()}</div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>{formatBogotaDate(leadData.last_contact_date as string)}</div>
                                 </div>
                             )}
                         </div>
@@ -4419,7 +4415,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                                         {new Date(leadData.next_contact_date as string) < new Date() ? 'TAREA VENCIDA' : 'SIGUIENTE CONTACTO'}
                                     </label>
                                     <div style={{ fontSize: '0.85rem', fontWeight: '800', color: new Date(leadData.next_contact_date as string) < new Date() ? '#B91C1C' : '#15803D' }}>
-                                        {new Date(leadData.next_contact_date as string).toLocaleDateString()}
+                                        {formatBogotaDate(leadData.next_contact_date as string)}
                                     </div>
                                 </div>
                             </div>
@@ -4521,7 +4517,7 @@ function ClientCard({ type, data, pricingModels, onUpdatePricingModel, onUpdateS
                 {isLead && onScheduleTask && (
                     <button 
                         onClick={() => {
-                            const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+                            const date = window.prompt('Fecha de siguiente contacto (AAAA-MM-DD):', addBogotaDays(getBogotaDateString(), 1));
                             if (date) onScheduleTask(date);
                         }}
                         style={{ flex: 1, padding: '0.5rem 0.8rem', border: '1px solid #D1D5DB', color: '#64748B', fontSize: '0.75rem', fontWeight: 600, borderRadius: '8px', backgroundColor: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
@@ -4707,10 +4703,10 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <Calendar size={12} style={{ color: '#059669' }} />
-                            <span>{new Date(client.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                            <span>{formatBogotaDate(client.created_at, { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                         </div>
                         <div style={{ fontSize: '0.71rem', color: '#64748B', fontWeight: '600', paddingLeft: '17px' }}>
-                            {new Date(client.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {new Date(client.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true })}
                         </div>
                     </div>
                 ) : (
@@ -4783,12 +4779,12 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
                 {isLead ? (
                     <div>
                         {(client as any).last_contact_date ? (
-                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#475569' }}>Último: {new Date((client as any).last_contact_date).toLocaleDateString()}</div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#475569' }}>Último: {formatBogotaDate((client as any).last_contact_date)}</div>
                         ) : (
                             <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Sin contacto</div>
                         )}
                         {(client as any).next_contact_date ? (
-                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D97706', marginTop: '2px' }}>Tarea: {new Date((client as any).next_contact_date).toLocaleDateString()}</div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D97706', marginTop: '2px' }}>Tarea: {formatBogotaDate((client as any).next_contact_date)}</div>
                         ) : (
                             <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '2px' }}>Sin tareas</div>
                         )}
@@ -4842,7 +4838,7 @@ function ClientListRow({ client, pricingModels, onViewDetails, onEdit, onUpdateD
 
                             return (
                                 <span 
-                                    title={agreementValidUntil ? `Acuerdo vence el ${new Date(agreementValidUntil).toLocaleDateString('es-CO')}${agreementDaysRemaining !== null ? ` (quedan ${agreementDaysRemaining} días)` : ''}` : undefined}
+                                    title={agreementValidUntil ? `Acuerdo vence el ${formatBogotaDate(agreementValidUntil)}${agreementDaysRemaining !== null ? ` (quedan ${agreementDaysRemaining} días)` : ''}` : undefined}
                                     style={{
                                         fontSize: '0.68rem',
                                         padding: '3px 8px',
@@ -5043,7 +5039,7 @@ function AgreementDetailsModal({ agreement, onClose, clientName }: { agreement: 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', backgroundColor: '#F8FAFC', padding: '0.85rem 1.2rem', borderRadius: '16px', border: '1px solid #E2E8F0', fontSize: '0.8rem', color: '#475569' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Calendar size={15} color="#0D7A57" />
-                            <span><strong>Vigencia:</strong> {agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'} al {agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                            <span><strong>Vigencia:</strong> {agreement.start_date ? formatBogotaDate(agreement.start_date) : '---'} al {agreement.valid_until ? formatBogotaDate(agreement.valid_until) : 'Indefinida'}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <FileText size={15} color="#0D7A57" />
@@ -5643,7 +5639,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
             XLSX.utils.book_append_sheet(wb, ws, 'Pareto 80-20');
 
             const safeClientName = clientName.replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 30);
-            const dateStr = new Date().toISOString().split('T')[0];
+            const dateStr = getBogotaDateString();
             const fileName = `Pareto_Consumo_${safeClientName}_NIT_${clientNit}_${dateStr}.xlsx`;
 
             XLSX.writeFile(wb, fileName);
@@ -6461,7 +6457,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
                                             <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Fecha Registro:</span>
-                                            <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{editData?.created_at ? new Date(editData.created_at).toLocaleDateString() : 'Desconocida'}</span>
+                                            <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{editData?.created_at ? formatBogotaDate(editData.created_at) : 'Desconocida'}</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
                                             <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Número de Contactos:</span>
@@ -6470,13 +6466,13 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                         { (editData as any)?.last_contact_date && (
                                             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.6rem' }}>
                                                 <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Último Contacto:</span>
-                                                <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{new Date((editData as any).last_contact_date).toLocaleDateString()}</span>
+                                                <span style={{ fontSize: '0.78rem', color: '#1E293B', fontWeight: '800' }}>{formatBogotaDate((editData as any).last_contact_date)}</span>
                                             </div>
                                         )}
                                         { (editData as any)?.next_contact_date && (
                                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: '600' }}>Siguiente Tarea:</span>
-                                                <span style={{ fontSize: '0.78rem', color: '#D97706', fontWeight: '800' }}>{new Date((editData as any).next_contact_date).toLocaleDateString()}</span>
+                                                <span style={{ fontSize: '0.78rem', color: '#D97706', fontWeight: '800' }}>{formatBogotaDate((editData as any).next_contact_date)}</span>
                                             </div>
                                         )}
                                     </div>
@@ -7723,7 +7719,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                             </div>
                                             <div>
                                                 <span style={{ color: '#065F46', fontWeight: '800', display: 'block', textTransform: 'uppercase', fontSize: '0.65rem' }}>Creado el</span>
-                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{new Date(b2bAccess.createdAt || '').toLocaleDateString()}</span>
+                                                <span style={{ color: '#064E3B', fontWeight: '700' }}>{formatBogotaDate(b2bAccess.createdAt || '')}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -8162,7 +8158,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                 {b.last_order_date && (
                                                                     <div style={{ fontSize: '0.7rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                                                                         <Calendar size={11} style={{ color: '#94A3B8' }} />
-                                                                        <span>Último pedido: {new Date(b.last_order_date).toLocaleDateString('es-CO')}</span>
+                                                                        <span>Último pedido: {formatBogotaDate(b.last_order_date)}</span>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -8226,10 +8222,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                      const expiry = agreement.valid_until;
                                                      const status = (() => {
                                                          if (!expiry) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' };
-                                                         const exp = new Date(expiry);
-                                                         const today = new Date();
-                                                         today.setHours(0,0,0,0);
-                                                         const diff = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                                         const diff = diffBogotaDays(getBogotaDateString(), getBogotaDateString(expiry));
                                                          if (diff < 0) return { label: 'Vencido', color: '#DC2626', bgColor: '#FEF2F2', type: 'expired' };
                                                          if (diff <= 5) {
                                                              const label = diff === 0 ? 'Vence hoy' : diff === 1 ? 'Por vencer (1 día)' : `Por vencer (${diff} días)`;
@@ -8299,7 +8292,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                                             Matriz
                                                                         </span>
                                                                     )}
-                                                                    <span>• Vence: {expiry ? new Date(expiry).toLocaleDateString('es-CO') : 'Indefinida'}</span>
+                                                                    <span>• Vence: {expiry ? formatBogotaDate(expiry) : 'Indefinida'}</span>
                                                                 </div>
                                                                 <span style={{ fontSize: '0.62rem', color: '#0D7A57', fontWeight: '800', textDecoration: 'underline', flexShrink: 0 }}>Ver Precios →</span>
                                                             </div>
@@ -8799,7 +8792,7 @@ function ClientFormModal({ onClose, onRefresh, pricingModels, editData, setNickn
                                                             <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: idx % 2 === 0 ? 'white' : '#FAFAFA' }}>
                                                                 {/* Fecha */}
                                                                 <td style={{ padding: '0.75rem 1rem', color: '#334155', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                                                                    {item.created_at ? new Date(item.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '---'}
+                                                                    {item.created_at ? new Date(item.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' }) : '---'}
                                                                 </td>
 
                                                                 {/* Pedido */}
@@ -11418,7 +11411,7 @@ function BranchTransferModal({
         try {
             const newBranchId = crypto.randomUUID();
             const now = new Date();
-            const dateStr = now.toLocaleDateString('es-CO');
+            const dateStr = formatBogotaDate(new Date());
 
             // 1. Prepare cloned branch payload
             const newBranchPayload: any = {

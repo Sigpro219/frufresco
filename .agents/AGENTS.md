@@ -64,3 +64,19 @@ Este archivo define las reglas de negocio, estándares de desarrollo y mitigaci�
   - Si un cliente B2B **sí** tiene acuerdo vigente (`quotes.status = 'agreement'`) y `allow_off_agreement_purchases = true`, todo SKU fuera de acuerdo entra estrictamente en **`$0 COP`** como **Pedido B (`Remisión $0`, `is_off_agreement_split = true`)** para ajuste puntual al día siguiente por Comercial (sin heredar *General Institucional*), mientras **Pedido A** conserva únicamente los ítems del acuerdo.
   - Si un ítem ya tiene `unit_price > 0` en `order_items` (por ejemplo tras ser valorizado por Comercial), queda estrictamente prohibido seguir marcándolo como `"despachado sin precio"`.
 
+
+---
+
+## 7. Soberanía Horaria `America/Bogota` (Poka-Yoke Anti-Desfase UTC — Escenario 500)
+* **Regla Inmutable:** Toda lógica de fecha calendario, cálculo de días, rangos diarios y formateo visual en FruFresco opera exclusivamente bajo la zona horaria **`America/Bogota` (`UTC-5` permanente, sin horario de verano)**.
+* **Prohibiciones Estrictas:**
+  1. Queda terminantemente prohibido usar `new Date().toISOString().split('T')[0]` o `.toISOString().slice(0, 10)` para obtener la fecha de hoy o convertir timestamps a `'YYYY-MM-DD'` (después de las 19:00 COT salta al día siguiente en UTC).
+  2. Queda terminantemente prohibido usar `new Date(x).toLocaleDateString()` (o `.toLocaleString()` / `Intl.DateTimeFormat`) sin `timeZone: 'America/Bogota'`, o parsear cadenas `'YYYY-MM-DD'` con `new Date(dateStr)` / `new Date(\`${dateStr}T00:00:00\`)` (genera desfase `-1 día` en Colombia).
+  3. Queda terminantemente prohibido filtrar días completos en Supabase con límites UTC crudos (`T00:00:00Z` / `T23:59:59Z` o `.000Z` / `.999Z`).
+* **Fuente Única Soberana (`@/lib/dateUtils`):**
+  - `getBogotaDateString(input?)` para obtener `'YYYY-MM-DD'` en Bogotá.
+  - `parseBogotaDate(dateStr)` para parsear `'YYYY-MM-DD'` al mediodía de Bogotá (`12:00:00-05:00` / `17:00:00Z`, invariante a zona horaria) sin desfase.
+  - `formatBogotaDate(input, options?, fallback?)` para formateo en `'es-CO'` con `America/Bogota`.
+  - `addBogotaDays(dateStr, days)` y `diffBogotaDays(fromDateStr, toDateStr)` para aritmética calendario exacta.
+  - `getBogotaDayRangeUtcIso(dateStr)` para rangos UTC de Supabase (`T00:00:00.000-05:00` a `T23:59:59.999-05:00`).
+* **Compuerta de Auditoría:** Ejecutar `node scripts/audit-bogota-dates.mjs --test` (pruebas Dual-TZ `UTC` y `America/Bogota`) y `node scripts/audit-bogota-dates.mjs` (escaneo de regresiones en `src/`).

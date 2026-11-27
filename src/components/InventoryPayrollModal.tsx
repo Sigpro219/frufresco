@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getBogotaDateString, getBogotaDayRangeUtcIso, formatBogotaDate } from '@/lib/dateUtils';
 import { 
     X, 
     FileSpreadsheet, 
@@ -87,7 +88,7 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
 
     // Modal de nueva venta rápida
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newSaleDate, setNewSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [newSaleDate, setNewSaleDate] = useState(() => getBogotaDateString());
     const [newSaleProductId, setNewSaleProductId] = useState('');
     const [newSaleCollaborator, setNewSaleCollaborator] = useState('');
     const [newSaleCollabSearch, setNewSaleCollabSearch] = useState('');
@@ -95,9 +96,8 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
     const [isSubmittingSale, setIsSubmittingSale] = useState(false);
 
     // Rango de fechas por defecto: Mes actual
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
+    const firstDayOfMonth = `${todayStr.slice(0, 7)}-01`;
 
     const [startDate, setStartDate] = useState(firstDayOfMonth);
     const [endDate, setEndDate] = useState(todayStr);
@@ -148,8 +148,8 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
     const fetchEmployeeSales = async () => {
         setLoading(true);
         try {
-            const startIso = `${startDate}T00:00:00.000Z`;
-            const endIso = `${endDate}T23:59:59.999Z`;
+            const { startUtcIso: startIso } = getBogotaDayRangeUtcIso(startDate);
+            const { endUtcIso: endIso } = getBogotaDayRangeUtcIso(endDate);
 
             const { data, error } = await supabase
                 .from('inventory_movements')
@@ -322,12 +322,13 @@ export default function InventoryPayrollModal({ isOpen, onClose }: InventoryPayr
         }
 
         const createdAtDate = new Date(item.created_at);
-        const datePart = createdAtDate.toLocaleDateString('es-CO', {
+        const datePart = formatBogotaDate(item.created_at, {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
         });
         const timePart = createdAtDate.toLocaleTimeString('es-CO', {
+            timeZone: 'America/Bogota',
             hour: '2-digit',
             minute: '2-digit',
             hour12: true

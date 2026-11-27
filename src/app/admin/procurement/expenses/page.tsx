@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import { 
     Receipt, 
     Plus, 
@@ -63,10 +64,8 @@ export default function ExpensesPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const todayIso = todayStart.toISOString();
-            const todayDateStr = new Date().toISOString().split('T')[0];
+            const todayDateStr = getBogotaDateString();
+            const { startUtcIso: todayIso } = getBogotaDayRangeUtcIso(todayDateStr);
 
             // 1. Fetch expenses for today
             const [expRes, budgetRes] = await Promise.all([
@@ -331,7 +330,7 @@ export default function ExpensesPage() {
                                             </td>
                                             <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                                                 <div style={{ fontSize: '0.82rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                    {new Date(exp.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(exp.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </td>
                                         </tr>

@@ -13,6 +13,7 @@ import Toast from '@/components/Toast';
 import { CATEGORY_MAP } from '@/lib/constants';
 import { triggerProductRevalidation } from '@/lib/revalidate';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { 
     Plus, 
     FileDown, 
@@ -439,7 +440,7 @@ export default function MasterProductsPage() {
         XLSX.utils.book_append_sheet(workbook, wsVariations, "2. Variaciones");
         XLSX.utils.book_append_sheet(workbook, wsGuide, "3. Diccionario_Guia");
 
-        XLSX.writeFile(workbook, `maestro_edicion_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(workbook, `maestro_edicion_${getBogotaDateString()}.xlsx`);
         showToast('Maestro completo exportado (precios gestionados dinámicamente)', 'success');
     };
 

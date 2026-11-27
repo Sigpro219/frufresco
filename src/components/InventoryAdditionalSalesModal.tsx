@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getBogotaDateString, getBogotaDayRangeUtcIso, formatBogotaDate } from '@/lib/dateUtils';
 import { 
     X, 
     FileSpreadsheet, 
@@ -39,9 +40,8 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
+    const firstDayOfMonth = `${todayStr.slice(0, 7)}-01`;
 
     const [startDate, setStartDate] = useState(firstDayOfMonth);
     const [endDate, setEndDate] = useState(todayStr);
@@ -49,8 +49,8 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
     const fetchAdditionalSales = async () => {
         setLoading(true);
         try {
-            const startIso = `${startDate}T00:00:00.000Z`;
-            const endIso = `${endDate}T23:59:59.999Z`;
+            const { startUtcIso: startIso } = getBogotaDayRangeUtcIso(startDate);
+            const { endUtcIso: endIso } = getBogotaDayRangeUtcIso(endDate);
 
             const { data, error } = await supabase
                 .from('inventory_movements')
@@ -128,7 +128,7 @@ export default function InventoryAdditionalSalesModal({ isOpen, onClose }: Inven
             unitPrice,
             totalEstimated,
             notes: r.notes || '',
-            date: new Date(r.created_at).toLocaleDateString('es-CO', {
+            date: formatBogotaDate(r.created_at, {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

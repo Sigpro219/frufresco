@@ -10,6 +10,7 @@ import { Printer, ShieldAlert, ArrowLeft, Download, Truck, FileSpreadsheet, File
 import Letterhead from '@/components/Letterhead';
 import { formatSpaceLabel, getOrderSpaceDisplayLabel, ensureUniversalStagingSpaces } from '@/lib/stagingSpaceAllocator';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } from '@/lib/fileSavePicker';
 import { formatTimeWindow } from '@/lib/logistics-parser';
 import { calculateProcurementNetting, NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
@@ -732,7 +733,7 @@ function ContingencyPrintContent() {
                         setSpaceSyncWarning(`Advertencia de Bodega: ${msg} Se muestran los pedidos cargados con su última asignación conocida.`);
                     }
                     const profileIds = Array.from(new Set(rawOrders.map(o => o.profile_id || o.profiles?.id).filter(Boolean)));
-                    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                    const sixtyDaysAgo = addBogotaDays(getBogotaDateString(), -60);
 
                     const [histOrdersRes, histPqrsRes] = await Promise.all([
                         profileIds.length > 0
@@ -853,7 +854,7 @@ function ContingencyPrintContent() {
 
     const handleExportExcel = async () => {
         if (!orders || orders.length === 0) return;
-        const fileDateForPicker = orders[0]?.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        const fileDateForPicker = orders[0]?.delivery_date || selectedDate || getBogotaDateString();
         const manifestExcelName = `Manifiesto_Ruta_${fileDateForPicker}.xlsx`;
         let fileHandle: any = null;
         try {
@@ -922,7 +923,7 @@ function ContingencyPrintContent() {
 
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Manifiesto de Ruta');
-        const fileDate = orders[0]?.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        const fileDate = orders[0]?.delivery_date || selectedDate || getBogotaDateString();
         await saveWorkbookWithPicker(XLSX, workbook, manifestExcelName, fileHandle);
     };
 
@@ -2237,7 +2238,7 @@ function ContingencyPrintContent() {
                                 key={`manifest-page-${pageIdx}`}
                                 title="Manifiesto de Ruta & Control de Canastillas"
                                 subtitle={`DESPACHO Y CONTROL LOGÍSTICO DE RUTA · SALIDA DE PLANTA${manifestPages.length > 1 ? ` · HOJA ${pageIdx + 1} DE ${manifestPages.length}` : ''}`}
-                                date={orders[0]?.delivery_date || new Date().toISOString().split('T')[0]}
+                                date={orders[0]?.delivery_date || getBogotaDateString()}
                                 reference={`TOTAL PARADAS: ${orders.length}`}
                                 badge="DESPACHO Y RUTA"
                                 badgeVariant="emerald"

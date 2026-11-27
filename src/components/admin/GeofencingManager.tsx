@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, forwardRef, useImperativeHandle, useCallb
 import { Map, Marker, InfoWindow, useMapsLibrary, MapMouseEvent, useMap } from '@vis.gl/react-google-maps';
 import { Save, Trash2, Eye, EyeOff, Edit2, AlertCircle, ListFilter, Search, X, MapPin, Building2, Phone, User, Calendar, ExternalLink, Layers, ArrowUpRight, Home, Download } from 'lucide-react';
 import { THEME } from '@/lib/adminTheme';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 function MapController({ center, zoom }: { center: { lat: number; lng: number } | null; zoom: number }) {
     const map = useMap();
@@ -219,7 +220,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         }
 
         const excelRows = filteredPoints.map(pt => ({
-            'Fecha y Hora': pt.created_at ? new Date(pt.created_at).toLocaleString('es-CO') : 'Hoy',
+            'Fecha y Hora': pt.created_at ? new Date(pt.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : 'Hoy',
             'Canal': pt.channel === 'b2b' ? 'HORECA B2B' : 'Hogar B2C',
             'Cliente / Empresa': pt.customer_name || 'Anónimo',
             'Teléfono': pt.customer_phone || '',
@@ -248,7 +249,7 @@ export default function GeofencingManager({ settings, onSave, saving, canEdit }:
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Demandas Rechazadas');
 
-        XLSX.writeFile(workbook, `frufresco_rechazos_${modalFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        XLSX.writeFile(workbook, `frufresco_rechazos_${modalFilter}_${getBogotaDateString()}.xlsx`);
     };
 
     const startEditing = (mode: 'b2c' | 'b2b') => {

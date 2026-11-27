@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import Letterhead from './Letterhead';
 import { X, Printer, Rocket, Tag, Calendar, Building2, CheckCircle2, FileText } from 'lucide-react';
 import { printViaNewWindow } from '@/components/print';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface AgreementItem {
     id?: string;
@@ -45,19 +46,19 @@ export default function AgreementDocumentModal({
     };
 
     const createdDate = agreement.created_at
-        ? new Date(agreement.created_at).toLocaleDateString('es-CO', {
+        ? formatBogotaDate(agreement.created_at, {
               day: 'numeric',
               month: 'long',
               year: 'numeric'
-          })
+          }, 'Fecha N/A')
         : 'Fecha N/A';
 
     const validUntilDate = agreement.valid_until
-        ? new Date(agreement.valid_until).toLocaleDateString('es-CO', {
+        ? formatBogotaDate(agreement.valid_until, {
               day: 'numeric',
               month: 'long',
               year: 'numeric'
-          })
+          }, 'Vigencia Continua (Renovación Trimestral)')
         : 'Vigencia Continua (Renovación Trimestral)';
 
     const refCode = agreement.quote_number

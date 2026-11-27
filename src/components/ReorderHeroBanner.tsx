@@ -5,6 +5,7 @@ import { useCart } from '../lib/cartContext';
 import { ShoppingCart, RotateCcw, Sparkles, X, Loader2, Calendar, CheckCircle2, ChevronRight, History, Star, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 export default function ReorderHeroBanner({ variant = 'banner' }: { variant?: 'banner' | 'compact-trigger' }) {
     const { addItem } = useCart();
@@ -391,7 +392,7 @@ export default function ReorderHeroBanner({ variant = 'banner' }: { variant?: 'b
                         ) : recentOrders.length > 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 {recentOrders.map((ord, idx) => {
-                                    const dateStr = new Date(ord.created_at).toLocaleDateString('es-CO', {
+                                    const dateStr = formatBogotaDate(ord.created_at, {
                                         weekday: 'short',
                                         year: 'numeric',
                                         month: 'short',

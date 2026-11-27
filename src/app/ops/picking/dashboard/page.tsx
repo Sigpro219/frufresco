@@ -181,8 +181,8 @@ export default function PickingDashboard() {
 
     useEffect(() => {
         // Hydration fix for time
-        setCurrentTime(new Date().toLocaleTimeString());
-        const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
+        setCurrentTime(new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' }));
+        const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })), 1000);
         return () => clearInterval(timer);
     }, []);
 

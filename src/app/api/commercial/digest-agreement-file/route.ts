@@ -5,6 +5,7 @@ import { findBestProductMatchDetails, sanitizeDocText } from '@/lib/orders/order
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
 import * as XLSX from 'xlsx';
 import { isSpreadsheetFile } from '@/lib/spreadsheets';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
     let modelUsed: string | undefined = undefined;
     let detectedClientName = '';
-    let validityStart = new Date().toISOString().split('T')[0];
+    let validityStart = getBogotaDateString();
     let validityEnd = '';
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || '';

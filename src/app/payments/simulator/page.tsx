@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { translations, Locale } from '../../../lib/translations';
+import { isSandboxMode } from '@/lib/sandboxGuard';
 import { AlertCircle } from 'lucide-react';
 
 function SimulatorContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const sandboxAllowed = isSandboxMode();
 
     const reference = searchParams.get('reference');
     const amountInCents = searchParams.get('amount-in-cents');
@@ -20,6 +22,14 @@ function SimulatorContent() {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<'idle' | 'processing'>('idle');
     const [simulationError, setSimulationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!sandboxAllowed) {
+            router.replace('/checkout');
+        }
+    }, [sandboxAllowed, router]);
+
+    if (!sandboxAllowed) return null;
 
     const amount = amountInCents ? parseInt(amountInCents) / 100 : 0;
 

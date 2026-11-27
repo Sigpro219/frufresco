@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
 import { CATEGORY_MAP, OPERATIONAL_STATUSES } from '@/lib/constants';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import {
     Calendar,
     ChevronUp,
@@ -152,8 +153,8 @@ export default function CommercialDailyMonitorModule() {
     const [selectedDrilldownProductId, setSelectedDrilldownProductId] = useState<string>('');
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportScope, setExportScope] = useState<'day' | 'month' | 'custom'>('day');
-    const [customStartDate, setCustomStartDate] = useState(new Date().toISOString().split('T')[0]);
-    const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [customStartDate, setCustomStartDate] = useState(getBogotaDateString());
+    const [customEndDate, setCustomEndDate] = useState(getBogotaDateString());
     const [isExporting, setIsExporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [activePokaYoke, setActivePokaYoke] = useState<PokaYokeFilter>('all');
@@ -243,9 +244,7 @@ export default function CommercialDailyMonitorModule() {
     const fetchDates = useCallback(async () => {
         setLoadingDates(true);
         try {
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setDate(sixMonthsAgo.getDate() - 180);
-            const minDateIso = sixMonthsAgo.toISOString().split('T')[0];
+            const minDateIso = addBogotaDays(getBogotaDateString(), -180);
 
             const { data, error } = await supabase
                 .from('orders')
@@ -743,11 +742,11 @@ export default function CommercialDailyMonitorModule() {
     // Selector de Boxing (Meses)
     const monthOptions = useMemo(() => {
         const options: { offset: number; label: string; yearMonth: string }[] = [];
-        const now = new Date();
+        const [curY, curM] = getBogotaDateString().split('-').map(Number);
         for (let i = 0; i < 6; i++) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const label = d.toLocaleString('es-CO', { month: 'long', year: 'numeric' });
-            const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const d = new Date(Date.UTC(curY, (curM - 1) - i, 15, 12, 0, 0));
+            const label = d.toLocaleString('es-CO', { month: 'long', year: 'numeric', timeZone: 'America/Bogota' });
+            const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
             options.push({
                 offset: i,
                 label: label.charAt(0).toUpperCase() + label.slice(1),

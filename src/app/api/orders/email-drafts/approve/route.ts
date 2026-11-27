@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffBearer, insertAuditLogSafe } from '@/lib/auth/verifyStaffBearer';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -211,7 +212,7 @@ export async function POST(req: Request) {
       total_weight_kg: roundedWeight,
       payment_status: isGiftRemission ? 'Exonerado' : 'Pendiente',
       payment_method: isGiftRemission ? 'obsequio_cortesia' : 'Crédito B2B',
-      delivery_date: deliveryDate || new Date().toISOString().split('T')[0],
+      delivery_date: deliveryDate || getBogotaDateString(),
       delivery_slot: deliverySlot || 'AM',
       shipping_address: address || profile.address || 'Bogotá',
       admin_notes: isGiftRemission ? `[REMISIÓN DE OBSEQUIO / CORTESÍA $0 COP] ${baseAdminNotes}` : baseAdminNotes,

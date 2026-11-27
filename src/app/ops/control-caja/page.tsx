@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
-import { getBogotaDateString } from '@/lib/dateUtils';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import Link from 'next/link';
 import { 
     Coins, 
@@ -76,8 +76,7 @@ export default function OpsControlCajaPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const startIso = `${selectedDate}T00:00:00`;
-            const endIso = `${selectedDate}T23:59:59.999`;
+            const { startUtcIso: startIso, endUtcIso: endIso } = getBogotaDayRangeUtcIso(selectedDate);
 
             // 1. Cargar presupuestos asignados del día
             const { data: budgets, error: bErr } = await supabase

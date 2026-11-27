@@ -18,6 +18,7 @@ import {
 } from '@/lib/rcaTaxonomy';
 import { PQR, formatDateFriendly } from '../utils';
 import PqrCapaPlanModal, { CapaPlan } from './PqrCapaPlanModal';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 
 interface PqrLeanDashboardProps {
     pqrs: PQR[];
@@ -113,7 +114,7 @@ export default function PqrLeanDashboard({
                         containmentAction: 'Inspección de salida al 100% en muelle por el despachador.',
                         pokaYokeAction: 'Instalación de barras metálicas de tope fijo en furgones a 1.20m de altura.',
                         assignedTo: 'Carlos Rodríguez (Jefe Transporte)',
-                        targetDate: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
+                        targetDate: addBogotaDays(getBogotaDateString(), 10),
                         status: 'verifying_15d',
                         verificationNotes: 'Auditoría en muelle: 0 casos de aplastamiento en 30 días posteriores.',
                         createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
@@ -294,20 +295,19 @@ export default function PqrLeanDashboard({
             const diffDays = Math.max(1, Math.min(31, Math.ceil((now.getTime() - start.getTime()) / 86400000)));
             const bucketDuration = diffDays <= 7 ? 1 : diffDays <= 14 ? 1 : 2; // 1 or 2 days per bar
 
-            let cur = new Date(start.getTime());
-            cur.setHours(0, 0, 0, 0);
+            let cur = new Date(getBogotaDayRangeUtcIso(getBogotaDateString(start)).startUtcIso);
 
             while (cur < now) {
                 const bEnd = new Date(cur.getTime() + bucketDuration * 86400000);
                 const isSingleDay = bucketDuration === 1;
                 const label = isSingleDay
-                    ? cur.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
-                    : `${cur.getDate()}-${new Date(bEnd.getTime() - 86400000).getDate()} ${cur.toLocaleDateString('es-CO', { month: 'short' })}`;
+                    ? formatBogotaDate(cur, { day: 'numeric', month: 'short' })
+                    : `${formatBogotaDate(cur, { day: 'numeric' })}-${formatBogotaDate(new Date(bEnd.getTime() - 86400000), { day: 'numeric' })} ${formatBogotaDate(cur, { month: 'short' })}`;
 
                 const b: HistBucket = {
                     key: `day-${cur.getTime()}`,
                     label,
-                    fullLabel: `${cur.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}`,
+                    fullLabel: `${formatBogotaDate(cur, { weekday: 'short', day: 'numeric', month: 'short' })}`,
                     startDate: new Date(cur),
                     endDate: new Date(bEnd),
                     totalCount: 0,
@@ -343,7 +343,7 @@ export default function PqrLeanDashboard({
             while (cur < now) {
                 const bEnd = new Date(Math.min(now.getTime() + 86400000, cur.getTime() + stepMs));
                 const label = `Sem ${weekIdx}`;
-                const fullLabel = `${cur.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })} - ${new Date(bEnd.getTime() - 86400000).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}`;
+                const fullLabel = `${formatBogotaDate(cur, { day: 'numeric', month: 'short' })} - ${formatBogotaDate(new Date(bEnd.getTime() - 86400000), { day: 'numeric', month: 'short' })}`;
 
                 const b: HistBucket = {
                     key: `week-${weekIdx}`,
@@ -377,11 +377,12 @@ export default function PqrLeanDashboard({
             }
         } else {
             // Monthly
-            let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+            const startBogota = getBogotaDateString(start);
+            let cur = new Date(Date.UTC(Number(startBogota.slice(0, 4)), Number(startBogota.slice(5, 7)) - 1, 1, 5, 0, 0));
             while (cur <= now) {
-                const bEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-                const label = cur.toLocaleDateString('es-CO', { month: 'short' });
-                const fullLabel = cur.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+                const bEnd = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1, 5, 0, 0));
+                const label = formatBogotaDate(cur, { month: 'short' });
+                const fullLabel = formatBogotaDate(cur, { month: 'long', year: 'numeric' });
 
                 const b: HistBucket = {
                     key: `month-${cur.getFullYear()}-${cur.getMonth()}`,

@@ -23,6 +23,7 @@ import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets'
 import { useAuth } from '@/lib/authContext';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, parseStoreVacationConfig } from '@/lib/colombianHolidays';
 import { getBogotaWeekdayShort } from '@/lib/orders/bogotaDateParser';
+import { addBogotaDays, diffBogotaDays, formatBogotaDate, getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
 import { fetchPendingDraftsComplete, fetchDraftsByStatusPage, fetchDraftTabCounts, searchOrderDraftsServer, detectPoSubjectMismatch, type DraftTabCounts } from '@/lib/orders/draftInboxQuery';
 import {
     matchItemsToTextLines,
@@ -67,22 +68,14 @@ const getChannelBadge = (source: string) => {
  */
 const getOperationalDateFromDelivery = (deliveryDateStr: string): string => {
   if (!deliveryDateStr) return '';
-  const d = new Date(deliveryDateStr + 'T12:00:00');
-  if (isNaN(d.getTime())) return deliveryDateStr;
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
+  return addBogotaDays(deliveryDateStr, -1) || deliveryDateStr;
 };
 
 /**
  * Retorna una fecha futura de Bogotá en formato YYYY-MM-DD
  */
 const getNextBogotaDateStr = (daysAhead: number = 1): string => {
-  const now = new Date();
-  const bogotaOffset = -5 * 60; // UTC-5
-  const localOffset = now.getTimezoneOffset();
-  const bogotaNow = new Date(now.getTime() + (localOffset - bogotaOffset) * 60000);
-  bogotaNow.setDate(bogotaNow.getDate() + daysAhead);
-  return bogotaNow.toISOString().split('T')[0];
+  return addBogotaDays(getBogotaDateString(), daysAhead);
 };
 
 const getSpanishStem = (word: string) => {
@@ -186,17 +179,13 @@ const getNextAllowedDeliveryDate = (baseDateStr: string, allowedDays: number[]):
   
   const jDays = allowedDays.map(d => d === 7 ? 0 : d);
   
-  let date = new Date(baseDateStr + 'T12:00:00');
-  if (isNaN(date.getTime())) {
-    date = new Date();
-  }
-  
+  const startStr = getBogotaDateString(baseDateStr) || getBogotaDateString();
   for (let k = 0; k < 7; k++) {
-    const currentDay = date.getDay();
+    const candidate = addBogotaDays(startStr, k);
+    const currentDay = parseBogotaDate(candidate).getUTCDay();
     if (jDays.includes(currentDay)) {
-      return date.toISOString().split('T')[0];
+      return candidate;
     }
-    date.setDate(date.getDate() + 1);
   }
   return baseDateStr;
 };
@@ -764,6 +753,7 @@ const GmailMessageViewer = ({
   })();
 
   const dateStr = draft.created_at ? new Date(draft.created_at).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -1070,39 +1060,28 @@ const formatFilterDateLabel = (dateStr: string) => {
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
   const day = parseInt(parts[2], 10);
-  const d = new Date(year, month, day);
   const isToday = dateStr === getBogotaTodayStr();
-  const monthName = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+  const monthName = formatBogotaDate(dateStr, { month: 'short' }).replace('.', '');
+  const currentYear = Number(getBogotaDateString().slice(0, 4));
   
   if (isToday) {
     return `Hoy (${day} ${monthName})`;
   }
-  return `${day} ${monthName} ${year !== new Date().getFullYear() ? year : ''}`.trim();
+  return `${day} ${monthName} ${year !== currentYear ? year : ''}`.trim();
 };
 
 const formatDeliveryDateLabel = (dateStr: string) => {
   if (!dateStr) return 'Seleccionar fecha';
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
   const day = parseInt(parts[2], 10);
-  const d = new Date(year, month, day);
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const target = new Date(year, month, day);
-  target.setHours(0, 0, 0, 0);
+  const diffDays = diffBogotaDays(getBogotaDateString(), dateStr);
+  const isToday = diffDays === 0;
+  const isTomorrow = diffDays === 1;
 
-  const isToday = target.getTime() === today.getTime();
-  const isTomorrow = target.getTime() === tomorrow.getTime();
-
-  const weekdayName = d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '');
-  const monthName = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+  const weekdayName = formatBogotaDate(dateStr, { weekday: 'short' }).replace('.', '');
+  const monthName = formatBogotaDate(dateStr, { month: 'short' }).replace('.', '');
   const capitalizedWeekday = weekdayName.charAt(0).toUpperCase() + weekdayName.slice(1);
 
   if (isToday) return `Hoy (${day} ${monthName})`;
@@ -4627,7 +4606,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     if (!isFromAgreement && effectiveClientId && campaigns.length > 0) {
       const metadata = getDraftMetadata(draft);
       const deliveryDateStr = deliveryDate || metadata?.deliveryDate;
-      const delivery = deliveryDateStr ? deliveryDateStr.split('T')[0] : new Date().toISOString().split('T')[0];
+      const delivery = deliveryDateStr ? deliveryDateStr.split('T')[0] : getBogotaDateString();
 
       // Find targets mapping this client/parent to active campaigns
       const clientTargets = campaignTargets.filter(t => t.profile_id === effectiveClientId);
@@ -8638,19 +8617,17 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                 const draftDate = new Date(draft.created_at);
                 const formattedDate = isNaN(draftDate.getTime()) 
                   ? '--/--' 
-                  : draftDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }).replace('.', '');
+                  : formatBogotaDate(draftDate, { day: '2-digit', month: 'short' }).replace('.', '');
                 const formattedTime = isNaN(draftDate.getTime())
                   ? '--:--'
-                  : draftDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  : draftDate.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' });
 
                 // Formateo armónico para la fecha de entrega en español (ej: "11 de nov" o "17 de nov")
                 const formattedDeliveryLabel = (() => {
                   if (!meta.deliveryDate) return null;
                   const parts = meta.deliveryDate.split('-');
                   if (parts.length !== 3) return meta.deliveryDate;
-                  const dObj = new Date(`${meta.deliveryDate}T12:00:00`);
-                  if (isNaN(dObj.getTime())) return meta.deliveryDate;
-                  return dObj.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }).replace('.', '');
+                  return formatBogotaDate(meta.deliveryDate, { day: '2-digit', month: 'short' }, meta.deliveryDate).replace('.', '');
                 })();
 
                 const rawSubject = cleanSubject(draft.email_subject) || 'Sin Asunto';
@@ -9137,7 +9114,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                     )}
                   </div>
                   <span style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 600 }}>
-                    {new Date(draft.created_at).toLocaleDateString()}
+                    {formatBogotaDate(draft.created_at)}
                   </span>
                 </div>
                 
@@ -13478,22 +13455,19 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                   const allowed = matchedProfile?.logistics_data?.allowed_days || matchedProfile?.logistics_data?.days || [];
                   const jDays = allowed.map((d: number) => d === 7 ? 0 : d);
                   
-                  const base = new Date();
-                  const utc = base.getTime() + (base.getTimezoneOffset() * 60000);
-                  const bogotaToday = new Date(utc + (3600000 * -5));
+                  const todayStr = getBogotaDateString();
                   
                   for (let offset = 1; offset <= 7; offset++) {
-                    const d = new Date(bogotaToday);
-                    d.setDate(bogotaToday.getDate() + offset);
-                    const dStr = d.toISOString().split('T')[0];
-                    const dayOfWeek = d.getDay();
+                    const dStr = addBogotaDays(todayStr, offset);
+                    const dayOfWeek = parseBogotaDate(dStr).getUTCDay();
                     const isAllowed = jDays.length === 0 || jDays.includes(dayOfWeek);
                     const isTom = offset === 1;
                     
                     if (isAllowed || isTom) {
+                      const fmt = formatBogotaDate(dStr, { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '');
                       quickDates.push({
                         dateStr: dStr,
-                        label: isTom ? `Mañana (${d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '')})` : d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', ''),
+                        label: isTom ? `Mañana (${fmt})` : fmt,
                         isAllowed,
                         isTomorrow: isTom
                       });

@@ -14,7 +14,8 @@ import InvoiceDocumentModal from '@/components/InvoiceDocumentModal';
 import AgreementDocumentModal from '@/components/AgreementDocumentModal';
 import B2BReportNoveltyModal from '@/components/B2BReportNoveltyModal';
 import { ShieldCheck, ExternalLink, ArrowRight, Percent, Award, CalendarClock, BookmarkCheck } from 'lucide-react';
-import { getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
+import { calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getNextValidDeliveryDate, isValidDeliveryDate, parseStoreVacationConfig, StoreVacationConfig } from '@/lib/colombianHolidays';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface OrderItem {
     id: string;
@@ -599,30 +600,17 @@ export default function B2BDashboard() {
                     setStoreStatus(rawStatus);
                 }
 
-                const now = new Date();
-                const cutoff = new Date();
-                cutoff.setHours(cutoffHour, 0, 0, 0);
-
-                let targetDate = new Date();
-
-                if (cutoffEnabled) {
-                    const afterCutoff = now >= cutoff;
-                    if (afterCutoff) {
-                        targetDate.setDate(now.getDate() + 2);
-                    } else {
-                        targetDate.setDate(now.getDate() + 1);
-                    }
-                } else {
-                    targetDate.setDate(now.getDate() + 1);
-                }
-
-                // Ajustar al primer día hábil permitido (saltando domingos, 19 festivos y receso operativo)
-                const validTargetDate = getNextValidDeliveryDate(targetDate, sundaysAllowed, holidaysAllowed, parsedVac);
+                const minDateStr = calculateStandardMinDeliveryDate(
+                    cutoffEnabled,
+                    cutoffHour,
+                    sundaysAllowed,
+                    holidaysAllowed,
+                    parsedVac
+                );
 
                 if (isMounted.current) {
-                    const minDateStr = validTargetDate.toISOString().split('T')[0];
                     setMinDeliveryDate(minDateStr);
-                    setDeliveryDate(prev => (!prev || prev < minDateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac)) ? minDateStr : prev);
+                    setDeliveryDate(prev => (!prev || prev < minDateStr || !isValidDeliveryDate(prev, sundaysAllowed, holidaysAllowed, parsedVac).valid) ? minDateStr : prev);
                 }
             } catch (err) {
                 if (isAbortError(err)) return;
@@ -1142,7 +1130,7 @@ export default function B2BDashboard() {
         }
 
         if (deliveryDate < minDeliveryDate || !isValidDeliveryDate(deliveryDate, allowSundays, allowHolidays, vacationConfig)) {
-            const corrected = getNextValidDeliveryDate(deliveryDate < minDeliveryDate ? minDeliveryDate : deliveryDate, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+            const corrected = formatDateToYYYYMMDD(getNextValidDeliveryDate(deliveryDate < minDeliveryDate ? minDeliveryDate : deliveryDate, allowSundays, allowHolidays, vacationConfig));
             setDeliveryDate(corrected);
             const msg = `La fecha seleccionada cae en un día sin despacho (domingo, festivo o receso operativo). Se ajustó automáticamente al primer día hábil: ${corrected}.`;
             setCartNotice(msg);
@@ -2209,7 +2197,7 @@ export default function B2BDashboard() {
                                                 <div style={{ display: 'flex', gap: '0.3rem', flex: 1, overflowX: 'auto' }}>
                                                     {historicalOrders.map((ord, idx) => {
                                                         const isSelected = selectedHistoricalOrderId === ord.id;
-                                                        const dateStr = ord.created_at ? new Date(ord.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+                                                        const dateStr = ord.created_at ? formatBogotaDate(ord.created_at, { day: 'numeric', month: 'short' }, '') : '';
                                                         return (
                                                             <button
                                                                 key={ord.id}
@@ -2758,7 +2746,7 @@ export default function B2BDashboard() {
                                                     #{inv.sequence_id ? `PED-${inv.sequence_id}` : inv.id.substring(0, 8).toUpperCase()}
                                                 </td>
                                                 <td style={{ padding: '1rem', color: '#64748B', fontWeight: '600', fontSize: '0.85rem' }}>
-                                                    {new Date(inv.created_at).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    {new Date(inv.created_at).toLocaleDateString(locale === 'es' ? 'es-CO' : 'en-US', { timeZone: 'America/Bogota', day: '2-digit', month: 'short', year: 'numeric' })}
                                                 </td>
                                                 <td style={{ padding: '1rem', fontWeight: '900', color: 'var(--primary)', fontSize: '0.95rem' }}>
                                                     ${formatPrice(inv.total || inv.subtotal || inv.total_amount || 0)}
@@ -3509,8 +3497,8 @@ export default function B2BDashboard() {
                                         return name.includes(search) || sku.includes(search);
                                     });
 
-                                    const createdDateStr = agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : '';
-                                    const validDateStr = agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : 'Renovación Automática';
+                                    const createdDateStr = agreement.created_at ? formatBogotaDate(agreement.created_at, undefined, '') : '';
+                                    const validDateStr = agreement.valid_until ? formatBogotaDate(agreement.valid_until, undefined, 'Renovación Automática') : 'Renovación Automática';
 
                                     return (
                                         <div key={agreement.id} style={{
@@ -3957,9 +3945,9 @@ export default function B2BDashboard() {
                                             </tr>
                                         ) : (
                                             crateMovements.map((mov) => {
-                                                const dateStr = mov.created_at ? new Date(mov.created_at).toLocaleDateString('es-CO', {
+                                                const dateStr = mov.created_at ? formatBogotaDate(mov.created_at, {
                                                     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                                                }) : 'N/A';
+                                                }, 'N/A') : 'N/A';
                                                 
                                                 const isDelivered = (mov.delivered_qty || 0) > 0 || mov.type === 'delivery';
                                                 const isReceived = (mov.received_qty || 0) > 0 || mov.type === 'pickup';
@@ -4611,7 +4599,7 @@ export default function B2BDashboard() {
                                         const picked = e.target.value;
                                         if (!picked) return;
                                         if (picked < minDeliveryDate || !isValidDeliveryDate(picked, allowSundays, allowHolidays, vacationConfig)) {
-                                            const nextValid = getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig).toISOString().split('T')[0];
+                                            const nextValid = formatDateToYYYYMMDD(getNextValidDeliveryDate(picked < minDeliveryDate ? minDeliveryDate : picked, allowSundays, allowHolidays, vacationConfig));
                                             setDeliveryDate(nextValid);
                                             setSubmitError(`El día seleccionado no cuenta con despacho (domingo, festivo o receso operativo). Se ajustó automáticamente al ${nextValid}.`);
                                         } else {

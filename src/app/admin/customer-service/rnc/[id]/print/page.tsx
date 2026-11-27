@@ -12,6 +12,7 @@ import {
     parseSanitaryAndHumanNotes
 } from '@/lib/rcaTaxonomy';
 import { getPqrAuthorInfo, formatPqrFolio } from '@/app/admin/customer-service/utils';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { INVESTMENTS_CORTES_BRAND } from '@/components/print/presets';
 import { 
     Printer, ArrowLeft, ShieldAlert, CheckCircle2, FileText, 
@@ -147,13 +148,13 @@ export default function RncPrintPage() {
         .trim();
     
     const creationDateFull = new Date(pqr.created_at).toLocaleString('es-CO', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-    const creationDateOnly = new Date(pqr.created_at).toLocaleDateString('es-CO', {
+    const creationDateOnly = formatBogotaDate(pqr.created_at, {
         day: '2-digit', month: '2-digit', year: 'numeric'
     });
     const resolutionDate = pqr.resolved_at 
-        ? new Date(pqr.resolved_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        ? new Date(pqr.resolved_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : 'En investigación técnica';
 
     const resNotesRaw = pqr.resolution_notes || '';
@@ -441,7 +442,7 @@ export default function RncPrintPage() {
                     <div style={{ fontSize: '7pt', color: '#334155', fontWeight: '700' }}>
                         Remisión: <strong style={{ color: '#0D7A57' }}>#REM-{pqr.orders?.sequence_id || 'N/A'}</strong> • Pedido: <strong style={{ color: '#1E293B' }}>{orderSequence}</strong>
                         {pqr.orders?.delivery_date ? (
-                            <span> • Entrega: <strong style={{ color: '#0F172A' }}>{new Date(pqr.orders.delivery_date + 'T12:00:00Z').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong></span>
+                            <span> • Entrega: <strong style={{ color: '#0F172A' }}>{formatBogotaDate(pqr.orders.delivery_date, { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong></span>
                         ) : (
                             <span> • Fecha: <strong style={{ color: '#0F172A' }}>{creationDateOnly}</strong></span>
                         )}

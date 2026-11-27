@@ -4,6 +4,8 @@
  * normalización NFD (sin tildes), seseo (z<->s, ce/ci->se/si) y optimización anti-TOAST en SETTINGS.
  */
 
+import { addBogotaDays, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
+
 export type AuditModuleFilter =
     | 'all'
     | 'ORDERS'
@@ -505,23 +507,18 @@ export async function fetchAuditLogsSmart(params: FetchAuditLogsParams): Promise
     const effectiveModule: AuditModuleFilter = parsed.moduleTag || moduleFilter || 'all';
     const effectiveAction = parsed.actionTag || actionType || 'all';
 
-    const limitDate = new Date();
-    limitDate.setDate(limitDate.getDate() - 90);
-    const minIso = limitDate.toISOString();
+    const minIso = getBogotaDayRangeUtcIso(addBogotaDays(getBogotaDateString(), -90)).startUtcIso;
 
     let rangeIso = minIso;
     if (dateRange === 'today') {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        rangeIso = start.toISOString() > minIso ? start.toISOString() : minIso;
+        const startIso = getBogotaDayRangeUtcIso(getBogotaDateString()).startUtcIso;
+        rangeIso = startIso > minIso ? startIso : minIso;
     } else if (dateRange === 'week') {
-        const start = new Date();
-        start.setDate(start.getDate() - 7);
-        rangeIso = start.toISOString() > minIso ? start.toISOString() : minIso;
+        const startIso = getBogotaDayRangeUtcIso(addBogotaDays(getBogotaDateString(), -7)).startUtcIso;
+        rangeIso = startIso > minIso ? startIso : minIso;
     } else if (dateRange === 'month') {
-        const start = new Date();
-        start.setDate(start.getDate() - 30);
-        rangeIso = start.toISOString() > minIso ? start.toISOString() : minIso;
+        const startIso = getBogotaDayRangeUtcIso(addBogotaDays(getBogotaDateString(), -30)).startUtcIso;
+        rangeIso = startIso > minIso ? startIso : minIso;
     }
 
     const buildBaseQuery = () => {

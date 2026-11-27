@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber, formatSmartMoney } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     BarChart2, TrendingUp, AlertTriangle, CheckCircle2, Check,
     ArrowLeft, ShieldCheck, DollarSign, Clock, RefreshCw, 
@@ -822,7 +823,7 @@ export default function RootCauseAnalysisDashboardPage() {
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '0.68rem', color: '#64748B', marginTop: '2px' }}>
-                                                            Contacto: {client.contact} • Último caso: {new Date(client.lastDate).toLocaleDateString()}
+                                                            Contacto: {client.contact} • Último caso: {formatBogotaDate(client.lastDate)}
                                                         </div>
                                                     </div>
                                                     <div style={{ textAlign: 'right' }}>

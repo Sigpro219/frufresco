@@ -1,3 +1,5 @@
+import { formatBogotaDate } from '@/lib/dateUtils';
+
 export interface OrderEmailItem {
   sku?: string;
   name: string;
@@ -439,7 +441,7 @@ export function generateAgreementNotificationHtml(data: AgreementNotificationEma
   const validFrom = data.valid_from || 'Inmediata';
   const validUntil = data.valid_until || 'Indefinida';
   const responsibleAgent = data.responsible_agent || 'Dirección Comercial FruFresco';
-  const modifiedAt = data.modified_at || new Date().toLocaleDateString('es-CO');
+  const modifiedAt = data.modified_at || formatBogotaDate(new Date());
   const items = data.items || [];
   const notes = data.notes || '';
 

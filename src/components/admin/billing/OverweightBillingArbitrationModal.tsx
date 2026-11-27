@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Scale, X, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 interface OverweightItemRow {
     orderItemId: string;
@@ -78,7 +79,7 @@ export default function OverweightBillingArbitrationModal({
     const [thresholdCop, setThresholdCop] = useState<number>(2000);
     const [autoAbsorbedCount, setAutoAbsorbedCount] = useState<number>(0);
     const [dateFilter, setDateFilter] = useState<string>(
-        selectedDate || new Date().toISOString().split('T')[0]
+        selectedDate || getBogotaDateString()
     );
 
     const isSandbox = process.env.NEXT_PUBLIC_SANDBOX_MODE === 'true';
@@ -296,7 +297,7 @@ export default function OverweightBillingArbitrationModal({
             if (warehouseId) {
                 const movementDate = (row.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(row.deliveryDate))
                     ? row.deliveryDate
-                    : (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : new Date().toISOString().slice(0, 10));
+                    : (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getBogotaDateString());
                 const { error: insMovErr } = await supabase.from('inventory_movements').insert([{
                     product_id: row.productId,
                     warehouse_id: warehouseId,

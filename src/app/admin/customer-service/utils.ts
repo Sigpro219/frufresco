@@ -98,7 +98,7 @@ export const getTypeBadgeStyle = (type: string) => {
 export const formatDateFriendly = (dateStr: string): string => {
     try {
         const d = new Date(dateStr);
-        return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+        return d.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short' });
     } catch {
         return dateStr;
     }

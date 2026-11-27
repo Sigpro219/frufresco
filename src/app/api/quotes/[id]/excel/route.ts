@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,9 +16,9 @@ function getSupabaseAdmin() {
 }
 
 const formatQuoteNumber = (num: number, createdDate?: string) => {
-    const d = new Date(createdDate || Date.now());
-    const year = String(d.getFullYear()).slice(-2);
-    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const bogotaDate = getBogotaDateString(createdDate || new Date()) || getBogotaDateString(new Date());
+    const [fullYear = '2026', month = '01'] = bogotaDate.split('-');
+    const year = fullYear.slice(-2);
     const seq = String(num || 1).padStart(4, '0');
     return `COT ${year}${month} ${seq}`;
 };
@@ -82,7 +83,7 @@ export async function GET(
         const phone = clientInfo?.phone || 'N/A';
         const email = clientInfo?.email || 'N/A';
         const address = clientInfo?.address || (clientInfo?.municipality ? `${clientInfo.municipality}` : 'N/A');
-        const startDate = quote.start_date ? new Date(quote.start_date).toLocaleDateString('es-CO') : new Date(quote.created_at).toLocaleDateString('es-CO');
+        const startDate = quote.start_date ? formatBogotaDate(quote.start_date) : formatBogotaDate(quote.created_at);
 
         // 4. Construir la estructura del archivo Excel
         const rows: any[][] = [];

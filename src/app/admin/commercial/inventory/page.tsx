@@ -7,7 +7,7 @@ import Toast from '@/components/Toast';
 import Link from 'next/link';
 import { Package, Search, Filter, Plus, ArrowUpRight, ArrowDownLeft, ArrowDownRight, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, TrendingUp, History, Download, ChevronRight, ChevronLeft, ChevronDown, ChevronsUpDown, Scale, Tag, Calendar, Database, Sparkles, Info, Building2, Truck, MoreVertical, Edit2, Trash2, RefreshCw, ClipboardList, Kanban, BookOpen, X, Layers, FileSpreadsheet, Clock, BarChart3, Users, User, CheckCircle2, Check, UserPlus, ArrowRight, Sprout, Carrot, Apple, Boxes, Wheat, Milk, Beef, Dna, Zap, DollarSign } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
-import { getBogotaDateString } from '@/lib/dateUtils';
+import { addBogotaDays, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import InventoryUnifiedDashboard from '@/components/InventoryUnifiedDashboard';
 import InventoryDailyBalanceTab from '@/components/InventoryDailyBalanceTab';
 import WasteSusceptibleProductsManager from '@/components/WasteSusceptibleProductsManager';
@@ -795,33 +795,26 @@ export default function InventoryAdminPage() {
             if (activeTab === 'movements') {
                 let startDateIso = '';
                 let endDateIso = '';
-                const now = new Date();
+                const todayStr = getBogotaDateString();
 
                 if (movementsDateRange === 'selected_day') {
-                    const targetDateStr = sharedInventoryDate || getBogotaDateString();
-                    const [sY, sM, sD] = targetDateStr.split('-').map(Number);
-                    const start = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 0, 0, 0, 0);
-                    const end = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 23, 59, 59, 999);
-                    startDateIso = start.toISOString();
-                    endDateIso = end.toISOString();
+                    const targetDateStr = getBogotaDateString(sharedInventoryDate) || todayStr;
+                    const range = getBogotaDayRangeUtcIso(targetDateStr);
+                    startDateIso = range.startUtcIso;
+                    endDateIso = range.endUtcIso;
                 } else if (movementsDateRange === 'today') {
-                    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-                    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    startDateIso = start.toISOString();
-                    endDateIso = end.toISOString();
+                    const range = getBogotaDayRangeUtcIso(todayStr);
+                    startDateIso = range.startUtcIso;
+                    endDateIso = range.endUtcIso;
                 } else if (movementsDateRange === '8days') {
                     // Ventana móvil de 8 días (7 días atrás + hoy)
-                    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
-                    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    startDateIso = start.toISOString();
-                    endDateIso = end.toISOString();
+                    startDateIso = getBogotaDayRangeUtcIso(addBogotaDays(todayStr, -7)).startUtcIso;
+                    endDateIso = getBogotaDayRangeUtcIso(todayStr).endUtcIso;
                 } else {
-                    const [sY, sM, sD] = (customStartDate || '').split('-').map(Number);
-                    const [eY, eM, eD] = (customEndDate || '').split('-').map(Number);
-                    const start = new Date(sY || now.getFullYear(), (sM || 1) - 1, sD || 1, 0, 0, 0, 0);
-                    const end = new Date(eY || now.getFullYear(), (eM || 1) - 1, eD || now.getDate(), 23, 59, 59, 999);
-                    startDateIso = start.toISOString();
-                    endDateIso = end.toISOString();
+                    const safeStart = getBogotaDateString(customStartDate) || addBogotaDays(todayStr, -7);
+                    const safeEnd = getBogotaDateString(customEndDate) || todayStr;
+                    startDateIso = getBogotaDayRangeUtcIso(safeStart).startUtcIso;
+                    endDateIso = getBogotaDayRangeUtcIso(safeEnd).endUtcIso;
                 }
 
                 let movQuery = supabase
@@ -2093,7 +2086,7 @@ export default function InventoryAdminPage() {
                 else if (m.type === 'transfer') tipoTexto = 'TRASLADO';
 
                 return {
-                    FECHA_HORA: new Date(m.created_at).toLocaleString('es-CO'),
+                    FECHA_HORA: new Date(m.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
                     ID_CONTABLE: p?.accounting_id ?? '—',
                     CELULA: mCell?.short_name || p?.inventory_group || '—',
                     RESPONSABLE_CELULA: mCell?.leader_name || '—',
@@ -4474,10 +4467,10 @@ export default function InventoryAdminPage() {
                                                     <tr key={m.id} style={{ transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAF9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                         <td style={styles.td}>
                                                             <div style={{ fontWeight: '700', color: '#1E293B', fontSize: '0.82rem' }}>
-                                                                {new Date(m.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                {new Date(m.created_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: 'short', year: 'numeric' })}
                                                             </div>
                                                             <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
-                                                                {new Date(m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(m.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                                                             </div>
                                                         </td>
                                                         <td style={styles.td}>
@@ -4848,7 +4841,7 @@ export default function InventoryAdminPage() {
                                                                                         <tbody>
                                                                                             {kf.summary.transactions.map(tx => (
                                                                                                 <tr key={tx.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                                                    <td style={{ padding: '0.4rem 0.65rem', color: '#334155' }}>{new Date(tx.created_at).toLocaleString('es-CO')}</td>
+                                                                                                    <td style={{ padding: '0.4rem 0.65rem', color: '#334155' }}>{new Date(tx.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                                                                                                     <td style={{ padding: '0.4rem 0.65rem', fontWeight: '600', color: '#1E293B' }}>{tx.products?.name || parent.products?.name}</td>
                                                                                                     <td style={{ padding: '0.4rem 0.65rem' }}>
                                                                                                         <span style={{
@@ -5169,7 +5162,7 @@ export default function InventoryAdminPage() {
                                                                                                             <tbody>
                                                                                                                 {cSummary.transactions.map(tx => (
                                                                                                                     <tr key={tx.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{new Date(tx.created_at).toLocaleString('es-CO')}</td>
+                                                                                                                        <td style={{ padding: '0.35rem 0.6rem', color: '#475569' }}>{new Date(tx.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                                                                                                                         <td style={{ padding: '0.35rem 0.6rem' }}>
                                                                                                                             <span style={{
                                                                                                                                 padding: '1px 5px',
@@ -5360,7 +5353,7 @@ export default function InventoryAdminPage() {
                                                                                     <tbody>
                                                                                         {kf.summary.transactions.map(tx => (
                                                                                             <tr key={tx.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                                                                                <td style={{ padding: '0.4rem 0.65rem', color: '#334155' }}>{new Date(tx.created_at).toLocaleString('es-CO')}</td>
+                                                                                                <td style={{ padding: '0.4rem 0.65rem', color: '#334155' }}>{new Date(tx.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                                                                                                 <td style={{ padding: '0.4rem 0.65rem' }}>
                                                                                                     <span style={{
                                                                                                         padding: '2px 6px',

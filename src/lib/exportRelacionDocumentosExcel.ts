@@ -31,18 +31,18 @@ export function formatSpanishDateHeader(dateStr: string): string {
 }
 
 export function formatGeneratedTimestamp(): string {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    let hours = now.getHours();
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const hoursStr = String(hours).padStart(2, '0');
-    return `GENERADO EL: ${day}/${month}/${year} ${hoursStr}:${minutes}:${seconds} ${ampm}`;
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Bogota',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value || '';
+    return `GENERADO EL: ${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}:${get('second')} ${get('dayPeriod').toUpperCase()}`;
 }
 
 export function detectZone(address: string, municipality?: string, city?: string): string {

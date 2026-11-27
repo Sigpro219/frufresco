@@ -18,6 +18,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import { CATEGORY_MAP } from '@/lib/constants';
+import { getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 
 const INVENTORY_MOVEMENT_SUBTYPES = {
     WASTE_DAMAGE: 'waste_damage',
@@ -96,8 +97,7 @@ export default function OpsProcesadosPage() {
             const prodMap = new Map<string, CatalogProduct>();
             allProds.forEach(p => prodMap.set(p.id, p));
 
-            const startIso = `${operationDate}T00:00:00.000Z`;
-            const endIso = `${operationDate}T23:59:59.999Z`;
+            const { startUtcIso: startIso, endUtcIso: endIso } = getBogotaDayRangeUtcIso(operationDate);
 
             const { data: movsData } = await supabase
                 .from('inventory_movements')

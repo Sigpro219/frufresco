@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
         });
         const total = subtotal + totalTax;
 
-        const defaultName = `Institucional General - ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`;
+        const defaultName = `Institucional General - ${formatBogotaDate(new Date(), { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`;
         const templateName = (name && name.trim()) ? name.trim() : defaultName;
 
         // 3. Crear nueva cotización plantilla
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
                 model_id: GENERAL_INSTITUCIONAL_MODEL_ID,
                 model_snapshot_name: templateName,
                 status: 'template',
-                start_date: new Date().toISOString(),
+                start_date: getBogotaDateString(),
                 valid_until: null,
                 subtotal_amount: subtotal,
                 total_tax_amount: totalTax,

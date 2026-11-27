@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import { 
     Search, 
     ChevronRight, 
@@ -73,7 +74,7 @@ export default function CashOperationsPage() {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            const todayDateStr = new Date().toISOString().split('T')[0];
+            const todayDateStr = getBogotaDateString();
 
             // 1. Fetch products & providers for select dropdowns
             const [prodsRes, provsRes, budgetRes] = await Promise.all([
@@ -99,9 +100,7 @@ export default function CashOperationsPage() {
 
     const fetchOperations = async () => {
         try {
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const todayIso = todayStart.toISOString();
+            const { startUtcIso: todayIso } = getBogotaDayRangeUtcIso(getBogotaDateString());
 
             const [purchasesRes, expensesRes] = await Promise.all([
                 supabase
@@ -468,7 +467,7 @@ export default function CashOperationsPage() {
                                         </td>
                                         <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                                             <div style={{ fontSize: '0.82rem', color: THEME.colors.textSecondary, fontWeight: '500' }}>
-                                                {new Date(op.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(op.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </td>
                                     </tr>

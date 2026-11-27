@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { 
     ArrowLeft, 
     Download, 
@@ -775,7 +776,7 @@ export default function AuditLogPage() {
             }
 
             const exportData = allLogs.map((log: any) => ({
-                'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO'),
+                'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
                 'Usuario': formatCollaboratorName(log.collaborator_name),
                 'ID de Usuario': log.collaborator_id || 'Sistema',
                 'Acción': formatActionName(log),
@@ -800,7 +801,7 @@ export default function AuditLogPage() {
 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Logs de Auditoría");
-            XLSX.writeFile(wb, `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(wb, `Reporte_Auditoria_${getBogotaDateString()}.xlsx`);
             showToast('Reporte XLSX generado y descargado exitosamente.', 'success');
         } catch (err: any) {
             console.error('Error exporting data:', err);
@@ -1429,7 +1430,7 @@ export default function AuditLogPage() {
                                                 }}
                                             >
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '600', whiteSpace: 'nowrap', borderBottom: `1px solid ${THEME.colors.border}` }}>
-                                                    {new Date(log.created_at).toLocaleString('es-CO')}
+                                                    {new Date(log.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                                 </td>
                                                 <td style={{ padding: '0.85rem 1.25rem', color: THEME.colors.textMain, fontWeight: '700', borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                     {formatCollaboratorName(log.collaborator_name)}
@@ -1533,7 +1534,7 @@ export default function AuditLogPage() {
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontSize: '0.85rem', fontFamily: THEME.typography.fontFamilySecondary, color: THEME.colors.textMain }}>
                             <div>
-                                <strong style={{ color: THEME.colors.textSecondary }}>Fecha y Hora:</strong> {new Date(selectedLog.created_at).toLocaleString('es-CO')}
+                                <strong style={{ color: THEME.colors.textSecondary }}>Fecha y Hora:</strong> {new Date(selectedLog.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                             </div>
                             <div>
                                 <strong style={{ color: THEME.colors.textSecondary }}>Usuario:</strong> {formatCollaboratorName(selectedLog.collaborator_name)}

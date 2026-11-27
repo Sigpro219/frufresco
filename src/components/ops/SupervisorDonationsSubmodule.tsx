@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import {
     HeartHandshake,
     Camera,
@@ -93,7 +94,8 @@ export default function SupervisorDonationsSubmodule({
     const [todayDonations, setTodayDonations] = useState<TodayDonationMovement[]>([]);
 
     const loadData = useCallback(async () => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getBogotaDateString();
+        const { startUtcIso, endUtcIso } = getBogotaDayRangeUtcIso(todayStr);
         const [prodRes, movRes] = await Promise.all([
             supabase
                 .from('products')
@@ -105,8 +107,8 @@ export default function SupervisorDonationsSubmodule({
                 .from('inventory_movements')
                 .select('id, product_id, quantity, notes, evidence_url, created_at, products(name, sku, unit_of_measure)')
                 .eq('reference_type', 'food_bank')
-                .gte('created_at', `${todayStr}T00:00:00.000Z`)
-                .lte('created_at', `${todayStr}T23:59:59.999Z`)
+                .gte('created_at', startUtcIso)
+                .lte('created_at', endUtcIso)
                 .order('created_at', { ascending: false })
         ]);
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import { 
     Wallet, 
     Plus, 
@@ -99,7 +100,7 @@ export default function TreasuryPage() {
 
     // Form State for Budgets
     const [budgetAmount, setBudgetAmount] = useState('');
-    const [budgetDate, setBudgetDate] = useState(new Date().toISOString().split('T')[0]);
+    const [budgetDate, setBudgetDate] = useState(getBogotaDateString());
     const [budgetNotes, setBudgetNotes] = useState('');
     const [budgetStatus, setBudgetStatus] = useState<'authorized' | 'pending'>('authorized');
     const [modalError, setModalError] = useState<string | null>(null);
@@ -112,9 +113,7 @@ export default function TreasuryPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const todayIso = todayStart.toISOString();
+            const { startUtcIso: todayIso } = getBogotaDayRangeUtcIso(getBogotaDateString());
 
             // 1. Fetch budgets
             const { data: bData, error: bErr } = await supabase
@@ -351,7 +350,7 @@ export default function TreasuryPage() {
     if (!mounted) return null;
 
     // Real dynamic calculations
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
     const todayBudgets = budgets.filter(b => b.target_date === todayStr && b.status === 'authorized');
     const presupuestoHoy = todayBudgets.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
     const remanentePlaza = presupuestoHoy - todayExecuted;

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { THEME, formatMoney } from '@/lib/adminTheme';
 import { DefectCategoryL1 } from '@/lib/rcaTaxonomy';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 
 export interface CapaPlan {
     id: string;
@@ -126,9 +127,7 @@ export default function PqrCapaPlanModal({
             setPokaYokeAction('');
             setAssignedTo('');
             // Default 15 days ahead
-            const future = new Date();
-            future.setDate(future.getDate() + 15);
-            setTargetDate(future.toISOString().split('T')[0]);
+            setTargetDate(addBogotaDays(getBogotaDateString(), 15));
             setStatus('diagnosing');
             setVerificationNotes('');
         }

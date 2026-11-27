@@ -8,7 +8,7 @@ import { isAbortError, diagnoseStorageError } from "@/lib/errorUtils";
 import { REVERSE_CATEGORY_MAP, DEFAULT_CUTOFF_HOUR } from '@/lib/constants';
 import { getStructuredSpecKey } from '@/lib/orderUtils';
 import { getCanonicalProcurementSpec, normalizeDemandToKg, calculateProcurementNetting, type NettingOrderItem } from '@/lib/procurement/procurementNettingEngine';
-import { getBogotaDateString } from '@/lib/dateUtils';
+import { formatBogotaDate, getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { resolveInitialInventory } from '@/lib/inventory/resolveInitialInventory';
 import {
@@ -428,10 +428,10 @@ export default function ProcurementPage() {
 
   const formatDateFriendly = (dateStr: string) => {
     if (!dateStr) return "";
-    const date = new Date(`${dateStr}T12:00:00`); // Force mid-day to avoid TZ shifts
-    const dayName = date.toLocaleDateString("es-ES", { weekday: "long" });
-    const day = date.getDate();
-    const month = date.toLocaleDateString("es-ES", { month: "short" });
+    const date = parseBogotaDate(dateStr);
+    const dayName = formatBogotaDate(date, { weekday: "long" });
+    const day = date.getUTCDate();
+    const month = formatBogotaDate(date, { month: "short" });
     // Capitalize first letter
     return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${day} ${month}`;
   };
@@ -1135,7 +1135,7 @@ export default function ProcurementPage() {
 
       // 2. Registrar en inventory_movements con type 'exit' y reference_type 'order_shortage'
       // Esto alimenta automáticamente la COLUMNA K (Escasez) en la Sábana de Inventario
-      const targetDate = selectedTask.delivery_date || selectedDate || new Date().toISOString().split("T")[0];
+      const targetDate = selectedTask.delivery_date || selectedDate || getBogotaDateString();
       const movementPayload: any = {
         product_id: selectedTask.product_id,
         quantity: qtyToDeclare,
@@ -1192,7 +1192,7 @@ export default function ProcurementPage() {
                 priority: 'urgent',
                 status: 'pending',
                 subject: `[ALERTA: Quiebre en Plaza - Requiere Acción Inmediata] ${selectedTask.product_name} (${ordItem.quantity} ${selectedTask.unit})`,
-                description: `El comprador en Corabastos reportó quiebre de abastecimiento ("NO LO HAY") a las ${new Date().toLocaleTimeString('es-CO')}.\nMotivo: ${shortageReason}.\n\nSe requiere contactar al cliente de inmediato para acordar: 1) Sustitución de SKU en bodega, 2) Retiro limpio de remisión (Col K), o 3) Anexión a próximo pedido (D+1).`,
+                description: `El comprador en Corabastos reportó quiebre de abastecimiento ("NO LO HAY") a las ${new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })}.\nMotivo: ${shortageReason}.\n\nSe requiere contactar al cliente de inmediato para acordar: 1) Sustitución de SKU en bodega, 2) Retiro limpio de remisión (Col K), o 3) Anexión a próximo pedido (D+1).`,
                 defect_category_l1: 'comercial_cliente',
                 defect_subtype_l2: 'producto_agotado_plaza',
                 imputed_responsible: 'proveedor',
@@ -1474,7 +1474,7 @@ export default function ProcurementPage() {
 
       // 3. Ingesta Reactiva de Costo Promedio Ponderado Diario (PPP) en commercial_cost_matrix (SDD Escenario 386 / DT-11)
       try {
-        const operationDate = selectedTask.delivery_date || selectedDate || new Date().toISOString().split('T')[0];
+        const operationDate = selectedTask.delivery_date || selectedDate || getBogotaDateString();
         const { data: dayTaskRows } = await supabase
           .from('procurement_tasks')
           .select('id')
@@ -1570,10 +1570,7 @@ export default function ProcurementPage() {
   };
 
   // Helper Fecha
-  const nowBogotaStr = new Date().toLocaleString("en-US", {
-    timeZone: "America/Bogota",
-  });
-  const todayYMD = new Date(nowBogotaStr).toISOString().split("T")[0];
+  const todayYMD = getBogotaDateString();
 
   // Cálculos de Gamificación y Dashboard
   const completedTasks = tasks.filter((t) => t.status === "completed").length;
@@ -3076,7 +3073,7 @@ export default function ProcurementPage() {
                           </div>
                           {purchase.estimated_pickup_time && (
                             <div style={{ fontSize: "0.75rem", color: "#F59E0B" }}>
-                              Hora Estimada Recogida: {new Date(purchase.estimated_pickup_time).toLocaleTimeString("es-ES", { hour: '2-digit', minute: '2-digit' })}
+                              Hora Estimada Recogida: {new Date(purchase.estimated_pickup_time).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour: '2-digit', minute: '2-digit' })}
                             </div>
                           )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem", borderTop: "1px dashed var(--ops-border)", paddingTop: "0.25rem" }}>

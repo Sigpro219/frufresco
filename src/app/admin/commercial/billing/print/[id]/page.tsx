@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import Letterhead from '@/components/Letterhead';
 import { printViaNewWindow } from '@/components/print';
 import {
@@ -347,7 +348,7 @@ export default function BillingPrintPage() {
                                 </span>
                             </div>
                             <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748B' }}>
-                                Fecha: {new Date(cut.scheduled_date).toLocaleDateString()} • {orders.length} documentos generados
+                                Fecha: {formatBogotaDate(cut.scheduled_date)} • {orders.length} documentos generados
                             </p>
                         </div>
                     </div>
@@ -497,8 +498,8 @@ export default function BillingPrintPage() {
                             : 'Investments Cortés S.A.S. • Despachos & Logística';
                         
                         const deliveryDateFormatted = order.delivery_date 
-                            ? new Date(order.delivery_date).toLocaleDateString()
-                            : new Date(order.created_at).toLocaleDateString();
+                            ? formatBogotaDate(order.delivery_date)
+                            : formatBogotaDate(order.created_at);
 
                         const mappedItems: OrderItemLike[] = (order.order_items || []).map((oi: any) => ({
                             ...oi,

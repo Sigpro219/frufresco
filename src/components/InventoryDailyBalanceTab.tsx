@@ -2770,7 +2770,7 @@ interface CommittedSaleData {
                     const updated = {
                         ...closingRecord,
                         is_locked: false,
-                        notes: `${stripPartialPrefix(closingRecord.notes)} | Reabierto en Sandbox el ${new Date().toLocaleString()}`.trim(),
+                        notes: `${stripPartialPrefix(closingRecord.notes)} | Reabierto en Sandbox el ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`.trim(),
                         updated_at: new Date().toISOString()
                     };
                     const { error: sbReopenErr } = await supabase
@@ -2793,7 +2793,7 @@ interface CommittedSaleData {
                 .from('daily_inventory_closings')
                 .update({
                     is_locked: false,
-                    notes: `${stripPartialPrefix(closingRecord?.notes)} | Reabierto el ${new Date().toLocaleString()}`.trim(),
+                    notes: `${stripPartialPrefix(closingRecord?.notes)} | Reabierto el ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`.trim(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('closing_date', balanceDate);
@@ -5182,7 +5182,7 @@ interface CommittedSaleData {
                                 fontSize: '0.73rem',
                                 fontWeight: '800',
                                 boxShadow: '0 1px 2px rgba(22, 163, 74, 0.15)'
-                            }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString()} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
+                            }} title={`Cerrado oficialmente el ${new Date(closingRecord.closed_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })} por ${closingRecord.closed_by_name || 'Supervisor'}`}>
                                 <Lock size={12} strokeWidth={2.5} />
                                 <span>Cerrado</span>
                                 {canEditSheet && sheetMode === 'manual_edit' && (
@@ -5221,7 +5221,7 @@ interface CommittedSaleData {
                                         fontWeight: '800',
                                         boxShadow: '0 1px 2px rgba(217, 119, 6, 0.15)'
                                     }}
-                                    title={`Cierre parcial guardado el ${closingRecord?.closed_at ? new Date(closingRecord.closed_at).toLocaleString() : ''} por ${closingRecord?.closed_by_name || 'Supervisor'}. Conteo Físico avalado para lanzar operación; pendiente completar cierre contable definitivo.`}
+                                    title={`Cierre parcial guardado el ${closingRecord?.closed_at ? new Date(closingRecord.closed_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : ''} por ${closingRecord?.closed_by_name || 'Supervisor'}. Conteo Físico avalado para lanzar operación; pendiente completar cierre contable definitivo.`}
                                 >
                                     <AlertTriangle size={12} strokeWidth={2.5} />
                                     <span>Cierre Parcial</span>

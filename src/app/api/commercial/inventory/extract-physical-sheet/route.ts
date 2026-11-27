@@ -4,6 +4,7 @@ import { verifySessionAndRole } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase';
 import { fetchGeminiExtraction } from '@/lib/orders/order-parser-engine';
 import { getGeminiApiKey } from '@/lib/ai/aiModelConfig';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { PhysicalSheetType, RawExtractedSheetRow, normalizeGeminiItems } from '@/lib/inventory/physical-sheet-parser';
 
 const SheetTypeSchema = z.enum(['entrada', 'inv_manual', 'desperdicio', 'pedidos_desperdicio', 'donaciones']);
@@ -174,7 +175,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Tipo de planilla física inválido.' }, { status: 400 });
     }
     const sheetType: PhysicalSheetType = sheetTypeParse.data;
-    const balanceDate = (formData.get('balanceDate') as string) || new Date().toISOString().split('T')[0];
+    const balanceDate = (formData.get('balanceDate') as string) || getBogotaDateString();
     const textInput = (formData.get('text') as string) || '';
     const fileUrl = (formData.get('fileUrl') as string) || '';
     const storagePath = (formData.get('storagePath') as string) || '';

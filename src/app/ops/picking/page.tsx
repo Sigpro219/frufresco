@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/authContext';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import { getOperationalTargetDate, OPERATIONAL_CELLS, normalizeOperationalCell } from '@/lib/ops/operationalCells';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import { resolvePhysicalInstruction } from '@/lib/orderUtils';
 import {
@@ -150,7 +151,7 @@ export default function PickingExecutionPage() {
 
             // Build Special Client Attention Map for Logistics & Picking
             const profileIds = Array.from(new Set((activeOrders || []).map((o: any) => o.profile_id || o.profiles?.id).filter(Boolean)));
-            const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const sixtyDaysAgo = addBogotaDays(getBogotaDateString(), -60);
 
             const [histOrdersRes, histPqrsRes] = await Promise.all([
                 profileIds.length > 0
@@ -740,7 +741,7 @@ export default function PickingExecutionPage() {
                         >
                             <span style={{ whiteSpace: "nowrap" }}>Alistamiento <span style={{ color: "#0D7A57" }}>Bodega</span></span>
                             <span className="header-date-badge" style={{ fontSize: "0.8rem", color: "#F59E0B", fontWeight: "800", backgroundColor: "rgba(245, 158, 11, 0.12)", padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                <Calendar size={14} /> {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" })}
+                                <Calendar size={14} /> {formatBogotaDate(new Date(), { weekday: "long", day: "numeric", month: "short" })}
                             </span>
                         </h1>
                     </div>

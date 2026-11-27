@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
+import { diffBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     getFriendlyOrderId,
     formatStructuredSpecification,
@@ -1324,7 +1325,7 @@ export default function BillingDashboard() {
         ciudad: '',
         cupo_solicitado: 0,
         plazo_solicitado: 0,
-        fecha_solicitud: new Date().toISOString().split('T')[0],
+        fecha_solicitud: getBogotaDateString(),
         tipo_solicitud: 'creacion',
         razon_social: '',
         nombre_comercial: '',
@@ -1811,7 +1812,7 @@ export default function BillingDashboard() {
                 });
             }
 
-            setLastRealtimeSync(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            setLastRealtimeSync(new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         } catch (err: any) {
             console.error('Error in billing fetchData:', err);
         } finally {
@@ -2456,13 +2457,10 @@ export default function BillingDashboard() {
 
     // Filter Invoices (Portfolio)
     const filteredInvoices = useMemo(() => {
-        const today = new Date();
-        today.setHours(0,0,0,0);
+        const todayStr = getBogotaDateString();
 
         return invoices.filter(inv => {
-            const due = new Date(inv.due_date);
-            due.setHours(0,0,0,0);
-            const diffDays = Math.ceil((today.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+            const diffDays = diffBogotaDays(inv.due_date, todayStr);
             const isPaid = inv.payment_status === 'paid';
 
             if (portfolioStatusFilter === 'paid') {
@@ -2999,7 +2997,7 @@ export default function BillingDashboard() {
                     total_final: total,
                     status: 'pending',
                     payment_status: isB2B ? 'pending' : 'paid',
-                    due_date: dueDate.toISOString().split('T')[0]
+                    due_date: getBogotaDateString(dueDate)
                 };
             });
 
@@ -4876,7 +4874,7 @@ export default function BillingDashboard() {
     const handleCopyNoveltiesToCommercial = () => {
         let text = `📋 *REPORTE DE REMISIONES RETENIDAS POR PRECIO $0*\n`;
         text += `Módulo: Facturación | Segregación de Funciones (SoD)\n`;
-        text += `Fecha de Auditoría: ${new Date().toLocaleDateString('es-CO')}\n\n`;
+        text += `Fecha de Auditoría: ${formatBogotaDate(new Date())}\n\n`;
 
         assignPriceOrders.forEach((o: any) => {
             const client = o.profiles?.company_name || o.profiles?.razon_social || 'Cliente';
@@ -4957,19 +4955,14 @@ export default function BillingDashboard() {
         let countVencido30Mas = 0;
         let countPaid = 0;
 
-        const today = new Date();
-        today.setHours(0,0,0,0);
+        const todayStr = getBogotaDateString();
 
         invoices.forEach(inv => {
             if (inv.payment_status === 'paid') {
                 countPaid++;
                 return;
             }
-            const due = new Date(inv.due_date);
-            due.setHours(0,0,0,0);
-            
-            const diffTime = today.getTime() - due.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = diffBogotaDays(inv.due_date, todayStr);
             const amount = Number(inv.total_final || 0);
             totalPendiente += amount;
 
@@ -6364,7 +6357,7 @@ export default function BillingDashboard() {
                                                         <tr key={cut.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'background-color 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                                                             <td style={{ padding: '0.55rem 0.75rem' }}><span style={{ fontWeight: '800', color: THEME.colors.textMain, fontVariantNumeric: 'tabular-nums', fontSize: '0.78rem' }}>#{cut.cut_number.toString().padStart(4, '0')}</span></td>
                                                             <td style={{ padding: '0.55rem 0.75rem' }}>
-                                                                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>{new Date(cut.scheduled_date).toLocaleDateString()}</div>
+                                                                <div style={{ fontWeight: '800', color: THEME.colors.textMain, fontSize: '0.78rem' }}>{formatBogotaDate(cut.scheduled_date)}</div>
                                                                 <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '1px' }}>Franja: {cut.cut_slot}</div>
                                                             </td>
                                                             <td style={{ padding: '0.55rem 0.75rem', fontWeight: '600', color: '#334155', fontSize: '0.76rem' }}>{cut.total_orders} pedidos</td>
@@ -6772,7 +6765,7 @@ export default function BillingDashboard() {
                                                             </td>
                                                             <td style={{ padding: '0.4rem 0.35rem' }}>
                                                                 <div style={{ fontWeight: '700', color: '#334155' }}>
-                                                                    {order.delivery_date ? new Date(order.delivery_date).toLocaleDateString('es-CO') : 'Sin fecha'}
+                                                                    {order.delivery_date ? formatBogotaDate(order.delivery_date) : 'Sin fecha'}
                                                                 </div>
                                                                 <div style={{ fontSize: '0.64rem', color: '#64748B' }}>
                                                                     Franja: {order.delivery_slot || 'AM'}
@@ -8389,11 +8382,7 @@ export default function BillingDashboard() {
                                                     </tr>
                                                 ) : filteredInvoices.map((inv) => {
                                                     const client = inv.orders?.profiles;
-                                                    const today = new Date();
-                                                    today.setHours(0,0,0,0);
-                                                    const due = new Date(inv.due_date);
-                                                    due.setHours(0,0,0,0);
-                                                    const isOverdue = inv.payment_status !== 'paid' && due < today;
+                                                    const isOverdue = inv.payment_status !== 'paid' && diffBogotaDays(inv.due_date, getBogotaDateString()) > 0;
 
                                                     return (
                                                         <tr key={inv.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'all 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>

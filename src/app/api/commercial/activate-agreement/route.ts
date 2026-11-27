@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { cleanupConflictingAgreementsForClients } from '@/lib/commercial/agreementConflictGuard';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 export async function POST(req: Request) {
   try {
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
 
       const totalAmount = subtotalAmount + totalTaxAmount;
 
-      const startDateStr = validityStart || new Date().toISOString().split('T')[0];
+      const startDateStr = validityStart || getBogotaDateString();
       const [y, m, d] = startDateStr.split('-');
       const formattedDate = `${d}-${m}-${y.slice(-2)}`;
       const canonicalSnapshotName = `${clientName || 'Cliente'} - ${formattedDate}`;
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
         .update({
           status: 'agreement',
           client_id: clientId || null,
-          start_date: validityStart || new Date().toISOString().split('T')[0],
+          start_date: validityStart || getBogotaDateString(),
           valid_until: validityEnd || null,
           updated_at: new Date().toISOString()
         })

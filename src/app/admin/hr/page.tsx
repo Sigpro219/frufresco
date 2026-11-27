@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { QRCodeSVG } from 'qrcode.react';
 import { THEME, formatNumber } from '@/lib/adminTheme';
 import { parseRcaFromRecord } from '@/lib/rcaTaxonomy';
+import { formatBogotaDate, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import SearchableSelect from '@/components/common/SearchableSelect';
 
 const styles = {
@@ -170,9 +171,8 @@ export default function HRManagement() {
     // SUBMÓDULO DEDUCCIONES DE NÓMINA (COL N INVENTARIO)
     // ========================================================
     const [mainTab, setMainTab] = useState<'staff' | 'payroll_deductions'>('staff');
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getBogotaDateString();
+    const firstDayOfMonth = `${todayStr.slice(0, 8)}01`;
 
     const [payrollStartDate, setPayrollStartDate] = useState(firstDayOfMonth);
     const [payrollEndDate, setPayrollEndDate] = useState(todayStr);
@@ -202,8 +202,8 @@ export default function HRManagement() {
     const fetchPayrollSales = useCallback(async () => {
         setLoadingPayroll(true);
         try {
-            const startIso = `${payrollStartDate}T00:00:00.000Z`;
-            const endIso = `${payrollEndDate}T23:59:59.999Z`;
+            const { startUtcIso: startIso } = getBogotaDayRangeUtcIso(payrollStartDate);
+            const { endUtcIso: endIso } = getBogotaDayRangeUtcIso(payrollEndDate);
 
             const { data, error } = await supabase
                 .from('inventory_movements')
@@ -399,7 +399,7 @@ export default function HRManagement() {
                 sku: item.products?.sku || '',
                 unitPrice: unitCost,
                 totalVal,
-                date: new Date(item.created_at).toLocaleDateString('es-CO', {
+                date: formatBogotaDate(item.created_at, {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',

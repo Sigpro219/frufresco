@@ -116,7 +116,7 @@ export default function MissingOrdersGallery({
 
     const markAsContacted = useCallback((profileId: string) => {
         const now = getBogotaNow();
-        const timeStr = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const timeStr = now.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: true });
         const updated = {
             ...contactedMap,
             [profileId]: timeStr

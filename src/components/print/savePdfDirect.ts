@@ -5,6 +5,7 @@ import {
     isSavePickerAborted,
     writeBlobToHandleOrFallback,
 } from '@/lib/fileSavePicker';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 export type DirectPdfDocKey =
     | 'alistamiento'
@@ -85,7 +86,7 @@ const PDF_PAGE_SPECS: Record<DirectPdfDocKey, PdfPageSpec> = {
 
 export function getSuggestedPdfFileName(docType: DirectPdfDocKey, selectedDate?: string): string {
     const spec = PDF_PAGE_SPECS[docType] || PDF_PAGE_SPECS.purchases;
-    const cleanDate = selectedDate || new Date().toISOString().slice(0, 10);
+    const cleanDate = selectedDate || getBogotaDateString();
     return `${spec.defaultPrefix}_${cleanDate}.pdf`;
 }
 

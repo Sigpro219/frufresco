@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { 
     Users, 
     Briefcase,
@@ -153,7 +154,7 @@ export default function ProvidersPage() {
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, `Proveedores_${filenameSuffix}`);
             
-            const dateStr = new Date().toISOString().slice(0, 10);
+            const dateStr = getBogotaDateString();
             XLSX.writeFile(workbook, `FruFresco_Proveedores_${filenameSuffix}_${dateStr}.xlsx`);
         } catch (err: any) {
             console.error('Error al exportar Excel:', err);

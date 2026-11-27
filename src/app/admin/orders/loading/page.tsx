@@ -20,7 +20,7 @@ import SpecialClientBadge from '@/components/SpecialClientBadge';
 import { getDocumentBadgeStyle } from '@/components/ClientsModule';
 import { GalleryOmnibox, normalizeSearchText } from '@/components/common/GalleryOmnibox';
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
-import { getBogotaDateString } from '@/lib/dateUtils';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import { ensureUniversalStagingSpaces, formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
 import { evaluateInventoryGateStatus, recordInventoryGateOverride, isPartialClosingNote, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import { 
@@ -362,9 +362,7 @@ function OrderLoadingContent() {
         try {
             return getTomorrowDateStr();
         } catch (e) {
-            const d = new Date();
-            d.setDate(d.getDate() + 1);
-            return d.toISOString().split('T')[0];
+            return addBogotaDays(getBogotaDateString(), 1);
         }
     }); 
 
@@ -1151,8 +1149,8 @@ function OrderLoadingContent() {
 
         setIsReassigning(true);
         try {
-            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowDateStr = formatBogotaDate(new Date(), { day: '2-digit', month: '2-digit', year: 'numeric' });
             const operatorName = profile?.contact_name || (profile as unknown as { email?: string })?.email || currentUser?.email || 'Mesa de Control';
 
             const isNewClientB2C = reassignSelectedClient.role === 'b2c_client' || (reassignSelectedClient.role === 'client' && !reassignSelectedClient.is_corporate_parent && !reassignSelectedClient.parent_id);
@@ -1444,8 +1442,8 @@ function OrderLoadingContent() {
 
         setIsSavingReplacement(true);
         try {
-            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const nowDateStr = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowDateStr = formatBogotaDate(new Date(), { day: '2-digit', month: '2-digit', year: 'numeric' });
             const operatorName = profile?.contact_name || (profile as any)?.email || currentUser?.email || 'Mesa de Control';
 
             const parentSequence = selectedParentOrder 
@@ -1806,7 +1804,7 @@ useEffect(() => {
 
                 if (active) {
                     const profileIds = Array.from(new Set((data || []).map((o: any) => o.profile_id || o.profiles?.id).filter(Boolean)));
-                    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                    const sixtyDaysAgo = addBogotaDays(getBogotaDateString(), -60);
 
                     const [histOrdersRes, histPqrsRes] = await Promise.all([
                         profileIds.length > 0
@@ -3103,7 +3101,7 @@ useEffect(() => {
         
         try {
             // 1. Preparar nota de auditoría en admin_notes
-            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
             const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const auditStamp = ` [Audit ${nowTimeStr}: Edición por ${userTag}]`;
             let updatedAdminNotes = `${selectedOrder.admin_notes || ''}${exceptionStamp}${auditStamp}`.trim();
@@ -3327,7 +3325,7 @@ useEffect(() => {
 
         setUpdateLoading(true);
         try {
-            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const nowTimeStr = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
             const userTag = profile?.contact_name || (profile as any)?.email || 'Mesa de Control';
             const deleteReason = `Eliminación completa del pedido por ${userTag} a las ${nowTimeStr}`;
 
@@ -3526,9 +3524,7 @@ useEffect(() => {
     };
 
     const resetFilters = () => {
-        const now = new Date();
-        const bogota = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-        setSelectedDate(bogota.toISOString().split('T')[0]);
+        setSelectedDate(getBogotaDateString());
         setSearchTerm('');
     };
 
@@ -4986,7 +4982,7 @@ useEffect(() => {
                                                         </div>
                                                         {order.created_at && (
                                                             <div style={{ fontSize: '0.66rem', color: '#475569', fontWeight: '600', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }} title={`Creado: ${new Date(order.created_at).toLocaleString('es-CO')}`}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }} title={`Creado: ${new Date(order.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`}>
                                                                     <Clock size={10} strokeWidth={2.2} style={{ color: '#0D7A57' }} />
                                                                     <span>{formatCreatedAt(order.created_at)}</span>
                                                                 </span>
@@ -7617,7 +7613,7 @@ useEffect(() => {
                                                                         {cItem.cancellation_reason || 'Sin motivo especificado'}
                                                                     </div>
                                                                     <div style={{ fontSize: '0.66rem', color: '#B91C1C', marginTop: '1px' }}>
-                                                                        {cItem.cancelled_by ? `Por: ${cItem.cancelled_by}` : ''} {cItem.cancelled_at ? `· ${new Date(cItem.cancelled_at).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                                                                        {cItem.cancelled_by ? `Por: ${cItem.cancelled_by}` : ''} {cItem.cancelled_at ? `· ${formatBogotaDate(cItem.cancelled_at, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
                                                                     </div>
                                                                 </td>
                                                                 {editMode && (

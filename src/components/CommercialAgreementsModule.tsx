@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase, fetchAllRows } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { getBogotaDateString, addBogotaDays, diffBogotaDays, formatBogotaDate, parseBogotaDate } from '@/lib/dateUtils';
 import {
     checkClientAgreementConflicts,
     formatAgreementConflictPrompt,
@@ -482,7 +483,7 @@ export default function CommercialAgreementsModule() {
     const [createClientStatusFilter, setCreateClientStatusFilter] = useState<'available' | 'all'>('all');
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
     const [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(getBogotaDateString());
     const [durationValue, setDurationValue] = useState<number | string>(2);
     const [durationUnit, setDurationUnit] = useState<string>('weeks');
     const [agreementDiscountPct, setAgreementDiscountPct] = useState<number>(0);
@@ -1422,7 +1423,7 @@ export default function CommercialAgreementsModule() {
     };
 
     const computeDefaultAgreementName = (clientObj?: any, isMulti?: boolean, startD?: string) => {
-        const dStr = startD || startDate || new Date().toISOString().split('T')[0];
+        const dStr = startD || startDate || getBogotaDateString();
         const parts = dStr.split('-');
         const dateTag = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}` : dStr;
         if (isMulti) {
@@ -1439,7 +1440,7 @@ export default function CommercialAgreementsModule() {
     };
 
     const handleOpenCreateModal = () => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getBogotaDateString();
         setStartDate(today);
         setDurationValue(2);
         setDurationUnit('weeks');
@@ -1569,7 +1570,7 @@ export default function CommercialAgreementsModule() {
 
             // Asignar nombre sugerido canónico si no ha sido editado
             const clientObj = b2bClients.find(c => c.id === selectedClientId);
-            const today = startDate || new Date().toISOString().split('T')[0];
+            const today = startDate || getBogotaDateString();
             const parts = today.split('-');
             const dateTag = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}` : today;
             const clientName = isMultiClientMode ? 'Multicliente' : (clientObj?.company_name || 'Cliente');
@@ -1754,7 +1755,7 @@ export default function CommercialAgreementsModule() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: masterModelName || `Institucional General - ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`,
+                    name: masterModelName || `Institucional General - ${formatBogotaDate(new Date(), { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}`,
                     items: validItems,
                     author
                 })
@@ -2334,11 +2335,11 @@ export default function CommercialAgreementsModule() {
                 agreement_code: `ACU-${selectedAgreement.quote_number || selectedAgreement.id.slice(0, 6)}`,
                 client_name: selectedAgreement.client_name,
                 client_nit: selectedAgreement.profiles?.nit,
-                valid_from: selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString('es-CO') : 'Inmediata',
-                valid_until: selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida',
+                valid_from: selectedAgreement.start_date ? formatBogotaDate(selectedAgreement.start_date) : 'Inmediata',
+                valid_until: selectedAgreement.valid_until ? formatBogotaDate(selectedAgreement.valid_until) : 'Indefinida',
                 items: emailItems,
                 responsible_agent: authorName,
-                modified_at: new Date().toLocaleDateString('es-CO') + ' ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+                modified_at: formatBogotaDate(new Date()) + ' ' + new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })
             };
 
             const htmlContent = generateAgreementNotificationHtml(payload);
@@ -2636,8 +2637,8 @@ export default function CommercialAgreementsModule() {
             const rows: any[] = [];
             const clientName = selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Cliente';
             const refCode = formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at);
-            const validFrom = selectedAgreement.start_date ? new Date(selectedAgreement.start_date.includes('T') ? selectedAgreement.start_date : selectedAgreement.start_date + 'T12:00:00').toLocaleDateString('es-CO') : 'Inmediata';
-            const validUntil = selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until.includes('T') ? selectedAgreement.valid_until : selectedAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO') : 'Indefinida';
+            const validFrom = selectedAgreement.start_date ? formatBogotaDate(selectedAgreement.start_date) : 'Inmediata';
+            const validUntil = selectedAgreement.valid_until ? formatBogotaDate(selectedAgreement.valid_until) : 'Indefinida';
 
             sortedCategories.forEach(catName => {
                 const catItems = [...groups[catName]].sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'es', { sensitivity: 'base' }));
@@ -2739,7 +2740,7 @@ export default function CommercialAgreementsModule() {
                 unit_price: it.unit_price
             })));
 
-            if (result.validityStart && (!startDate || startDate === new Date().toISOString().split('T')[0])) {
+            if (result.validityStart && (!startDate || startDate === getBogotaDateString())) {
                 setStartDate(result.validityStart);
             }
 
@@ -3055,17 +3056,17 @@ export default function CommercialAgreementsModule() {
             if (targetClients.length === 0) throw new Error('No se encontraron clientes seleccionados');
             
             const numDuration = Math.max(1, Number(durationValue) || 1);
-            const expiry = new Date(startDate + 'T12:00:00');
+            const expiry = parseBogotaDate(startDate);
             if (durationUnit === 'days') {
-                expiry.setDate(expiry.getDate() + numDuration);
+                expiry.setUTCDate(expiry.getUTCDate() + numDuration);
             } else if (durationUnit === 'weeks') {
-                expiry.setDate(expiry.getDate() + numDuration * 7);
+                expiry.setUTCDate(expiry.getUTCDate() + numDuration * 7);
             } else if (durationUnit === 'months') {
-                expiry.setMonth(expiry.getMonth() + numDuration);
+                expiry.setUTCMonth(expiry.getUTCMonth() + numDuration);
             } else if (durationUnit === 'years') {
-                expiry.setFullYear(expiry.getFullYear() + numDuration);
+                expiry.setUTCFullYear(expiry.getUTCFullYear() + numDuration);
             }
-            const calculatedValidUntil = expiry.toISOString();
+            const calculatedValidUntil = getBogotaDateString(expiry);
             
             // Calculate negotiated totals dynamically with actual product IVA rates
             const itemsTemplate: any[] = [];
@@ -3149,7 +3150,7 @@ export default function CommercialAgreementsModule() {
                         model_id: 'd90a91e5-827c-473d-9d4f-3e28c7c91e15', // General Institucional
                         model_snapshot_name: masterName,
                         status: 'agreement',
-                        start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                        start_date: startDate || getBogotaDateString(),
                         valid_until: calculatedValidUntil,
                         version: 1,
                         subtotal_amount: subtotal,
@@ -3242,7 +3243,7 @@ export default function CommercialAgreementsModule() {
                             model_id: 'd90a91e5-827c-473d-9d4f-3e28c7c91e15', // General Institucional
                             model_snapshot_name: clientAgreementName,
                             status: 'agreement',
-                            start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                            start_date: startDate || getBogotaDateString(),
                             valid_until: calculatedValidUntil,
                             version: 1,
                             subtotal_amount: subtotal,
@@ -3311,7 +3312,7 @@ export default function CommercialAgreementsModule() {
             setSelectedClientIds([]);
             setAgreementName('');
             setIsNameManuallyEdited(false);
-            setStartDate(new Date().toISOString().split('T')[0]);
+            setStartDate(getBogotaDateString());
             setDurationValue(2);
             setDurationUnit('weeks');
             setParsedFile(null);
@@ -3470,17 +3471,17 @@ export default function CommercialAgreementsModule() {
         setEditSaving(true);
         try {
             const numEditDuration = Math.max(1, Number(editDurationValue) || 1);
-            const expiry = new Date(editStartDate + 'T12:00:00');
+            const expiry = parseBogotaDate(editStartDate);
             if (editDurationUnit === 'days') {
-                expiry.setDate(expiry.getDate() + numEditDuration);
+                expiry.setUTCDate(expiry.getUTCDate() + numEditDuration);
             } else if (editDurationUnit === 'weeks') {
-                expiry.setDate(expiry.getDate() + numEditDuration * 7);
+                expiry.setUTCDate(expiry.getUTCDate() + numEditDuration * 7);
             } else if (editDurationUnit === 'months') {
-                expiry.setMonth(expiry.getMonth() + numEditDuration);
+                expiry.setUTCMonth(expiry.getUTCMonth() + numEditDuration);
             } else if (editDurationUnit === 'years') {
-                expiry.setFullYear(expiry.getFullYear() + numEditDuration);
+                expiry.setUTCFullYear(expiry.getUTCFullYear() + numEditDuration);
             }
-            const calculatedValidUntil = expiry.toISOString();
+            const calculatedValidUntil = getBogotaDateString(expiry);
 
             // Preparar y validar ítems desde editExcelPreviewData.items ANTES de mutar quotes/profiles
             const hasPreviewItems = Boolean(editExcelPreviewData && editExcelPreviewData.items.length > 0);
@@ -3558,7 +3559,7 @@ export default function CommercialAgreementsModule() {
             }
 
             // Actualizar sufijo de fecha DD-MM-YY en model_snapshot_name preservando [DTO_COMERCIAL: X%]
-            const rawDateParts = (editStartDate || new Date().toISOString().split('T')[0]).split('-');
+            const rawDateParts = (editStartDate || getBogotaDateString()).split('-');
             const dateSuffix = rawDateParts.length === 3
                 ? `${rawDateParts[2]}-${rawDateParts[1]}-${rawDateParts[0].slice(-2)}`
                 : editStartDate;
@@ -3575,7 +3576,7 @@ export default function CommercialAgreementsModule() {
             const { error: updateErr } = await supabase
                 .from('quotes')
                 .update({
-                    start_date: editStartDate ? new Date(editStartDate + 'T12:00:00').toISOString() : new Date().toISOString(),
+                    start_date: editStartDate || getBogotaDateString(),
                     valid_until: calculatedValidUntil,
                     model_snapshot_name: defaultUpdatedName
                 })
@@ -3646,11 +3647,10 @@ export default function CommercialAgreementsModule() {
     const handleOpenRenew = (agreement: Agreement) => {
         setRenewTarget(agreement);
         // Default to 30 days from now or current valid_until
-        const current = agreement.valid_until ? new Date(agreement.valid_until) : new Date();
-        if (!agreement.valid_until) {
-            current.setDate(current.getDate() + 30);
-        }
-        setNewExpiryDate(current.toISOString().split('T')[0]);
+        const baseStr = agreement.valid_until
+            ? getBogotaDateString(agreement.valid_until)
+            : addBogotaDays(getBogotaDateString(), 30);
+        setNewExpiryDate(baseStr);
     };
 
     const handleRenewSubmit = async (e: React.FormEvent) => {
@@ -3662,7 +3662,7 @@ export default function CommercialAgreementsModule() {
             const { error } = await supabase
                 .from('quotes')
                 .update({ 
-                    valid_until: new Date(newExpiryDate).toISOString(),
+                    valid_until: getBogotaDateString(newExpiryDate),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', renewTarget.id);
@@ -3689,18 +3689,10 @@ export default function CommercialAgreementsModule() {
     const getAgreementStatus = (validUntil: string) => {
         if (!validUntil) return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const };
         
-        // Normalizar fecha de expiración para evitar desfases de huso horario
-        const cleanDateStr = String(validUntil).split('T')[0];
-        const parts = cleanDateStr.split('-').map(Number);
-        const expiry = parts.length === 3 && !parts.some(isNaN)
-            ? new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999)
-            : new Date(validUntil);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const diffTime = expiry.getTime() - today.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = diffBogotaDays(getBogotaDateString(), validUntil);
+        if (Number.isNaN(diffDays)) {
+            return { label: 'Vigente', color: '#0D7A57', bgColor: '#EAEFEA', type: 'active' as const };
+        }
 
         if (diffDays < 0) {
             return { label: 'Vencido', color: '#DC2626', bgColor: '#FEF2F2', type: 'expired' as const, diffDays };
@@ -3715,19 +3707,11 @@ export default function CommercialAgreementsModule() {
     const getAgreementRemainingInfo = (validUntil?: string, startDate?: string) => {
         if (!validUntil) return { label: 'Indefinida', sublabel: null, color: '#64748B', bgColor: '#F1F5F9', border: '#CBD5E1', diffDays: 0 };
         
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const end = new Date(validUntil);
-        end.setHours(0, 0, 0, 0);
-        
-        const diffMs = end.getTime() - now.getTime();
-        const remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const remainingDays = diffBogotaDays(getBogotaDateString(), validUntil);
         
         let totalPactadoText: string | null = null;
         if (startDate) {
-            const s = new Date(startDate);
-            s.setHours(0, 0, 0, 0);
-            const totalDays = Math.round((end.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+            const totalDays = diffBogotaDays(startDate, validUntil);
             if (totalDays > 0) {
                 totalPactadoText = `Pactado: ${totalDays} d`;
             }
@@ -4537,7 +4521,7 @@ export default function CommercialAgreementsModule() {
                                                                     {agreement.profiles?.company_name || agreement.client_name}
                                                                 </span>
                                                                 {(() => {
-                                                                    const badgeName = agreement.model_snapshot_name || `${agreement.profiles?.company_name || agreement.client_name || 'Acuerdo'} - ${agreement.created_at ? new Date(agreement.created_at).toLocaleDateString('es-CO') : ''}`;
+                                                                    const badgeName = agreement.model_snapshot_name || `${agreement.profiles?.company_name || agreement.client_name || 'Acuerdo'} - ${agreement.created_at ? formatBogotaDate(agreement.created_at) : ''}`;
                                                                     return (
                                                                         <span style={{ 
                                                                             fontSize: '0.68rem', 
@@ -4626,11 +4610,11 @@ export default function CommercialAgreementsModule() {
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textMain }}>
                                                     <span style={{ color: '#94A3B8', fontSize: '0.7rem', marginRight: '4px' }}>INICIA:</span>
-                                                    <strong>{agreement.start_date ? new Date(agreement.start_date).toLocaleDateString('es-CO') : '---'}</strong>
+                                                    <strong>{formatBogotaDate(agreement.start_date)}</strong>
                                                 </div>
                                                 <div style={{ fontSize: '0.8rem', color: THEME.colors.textSecondary }}>
                                                     <span style={{ color: '#94A3B8', fontSize: '0.7rem', marginRight: '4px' }}>VENCE:</span>
-                                                    <strong>{agreement.valid_until ? new Date(agreement.valid_until).toLocaleDateString('es-CO') : '---'}</strong>
+                                                    <strong>{formatBogotaDate(agreement.valid_until)}</strong>
                                                 </div>
                                             </div>
                                         </td>
@@ -4868,7 +4852,7 @@ export default function CommercialAgreementsModule() {
                                         {selectedAgreement.profiles?.company_name || selectedAgreement.client_name}
                                     </h2>
                                     {(() => {
-                                        const badgeName = selectedAgreement.model_snapshot_name || `${selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Acuerdo'} - ${selectedAgreement.created_at ? new Date(selectedAgreement.created_at).toLocaleDateString('es-CO') : ''}`;
+                                        const badgeName = selectedAgreement.model_snapshot_name || `${selectedAgreement.profiles?.company_name || selectedAgreement.client_name || 'Acuerdo'} - ${selectedAgreement.created_at ? formatBogotaDate(selectedAgreement.created_at) : ''}`;
                                         return (
                                             <span style={{ 
                                                 fontSize: '0.72rem', 
@@ -4984,7 +4968,7 @@ export default function CommercialAgreementsModule() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                     <span style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>VIGENCIA:</span>
                                     <span style={{ fontSize: '0.78rem', fontWeight: '800', color: '#1E293B' }}>
-                                        {selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString() : 'N/A'} al {selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString() : 'Indefinida'}
+                                        {selectedAgreement.start_date ? formatBogotaDate(selectedAgreement.start_date) : 'N/A'} al {selectedAgreement.valid_until ? formatBogotaDate(selectedAgreement.valid_until) : 'Indefinida'}
                                     </span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -5418,7 +5402,7 @@ export default function CommercialAgreementsModule() {
                                                                                     </div>
                                                                                     {itemLogs.slice(0, 3).map((log, idx) => {
                                                                                         const d = log.details || {};
-                                                                                        const dateStr = log.created_at ? new Date(log.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                                                                                        const dateStr = log.created_at ? formatBogotaDate(log.created_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
                                                                                         const author = log.collaborator_name || 'Comercial';
                                                                                         return (
                                                                                             <div key={log.id || idx} style={{ marginBottom: '4px', lineHeight: 1.3 }}>
@@ -6083,7 +6067,7 @@ export default function CommercialAgreementsModule() {
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
                                         <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.7rem' }}>Vigencia Contractual:</span>
                                         <strong style={{ color: '#0F172A' }}>
-                                            {selectedAgreement.start_date ? new Date(selectedAgreement.start_date).toLocaleDateString('es-CO') : 'Inmediata'} al {selectedAgreement.valid_until ? new Date(selectedAgreement.valid_until).toLocaleDateString('es-CO') : 'Indefinida'}
+                                            {selectedAgreement.start_date ? formatBogotaDate(selectedAgreement.start_date) : 'Inmediata'} al {selectedAgreement.valid_until ? formatBogotaDate(selectedAgreement.valid_until) : 'Indefinida'}
                                         </strong>
                                     </div>
                                     <div style={{ backgroundColor: '#F8FAFC', padding: '0.6rem', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
@@ -6498,17 +6482,17 @@ export default function CommercialAgreementsModule() {
                                     const sortedCategories = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
                                     const formattedDate = selectedAgreement.created_at
-                                        ? new Date(selectedAgreement.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
-                                        : new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+                                        ? formatBogotaDate(selectedAgreement.created_at, { day: '2-digit', month: 'long', year: 'numeric' })
+                                        : formatBogotaDate(new Date(), { day: '2-digit', month: 'long', year: 'numeric' });
 
                                     const refNumber = formatAgreementNumber(selectedAgreement.quote_number, selectedAgreement.created_at);
 
                                     const validFromStr = selectedAgreement.start_date
-                                        ? new Date(selectedAgreement.start_date.includes('T') ? selectedAgreement.start_date : selectedAgreement.start_date + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatBogotaDate(selectedAgreement.start_date, { day: '2-digit', month: 'short', year: 'numeric' })
                                         : 'Inmediata';
 
                                     const validUntilStr = selectedAgreement.valid_until
-                                        ? new Date(selectedAgreement.valid_until.includes('T') ? selectedAgreement.valid_until : selectedAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatBogotaDate(selectedAgreement.valid_until, { day: '2-digit', month: 'short', year: 'numeric' })
                                         : 'Indefinida (Sujeta a Renovación)';
 
                                     return (
@@ -6753,7 +6737,7 @@ export default function CommercialAgreementsModule() {
                             <div>
                                 <span style={{ fontSize: '0.75rem', color: THEME.colors.textSecondary, display: 'block', textTransform: 'uppercase', fontWeight: 'bold' }}>Acuerdo Actual Vence:</span>
                                 <span style={{ fontSize: '0.9rem', color: THEME.colors.textMain, fontWeight: '500' }}>
-                                    {renewTarget.valid_until ? new Date(renewTarget.valid_until).toLocaleDateString('es-CO', { dateStyle: 'full' }) : 'Indefinido'}
+                                    {renewTarget.valid_until ? formatBogotaDate(renewTarget.valid_until, { dateStyle: 'full' }) : 'Indefinido'}
                                 </span>
                             </div>
 
@@ -7338,11 +7322,11 @@ export default function CommercialAgreementsModule() {
                                                                 const itemsCount = (activeAgreement as any).items?.length || (activeAgreement as any).quote_items?.length || 0;
                                                                 const rawStartDate = activeAgreement.start_date || activeAgreement.created_at;
                                                                 const startDateFormatted = rawStartDate 
-                                                                    ? new Date(rawStartDate.includes('T') ? rawStartDate : rawStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                    ? formatBogotaDate(rawStartDate, { day: '2-digit', month: '2-digit', year: 'numeric' })
                                                                     : 'Inicial';
 
                                                                 const validUntilFormatted = activeAgreement.valid_until 
-                                                                    ? new Date(activeAgreement.valid_until.includes('T') ? activeAgreement.valid_until : activeAgreement.valid_until + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                    ? formatBogotaDate(activeAgreement.valid_until, { day: '2-digit', month: '2-digit', year: 'numeric' })
                                                                     : 'Indefinida (Sin fecha límite)';
 
                                                                 return (
@@ -7551,7 +7535,7 @@ export default function CommercialAgreementsModule() {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        const todayStr = new Date().toISOString().split('T')[0];
+                                                        const todayStr = getBogotaDateString();
                                                         setStartDate(todayStr);
                                                         if (!isNameManuallyEdited) {
                                                             const c = b2bClients.find(cl => cl.id === selectedClientId);
@@ -7748,23 +7732,23 @@ export default function CommercialAgreementsModule() {
 
                                     {(() => {
                                         const numDuration = Math.max(1, Number(durationValue) || 1);
-                                        const expiry = new Date(startDate + 'T12:00:00');
+                                        const expiry = parseBogotaDate(startDate);
                                         if (durationUnit === 'days') {
-                                            expiry.setDate(expiry.getDate() + numDuration);
+                                            expiry.setUTCDate(expiry.getUTCDate() + numDuration);
                                         } else if (durationUnit === 'weeks') {
-                                            expiry.setDate(expiry.getDate() + numDuration * 7);
+                                            expiry.setUTCDate(expiry.getUTCDate() + numDuration * 7);
                                         } else if (durationUnit === 'months') {
-                                            expiry.setMonth(expiry.getMonth() + numDuration);
+                                            expiry.setUTCMonth(expiry.getUTCMonth() + numDuration);
                                         } else if (durationUnit === 'years') {
-                                            expiry.setFullYear(expiry.getFullYear() + numDuration);
+                                            expiry.setUTCFullYear(expiry.getUTCFullYear() + numDuration);
                                         }
-                                        const formattedExpiry = expiry.toLocaleDateString('es-CO', {
+                                        const formattedExpiry = formatBogotaDate(expiry, {
                                             weekday: 'long',
                                             day: 'numeric',
                                             month: 'long',
                                             year: 'numeric'
                                         });
-                                        const formattedStart = new Date(startDate + 'T12:00:00').toLocaleDateString('es-CO', {
+                                        const formattedStart = formatBogotaDate(startDate, {
                                             day: 'numeric',
                                             month: 'long',
                                             year: 'numeric'
@@ -9117,17 +9101,17 @@ export default function CommercialAgreementsModule() {
                                     {/* Dynamic Expiration Card */}
                                     {(() => {
                                         const numEditDuration = Math.max(1, Number(editDurationValue) || 1);
-                                        const expiry = new Date(editStartDate + 'T12:00:00');
+                                        const expiry = parseBogotaDate(editStartDate);
                                         if (editDurationUnit === 'days') {
-                                            expiry.setDate(expiry.getDate() + numEditDuration);
+                                            expiry.setUTCDate(expiry.getUTCDate() + numEditDuration);
                                         } else if (editDurationUnit === 'weeks') {
-                                            expiry.setDate(expiry.getDate() + numEditDuration * 7);
+                                            expiry.setUTCDate(expiry.getUTCDate() + numEditDuration * 7);
                                         } else if (editDurationUnit === 'months') {
-                                            expiry.setMonth(expiry.getMonth() + numEditDuration);
+                                            expiry.setUTCMonth(expiry.getUTCMonth() + numEditDuration);
                                         } else if (editDurationUnit === 'years') {
-                                            expiry.setFullYear(expiry.getFullYear() + numEditDuration);
+                                            expiry.setUTCFullYear(expiry.getUTCFullYear() + numEditDuration);
                                         }
-                                        const formattedExpiry = expiry.toLocaleDateString('es-CO', {
+                                        const formattedExpiry = formatBogotaDate(expiry, {
                                             weekday: 'long',
                                             day: 'numeric',
                                             month: 'long',
@@ -9651,7 +9635,7 @@ export default function CommercialAgreementsModule() {
                                     <div style={{ width: '100%', maxWidth: '600px', backgroundColor: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: '12px', padding: '1.25rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                             <span style={{ color: '#64748B' }}>Fecha Inicio:</span>
-                                            <strong>{editStartDate ? new Date(editStartDate + 'T12:00:00').toLocaleDateString('es-CO') : '---'}</strong>
+                                            <strong>{formatBogotaDate(editStartDate)}</strong>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                                             <span style={{ color: '#64748B' }}>Duración Contractual:</span>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isSandboxMode } from '@/lib/sandboxGuard';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import {
@@ -1062,7 +1063,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             return;
         }
 
-        const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+        const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
         const routesHtml = confirmedManifest.map((route: any, idx: number) => {
             const stopsHtml = route.stops && route.stops.length > 0 
@@ -3246,7 +3247,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                             <button
                                 onClick={() => {
-                                    const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+                                    const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'short', year: 'numeric' });
                                     let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
                                     confirmedManifest.forEach((r, i) => {
                                         text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${formatNumber(r.total_kilos || 0, 1)} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 
 const formatCompactMoney = (num: number): string => {
     if (Math.abs(num) >= 1_000_000) {
@@ -1778,10 +1779,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
         const start = isIsolatedClient ? todayStr : (currentMeta.start_date || todayStr);
         let end = currentMeta.valid_until;
         if (isIsolatedClient || !end || end < todayStr) {
-            const d = new Date(start + 'T12:00:00');
             const defaultDays = selectedClient === 'nutresa' ? 30 : (currentMeta.default_duration_days || 15);
-            d.setDate(d.getDate() + defaultDays);
-            end = d.toISOString().split('T')[0];
+            end = addBogotaDays(start, defaultDays);
             setNutresaPresetDays(defaultDays);
         }
         setModalStartDate(start);
@@ -1799,33 +1798,27 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
     // Presets de Vigencia Rápida (15, 30, 60, 90 días) idénticos al modal de Cotizaciones
     const applyNutresaDaysPreset = (days: number) => {
         setNutresaPresetDays(days);
-        const base = modalStartDate ? new Date(modalStartDate + 'T12:00:00') : new Date();
-        base.setDate(base.getDate() + days);
-        setModalEndDate(base.toISOString().split('T')[0]);
+        setModalEndDate(addBogotaDays(modalStartDate || getBogotaDateString(), days));
     };
 
     // Presets rápidos de fechas en el modal general
     const applyDatePreset = (preset: '15d' | '30d' | 'end_of_month' | 'next_fortnight') => {
-        const start = new Date(modalStartDate + 'T12:00:00');
+        const startStr = modalStartDate || getBogotaDateString();
+        const [y, m, day] = startStr.split('-').map(Number);
         if (preset === '15d') {
-            const end = new Date(start);
-            end.setDate(end.getDate() + 15);
-            setModalEndDate(end.toISOString().split('T')[0]);
+            setModalEndDate(addBogotaDays(startStr, 15));
         } else if (preset === '30d') {
-            const end = new Date(start);
-            end.setDate(end.getDate() + 30);
-            setModalEndDate(end.toISOString().split('T')[0]);
+            setModalEndDate(addBogotaDays(startStr, 30));
         } else if (preset === 'end_of_month') {
-            const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-            setModalEndDate(end.toISOString().split('T')[0]);
+            const end = new Date(Date.UTC(y, m, 0, 12, 0, 0));
+            setModalEndDate(getBogotaDateString(end));
         } else if (preset === 'next_fortnight') {
-            const day = start.getDate();
             if (day <= 15) {
-                const fifteenth = new Date(start.getFullYear(), start.getMonth(), 15);
-                setModalEndDate(fifteenth.toISOString().split('T')[0]);
+                const fifteenth = new Date(Date.UTC(y, m - 1, 15, 12, 0, 0));
+                setModalEndDate(getBogotaDateString(fifteenth));
             } else {
-                const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-                setModalEndDate(end.toISOString().split('T')[0]);
+                const end = new Date(Date.UTC(y, m, 0, 12, 0, 0));
+                setModalEndDate(getBogotaDateString(end));
             }
         }
     };
@@ -5104,12 +5097,8 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                     type="button"
                                                     onClick={() => {
                                                         setNutresaPresetDays(preset.days);
-                                                        const todayBogota = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
-                                                        const baseStr = modalStartDate || todayBogota;
-                                                        const [y, m, d] = baseStr.split('-').map(Number);
-                                                        const dt = new Date(Date.UTC(y, m - 1, d));
-                                                        dt.setUTCDate(dt.getUTCDate() + preset.days);
-                                                        setModalEndDate(dt.toISOString().split('T')[0]);
+                                                        const baseStr = modalStartDate || getBogotaDateString();
+                                                        setModalEndDate(addBogotaDays(baseStr, preset.days));
                                                     }}
                                                     style={{
                                                         padding: '7px 10px',
@@ -5141,10 +5130,7 @@ export default function SpecialAgreementsModule({ embedded = false }: { embedded
                                                 const newFrom = e.target.value;
                                                 setModalStartDate(newFrom);
                                                 if (nutresaPresetDays && newFrom) {
-                                                    const [y, m, d] = newFrom.split('-').map(Number);
-                                                    const dt = new Date(Date.UTC(y, m - 1, d));
-                                                    dt.setUTCDate(dt.getUTCDate() + nutresaPresetDays);
-                                                    setModalEndDate(dt.toISOString().split('T')[0]);
+                                                    setModalEndDate(addBogotaDays(newFrom, nutresaPresetDays));
                                                 }
                                             }}
                                             style={{

@@ -9,6 +9,7 @@ import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { GOOGLE_MAPS_MAP_ID } from '@/lib/constants';
 import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
+import { formatBogotaDate, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 import { 
     Truck, 
     CheckCircle2, 
@@ -431,12 +432,11 @@ export default function TransportControlTower() {
             
             let novedadesCount = 0;
             try {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
+                const { startUtcIso } = getBogotaDayRangeUtcIso(getBogotaDateString());
                 const { count } = await supabase
                     .from('delivery_events')
                     .select('*', { count: 'exact', head: true })
-                    .gte('created_at', today.toISOString())
+                    .gte('created_at', startUtcIso)
                     .abortSignal(signal as AbortSignal);
                 novedadesCount = count || 0;
             } catch (e) {
@@ -901,7 +901,7 @@ export default function TransportControlTower() {
                                                         </div>
                                                         {real && v.last_gps_sync && (
                                                             <div style={{ fontSize: '0.6rem', color: '#94A3B8' }}>
-                                                                {new Date(v.last_gps_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                {new Date(v.last_gps_sync).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                                                             </div>
                                                         )}
                                                     </div>
@@ -1421,7 +1421,7 @@ export default function TransportControlTower() {
                                                                         </div>
                                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.62rem', color: THEME.colors.textSecondary }}>
                                                                             <span>{v.heading != null ? `Rumbo: ${v.heading}°` : 'Rumbo: --'}</span>
-                                                                            <span>{v.last_gps_sync ? `Sync: ${new Date(v.last_gps_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Sin datos'}</span>
+                                                                            <span>{v.last_gps_sync ? `Sync: ${new Date(v.last_gps_sync).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}` : 'Sin datos'}</span>
                                                                         </div>
                                                                         {/* Watchdog Signal Loss Warning (> 15 mins) */}
                                                                         {isInRoute && v.last_gps_sync && (Date.now() - new Date(v.last_gps_sync).getTime() > 15 * 60 * 1000) && (
@@ -1985,7 +1985,7 @@ export default function TransportControlTower() {
                                         {clientKardexMovements.map(mov => (
                                             <tr key={mov.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
                                                 <td style={{ padding: '0.65rem 0.8rem', color: THEME.colors.textSecondary, fontWeight: '600' }}>
-                                                    {mov.created_at ? new Date(mov.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                                    {mov.created_at ? formatBogotaDate(mov.created_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }, 'N/A') : 'N/A'}
                                                 </td>
                                                 <td style={{ padding: '0.65rem 0.8rem' }}>
                                                     {(mov.delivered_qty || 0) > 0 && (mov.received_qty || 0) > 0 ? (

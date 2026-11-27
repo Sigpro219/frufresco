@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import nodemailer from 'nodemailer';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 export async function POST(req: Request) {
   try {
@@ -212,7 +213,7 @@ export async function POST(req: Request) {
         total_amount: totalAmount,
         status: 'counter_offer_v2',
         version: 2,
-        start_date: validityStart || new Date().toISOString().split('T')[0],
+        start_date: validityStart || getBogotaDateString(),
         valid_until: validityEnd || null,
         model_snapshot_name: 'Acuerdo Comercial (Contraoferta)',
         

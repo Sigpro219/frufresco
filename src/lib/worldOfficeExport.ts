@@ -5,6 +5,8 @@
  * Sheet Name: 'Encab + Movim.Inven LOTES'
  */
 
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
+
 export const WORLD_OFFICE_SHEET_NAME = 'Encab + Movim.Inven LOTES';
 
 export const WORLD_OFFICE_44_COLUMNS = [
@@ -142,26 +144,18 @@ export function parseNitAndDv(rawNit: string | null | undefined): { nit: string;
  */
 export function formatDateDDMMYYYY(dateInput: string | Date | null | undefined): string {
     if (!dateInput) {
-        const now = new Date();
-        const d = String(now.getDate()).padStart(2, '0');
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const y = now.getFullYear();
+        const bogotaToday = getBogotaDateString();
+        const [y, m, d] = bogotaToday.split('-');
         return `${d}/${m}/${y}`;
     }
     if (typeof dateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateInput.trim())) {
         return dateInput.trim();
     }
-    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateInput.trim())) {
-        const [y, m, d] = dateInput.trim().substring(0, 10).split('-');
-        return `${d}/${m}/${y}`;
-    }
-    const dObj = new Date(dateInput);
-    if (isNaN(dObj.getTime())) {
+    const bogotaStr = getBogotaDateString(dateInput);
+    if (!bogotaStr) {
         return '';
     }
-    const d = String(dObj.getDate()).padStart(2, '0');
-    const m = String(dObj.getMonth() + 1).padStart(2, '0');
-    const y = dObj.getFullYear();
+    const [y, m, d] = bogotaStr.split('-');
     return `${d}/${m}/${y}`;
 }
 
@@ -169,23 +163,18 @@ export function formatDateDDMMYYYY(dateInput: string | Date | null | undefined):
  * Calculates due date (Fecha + payment_days) and returns DD/MM/YYYY
  */
 export function calculateDueDate(baseDateInput: string | Date | null | undefined, days: number = 0): string {
-    let dObj: Date;
-    if (typeof baseDateInput === 'string' && /^\d{4}-\d{2}-\d{2}/.test(baseDateInput.trim())) {
-        const [y, m, d] = baseDateInput.trim().substring(0, 10).split('-').map(Number);
-        dObj = new Date(y, m - 1, d);
-    } else if (typeof baseDateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(baseDateInput.trim())) {
-        const [d, m, y] = baseDateInput.trim().split('/').map(Number);
-        dObj = new Date(y, m - 1, d);
+    let baseIso = '';
+    if (typeof baseDateInput === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(baseDateInput.trim())) {
+        const [d, m, y] = baseDateInput.trim().split('/');
+        baseIso = `${y}-${m}-${d}`;
     } else if (baseDateInput) {
-        dObj = new Date(baseDateInput);
-    } else {
-        dObj = new Date();
+        baseIso = getBogotaDateString(baseDateInput);
     }
-    if (isNaN(dObj.getTime())) dObj = new Date();
-    dObj.setDate(dObj.getDate() + (Number(days) || 0));
-    const d = String(dObj.getDate()).padStart(2, '0');
-    const m = String(dObj.getMonth() + 1).padStart(2, '0');
-    const y = dObj.getFullYear();
+    if (!baseIso) {
+        baseIso = getBogotaDateString();
+    }
+    const dueIso = addBogotaDays(baseIso, Number(days) || 0) || baseIso;
+    const [y, m, d] = dueIso.split('-');
     return `${d}/${m}/${y}`;
 }
 
@@ -465,7 +454,7 @@ export async function downloadWorldOfficeExcel(
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, WORLD_OFFICE_SHEET_NAME);
 
-    const cleanDate = new Date().toISOString().split('T')[0];
+    const cleanDate = getBogotaDateString();
     const hasDateInPrefix = /\d{4}-\d{2}-\d{2}/.test(fileNamePrefix);
     const fullFileName = hasDateInPrefix
         ? `${fileNamePrefix}.xls`
@@ -557,7 +546,7 @@ export async function downloadCreditNotesExcel(
 
     const dateStr = selectedDate && selectedDate !== 'all'
         ? selectedDate
-        : new Date().toISOString().split('T')[0];
+        : getBogotaDateString();
     const fullFileName = `Novedades_Notas_Credito_WorldOffice_${dateStr}.xlsx`;
 
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {

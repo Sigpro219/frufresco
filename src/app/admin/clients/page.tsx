@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth, checkUserPermission } from '@/lib/authContext';
 import Toast from '@/components/Toast';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     BarChart3, 
     Building2, 
@@ -1257,7 +1258,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                 {isB2C && profileData && profileData.total_orders !== undefined && (
                     <>
                         <InfoRow icon={<Package size={14} strokeWidth={1.5} />} label="Actividad" value={`${formatNumber(profileData.total_orders || 0)} Pedidos | ${formatMoney(profileData.total_spent || 0)} totales`} />
-                        {profileData.last_order && <InfoRow icon={<ClipboardList size={14} strokeWidth={1.5} />} label="Último pedido" value={new Date(profileData.last_order as string).toLocaleDateString()} />}
+                        {profileData.last_order && <InfoRow icon={<ClipboardList size={14} strokeWidth={1.5} />} label="Último pedido" value={formatBogotaDate(profileData.last_order as string)} />}
                     </>
                 )}
                 {isLead && leadData && (
@@ -1286,7 +1287,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                             {leadData.last_contact_date && (
                                 <div>
                                     <label style={{ fontSize: '0.65rem', fontWeight: '600', color: THEME.colors.textSecondary, display: 'block' }}>ÚLTIMO</label>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>{new Date(leadData.last_contact_date as string).toLocaleDateString()}</div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: THEME.colors.textMain }}>{formatBogotaDate(leadData.last_contact_date as string)}</div>
                                 </div>
                             )}
                         </div>
@@ -1307,7 +1308,7 @@ function ClientCard({ type, data, pricingModels, availableParents, onUpdatePrici
                                         {new Date(leadData.next_contact_date as string) < new Date() ? 'VENCIDA' : 'SIGUIENTE'}
                                     </label>
                                     <div style={{ fontSize: '0.8rem', fontWeight: '700', color: new Date(leadData.next_contact_date as string) < new Date() ? '#B91C1C' : '#15803D' }}>
-                                        {new Date(leadData.next_contact_date as string).toLocaleDateString()}
+                                        {formatBogotaDate(leadData.next_contact_date as string)}
                                     </div>
                                 </div>
                             </div>
@@ -1872,7 +1873,7 @@ function ClientDetailsModal({ client, onClose, pricingModels, onUpdateDevVerifie
                                 <ModalRow label="Tipo de Negocio" value={(client as unknown as Lead).business_type} />
                                 <ModalRow label="Tamaño / Escala" value={(client as unknown as Lead).business_size} />
                                 <ModalRow label="Contactos Realizados" value={(client as unknown as Lead).contact_count || 0} />
-                                <ModalRow label="Último Contacto" value={(client as unknown as Lead).last_contact_date ? new Date(String((client as unknown as Lead).last_contact_date)).toLocaleDateString() : 'Nunca'} />
+                                <ModalRow label="Último Contacto" value={(client as unknown as Lead).last_contact_date ? formatBogotaDate(String((client as unknown as Lead).last_contact_date)) : 'Nunca'} />
                             </section>
                         )}
                     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { 
     FileText, 
     UploadCloud, 
@@ -562,7 +563,7 @@ export default function CadenaRadianReconciliationSubmodule({ onSyncComplete }: 
             const ws = XLSX.utils.json_to_sheet(rowsToExport);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Faltantes en Cadena');
-            XLSX.writeFile(wb, `URGENTE_Facturas_Faltantes_Cadena_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            XLSX.writeFile(wb, `URGENTE_Facturas_Faltantes_Cadena_${getBogotaDateString()}.xlsx`);
         } catch (e: any) {
             console.error('Error exportando reporte de faltantes:', e);
             alert('Error al generar Excel');
@@ -1584,7 +1585,7 @@ export default function CadenaRadianReconciliationSubmodule({ onSyncComplete }: 
                                     {auditHistory.map((item, idx) => (
                                         <tr key={item.id || idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
                                             <td style={{ padding: '0.65rem 0.9rem', fontWeight: '800', color: '#0F172A' }}>
-                                                {new Date(item.date).toLocaleString()}
+                                                {new Date(item.date).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                             </td>
                                             <td style={{ padding: '0.65rem 0.9rem', color: '#475569' }}>
                                                 {item.fileName}

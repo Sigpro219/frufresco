@@ -1038,7 +1038,7 @@ export default function CustomerServicePage({ initialTab }: { initialTab?: 'all'
                                                             {formatDateFriendly(pqr.created_at)}
                                                         </div>
                                                         <div style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
-                                                            {new Date(pqr.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                                                            {new Date(pqr.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                                                         </div>
                                                     </div>
                                                 </td>

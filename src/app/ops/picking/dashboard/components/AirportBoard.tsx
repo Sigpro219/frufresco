@@ -122,9 +122,9 @@ export default function AirportBoard() {
                 </div>
                 <div className="text-right">
                     <div className="text-3xl md:text-5xl font-bold text-yellow-400">
-                        {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {currentTime.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div className="text-gray-400">{currentTime.toLocaleDateString()}</div>
+                    <div className="text-gray-400">{currentTime.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}</div>
                 </div>
             </div>
 

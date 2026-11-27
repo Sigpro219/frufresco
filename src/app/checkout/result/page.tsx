@@ -1,26 +1,67 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/lib/cartContext';
 import { getFriendlyOrderId } from '@/lib/orderUtils';
-import { Copy, Check, CheckCircle2, Clock, XCircle, Banknote, ShoppingBag, Sparkles } from 'lucide-react';
+import {
+    Copy,
+    Check,
+    CheckCircle2,
+    Clock,
+    XCircle,
+    Banknote,
+    ShoppingBag,
+    Sparkles,
+    MessageCircle,
+    Calendar,
+    CreditCard,
+    RefreshCw
+} from 'lucide-react';
+
+const TRANSIENT_CHECKOUT_KEYS = [
+    'checkout_specialNotes',
+    'checkout_is_gift',
+    'checkout_recipient_name',
+    'checkout_recipient_phone',
+    'checkout_address_details',
+    'checkout_building_complex',
+    'checkout_unit_details',
+    'checkout_selected_beneficiary_idx'
+];
+
+function formatPaymentMethodLabel(raw?: string | null): string {
+    const val = String(raw || '').toUpperCase();
+    if (!val || val === 'ONLINE' || val === 'WOMPI') return 'Wompi en línea';
+    if (val === 'PSE') return 'PSE (Débito bancario)';
+    if (val === 'NEQUI') return 'Nequi';
+    if (val === 'BANCOLOMBIA_TRANSFER' || val === 'BANCOLOMBIA_QR') return 'Botón Bancolombia';
+    if (val === 'CARD') return 'Tarjeta Crédito / Débito';
+    if (val === 'DAVIPLATA') return 'Daviplata';
+    return val;
+}
 
 function ResultContent() {
     const searchParams = useSearchParams();
+    const { clearCart } = useCart();
+    const hasClearedCartRef = useRef(false);
+
     const transactionId = searchParams.get('id');
     const codStatus = searchParams.get('status');
     const reference = searchParams.get('reference');
     const sequence = searchParams.get('sequence');
     const createdAt = searchParams.get('created_at');
-    
+
     const [status, setStatus] = useState<'loading' | 'success' | 'pending' | 'error'>('loading');
     const [transactionData, setTransactionData] = useState<{
         status: string;
         order_id: string;
         order_sequence: number;
         order_created_at: string;
+        amount_in_cents?: number;
+        delivery_date?: string | null;
+        payment_method_type?: string | null;
     } | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -30,35 +71,74 @@ function ResultContent() {
             setTransactionData({
                 status: 'APPROVED',
                 order_id: reference,
-                order_sequence: sequence ? parseInt(sequence) : 0,
+                order_sequence: sequence ? parseInt(sequence, 10) : 0,
                 order_created_at: createdAt || new Date().toISOString()
             });
             return;
         }
 
-        const checkStatus = async () => {
+        let cancelled = false;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const maxAttempts = 10;
+
+        const checkStatus = async (attempt: number) => {
             if (!transactionId) {
-                setStatus('error');
+                if (!cancelled) setStatus('error');
                 return;
             }
             try {
-                const response = await fetch(`/api/payments/status?id=${transactionId}`);
+                const response = await fetch(`/api/payments/status?id=${encodeURIComponent(transactionId)}`, {
+                    cache: 'no-store'
+                });
                 const responseBody = await response.json();
-                const data = responseBody.data;
+                const data = responseBody?.data;
+                if (cancelled) return;
 
-                setTransactionData(data);
+                if (data) setTransactionData(data);
 
-                if (data && data.status === 'APPROVED') setStatus('success');
-                else if (data && data.status === 'PENDING') setStatus('pending');
-                else setStatus('error');
+                const txStatus = String(data?.status || '').toUpperCase();
+                if (txStatus === 'APPROVED') {
+                    setStatus('success');
+                    if (!hasClearedCartRef.current) {
+                        hasClearedCartRef.current = true;
+                        clearCart();
+                        if (typeof window !== 'undefined') {
+                            TRANSIENT_CHECKOUT_KEYS.forEach((k) => localStorage.removeItem(k));
+                        }
+                    }
+                    return;
+                }
+
+                if (txStatus === 'DECLINED' || txStatus === 'VOIDED' || txStatus === 'ERROR') {
+                    setStatus('error');
+                    return;
+                }
+
+                setStatus('pending');
+                if (attempt < maxAttempts) {
+                    timeoutId = setTimeout(() => {
+                        if (!cancelled) checkStatus(attempt + 1);
+                    }, 3000);
+                }
             } catch (error) {
                 console.error('Error fetching transaction:', error);
-                setStatus('pending'); // Fallback a pendiente
+                if (cancelled) return;
+                setStatus('pending');
+                if (attempt < maxAttempts) {
+                    timeoutId = setTimeout(() => {
+                        if (!cancelled) checkStatus(attempt + 1);
+                    }, 3000);
+                }
             }
         };
 
-        checkStatus();
-    }, [transactionId, codStatus, reference, sequence, createdAt]);
+        checkStatus(1);
+
+        return () => {
+            cancelled = true;
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [transactionId, codStatus, reference, sequence, createdAt, clearCart]);
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -68,13 +148,13 @@ function ResultContent() {
 
     const renderIconStatus = () => {
         switch (status) {
-            case 'success': 
+            case 'success':
                 return <CheckCircle2 size={64} color="#10B981" />;
-            case 'pending': 
+            case 'pending':
                 return <Clock size={64} color="#F59E0B" />;
-            case 'error': 
+            case 'error':
                 return <XCircle size={64} color="#EF4444" />;
-            default: 
+            default:
                 return <Clock size={64} color="#94A3B8" />;
         }
     };
@@ -83,19 +163,27 @@ function ResultContent() {
         if (codStatus === 'cod_success') return '¡Pedido Registrado con Éxito!';
         switch (status) {
             case 'success': return '¡Pago Aprobado!';
-            case 'pending': return 'Pago en Proceso';
-            case 'error': return 'Hubo un problema con el pago';
+            case 'pending': return 'Confirmando pago con tu banco...';
+            case 'error': return 'No se pudo completar el pago';
             default: return 'Verificando transacción...';
         }
     };
 
-    const friendlyId = transactionData?.order_id 
+    const friendlyId = transactionData?.order_id
         ? getFriendlyOrderId({
             id: transactionData.order_id,
             sequence_id: transactionData.order_sequence,
             created_at: transactionData.order_created_at
         })
         : '';
+
+    const paidAmountCop = transactionData?.amount_in_cents
+        ? Math.round(transactionData.amount_in_cents / 100)
+        : 0;
+
+    const whatsappHref = `https://wa.me/573167022898?text=${encodeURIComponent(
+        `Hola FruFresco, acabo de realizar mi pedido${friendlyId ? ` ${friendlyId}` : ''} y necesito soporte/seguimiento.`
+    )}`;
 
     return (
         <div className="result-card" style={{
@@ -112,14 +200,14 @@ function ResultContent() {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>{renderIconStatus()}</div>
             <h1 className="result-title" style={{ fontSize: '2rem', fontWeight: '900', marginBottom: '1rem', color: '#0F172A', fontFamily: 'var(--font-outfit), sans-serif' }}>{renderMessage()}</h1>
 
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem', fontSize: '1.05rem', lineHeight: '1.5' }}>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2.2rem', fontSize: '1.05rem', lineHeight: '1.5' }}>
                 {codStatus === 'cod_success'
                     ? 'Tu pedido ha sido guardado exitosamente con modalidad de Pago Contra Entrega. Iniciaremos el alistamiento de tus alimentos frescos inmediatamente.'
                     : status === 'success'
-                        ? 'Tu pedido ha sido confirmado y está siendo preparado por nuestro equipo.'
+                        ? 'Tu pago fue confirmado y tu pedido ya está en manos de nuestro equipo de alistamiento.'
                         : status === 'pending'
-                            ? 'Estamos esperando la confirmación de tu banco. Te avisaremos cuando el estado cambie.'
-                            : 'La transacción no pudo completarse. Por favor, intenta de nuevo o usa otro medio de pago.'}
+                            ? 'Confirmando pago con tu banco... esto toma unos segundos. No cierres esta ventana.'
+                            : 'Tu carrito sigue intacto para que puedas intentarlo de nuevo con otro medio de pago.'}
             </p>
 
             {codStatus === 'cod_success' && (
@@ -148,27 +236,50 @@ function ResultContent() {
                     border: '1px solid #E2E8F0',
                     padding: '1.25rem 1.5rem',
                     borderRadius: '18px',
-                    marginBottom: '2.5rem',
+                    marginBottom: '2rem',
                     textAlign: 'left',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.5rem'
+                    gap: '0.65rem'
                 }}>
                     <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
-                            {codStatus === 'cod_success' ? 'Método de Pago' : 'ID de Transacción'}
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <CreditCard size={14} /> {codStatus === 'cod_success' ? 'Método de Pago' : 'Referencia / Medio'}
                         </span>
-                        <span style={{ fontSize: '0.9rem', fontFamily: codStatus === 'cod_success' ? 'sans-serif' : 'monospace', fontWeight: '700', color: '#334155', wordBreak: 'break-all' }}>
-                            {codStatus === 'cod_success' ? 'Contra Entrega (Efectivo / Transferencia)' : transactionId}
+                        <span style={{ fontSize: '0.88rem', fontWeight: '700', color: '#334155', wordBreak: 'break-all' }}>
+                            {codStatus === 'cod_success'
+                                ? 'Contra Entrega (Efectivo / Transferencia)'
+                                : `${formatPaymentMethodLabel(transactionData?.payment_method_type)} · ${transactionId}`}
                         </span>
                     </div>
+
+                    {paidAmountCop > 0 && (
+                        <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '0.65rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Monto</span>
+                            <span style={{ fontSize: '1rem', fontWeight: '900', color: '#0F172A' }}>
+                                ${paidAmountCop.toLocaleString('es-CO')} COP
+                            </span>
+                        </div>
+                    )}
+
+                    {transactionData?.delivery_date && (
+                        <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '0.65rem' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#64748B', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <Calendar size={14} /> Fecha de Entrega
+                            </span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#0F172A' }}>
+                                {transactionData.delivery_date}
+                            </span>
+                        </div>
+                    )}
+
                     {friendlyId && (
-                        <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                        <div className="result-tx-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem', marginTop: '0.15rem' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>Número de Pedido</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ 
-                                    fontSize: '1.3rem', 
-                                    fontWeight: '900', 
+                                <span style={{
+                                    fontSize: '1.3rem',
+                                    fontWeight: '900',
                                     color: 'var(--primary)',
                                     letterSpacing: '0.05em',
                                     fontFamily: 'var(--font-outfit), sans-serif'
@@ -199,7 +310,6 @@ function ResultContent() {
                 </div>
             )}
 
-            {/* Tarjeta de Confirmación de Datos Guardados para Recompra Ágil */}
             {(status === 'success' || codStatus === 'cod_success') && (
                 <div style={{
                     backgroundColor: '#F0FDF4',
@@ -224,15 +334,39 @@ function ResultContent() {
                 </div>
             )}
 
-            <div className="result-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Link href="/" className="btn btn-primary result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800', transition: 'all 0.2s ease' }}>
-                    <ShoppingBag size={18} /> Volver al Inicio
-                </Link>
-                {status === 'error' && (
-                    <Link href="/checkout" className="btn result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', border: '1px solid var(--border)', borderRadius: '14px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s ease' }}>
-                        Reintentar
+            <div className="result-actions" style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                {status === 'error' ? (
+                    <Link href="/checkout" className="btn btn-primary result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800', transition: 'all 0.2s ease' }}>
+                        <RefreshCw size={18} /> Reintentar pago
+                    </Link>
+                ) : (
+                    <Link href="/" className="btn btn-primary result-cta" style={{ padding: '0.85rem 2rem', minHeight: '46px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '14px', fontWeight: '800', transition: 'all 0.2s ease' }}>
+                        <ShoppingBag size={18} /> Volver al Inicio
                     </Link>
                 )}
+
+                <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn result-cta"
+                    style={{
+                        padding: '0.85rem 1.5rem',
+                        minHeight: '46px',
+                        border: '1.5px solid #16A34A',
+                        color: '#15803D',
+                        backgroundColor: '#F0FDF4',
+                        borderRadius: '14px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        textDecoration: 'none'
+                    }}
+                >
+                    <MessageCircle size={18} /> WhatsApp SAC
+                </a>
             </div>
 
             <style jsx>{`

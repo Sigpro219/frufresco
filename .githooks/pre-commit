@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -eu
+
+STAGED_SRC=$(git diff --cached --name-only --diff-filter=ACMR -- src/ || true)
+if [ -z "$STAGED_SRC" ]; then
+  exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[Poka-Yoke Escenario 500] ERROR: 'node' no encontrado en PATH." >&2
+  exit 1
+fi
+
+node scripts/audit-bogota-dates.mjs

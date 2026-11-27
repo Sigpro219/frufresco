@@ -10,14 +10,9 @@ import {
     formatAgreementConflictPrompt,
     cleanupConflictingAgreementsForClients
 } from '@/lib/commercial/agreementConflictGuard';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 
-const getBogotaDateStr = (d: Date = new Date()): string => {
-    try {
-        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-    } catch {
-        return d.toISOString().split('T')[0];
-    }
-};
+const getBogotaDateStr = (d: Date = new Date()): string => getBogotaDateString(d);
 
 export default function QuotesListPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [quotes, setQuotes] = useState<any[]>([]);
@@ -74,9 +69,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
 
     const handleApplyPreset = (days: number) => {
         setPresetDays(days);
-        const base = approvalStartDate ? new Date(approvalStartDate + 'T12:00:00') : new Date();
-        base.setDate(base.getDate() + days);
-        setApprovalValidUntil(base.toISOString().split('T')[0]);
+        setApprovalValidUntil(addBogotaDays(approvalStartDate || getBogotaDateString(), days));
     };
 
     const handleConfirmApprove = async () => {
@@ -126,7 +119,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                 console.warn('Notice: Could not log agreement activation:', auditErr);
             }
 
-            alert(`¡Acuerdo Comercial activado exitosamente para ${clientName}! Precios congelados hasta el ${new Date(approvalValidUntil + 'T12:00:00').toLocaleDateString('es-CO')}.`);
+            alert(`¡Acuerdo Comercial activado exitosamente para ${clientName}! Precios congelados hasta el ${formatBogotaDate(approvalValidUntil)}.`);
             setQuoteToApprove(null);
             fetchQuotes(true);
         } catch (err: any) {
@@ -343,7 +336,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
     };
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('es-CO', {
+        return formatBogotaDate(dateString, {
             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
@@ -1101,7 +1094,7 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                                                     const isFirst = idx === 0;
                                                                     const isLatest = idx === threadVersions.length - 1;
                                                                     const verNum = ver.version || (idx + 1);
-                                                                    const verTime = new Date(ver.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                                                                    const verTime = new Date(ver.created_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' });
                                                                     const prevVer = idx > 0 ? threadVersions[idx - 1] : null;
                                                                     const stepDelta = prevVer ? (Number(ver.total_amount || 0) - Number(prevVer.total_amount || 0)) : 0;
 
@@ -1444,10 +1437,10 @@ export default function QuotesListPage({ embedded = false }: { embedded?: boolea
                                     const todayStr = getBogotaDateStr();
                                     const isImmediate = !approvalStartDate || approvalStartDate <= todayStr;
                                     const startFormatted = approvalStartDate
-                                        ? new Date(approvalStartDate + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatBogotaDate(approvalStartDate, { day: '2-digit', month: 'short', year: 'numeric' })
                                         : 'Hoy';
                                     const endFormatted = approvalValidUntil
-                                        ? new Date(approvalValidUntil + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatBogotaDate(approvalValidUntil, { day: '2-digit', month: 'short', year: 'numeric' })
                                         : '---';
 
                                     return (

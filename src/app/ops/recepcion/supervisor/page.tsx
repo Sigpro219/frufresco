@@ -1292,7 +1292,7 @@ export default function SupervisorDashboard() {
                       {collab.active_shift ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10B981', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                           <span style={{ width: '6px', height: '6px', backgroundColor: '#10B981', borderRadius: '50%' }}></span>
-                          TURNO ACTIVO (Inició {new Date(collab.active_shift.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                          TURNO ACTIVO (Inició {new Date(collab.active_shift.started_at).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })})
                         </span>
                       ) : (
                         <span style={{ fontSize: '0.7rem', fontWeight: '800', backgroundColor: 'rgba(0,0,0,0.04)', color: 'var(--ops-text-muted)', padding: '4px 10px', borderRadius: '8px' }}>

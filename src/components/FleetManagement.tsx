@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     Search, 
     X, 
@@ -516,7 +517,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                     <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Control de <span style={{ color: '#0891B2' }}>Activos Logísticos</span></h2>
                     {lastUpdated && (
                         <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF', fontWeight: '600' }}>
-                            ÚLTIMA ACTUALIZACIÓN: {lastUpdated.toLocaleTimeString()}
+                            ÚLTIMA ACTUALIZACIÓN: {lastUpdated.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })}
                         </p>
                     )}
                 </div>
@@ -1056,7 +1057,7 @@ export default function FleetManagement({ readOnly = false }: { readOnly?: boole
                                                 <div key={idx} style={{ padding: '1rem', backgroundColor: '#FFF7ED', borderRadius: '16px', border: '1px solid #FFEDD5' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                                         <span style={{ fontSize: '0.7rem', fontWeight: '900', color: '#C2410C' }}>{issue.event_type.toUpperCase()}</span>
-                                                        <span style={{ fontSize: '0.65rem', color: '#9A3412', fontWeight: '700' }}>{new Date(issue.created_at).toLocaleDateString()}</span>
+                                                        <span style={{ fontSize: '0.65rem', color: '#9A3412', fontWeight: '700' }}>{formatBogotaDate(issue.created_at)}</span>
                                                     </div>
                                                     <p style={{ fontSize: '0.8rem', margin: 0, fontWeight: '600', color: '#431407' }}>{issue.description}</p>
                                                     {issue.evidence_url && (

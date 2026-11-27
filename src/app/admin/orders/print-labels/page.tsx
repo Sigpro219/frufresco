@@ -9,6 +9,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Printer, ArrowLeft, Tag, Package, Sparkles, Scale, Building2, Calendar, Truck, Clock } from 'lucide-react';
 import { PrintDocumentSwitcher, DirectPdfSaveButton } from '@/components/print';
 import { buildSpecialAttentionByProfileMap, SpecialClientAttentionState } from '@/lib/specialClientAttention';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 
 interface OrderItemData {
     id: string;
@@ -163,7 +164,7 @@ export default function BulkOrderPrintLabelsPage() {
 
                 // 2. Fetch order items with products + historical orders/pqrs for Special Client Attention
                 const profileIds = Array.from(new Set((ordersData || []).map((o: any) => o.profile_id || (Array.isArray(o.profiles) ? o.profiles[0]?.id : o.profiles?.id)).filter(Boolean)));
-                const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const sixtyDaysAgo = addBogotaDays(getBogotaDateString(), -60);
 
                 const [itemsRes, histOrdersRes, histPqrsRes] = await Promise.all([
                     supabase

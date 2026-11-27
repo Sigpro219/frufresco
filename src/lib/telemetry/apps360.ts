@@ -100,7 +100,7 @@ export function isValidTelemetryTimestamp(date: Date): boolean {
     const time = date.getTime();
     if (isNaN(time)) return false;
     const now = Date.now();
-    const minValidTime = new Date('2020-01-01T00:00:00Z').getTime();
+    const minValidTime = Date.UTC(2020, 0, 1);
     const maxValidTime = now + 24 * 60 * 60 * 1000;
     return time >= minValidTime && time <= maxValidTime;
 }

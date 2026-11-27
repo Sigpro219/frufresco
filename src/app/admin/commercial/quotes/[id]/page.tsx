@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { THEME } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     checkClientAgreementConflicts,
     formatAgreementConflictPrompt,
@@ -163,19 +164,11 @@ export default function QuoteDetailPage() {
 
     // PARÁMETROS DEL ACUERDO
     const [validityDaysPreset, setValidityDaysPreset] = useState<number>(180);
-    const [validUntilDate, setValidUntilDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 180);
-        return d.toISOString().split('T')[0];
-    });
+    const [validUntilDate, setValidUntilDate] = useState(() => addBogotaDays(getBogotaDateString(), 180));
 
     // MODAL PARA PEDIDO SPOT PUNTUAL
     const [showSpotOrderModal, setShowSpotOrderModal] = useState(false);
-    const [spotDeliveryDate, setSpotDeliveryDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().split('T')[0];
-    });
+    const [spotDeliveryDate, setSpotDeliveryDate] = useState(() => addBogotaDays(getBogotaDateString(), 1));
 
     useEffect(() => {
         if (params.id) fetchQuoteDetails();
@@ -491,18 +484,14 @@ export default function QuoteDetailPage() {
 
         // Preset inicial pactado (ej. 180 días / 6 meses)
         setValidityDaysPreset(30);
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        setValidUntilDate(d.toISOString().split('T')[0]);
+        setValidUntilDate(addBogotaDays(getBogotaDateString(), 30));
 
         setShowFormalizeModal(true);
     };
 
     const handleSelectValidityPreset = (days: number) => {
         setValidityDaysPreset(days);
-        const d = new Date();
-        d.setDate(d.getDate() + days);
-        setValidUntilDate(d.toISOString().split('T')[0]);
+        setValidUntilDate(addBogotaDays(getBogotaDateString(), days));
     };
 
     // FORMALIZAR CLIENTE Y ACTIVAR ACUERDO COMERCIAL (CONEXIÓN AL PIPELINE)
@@ -633,7 +622,7 @@ export default function QuoteDetailPage() {
             }
 
             // 2. Formalizar Cotización a Acuerdo Comercial (status = 'agreement')
-            const [y, m, d] = new Date().toISOString().split('T')[0].split('-');
+            const [y, m, d] = getBogotaDateString().split('-');
             const formattedDate = `${d}-${m}-${y.slice(-2)}`;
             const canonicalSnapshotName = `${finalClientName} - Acuerdo ${formattedDate}`;
 
@@ -652,8 +641,8 @@ export default function QuoteDetailPage() {
                     status: 'agreement',
                     client_id: finalClientId,
                     client_name: finalClientName,
-                    valid_until: new Date(validUntilDate).toISOString(),
-                    start_date: new Date().toISOString().split('T')[0],
+                    valid_until: validUntilDate,
+                    start_date: getBogotaDateString(),
                     // payment_terms_days stored in profiles & app_settings
                     model_snapshot_name: canonicalSnapshotName,
                     // notes tracked in audit_logs
@@ -690,7 +679,7 @@ export default function QuoteDetailPage() {
 
             setShowFormalizeModal(false);
             const validityMsg = validityDaysPreset === 180 ? '6 meses' : (validityDaysPreset > 0 ? `${validityDaysPreset} días` : 'el periodo pactado');
-            alert(`¡Cliente Institucional ${finalClientName} creado exitosamente y Acuerdo Comercial activado por ${validityMsg}! Precios congelados hasta el ${new Date(validUntilDate).toLocaleDateString('es-CO')}.\n\nRedirigiendo a la pantalla de Acuerdos Institucionales...`);
+            alert(`¡Cliente Institucional ${finalClientName} creado exitosamente y Acuerdo Comercial activado por ${validityMsg}! Precios congelados hasta el ${formatBogotaDate(validUntilDate)}.\n\nRedirigiendo a la pantalla de Acuerdos Institucionales...`);
             
             // REDIRECCIÓN DIRECTA AL PIPELINE DE ACUERDOS INSTITUCIONALES
             router.push('/admin/commercial?tab=clients&clientTab=agreements');
@@ -819,7 +808,7 @@ export default function QuoteDetailPage() {
                                             : `Acuerdo Comercial Activo &bull; Vigente por ${daysRemaining} días más`}
                                 </div>
                                 <div style={{ fontSize: '0.82rem', color: daysRemaining < 0 ? '#B91C1C' : (daysRemaining <= 5 ? '#B45309' : '#047857') }}>
-                                    Fecha límite de precios congelados: {new Date(quote.valid_until).toLocaleDateString('es-CO')}. Plazo de pago pactado: {quote.payment_terms_days || 30} días de crédito.
+                                    Fecha límite de precios congelados: {formatBogotaDate(quote.valid_until)}. Plazo de pago pactado: {quote.payment_terms_days || 30} días de crédito.
                                 </div>
                             </div>
                         </div>
@@ -868,7 +857,7 @@ export default function QuoteDetailPage() {
                         <div style={{ display: 'flex', gap: '1.2rem', color: THEME.colors.textSecondary, fontSize: '0.85rem' }}>
                             <span>Modelo: <strong style={{ color: THEME.colors.textMain }}>{quote.model_snapshot_name || 'Estándar'}</strong></span>
                             <span>•</span>
-                            <span>Emisión: <strong style={{ color: THEME.colors.textMain }}>{new Date(quote.created_at).toLocaleDateString('es-CO')}</strong></span>
+                            <span>Emisión: <strong style={{ color: THEME.colors.textMain }}>{formatBogotaDate(quote.created_at)}</strong></span>
                             <span>•</span>
                             <span>Plazo Pago: <strong style={{ color: '#0D7A57' }}>{quote.payment_terms_days || clientProfile?.payment_days || 30} Días Crédito</strong></span>
                         </div>

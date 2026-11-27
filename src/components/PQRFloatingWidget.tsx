@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { optimizeImageForUpload } from '@/lib/imageOptimizer';
 import { buildRcaMetadataTag } from '@/lib/rcaTaxonomy';
+import { formatBogotaDate } from '@/lib/dateUtils';
 
 interface ClientProfile {
     id: string;
@@ -1348,7 +1349,7 @@ export default function PQRFloatingWidget() {
                                         <option value="">-- Sin pedido específico --</option>
                                         {branchOrders.map(ord => (
                                             <option key={ord.id} value={ord.id}>
-                                                Pedido #{ord.sequence_id} — {ord.delivery_date || new Date(ord.created_at).toLocaleDateString('es-CO')} (${Number(ord.total || 0).toLocaleString('es-CO')})
+                                                Pedido #{ord.sequence_id} — {ord.delivery_date || formatBogotaDate(ord.created_at)} (${Number(ord.total || 0).toLocaleString('es-CO')})
                                             </option>
                                         ))}
                                     </select>

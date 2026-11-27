@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
 import { THEME, formatMoney } from '@/lib/adminTheme';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { Printer, FileText, Scale, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
@@ -174,7 +175,7 @@ export default function CreditPrintPage() {
                 </>
             );
         }
-        return new Date(dateStr).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+        return formatBogotaDate(dateStr, { year: 'numeric', month: 'long', day: 'numeric' });
     };
 
     // Helper to render field underlines inside text flow only, NOT in cells

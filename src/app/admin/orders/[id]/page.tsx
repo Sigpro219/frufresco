@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { getFriendlyOrderId, formatStructuredSpecification, getOrderReplacementInfo } from '@/lib/orderUtils';
 import { useParams } from 'next/navigation';
 import { ADMIN_EDIT_CUTOFF_HOUR } from '@/lib/constants';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import Link from 'next/link';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
 import { 
@@ -305,18 +306,14 @@ export default function OrderDetailPage() {
         const hourSetting = settings?.find((s: any) => s.key === 'cutoff_hour_admin')?.value;
         const dynamicCutoffHour = hourSetting ? parseInt(hourSetting, 10) : ADMIN_EDIT_CUTOFF_HOUR;
 
-        // 2. Bogota Time logic
-        const now = new Date();
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const bogotaNow = new Date(utc + (3600000 * -5));
-        
-        const deliveryDate = new Date(order.delivery_date + 'T00:00:00');
-        const cutoffDate = new Date(deliveryDate);
-        cutoffDate.setDate(deliveryDate.getDate() - 1);
-        cutoffDate.setHours(dynamicCutoffHour, 0, 0, 0);
+        // 2. Bogota Time logic (UTC-5)
+        const deliveryStr = getBogotaDateString(order.delivery_date);
+        const cutoffDayStr = addBogotaDays(deliveryStr, -1);
+        const cutoffHourStr = String(dynamicCutoffHour).padStart(2, '0');
+        const cutoffDate = new Date(`${cutoffDayStr}T${cutoffHourStr}:00:00-05:00`);
 
         // If it's already the delivery day or past dynamic cutoff hour of the day before
-        return bogotaNow.getTime() < cutoffDate.getTime();
+        return Date.now() < cutoffDate.getTime();
     }, [order]);
 
     const [isEditable, setIsEditable] = useState(false);
@@ -1125,7 +1122,7 @@ export default function OrderDetailPage() {
                                 {order.profile?.contact_name && (
                                     <span>• {order.profile.contact_name}</span>
                                 )}
-                                <span>• Creado el {new Date(order.created_at).toLocaleString('es-CO')}</span>
+                                <span>• Creado el {new Date(order.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</span>
                             </div>
                         </div>
 

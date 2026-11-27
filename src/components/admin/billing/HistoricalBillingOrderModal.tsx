@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { getBogotaDateString } from '@/lib/dateUtils';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import { parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import {
     X,
@@ -100,9 +100,7 @@ function parseDecimalValue(raw: string): number {
 }
 
 function subtractOneDay(yyyyMmDd: string): string {
-    const ms = new Date(`${yyyyMmDd}T12:00:00Z`).getTime();
-    if (Number.isNaN(ms)) return yyyyMmDd;
-    return new Date(ms - 86_400_000).toISOString().slice(0, 10);
+    return addBogotaDays(yyyyMmDd, -1) || yyyyMmDd;
 }
 
 function getClientLabel(client: HistoricalClient): string {

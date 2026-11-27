@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isAbortError, diagnoseStorageError } from '@/lib/errorUtils';
+import { getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
 import { useParams, useRouter } from 'next/navigation';
 import { 
     AlertTriangle, 
@@ -80,15 +81,15 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
         interval_km: COMMON_TASKS[0].type === 'km' ? COMMON_TASKS[0].interval : 0,
         interval_months: COMMON_TASKS[0].type === 'date' ? COMMON_TASKS[0].interval : 0,
         last_performed_km: 0,
-        last_performed_date: new Date().toISOString().split('T')[0]
+        last_performed_date: getBogotaDateString()
     });
 
     // Completion modal state
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [completingTask, setCompletingTask] = useState<MaintenanceTask | null>(null);
-    const [completionDate, setCompletionDate] = useState(new Date().toISOString().split('T')[0]);
+    const [completionDate, setCompletionDate] = useState(getBogotaDateString());
     const [completionOdometer, setCompletionOdometer] = useState(0);
-    const [nextValidityStart, setNextValidityStart] = useState(new Date().toISOString().split('T')[0]);
+    const [nextValidityStart, setNextValidityStart] = useState(getBogotaDateString());
     const [nextDueKmOverride, setNextDueKmOverride] = useState(0);
     const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
     const [completionNotes, setCompletionNotes] = useState('');
@@ -202,7 +203,7 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
         const ws = XLSX.utils.json_to_sheet(dataToExport);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Historial_Mantenimiento');
-        XLSX.writeFile(wb, `FruFresco_Mantenimiento_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(wb, `FruFresco_Mantenimiento_${getBogotaDateString()}.xlsx`);
     };
 
     const handleCloseTask = async (e: React.FormEvent) => {
@@ -219,10 +220,9 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
             if (completingTask.task_type === 'km') {
                 nextDueKm = (completionOdometer || completingTask.vehicle?.current_odometer || 0) + (nextDueKmOverride || completingTask.interval_km || 5000);
             } else {
-                const startDate = new Date(nextValidityStart);
-                const nextDate = new Date(startDate);
-                nextDate.setFullYear(nextDate.getFullYear() + 1);
-                nextDueDate = nextDate.toISOString().split('T')[0];
+                const nextDate = parseBogotaDate(nextValidityStart);
+                nextDate.setUTCFullYear(nextDate.getUTCFullYear() + 1);
+                nextDueDate = getBogotaDateString(nextDate);
                 nextDueKm = 9999999;
             }
 
@@ -311,10 +311,9 @@ export default function MaintenanceManagement({ readOnly = false }: { readOnly?:
         if (newTask.task_type === 'km') {
             nextDueKm = (newTask.last_performed_km || vehicle.current_odometer) + (newTask.interval_km || 0);
         } else {
-            const lastDate = new Date(newTask.last_performed_date || new Date());
-            const nextDate = new Date(lastDate);
-            nextDate.setFullYear(nextDate.getFullYear() + 1); // User specified every year
-            nextDueDate = nextDate.toISOString().split('T')[0];
+            const nextDate = parseBogotaDate(newTask.last_performed_date || getBogotaDateString());
+            nextDate.setUTCFullYear(nextDate.getUTCFullYear() + 1); // User specified every year
+            nextDueDate = getBogotaDateString(nextDate);
         }
 
         try {

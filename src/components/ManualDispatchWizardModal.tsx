@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import { 
     OrderStagingInput, 
     allocateStagingSpacesGeographically, 
@@ -753,15 +754,10 @@ export default function ManualDispatchWizardModal({
     // Formateador de fecha larga en español para la cabecera A1 del Excel
     const formatSpanishLongDate = (dateStr?: string) => {
         if (!dateStr) {
-            const now = new Date();
-            return `${now.getDate()} de ${now.toLocaleDateString('es-CO', { month: 'long' })} de ${now.getFullYear()}`;
+            return formatBogotaDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
         }
-        const parts = dateStr.split('-');
-        if (parts.length === 3) {
-            const [y, m, d] = parts;
-            const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
-            const monthName = dateObj.toLocaleDateString('es-CO', { month: 'long' });
-            return `${Number(d)} de ${monthName} de ${y}`;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            return formatBogotaDate(dateStr, { day: 'numeric', month: 'long', year: 'numeric' });
         }
         return dateStr;
     };

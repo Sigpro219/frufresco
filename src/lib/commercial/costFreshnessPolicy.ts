@@ -9,6 +9,8 @@
  * - Tercil 3 (T3): 34% menor frecuencia / catálogo extendido. SLA: 15 días.
  */
 
+import { getBogotaDateString } from '@/lib/dateUtils';
+
 export type ParetoTercil = 'T1' | 'T2' | 'T3';
 export type FreshnessClass = ParetoTercil | 'A' | 'B' | 'C';
 
@@ -155,7 +157,7 @@ export function evaluateCostFreshness(
     const now = new Date();
     const diffMs = now.getTime() - dateObj.getTime();
     const daysOld = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-    const formattedDate = dateObj.toISOString().slice(0, 10);
+    const formattedDate = getBogotaDateString(dateObj);
     const sourceText = signalSource === 'COMPRAS' ? 'Orden Compra' : signalSource === 'MANUAL' ? 'Carga Masiva / Manual' : 'Registro BD';
 
     if (daysOld <= sla.validDaysMax) {

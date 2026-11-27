@@ -9,6 +9,7 @@ import GeofencingManager from '@/components/admin/GeofencingManager';
 import TechUserGovernance from '@/components/admin/TechUserGovernance';
 import ManageAttributesModal from '@/components/ManageAttributesModal';
 import { THEME } from '@/lib/adminTheme';
+import { addBogotaDays, formatBogotaDate, getBogotaDateString, getBogotaDayRangeUtcIso } from '@/lib/dateUtils';
 
 interface Point {
     lat: number;
@@ -278,25 +279,19 @@ export default function CommandCenter() {
         }
         
         if (auditDatePreset === 'today') {
-            const start = new Date();
-            start.setHours(0, 0, 0, 0);
-            query = query.gte('created_at', start.toISOString());
+            query = query.gte('created_at', getBogotaDayRangeUtcIso(getBogotaDateString()).startUtcIso);
         } else if (auditDatePreset === 'week') {
-            const start = new Date();
-            start.setDate(start.getDate() - 7);
-            query = query.gte('created_at', start.toISOString());
+            query = query.gte('created_at', getBogotaDayRangeUtcIso(addBogotaDays(getBogotaDateString(), -7)).startUtcIso);
         } else if (auditDatePreset === 'month') {
-            const start = new Date();
-            start.setDate(start.getDate() - 30);
-            query = query.gte('created_at', start.toISOString());
+            query = query.gte('created_at', getBogotaDayRangeUtcIso(addBogotaDays(getBogotaDateString(), -30)).startUtcIso);
         } else if (auditDatePreset === 'custom') {
-            if (auditStartDate) {
-                query = query.gte('created_at', new Date(auditStartDate).toISOString());
+            const normStart = getBogotaDateString(auditStartDate);
+            if (normStart) {
+                query = query.gte('created_at', getBogotaDayRangeUtcIso(normStart).startUtcIso);
             }
-            if (auditEndDate) {
-                const end = new Date(auditEndDate);
-                end.setHours(23, 59, 59, 999);
-                query = query.lte('created_at', end.toISOString());
+            const normEnd = getBogotaDateString(auditEndDate);
+            if (normEnd) {
+                query = query.lte('created_at', getBogotaDayRangeUtcIso(normEnd).endUtcIso);
             }
         }
         
@@ -403,7 +398,7 @@ export default function CommandCenter() {
             if (error) throw error;
             
             const exportData = (data || []).map((log: any) => ({
-                'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO'),
+                'Fecha y Hora': new Date(log.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
                 'Usuario': formatCollaboratorName(log.collaborator_name),
                 'ID de Usuario': log.collaborator_id || 'Sistema',
                 'Acción': formatActionName(log.action),
@@ -415,7 +410,7 @@ export default function CommandCenter() {
             const ws = XLSX.utils.json_to_sheet(exportData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Logs de Auditoría");
-            XLSX.writeFile(wb, `Reporte_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(wb, `Reporte_Auditoria_${getBogotaDateString()}.xlsx`);
             showToast('Reporte de auditoría exportado exitosamente', 'success');
         } catch (err: any) {
             console.error('Error exporting data:', err);
@@ -475,8 +470,8 @@ export default function CommandCenter() {
                 name: t.tenant_name,
                 url: t.supabase_url.replace('https://', '').replace('.supabase.co', ''),
                 status: t.status,
-                end_date: t.subscription_end ? new Date(t.subscription_end).toLocaleDateString('es-CO') : 'N/A',
-                last_sync: t.last_sync ? new Date(t.last_sync).toLocaleString('es-CO', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : 'Nunca'
+                end_date: t.subscription_end ? formatBogotaDate(t.subscription_end) : 'N/A',
+                last_sync: t.last_sync ? new Date(t.last_sync).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : 'Nunca'
             }));
             
             setTenants(formattedTenants);
@@ -1381,7 +1376,7 @@ export default function CommandCenter() {
                                                     return (
                                                         <tr key={log.id} style={{ borderBottom: '1px solid #F3F4F6', transition: 'background-color 0.15s' }}>
                                                             <td style={{ padding: '0.85rem 1rem', fontWeight: '600', color: '#111827', whiteSpace: 'nowrap' }}>
-                                                                {new Date(log.created_at).toLocaleString('es-CO')}
+                                                                {new Date(log.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                                             </td>
                                                             <td style={{ padding: '0.85rem 1rem', fontWeight: '700', color: '#111827' }}>
                                                                 {formatCollaboratorName(log.collaborator_name)}
@@ -1443,7 +1438,7 @@ export default function CommandCenter() {
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontSize: '0.85rem', color: '#111827' }}>
                             <div>
-                                <strong style={{ color: '#475569' }}>Fecha y Hora:</strong> {new Date(auditSelectedLog.created_at).toLocaleString('es-CO')}
+                                <strong style={{ color: '#475569' }}>Fecha y Hora:</strong> {new Date(auditSelectedLog.created_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                             </div>
                             <div>
                                 <strong style={{ color: '#475569' }}>Usuario:</strong> {formatCollaboratorName(auditSelectedLog.collaborator_name)}

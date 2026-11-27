@@ -11,13 +11,18 @@
     "sandbox:sanitize-db": "node scripts/sanitize-sandbox-db.mjs",
     "dev:frufresco": "npx dotenv -e .env.tenant1_production -- next dev -p 3002",
     "build": "next build",
+    "prebuild": "node scripts/audit-bogota-dates.mjs",
+    "audit:dates": "node scripts/audit-bogota-dates.mjs",
+    "audit:dates:test": "node scripts/audit-bogota-dates.mjs --test",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "prepare": "node -e \"const fs=require('fs'),cp=require('child_process');if(fs.existsSync('.git')){try{cp.execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}}\"",
     "start": "next start",
     "lint": "eslint",
     "test": "npx tsx --test tests/**/*.test.ts",
     "test:commercial": "npx tsx --test tests/commercial/*.test.ts",
     "test:commercial:e2e": "node scripts/test_commercial_agreements_e2e.js",
     "backup:imap": "node scripts/daily_imap_backup.js",
-    "publish": "git push origin main && git push origin main:liard"
+    "publish": "npm run audit:dates:test && npm run audit:dates && git push origin main && git push origin main:liard"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

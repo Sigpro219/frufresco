@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { THEME, formatMoney, formatNumber } from '@/lib/adminTheme';
 import { GENERAL_INSTITUCIONAL_ID } from '@/lib/pricingUtils';
+import { formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import {
     BarChart3,
     DollarSign,
@@ -487,7 +488,7 @@ export default function StrategyControlTower() {
                 id: o.id,
                 sequence_id: o.sequence_id,
                 date: o.created_at,
-                displayDate: new Date(o.created_at).toLocaleDateString('es-CO'),
+                displayDate: formatBogotaDate(o.created_at),
                 clientName,
                 weightKg: finalWeight,
                 estimatedCost: orderCost,
@@ -513,9 +514,9 @@ export default function StrategyControlTower() {
         }>();
 
         filteredOrders.forEach(o => {
-            const d = new Date(o.created_at);
-            const key = d.toISOString().split('T')[0]; // YYYY-MM-DD
-            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const key = getBogotaDateString(o.created_at);
+            const [, km, kd] = key.split('-').map(Number);
+            const displayDate = `${kd}/${km}`;
             const existing = dayMap.get(key) || {
                 date: key,
                 displayDate,
@@ -545,9 +546,9 @@ export default function StrategyControlTower() {
         // Add reposition orders to dayMap
         repositionOrdersList.forEach(repo => {
             if (!repo.date) return;
-            const d = new Date(repo.date);
-            const key = d.toISOString().split('T')[0];
-            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const key = getBogotaDateString(repo.date);
+            const [, km, kd] = key.split('-').map(Number);
+            const displayDate = `${kd}/${km}`;
             const existing = dayMap.get(key) || {
                 date: key,
                 displayDate,
@@ -575,9 +576,9 @@ export default function StrategyControlTower() {
         // Add billing_returns to dayMap
         billingReturns.forEach(ret => {
             if (!ret.created_at) return;
-            const d = new Date(ret.created_at);
-            const key = d.toISOString().split('T')[0];
-            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const key = getBogotaDateString(ret.created_at);
+            const [, km, kd] = key.split('-').map(Number);
+            const displayDate = `${kd}/${km}`;
             const existing = dayMap.get(key) || {
                 date: key,
                 displayDate,
@@ -718,9 +719,9 @@ export default function StrategyControlTower() {
                 return;
             }
 
-            const d = new Date(m.created_at);
-            const key = d.toISOString().split('T')[0];
-            const displayDate = `${d.getDate()}/${d.getMonth() + 1}`;
+            const key = getBogotaDateString(m.created_at);
+            const [, km, kd] = key.split('-').map(Number);
+            const displayDate = `${kd}/${km}`;
             const existing = dailyMovementsMap.get(key) || { date: key, displayDate, inbound: 0, outbound: 0, waste: 0 };
 
             if (m.type === 'in' || m.type === 'purchase' || m.type === 'entry') {
@@ -1375,7 +1376,7 @@ export default function StrategyControlTower() {
                     return {
                         'ID Pedido': o.id,
                         'Consecutivo': o.sequence_id || '—',
-                        'Fecha': new Date(o.created_at).toLocaleDateString('es-CO'),
+                        'Fecha': formatBogotaDate(o.created_at),
                         'Cliente / Razón Social': prof?.company_name || prof?.contact_name || 'Desconocido',
                         'NIT': prof?.nit || '—',
                         'Canal': o.type === 'b2b' || prof?.role === 'b2b_client' ? 'Institucional B2B' : 'Hogar B2C',
@@ -1450,7 +1451,7 @@ export default function StrategyControlTower() {
                 XLSX.utils.book_append_sheet(wb, ws, 'Matriz_Rentabilidad_Top20');
             }
 
-            const fileName = `FruFresco_BI_${areaKey.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const fileName = `FruFresco_BI_${areaKey.toUpperCase()}_${getBogotaDateString()}.xlsx`;
             XLSX.writeFile(wb, fileName);
             (window as any).showToast?.(`Reporte BI ${fileName} exportado con éxito `, 'success');
         } catch (err) {
@@ -3352,7 +3353,7 @@ export default function StrategyControlTower() {
                                         }));
                                         const ws = XLSX.utils.json_to_sheet(data);
                                         XLSX.utils.book_append_sheet(wb, ws, 'Garantias');
-                                        XLSX.writeFile(wb, `Frufresco_Garantias_Reposiciones_${new Date().toISOString().split('T')[0]}.xlsx`);
+                                        XLSX.writeFile(wb, `Frufresco_Garantias_Reposiciones_${getBogotaDateString()}.xlsx`);
                                     }}
                                     style={{
                                         display: 'inline-flex',
