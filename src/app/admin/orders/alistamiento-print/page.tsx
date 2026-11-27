@@ -8,6 +8,7 @@ import { formatSpaceLabel, getOrderSpaceDisplayLabel, ensureUniversalStagingSpac
 import { Printer, ArrowLeft, Filter, Layers, CheckSquare, Download, Columns } from 'lucide-react';
 import GoldenPrintStyles from '@/components/print/GoldenPrintStyles';
 import { printViaNewWindow, PrintDocumentSwitcher, getBogotaDate, DirectPdfSaveButton } from '@/components/print';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import { compareFamilyProducts } from '@/lib/productHierarchyUtils';
 import { buildSpecialAttentionByProfileMap, SpecialAttentionState } from '@/lib/specialClientAttention';
 import SpecialClientBadge from '@/components/SpecialClientBadge';
@@ -401,9 +402,7 @@ export default function AlistamientoSabanaPrintPage() {
     const paramOrderIds = rawOrderIds;
 
     const getTomorrowDateStr = () => {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().split('T')[0];
+        return addBogotaDays(getBogotaDateString(), 1);
     };
 
     const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -476,7 +475,7 @@ export default function AlistamientoSabanaPrintPage() {
 
             let attentionMap: Record<string, SpecialAttentionState> = {};
             if (clientProfileIds.length > 0) {
-                const sixtyDaysAgoIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const sixtyDaysAgoIso = addBogotaDays(getBogotaDateString(), -60);
                 const [{ data: histOrders }, { data: recentPqrs }] = await Promise.all([
                     supabase
                         .from('orders')
@@ -1117,9 +1116,41 @@ export default function AlistamientoSabanaPrintPage() {
                                 }}
                             >
                                 {/* Encabezado Institucional de la Hoja (Compactado para ahorrar espacio vertical) */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                {(() => {
+                                    const pageFamilyMap = new Map<string, { key: string; parentName: string; familyStock: number; unit: string }>();
+                                    const colFamilyMap = new Map<string, ReturnType<typeof resolveFamilyStockSummary>>();
+                                    for (const prod of chunkProducts) {
+                                        const famSummary = resolveFamilyStockSummary({
+                                            product: {
+                                                id: prod.id,
+                                                name: prod.name,
+                                                accounting_id: prod.accountingId,
+                                                parent_id: prod.parentId,
+                                                unit_of_measure: prod.unit
+                                            },
+                                            allFamilyProducts: familyCatalog,
+                                            stockMap: inventoryMap
+                                        });
+                                        colFamilyMap.set(prod.id, famSummary);
+                                        if (famSummary && famSummary.siblingsWithStock.length > 0 && famSummary.familyStock > 0) {
+                                            const dedupKey = `${famSummary.familyRootId}::${famSummary.unit}`;
+                                            if (!pageFamilyMap.has(dedupKey)) {
+                                                pageFamilyMap.set(dedupKey, {
+                                                    key: dedupKey,
+                                                    parentName: parentNames[famSummary.familyRootId] || prod.name,
+                                                    familyStock: famSummary.familyStock,
+                                                    unit: famSummary.unit
+                                                });
+                                            }
+                                        }
+                                    }
+                                    const pageFamilySummaries = Array.from(pageFamilyMap.values());
+
+                                    return (
+                                        <>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px', gap: '8px' }}>
                                     {/* Logo a la izquierda */}
-                                    <div style={{ width: '110px', display: 'flex', alignItems: 'center' }}>
+                                    <div style={{ width: '110px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                                         <img
                                             src="/logo.png"
                                             alt="FruFresco"
@@ -1149,9 +1180,37 @@ export default function AlistamientoSabanaPrintPage() {
                                         </div>
                                     </div>
 
-                                    {/* Tag de formato y control a la derecha */}
-                                    <div style={{ width: '110px', textAlign: 'right' }}>
-                                        <span style={{ fontSize: '6pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 5px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase' }}>
+                                    {/* Recuadro Stock Familia + Tag de formato a la derecha */}
+                                    <div style={{ minWidth: '110px', maxWidth: '330px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                        {pageFamilySummaries.length > 0 && (
+                                            <div
+                                                style={{
+                                                    backgroundColor: '#FFFBEB',
+                                                    border: '1px solid #F59E0B',
+                                                    borderRadius: '4px',
+                                                    padding: '3px 7px',
+                                                    textAlign: 'left',
+                                                    fontSize: '6.8pt',
+                                                    lineHeight: 1.25,
+                                                    color: '#78350F',
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 900, fontSize: '6.3pt', textTransform: 'uppercase', letterSpacing: '0.03em', color: '#92400E', borderBottom: '1px solid #FDE68A', paddingBottom: '1px', marginBottom: '2px' }}>
+                                                    Stock Familia (Hoja)
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+                                                    {pageFamilySummaries.map(fs => {
+                                                        const qtyStr = fs.familyStock % 1 === 0 ? String(fs.familyStock) : fs.familyStock.toFixed(1);
+                                                        return (
+                                                            <span key={fs.key} style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+                                                                {fs.parentName}: <strong>{qtyStr} {fs.unit}</strong>
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <span style={{ fontSize: '6pt', fontWeight: 800, border: '1px solid #CBD5E1', padding: '2px 5px', borderRadius: '4px', color: '#64748B', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                                             FORMATO OFICIO
                                         </span>
                                     </div>
@@ -1182,21 +1241,8 @@ export default function AlistamientoSabanaPrintPage() {
                                                 // null = sin registro en inventory_stocks → tratar como 0
                                                 const invKg = prod.inventoryKg ?? 0;
                                                 const invStr = invKg % 1 === 0 ? String(invKg) : invKg.toFixed(1);
-                                                const famSummary = invKg === 0 ? resolveFamilyStockSummary({
-                                                    product: {
-                                                        id: prod.id,
-                                                        name: prod.name,
-                                                        accounting_id: prod.accountingId,
-                                                        parent_id: prod.parentId,
-                                                        unit_of_measure: prod.unit
-                                                    },
-                                                    allFamilyProducts: familyCatalog,
-                                                    stockMap: inventoryMap
-                                                }) : null;
-                                                const hasFamStock = Boolean(famSummary && famSummary.familyStock > 0);
-                                                const famStr = hasFamStock
-                                                    ? (famSummary!.familyStock % 1 === 0 ? String(famSummary!.familyStock) : famSummary!.familyStock.toFixed(1))
-                                                    : '';
+                                                const famSummary = colFamilyMap.get(prod.id) || null;
+                                                const hasFamStock = Boolean(famSummary && famSummary.siblingsWithStock.length > 0 && famSummary.familyStock > 0);
                                                 const invColor = invKg > 0 ? '#15803D' : hasFamStock ? '#B45309' : '#B91C1C';
                                                 return (
                                                     <th
@@ -1211,8 +1257,8 @@ export default function AlistamientoSabanaPrintPage() {
                                                             lineHeight: '1.25'
                                                         }}
                                                     >
-                                                        <span style={{ color: invColor, fontWeight: 900, fontSize: hasFamStock ? '7.1pt' : '7.5pt' }}>
-                                                            {hasFamStock ? `INV[0] · Fam[${famStr}]` : `INV[${invStr}]`}
+                                                        <span style={{ color: invColor, fontWeight: 900, fontSize: '7.5pt' }}>
+                                                            {`INV[${invStr}]`}
                                                         </span>
                                                         {' '}{prod.displayName}
                                                     </th>
@@ -1343,6 +1389,9 @@ export default function AlistamientoSabanaPrintPage() {
                                         </tr>
                                     </tfoot>
                                 </table>
+                                        </>
+                                    );
+                                })()}
 
                                 {(() => {
                                     const sheetProdIds = new Set(chunkProducts.map(p => p.id));

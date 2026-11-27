@@ -18390,7 +18390,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ### Escenario 496: Visibilidad No-Invasiva de Stock Familiar en Alistamiento (Impreso Oficio + OPS Digital `/ops/picking` y `/ops/picking/terminal`) (SDD v1.9.451)
 - **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` 0 errores)`
-- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17728`):** Autorización acotada del CTO sobre `src/app/admin/orders/alistamiento-print/page.tsx` únicamente para: query de hermanos de catálogo por `familyRootIds`, etiqueta `BASE INV: CIERRE PARCIAL`, indicador `INV[0] · Fam[X]` en `<th>`, y micro-cinta de 1 línea entre `</table>` y footer (cero columnas/filas extra, cero cambios en `OPERATIONAL_STATUSES` o `normalizeToKg`).
+- **Enmienda Acotada `READ-ONLY LOCK` (`Escenario 477 §1`, `SPEC.md:17728`):** Autorización acotada del CTO sobre `src/app/admin/orders/alistamiento-print/page.tsx` únicamente para: query de hermanos de catálogo por `familyRootIds`, etiqueta `BASE INV: CIERRE PARCIAL`, indicador `INV[0]` en tono ámbar `#B45309` en `<th>` (sin sufijo `· Fam[X]`), recuadro compacto deduplicado `STOCK FAMILIA (HOJA)` en la cabecera superior derecha junto a `FORMATO OFICIO`, y micro-cinta de 1 línea entre `</table>` y footer (cero columnas/filas extra, cero cambios en `OPERATIONAL_STATUSES` o `normalizeToKg`).
 - **Alcance Contractual:**
   1. **Rutas Acotadas:**
      - *En alcance:* `src/lib/inventory/familyStockResolver.ts` *(nuevo helper puro)*, `src/app/admin/orders/alistamiento-print/page.tsx`, `src/app/ops/picking/page.tsx` (vistas `client` y `product`) y `src/app/ops/picking/terminal/page.tsx`.
@@ -18400,7 +18400,8 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - Deduplicación por `product_id` y **homogeneidad estricta de unidad base normalizada** (`KG` / `UN` / `CJ` / `DOC`): `familyStock` suma únicamente hermanos con la misma unidad normalizada.
   3. **Sábana de Alistamiento Impresa (`alistamiento-print/page.tsx`):**
      - Encabezado `BASE INV`: para `sourceKind === 'partial_closing'`, muestra `BASE INV: CIERRE PARCIAL (<fecha>)` en tono ámbar `#B45309`.
-     - Encabezado `<th>` de columna: cuando `ownStock === 0 && familyStock > 0`, muestra `INV[0] · Fam[<familyStock>]` en tono ámbar `#B45309` en lugar de alarma roja pura.
+     - Encabezado `<th>` de columna: muestra únicamente `INV[<ownStock>]` (eliminando `· Fam[X]` para evitar confusión de doble conteo entre columnas hermanas), conservando tono ámbar `#B45309` cuando `ownStock === 0` y su familia tiene stock compartido (`siblingsWithStock.length > 0`), o rojo `#B91C1C` cuando toda la familia está en `0`.
+     - Recuadro compacto `STOCK FAMILIA (HOJA)` en cabecera superior derecha (estilos 100% inline junto a `FORMATO OFICIO`, renderizado solo cuando al menos una columna de `chunkProducts` tiene `siblingsWithStock.length > 0 && familyStock > 0`): deduplica estrictamente por `${familyRootId}::${unit}` usando unidad dinámica (`summary.unit`) y fallback de nombre si el padre está inactivo.
      - Micro-cinta de 1 línea entre `</table>` y footer (solo cuando existen hermanos con stock `> 0` ausentes de `chunkProducts` de esa hoja): `Bodega familia sin pedido en hoja: <Nombre> #<accounting_id> (<X> <UM>)` (cero emojis, cero `SKU`).
   4. **Módulo Digital OPS (`/ops/picking` y `/ops/picking/terminal`):**
      - Muestra pill compacto informativo `Fam: <X> <UM> (#<accounting_id>[+N])` (eligiendo el hermano con mayor stock) cuando `ownStock === 0 && familyStock > 0`.
@@ -18678,22 +18679,27 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 ---
 
 ### Escenario 500: Soberanía Horaria `America/Bogota` (UTC-5) y Blindaje Dual-TZ (SDD)
-- **Estado del Contrato:** `🟡 FASE 0 FUNDACIÓN IMPLEMENTADA (EN EJECUCIÓN POR DOMINIOS)`
-- **Archivos Fundación:**
-  - `src/lib/dateUtils.ts`
-  - `scripts/audit-bogota-dates.mjs`
-  - `.agents/AGENTS.md` (Regla 7)
+- **Estado del Contrato:** `✅ BLOQUES 1 Y 2 CERRADOS Y CERTIFICADOS (Pendiente Bloque 3: Clientes/B2B y Pantallas Secundarias)`
+- **Archivos Fundación + Bloque 1 Cerrados (13 archivos en alcance):**
+  - Fundación: `src/lib/dateUtils.ts`, `scripts/audit-bogota-dates.mjs`, `.agents/AGENTS.md` (Regla 7)
+  - Acuerdos: `src/components/CommercialAgreementsModule.tsx`, `src/app/api/commercial/activate-agreement/route.ts`
+  - Cortes BD 7 PM: `src/components/FastPlazaPurchasesModal.tsx`, `src/components/InventoryAdditionalSalesModal.tsx`, `src/components/InventoryPayrollModal.tsx`, `src/app/ops/procesados/page.tsx`, `src/components/ops/SupervisorDonationsSubmodule.tsx`, `src/app/admin/hr/page.tsx`
+  - Servidor H2: `src/app/api/orders/email-ingest/route.ts`, `src/app/api/commercial/billing/liquidate-open-order/route.ts`, `src/app/api/commercial/master-template/route.ts`, `src/lib/emailTemplates.ts`
+  - Limpieza H8: `src/app/checkout/page.tsx` (`getSafeBogotaDate`)
+- **Bloque 2 Cerrado (Pedidos + Facturación/World Office, 18 archivos):**
+  - Pedidos & Borradores: `src/app/admin/orders/create/page.tsx`, `src/app/admin/orders/[id]/page.tsx`, `src/app/admin/orders/loading/page.tsx`, `src/app/admin/orders/alistamiento-print/page.tsx`, `src/app/admin/orders/contingency-print/page.tsx`, `src/app/admin/orders/contingency-reconciliation/page.tsx`, `src/app/admin/orders/print-labels/page.tsx`, `src/app/api/orders/email-drafts/approve/route.ts`, `src/components/EmailDraftsModule.tsx`, `src/components/admin/orders/WasteFormatPrintButton.tsx`
+  - Facturación, Impresión & World Office: `src/app/admin/commercial/billing/page.tsx`, `src/app/admin/commercial/billing/print/[id]/page.tsx`, `src/app/admin/commercial/billing/print-credit/[id]/page.tsx`, `src/components/admin/billing/CadenaRadianReconciliationSubmodule.tsx`, `src/components/admin/billing/HistoricalBillingOrderModal.tsx`, `src/components/admin/billing/OverweightBillingArbitrationModal.tsx`, `src/components/InvoiceDocumentModal.tsx`, `src/lib/worldOfficeExport.ts`
 - **Alcance Contractual:**
   1. **Núcleo Soberano (`src/lib/dateUtils.ts`):**
      - `getBogotaDateString(input?: Date | string): string` — retorna `'YYYY-MM-DD'` en `America/Bogota` (`UTC-5`); retorna sin desplazamiento las cadenas date-only `'YYYY-MM-DD'`.
-     - `parseBogotaDate(dateStr: string): Date` — ancla `'YYYY-MM-DD'` al mediodía local (`12:00:00.000`) para evitar desplazamientos `-1 día` en Colombia o UTC; parsea timestamps completos de forma segura.
+     - `parseBogotaDate(dateStr: string): Date` — ancla `'YYYY-MM-DD'` al mediodía de Bogotá (`12:00:00-05:00` / `17:00:00Z`, invariante a zona horaria) para evitar desplazamientos `-1 día` en Colombia o UTC; parsea timestamps completos de forma segura.
      - `formatBogotaDate(input?: Date | string | null, options?: Intl.DateTimeFormatOptions, fallback?: string): string` — retorna `fallback ?? '---'` si es nulo/vacío/inválido; ancla `'YYYY-MM-DD'` en `Date.UTC(y, m - 1, d, 12, 0, 0)` con `timeZone: 'America/Bogota'` y locale `'es-CO'`.
      - `addBogotaDays(dateStr: string, days: number): string` — suma/resta días calendario enteros con aritmética UTC al mediodía.
-     - `getBogotaDayRangeUtcIso(dateStr: string): { startUtcIso: string; endUtcIso: string }` — preserva rango exacto `T00:00:00.000-05:00` a `T23:59:59.999-05:00`.
+     - `getBogotaDayRangeUtcIso(dateStr: string): { startUtcIso: string; endUtcIso: string }` — valida y normaliza la fecha y retorna rango exacto `T00:00:00.000-05:00` a `T23:59:59.999-05:00`.
      - `diffBogotaDays(fromDateStr: string, toDateStr: string): number` — diferencia entera exacta (`to - from`) en calendario Bogotá.
   2. **Auditoría Automatizada (`scripts/audit-bogota-dates.mjs`):**
      - `--test`: ejecuta aserciones deterministas bajo procesos hijos `TZ=UTC` y `TZ=America/Bogota`.
-     - Modo escaneo por defecto (soporta lista de rutas opcional y `--json`): detecta violaciones Clases A1, A2, B1, B2 y C en `src/`, excluyendo `src/lib/dateUtils.ts`, `src/lib/orders/bogotaDateParser.ts` y las 3 líneas UTC legítimas verificadas (`src/app/api/orders/resolve-agreement-pricing/route.ts:240`, `src/app/ops/driver/page.tsx:125`, `src/lib/telemetry/apps360.ts:103`).
+     - Modo escaneo por defecto (soporta lista de rutas opcional y `--json`): detecta violaciones Clases A1, A2, A3 (`start_date|valid_until|delivery_date|closing_date` con `new Date(...).toISOString()`), B1 (restringido a receptores Date, sin falsos positivos numéricos), B2 y C en `src/`, excluyendo `src/lib/dateUtils.ts`, `src/lib/orders/bogotaDateParser.ts` y las 3 líneas UTC legítimas verificadas (`src/app/api/orders/resolve-agreement-pricing/route.ts:240`, `src/app/ops/driver/page.tsx:125`, `src/lib/telemetry/apps360.ts:103`).
   3. **Gobernanza Poka-Yoke:** Regla 7 en `.agents/AGENTS.md` prohíbe patrones crudos UTC/local y exige `@/lib/dateUtils`.
 
 
