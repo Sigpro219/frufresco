@@ -61,9 +61,7 @@ interface ExtendedProfileInput extends FrequencyRadarProfileInput {
   pricing_model_id?: string | null;
 }
 
-interface ExtendedOrderInput extends FrequencyRadarOrderInput {
-  customer_name?: string | null;
-}
+interface ExtendedOrderInput extends FrequencyRadarOrderInput {}
 
 interface CopilotDraftRow extends FrequencyRadarDraftInput {
   email_body?: string | null;
@@ -216,7 +214,6 @@ function getOrderClientLabel(
   return (
     prof?.company_name ||
     prof?.contact_name ||
-    order.customer_name ||
     (order.profile_id ? order.profile_id.slice(0, 8) : 'Cliente Hogar')
   );
 }
@@ -425,7 +422,7 @@ export async function buildOrdersCopilotContext(params: {
     fetchOrdersWindowPaginated(
       supabaseAdmin,
       histStart,
-      'id, sequence_id, profile_id, customer_name, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, warehouse_spaces, logistics_data'
+      'id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, warehouse_spaces, logistics_data'
     ),
     supabaseAdmin
       .from('order_drafts')
@@ -704,7 +701,7 @@ export async function buildOrdersCopilotContext(params: {
     if (!oHit) {
       const { data: directOrder } = await supabaseAdmin
         .from('orders')
-        .select('id, sequence_id, profile_id, customer_name, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, logistics_data')
+        .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, logistics_data')
         .eq('sequence_id', seqNum)
         .maybeSingle();
       if (directOrder) oHit = directOrder as ExtendedOrderInput;

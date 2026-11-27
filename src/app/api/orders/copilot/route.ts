@@ -147,7 +147,12 @@ ${ctx.promptText}`;
       lastDraftReceivedAtBogota: ctx.lastDraftReceivedAtBogota,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error en Copiloto de Pedidos';
+    const msg =
+      err instanceof Error
+        ? err.message
+        : err && typeof err === 'object' && 'message' in err && typeof (err as { message?: unknown }).message === 'string'
+        ? (err as { message: string }).message
+        : 'Error en Copiloto de Pedidos';
     console.error('[POST /api/orders/copilot] error:', err);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
