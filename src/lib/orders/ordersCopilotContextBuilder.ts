@@ -6,6 +6,7 @@ import {
   getBogotaDayRangeUtcIso,
   parseBogotaDate,
 } from '@/lib/dateUtils';
+import { evaluateInventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import {
   computeFrequencyRadar,
   fetchOrdersWindowPaginated,
@@ -474,7 +475,7 @@ export async function buildOrdersCopilotContext(params: {
   const draftsWindowEndUtc = getBogotaDayRangeUtcIso(todayBogota).endUtcIso;
   const cutoff36hIso = new Date(now.getTime() - 36 * 3600 * 1000).toISOString();
 
-  const [profilesRes, allOrdersRaw, draftsRes, latestDraftRes, headerSnap] = await Promise.all([
+  const [profilesRes, allOrdersRaw, draftsRes, latestDraftRes, headerSnap, inventoryGate] = await Promise.all([
     supabaseAdmin
       .from('profiles')
       .select('id, company_name, contact_name, email, role, is_active, logistics_data, parent_id, pricing_model_id'),
@@ -497,6 +498,7 @@ export async function buildOrdersCopilotContext(params: {
       .limit(1)
       .maybeSingle(),
     getAgreementsHeaderSnapshot(supabaseAdmin),
+    evaluateInventoryGateStatus({ supabase: supabaseAdmin, targetDate }),
   ]);
 
   const allProfiles = (profilesRes.data || []) as ExtendedProfileInput[];
@@ -1099,8 +1101,8 @@ export async function buildOrdersCopilotContext(params: {
   };
 
   const lines: string[] = [
-    `=== SNAPSHOT OPERATIVO v3 (BOGOTÁ HOY: ${todayBogota} | FECHA OBJETIVO: ${targetDate} - ${radar.weekdayName.toUpperCase()}) ===`,
-    `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())} | Último borrador Supabase: ${lastDraftReceivedAtBogota || 'Sin registros'}`,
+    `=== SNAPSHOT OPERATIVO v4 (BOGOTÁ HOY: ${todayBogota} | FECHA OBJETIVO: ${targetDate} - ${radar.weekdayName.toUpperCase()}) ===`,
+    `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())} | Último borrador Supabase: ${lastDraftReceivedAtBogota || 'Sin registros'} | Semáforo Inventario: [${inventoryGate.level.toUpperCase()}] ${inventoryGate.headline}`,
   ];
 
   if (focusLines.length > 0) {

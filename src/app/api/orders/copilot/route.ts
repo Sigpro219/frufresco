@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { verifyStaffBearer } from '@/lib/auth/verifyStaffBearer';
+import { getBogotaDateString } from '@/lib/dateUtils';
 import { buildOrdersCopilotContext } from '@/lib/orders/ordersCopilotContextBuilder';
+import { COPILOT_TOOL_DECLARATIONS, executeCopilotTool } from '@/lib/orders/ordersCopilotTools';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -112,14 +114,14 @@ export async function POST(req: Request) {
       focusQuery: lastUserMsg,
     });
 
-    const systemPrompt = `Eres el Copiloto Operativo de Pedidos, Correos y Acuerdos de FruFresco (Ciclo Cerrado, Solo Lectura).
+    const systemPrompt = `Eres el Copiloto Operativo de Pedidos, Correos, Inventario y Acuerdos de FruFresco (Ciclo Cerrado, Solo Lectura).
 REGLAS ESTRICTAS:
-1. Tu ÚNICA fuente de verdad es el SNAPSHOT OPERATIVO DE SUPABASE adjunto abajo. Jamás inventes números de pedido, fechas, precios, correos ni clientes que no aparezcan en el snapshot.
-2. En Bandeja de Entrada Email distingue SIEMPRE con exactitud entre HOY, AYER y 48H, separando: Legalizados (approved), Pendientes por legalizar (pending) y Descartados/Rechazados (rejected). NUNCA sumes rejected como legalizados.
-3. Prioriza reportar primero alertas críticas: [DISCREPANCIA_FECHA], [DUPLICADO_POSIBLE], [CAIDA_ANORMAL], [BORRADOR_PENDIENTE], [FALTA_POR_PEDIR_VENCIDO] (ordenado por impacto COP), [ACUERDO_VENCIDO_CRITICO] (>30d), [ENTREGA_POST_VENCIMIENTO] e ítems en $0. Distingue [EN_VENTANA] y [VENCIDO_GRACIA <=30d] con claridad.
-4. Si te preguntan por un cliente, pedido, OC o precio (Acuerdo / General Institucional / Clientes Hogar) que no aparece en el snapshot, dilo explícitamente sin adivinar.
-5. Cita siempre los identificadores exactos (#sequence_id, #accounting_id para productos, fecha YYYY-MM-DD, estado, OC, asunto de correo). NUNCA uses la sigla "SKU" ni menciones "base_price".
-6. Responde en español conciso, directo y ejecutivo (viñetas cortas, sin relleno). Si se pide redactar recordatorio para un cliente faltante, entrégalo listo para copiar en WhatsApp.
+1. Tu ÚNICA fuente de verdad es el SNAPSHOT OPERATIVO DE SUPABASE y tus 6 HERRAMIENTAS DE CONSULTA EN VIVO (Function Calling). Jamás inventes números de pedido, fechas, stocks, precios, correos ni clientes.
+2. USO OBLIGATORIO DE HERRAMIENTAS: NUNCA digas "el snapshot no detalla los productos / pedidos / stock / precios". Si el usuario pregunta en qué pedido está un producto, cuánto falta por comprar, cuánto hay en bodega, si ya cerró inventario hoy, el detalle de un pedido/OC, correos de un cliente o tarifas: INVOCA LA HERRAMIENTA CORRESPONDIENTE (puedes llamar varias en paralelo y resolver referencias del turno anterior como "ese" o "el crimini").
+3. En Bandeja de Entrada Email distingue SIEMPRE con exactitud entre HOY, AYER y 48H, separando: Legalizados (approved), Pendientes por legalizar (pending) y Descartados/Rechazados (rejected). NUNCA sumes rejected como legalizados.
+4. Prioriza alertas críticas: [DISCREPANCIA_FECHA], [DUPLICADO_POSIBLE], [CAIDA_ANORMAL], [BORRADOR_PENDIENTE], [FALTA_POR_PEDIR_VENCIDO] (por impacto COP), [ACUERDO_VENCIDO_CRITICO] (>30d), [ENTREGA_POST_VENCIMIENTO], ítems en $0 y Semáforo Andon de Inventario.
+5. Cita siempre identificadores exactos (#sequence_id, #accounting_id para productos, fecha YYYY-MM-DD, estado, OC, asunto de correo). NUNCA uses la sigla "SKU" ni menciones "base_price" ni "inventory_stocks".
+6. Responde en español conciso, directo y ejecutivo (viñetas cortas, sin relleno).
 
 ${ctx.promptText}`;
 
@@ -127,19 +129,52 @@ ${ctx.promptText}`;
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: systemPrompt,
+      tools: [{ functionDeclarations: COPILOT_TOOL_DECLARATIONS }],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,
       },
     });
 
+    const todayBogota = getBogotaDateString();
     const chat = model.startChat({ history });
-    const result = await chat.sendMessage(lastUserMsg);
+    let result = await chat.sendMessage(lastUserMsg);
+    const toolsUsed: string[] = [];
+
+    for (let round = 0; round < 5; round++) {
+      const calls = result.response.functionCalls();
+      if (!calls || calls.length === 0) break;
+
+      const responses = await Promise.all(
+        calls.map(async call => {
+          toolsUsed.push(call.name);
+          const output = await executeCopilotTool(
+            call.name,
+            (call.args || {}) as Record<string, unknown>,
+            {
+              supabaseAdmin,
+              defaultTargetDate: ctx.targetDate,
+              todayBogota,
+            }
+          );
+          return {
+            functionResponse: {
+              name: call.name,
+              response: { result: output },
+            },
+          };
+        })
+      );
+
+      result = await chat.sendMessage(responses);
+    }
+
     const reply = result.response.text();
 
     return NextResponse.json({
       success: true,
       reply,
+      toolsUsed,
       stats: ctx.stats,
       targetDate: ctx.targetDate,
       generatedAtBogota: ctx.generatedAtBogota,

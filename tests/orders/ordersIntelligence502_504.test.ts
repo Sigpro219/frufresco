@@ -16,6 +16,7 @@ import {
   extractFocalOrderSequences,
   extractProductSearchTerms,
 } from '../../src/lib/orders/ordersCopilotContextBuilder';
+import { matchesProductQuery, stemSpanishToken } from '../../src/lib/orders/ordersCopilotTools';
 import { sanitizeGeminiHistory } from '../../src/app/api/orders/copilot/route';
 
 test('Escenario 502: Gourmet Titán 2026-11-25 "para el jueves" -> 2026-11-26', () => {
@@ -212,4 +213,18 @@ test('Escenario 505-B: extractFocalOrderSequences y extractProductSearchTerms pa
     extractProductSearchTerms('cuanto champiñon y cuanta papaya debemos enviar mañana?'),
     ['champinon', 'papaya']
   );
+});
+
+test('Escenario 507: stemSpanishToken y matchesProductQuery evitan falsos positivos y soportan plurales', () => {
+  assert.equal(stemSpanishToken('champiñones'), 'champinon');
+  assert.equal(stemSpanishToken('papayas'), 'papaya');
+  assert.equal(stemSpanishToken('limones'), 'limon');
+
+  assert.equal(matchesProductQuery('champiñones', 'Champiñon', 112), true);
+  assert.equal(matchesProductQuery('crimini', 'Champiñon crimini', 378), true);
+  assert.equal(matchesProductQuery('#378', 'Champiñon crimini', 378), true);
+  assert.equal(matchesProductQuery('papayas', 'Papaya maradol', 286), true);
+  // Anti falso positivo: "papa" NO debe matchear "Papaya maradol"
+  assert.equal(matchesProductQuery('papa', 'Papaya maradol', 286), false);
+  assert.equal(matchesProductQuery('papa', 'Papa pastusa lavada', 150), true);
 });

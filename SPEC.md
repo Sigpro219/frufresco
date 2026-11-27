@@ -18795,3 +18795,23 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   3. **KPIs de decisión real:**
      - Tarjeta 4 (`POR GESTIONAR`): `pendingEmailCount + radarUrgentCount` (alimentado vía `onCountChange` de `FrequencyRadarDrawer`); clic abre Bandeja de Entrada o Radar (`openTrigger`).
      - Tarjeta 5 (`ALERTAS REALES`): conteo único de pedidos con duplicado, info incompleta o `$0` (excluyendo `cancelled`, `logistics_data.is_replacement` y `off_agreement_priced`), sin sumar `todayClosingState` global para mantener correspondencia 1-a-1 al filtrar con `@alertas_reales`.
+
+---
+
+### Escenario 507: Copiloto v4 — Arquitectura Híbrida (Snapshot + Gemini Function Calling Read-Only, Inventario y Consolidación Padre–Hijo)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/lib/orders/ordersCopilotTools.ts` (nuevo)
+  - `src/app/api/orders/copilot/route.ts`
+  - `src/lib/orders/ordersCopilotContextBuilder.ts`
+  - `tests/orders/ordersIntelligence502_504.test.ts`
+- **Alcance Contractual (Blindado por `/goldfish` Modo Ácido):**
+  1. **6 Tools Determinísticas de Solo Lectura (`ordersCopilotTools.ts`):**
+     - `query_product_demand`: búsqueda tolerante a acentos, plurales (`stemSpanishToken`) y fronteras de palabra (`matchesProductQuery`, evitando falso positivo `papa -> papaya`), expansión Padre–Hijo (`getFamilyRootId` con guardia `parent_id !== id`), normalización vía `normalizeDemandToKg` (convirtiendo `Lb * 0.5`, `Paquete 250g/500g`, `_unit_weight_gr`, `weight_kg` y reportando aparte `unconvertedUnits`), con desglose **completo** por pedido (`#sequence_id`, cliente, estado, qty) sin tope de 12.
+     - `query_inventory_and_netting`: stock disponible exclusivamente vía `resolveInitialInventory` + `daily_inventory_closings` + `evaluateInventoryGateStatus` (prohibido `inventory_stocks`), consolidación familiar Padre–Hijo convirtiendo `Lb * 0.5` y `g / 1000` en `KG`, y ecuación de neteo (`grossNeed`, `appliedStock`, `netToBuy`, `surplus`).
+     - `query_inventory_closing_status`: estado de `daily_inventory_closings`, `getDailyManualChecklistStatus` y semáforo Andon (`evaluateInventoryGateStatus`).
+     - `query_order_details`: consulta de pedidos específicos (`sequenceIds`, `purchaseOrder`) o filtrados (`date`, `status`, `onlyZeroPrice`), con líneas, `admin_notes` y cruce contra acuerdos (3 niveles).
+     - `query_client_and_inbox`: cliente/sede/acuerdo y `order_drafts` de 7 días incluyendo correos con `profile_id = null` (`client_detected_name` / `source_email`).
+     - `query_product_prices`: tarifas soberanas múltiples (Acuerdo > `General Institucional` > `Clientes Hogar`, cero `products.base_price`).
+  2. **Loop de Function Calling en `route.ts`:** `tools: [{ functionDeclarations: COPILOT_TOOL_DECLARATIONS }]`, loop hasta 5 rondas en paralelo (`Promise.all`), trazabilidad en `toolsUsed`.
+  3. **Semáforo Andon en Snapshot Base (`ordersCopilotContextBuilder.ts`):** integra `evaluateInventoryGateStatus` para la fecha objetivo.
