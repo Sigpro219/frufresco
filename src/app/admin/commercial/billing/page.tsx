@@ -173,7 +173,7 @@ interface Invoice {
     total_final: number;
     status: 'pending' | 'printed' | 'exported' | 'cancelled';
     payment_status: 'pending' | 'paid' | 'overdue';
-    due_date: string;
+    due_date: string | null;
     created_at: string;
     orders: {
         sequence_id: number;
@@ -2460,7 +2460,8 @@ export default function BillingDashboard() {
         const todayStr = getBogotaDateString();
 
         return invoices.filter(inv => {
-            const diffDays = diffBogotaDays(inv.due_date, todayStr);
+            const rawDiff = diffBogotaDays(inv.due_date, todayStr);
+            const diffDays = Number.isFinite(rawDiff) ? rawDiff : 0;
             const isPaid = inv.payment_status === 'paid';
 
             if (portfolioStatusFilter === 'paid') {
@@ -4962,7 +4963,8 @@ export default function BillingDashboard() {
                 countPaid++;
                 return;
             }
-            const diffDays = diffBogotaDays(inv.due_date, todayStr);
+            const rawDiff = diffBogotaDays(inv.due_date, todayStr);
+            const diffDays = Number.isFinite(rawDiff) ? rawDiff : 0;
             const amount = Number(inv.total_final || 0);
             totalPendiente += amount;
 
@@ -8382,7 +8384,7 @@ export default function BillingDashboard() {
                                                     </tr>
                                                 ) : filteredInvoices.map((inv) => {
                                                     const client = inv.orders?.profiles;
-                                                    const isOverdue = inv.payment_status !== 'paid' && diffBogotaDays(inv.due_date, getBogotaDateString()) > 0;
+                                                    const isOverdue = inv.payment_status !== 'paid' && Boolean(inv.due_date) && diffBogotaDays(inv.due_date, getBogotaDateString()) > 0;
 
                                                     return (
                                                         <tr key={inv.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, transition: 'all 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F8FAFC'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
@@ -8394,7 +8396,7 @@ export default function BillingDashboard() {
                                                                 <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, marginTop: '1px' }}>NIT: {client?.nit || 'N/A'}</div>
                                                             </td>
                                                             <td style={{ padding: '0.65rem 0.75rem' }}>
-                                                                <div style={{ fontSize: '0.76rem', fontWeight: '700', color: isOverdue ? '#DC2626' : THEME.colors.textMain }}>{inv.due_date}</div>
+                                                                <div style={{ fontSize: '0.76rem', fontWeight: '700', color: isOverdue ? '#DC2626' : THEME.colors.textMain }}>{inv.due_date || '---'}</div>
                                                                 <div style={{ fontSize: '0.68rem', color: '#64748B' }}>Plazo: {client?.payment_days || 0} días</div>
                                                             </td>
                                                             <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: '600', color: '#334155' }}>

@@ -75,6 +75,18 @@ async function runTestWorker() {
     assert.equal(formatBogotaDate('', undefined), '---', `[${tz}] formatBogotaDate empty fallback`);
     assert.equal(formatBogotaDate('not-a-date'), '---', `[${tz}] formatBogotaDate invalid fallback`);
 
+    // 8. Null / undefined / invalid safety (Goldfish hardening)
+    assert.equal(getBogotaDateString(null), '', `[${tz}] getBogotaDateString null`);
+    assert.equal(getBogotaDateString(new Date('invalid')), '', `[${tz}] getBogotaDateString invalid Date`);
+    assert.ok(Number.isNaN(diffBogotaDays(null, '2026-11-26')), `[${tz}] diffBogotaDays null`);
+    assert.ok(Number.isNaN(diffBogotaDays(undefined, '2026-11-26')), `[${tz}] diffBogotaDays undefined`);
+    assert.ok(Number.isNaN(diffBogotaDays('', '2026-11-26')), `[${tz}] diffBogotaDays empty`);
+    assert.equal(addBogotaDays(null, 5), '', `[${tz}] addBogotaDays null`);
+    assert.equal(addBogotaDays(undefined, 5), '', `[${tz}] addBogotaDays undefined`);
+    assert.equal(addBogotaDays('2026-11-26', NaN), '', `[${tz}] addBogotaDays NaN days`);
+    assert.throws(() => getBogotaDayRangeUtcIso(null), /Invalid Bogotá date/, `[${tz}] getBogotaDayRangeUtcIso null`);
+    assert.throws(() => getBogotaDayRangeUtcIso(undefined), /Invalid Bogotá date/, `[${tz}] getBogotaDayRangeUtcIso undefined`);
+
     console.log(`PASS [TZ=${tz}] all Dual-TZ assertions passed.`);
 }
 

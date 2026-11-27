@@ -12,29 +12,38 @@ const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
  * for safe Supabase range queries and timestamp comparisons.
  */
 export function getBogotaDayRangeUtcIso(dateStr: string): { startUtcIso: string; endUtcIso: string } {
+    if (dateStr == null) {
+        throw new Error(`Invalid Bogotá date: "${dateStr}"`);
+    }
     const normalized = getBogotaDateString(dateStr);
     if (!DATE_ONLY_REGEX.test(normalized)) {
         throw new Error(`Invalid Bogotá date: "${dateStr}"`);
     }
-    const startUtcIso = new Date(`${normalized}T00:00:00.000-05:00`).toISOString();
-    const endUtcIso = new Date(`${normalized}T23:59:59.999-05:00`).toISOString();
-    return { startUtcIso, endUtcIso };
+    const startDate = new Date(`${normalized}T00:00:00.000-05:00`);
+    const endDate = new Date(`${normalized}T23:59:59.999-05:00`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new Error(`Invalid Bogotá date: "${dateStr}"`);
+    }
+    return { startUtcIso: startDate.toISOString(), endUtcIso: endDate.toISOString() };
 }
 
 /**
  * Returns the YYYY-MM-DD calendar date in America/Bogota (-05:00, permanent UTC-5).
  * Date-only 'YYYY-MM-DD' strings are returned directly without UTC shifting.
  */
-export function getBogotaDateString(input: Date | string = new Date()): string {
-    if (typeof input === 'string') {
-        const trimmed = input.trim();
+export function getBogotaDateString(input?: Date | string | null): string {
+    const resolved = input === undefined ? new Date() : input;
+    if (resolved === null) return '';
+    if (typeof resolved === 'string') {
+        const trimmed = resolved.trim();
         if (!trimmed) return '';
         if (DATE_ONLY_REGEX.test(trimmed)) return trimmed;
         const ms = new Date(trimmed).getTime();
         if (Number.isNaN(ms)) return '';
         return new Date(ms - BOGOTA_OFFSET_MS).toISOString().slice(0, 10);
     }
-    const ms = input.getTime();
+    if (!(resolved instanceof Date)) return '';
+    const ms = resolved.getTime();
     if (Number.isNaN(ms)) return '';
     return new Date(ms - BOGOTA_OFFSET_MS).toISOString().slice(0, 10);
 }
@@ -80,7 +89,7 @@ export function formatBogotaDate(
         dateObj = input;
     }
 
-    if (Number.isNaN(dateObj.getTime())) return fallback;
+    if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return fallback;
     return dateObj.toLocaleDateString('es-CO', {
         timeZone: BOGOTA_TZ,
         ...options,
@@ -91,7 +100,8 @@ export function formatBogotaDate(
  * Adds or subtracts integer calendar days to a 'YYYY-MM-DD' (or timestamp) using UTC noon arithmetic
  * and returns 'YYYY-MM-DD'.
  */
-export function addBogotaDays(dateStr: string, days: number): string {
+export function addBogotaDays(dateStr: string | Date | null | undefined, days: number): string {
+    if (dateStr == null || !Number.isFinite(days)) return '';
     const baseStr = getBogotaDateString(dateStr);
     const match = baseStr.match(DATE_ONLY_REGEX);
     if (!match) return '';
@@ -106,7 +116,8 @@ export function addBogotaDays(dateStr: string, days: number): string {
 /**
  * Returns the exact integer calendar day difference (to - from) in Bogotá calendar.
  */
-export function diffBogotaDays(fromDateStr: string, toDateStr: string): number {
+export function diffBogotaDays(fromDateStr: string | Date | null | undefined, toDateStr: string | Date | null | undefined): number {
+    if (fromDateStr == null || toDateStr == null) return NaN;
     const fromStr = getBogotaDateString(fromDateStr);
     const toStr = getBogotaDateString(toDateStr);
     const fromMatch = fromStr.match(DATE_ONLY_REGEX);
