@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffBearer } from '@/lib/auth/verifyStaffBearer';
-import { computeFrequencyRadar } from '@/lib/orders/frequencyEngine';
+import { computeFrequencyRadar, fetchOrdersWindowPaginated } from '@/lib/orders/frequencyEngine';
 import { getBogotaDateStr } from '@/lib/orders/bogotaDateParser';
 
 function getSupabaseAdmin() {
@@ -32,32 +32,27 @@ export async function GET(req: Request) {
       .split('T')[0];
     const cutoff48hIso = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
 
-    const [profilesRes, ordersRes, draftsRes] = await Promise.all([
+    const [profilesRes, recentOrders, draftsRes] = await Promise.all([
       supabaseAdmin
         .from('profiles')
         .select('id, company_name, contact_name, email, role, is_active, logistics_data')
         .eq('role', 'b2b_client')
         .eq('is_active', true),
-      supabaseAdmin
-        .from('orders')
-        .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, origin_source')
-        .gte('delivery_date', histStart)
-        .limit(2000),
+      fetchOrdersWindowPaginated(supabaseAdmin, histStart),
       supabaseAdmin
         .from('order_drafts')
         .select('id, profile_id, client_detected_name, source_email, email_subject, status, created_at, extracted_items')
         .gte('created_at', cutoff48hIso)
-        .limit(200),
+        .limit(250),
     ]);
 
     if (profilesRes.error) throw profilesRes.error;
-    if (ordersRes.error) throw ordersRes.error;
     if (draftsRes.error) throw draftsRes.error;
 
     const result = computeFrequencyRadar({
       targetDate,
       profiles: profilesRes.data || [],
-      recentOrders: ordersRes.data || [],
+      recentOrders,
       recentDrafts: draftsRes.data || [],
       now,
     });

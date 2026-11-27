@@ -1,10 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { computeFrequencyRadar, type FrequencyRadarResult } from './frequencyEngine';
-import { getBogotaDateStr } from './bogotaDateParser';
+import {
+  computeFrequencyRadar,
+  fetchOrdersWindowPaginated,
+  type FrequencyRadarResult,
+} from './frequencyEngine';
+import { getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from './bogotaDateParser';
 
 export interface OrdersCopilotContext {
   targetDate: string;
   generatedAtBogota: string;
+  lastDraftReceivedAt: string | null;
+  lastDraftReceivedAtBogota: string | null;
   radar: FrequencyRadarResult;
   stats: {
     ordersForTargetDate: number;
@@ -14,6 +20,8 @@ export interface OrdersCopilotContext {
     recentOtherDateOrdersCount: number;
     recentDraftsCount: number;
     pendingDraftsCount: number;
+    dateDiscrepancyCount: number;
+    urgentAnomalies: number;
     totalAnomalies: number;
   };
   promptText: string;
@@ -38,8 +46,40 @@ function getDraftMeta(draft: any): Record<string, any> {
   return items.find((i: any) => i && i.isMetadata) || {};
 }
 
+function resolveDraftOrderId(draft: any, meta: Record<string, any>): string | null {
+  if (meta?.orderId) return String(meta.orderId);
+  if (meta?.order_id) return String(meta.order_id);
+  if (Array.isArray(meta?.attachments)) {
+    for (const att of meta.attachments) {
+      if (att?.orderId) return String(att.orderId);
+      if (att?.order_id) return String(att.order_id);
+    }
+  }
+  return draft?.order_id ? String(draft.order_id) : null;
+}
+
+function stripQuotedEmailHistory(body: string): string {
+  if (!body) return '';
+  const cutMarkers = [
+    /\r?\n-{2,}\s*(?:Mensaje reenviado|Forwarded message|Original Message)\s*-{2,}/i,
+    /\r?\n(?:De|From):\s*[^\r\n]+\r?\n(?:Enviado|Sent|Date):/i,
+    /\r?\nEl\s+\d{1,2}\/\d{1,2}\/\d{2,4}.*escribi[oó]:/i,
+  ];
+  let clean = body;
+  for (const rx of cutMarkers) {
+    const idx = clean.search(rx);
+    if (idx > 0) clean = clean.slice(0, idx);
+  }
+  return clean;
+}
+
+function hasExplicitNumericDate(text: string): boolean {
+  if (!text) return false;
+  return /\b(?:\d{2}[\/-]\d{2}[\/-]\d{4}|\d{4}[\/-]\d{2}[\/-]\d{2})\b/.test(text);
+}
+
 /**
- * 100% server-side deterministic context assembler for the Orders & Emails AI Copilot (SECOP §62 pattern).
+ * 100% server-side deterministic context assembler for the Orders & Emails AI Copilot (SECOP §62 + Escenario 504 v2).
  * Never trusts client-supplied operational data; reads strictly from Supabase.
  */
 export async function buildOrdersCopilotContext(params: {
@@ -60,30 +100,38 @@ export async function buildOrdersCopilotContext(params: {
   const cutoff48hIso = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
   const cutoff36hIso = new Date(now.getTime() - 36 * 3600 * 1000).toISOString();
 
-  const [profilesRes, ordersRes, draftsRes] = await Promise.all([
+  const [profilesRes, allOrders, draftsRes, latestDraftRes] = await Promise.all([
     supabaseAdmin
       .from('profiles')
       .select('id, company_name, contact_name, email, role, is_active, logistics_data')
       .eq('role', 'b2b_client')
       .eq('is_active', true),
-    supabaseAdmin
-      .from('orders')
-      .select('id, sequence_id, profile_id, customer_name, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, warehouse_spaces, logistics_data')
-      .gte('delivery_date', histStart)
-      .order('created_at', { ascending: false })
-      .limit(2000),
+    fetchOrdersWindowPaginated(
+      supabaseAdmin,
+      histStart,
+      'id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, warehouse_spaces, logistics_data'
+    ),
     supabaseAdmin
       .from('order_drafts')
       .select('id, profile_id, client_detected_name, source_email, email_subject, email_body, status, created_at, extracted_items')
       .gte('created_at', cutoff48hIso)
       .order('created_at', { ascending: false })
-      .limit(120),
+      .limit(150),
+    supabaseAdmin
+      .from('order_drafts')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const profiles = profilesRes.data || [];
-  const allOrders = ordersRes.data || [];
   const recentDrafts = draftsRes.data || [];
   const profileMap = new Map(profiles.map((p: any) => [p.id, p]));
+  const ordersById = new Map(allOrders.map(o => [o.id, o]));
+
+  const lastDraftReceivedAt = latestDraftRes.data?.created_at || null;
+  const lastDraftReceivedAtBogota = lastDraftReceivedAt ? formatBogotaTimestamp(lastDraftReceivedAt) : null;
 
   const radar = computeFrequencyRadar({
     targetDate,
@@ -94,9 +142,7 @@ export async function buildOrdersCopilotContext(params: {
   });
 
   const targetOrders = allOrders.filter(
-    (o: any) =>
-      String(o.delivery_date || '').slice(0, 10) === targetDate &&
-      !['cancelled', 'billing_only'].includes(String(o.status || '').toLowerCase())
+    o => String(o.delivery_date || '').slice(0, 10) === targetDate
   );
 
   const byStatus: Record<string, number> = {};
@@ -110,53 +156,145 @@ export async function buildOrdersCopilotContext(params: {
   }
 
   const recentOtherDateOrders = allOrders.filter(
-    (o: any) =>
-      o.created_at >= cutoff36hIso &&
-      String(o.delivery_date || '').slice(0, 10) !== targetDate &&
-      !['cancelled', 'billing_only'].includes(String(o.status || '').toLowerCase())
+    o =>
+      (o.created_at || '') >= cutoff36hIso &&
+      String(o.delivery_date || '').slice(0, 10) !== targetDate
   );
 
   const pendingDrafts = recentDrafts.filter((d: any) => String(d.status || '').toLowerCase() === 'pending');
 
-  // Dynamic focus matching (#sequence_id or client/subject substring)
+  // Deterministic [DISCREPANCIA_FECHA] detector (0 tokens)
+  const dateDiscrepancies: string[] = [];
+  const missingOrderIdsToFetch: string[] = [];
+  const draftDiscrepancyCandidates: Array<{
+    draft: any;
+    meta: Record<string, any>;
+    expectedDate: string;
+    matchedPhrase: string;
+    linkedOrderId: string | null;
+  }> = [];
+
+  for (const d of recentDrafts) {
+    if (String(d.status || '').toLowerCase() === 'rejected') continue;
+    const subject = String(d.email_subject || '');
+    if (hasExplicitNumericDate(subject)) continue;
+
+    const cleanBodyFirstBlock = stripQuotedEmailHistory(String(d.email_body || ''));
+    const refDate = d.created_at ? new Date(d.created_at) : now;
+    const rel = resolveExplicitRelativeDeliveryDate(`${subject}\n${cleanBodyFirstBlock}`, refDate);
+    if (!rel) continue;
+
+    // Respect delta===0 same-day rule
+    const explicitSameDay = /\b(para\s+hoy|entrega\s+hoy|mismo\s+d[ií]a|hoy\s+mismo|despacho\s+hoy)\b/i.test(
+      `${subject}\n${cleanBodyFirstBlock}`
+    );
+    if (rel.isSameDay && !explicitSameDay) continue;
+
+    const meta = getDraftMeta(d);
+    const linkedOrderId = resolveDraftOrderId(d, meta);
+    if (linkedOrderId && !ordersById.has(linkedOrderId)) {
+      missingOrderIdsToFetch.push(linkedOrderId);
+    }
+    draftDiscrepancyCandidates.push({
+      draft: d,
+      meta,
+      expectedDate: rel.date,
+      matchedPhrase: rel.matchedPhrase,
+      linkedOrderId,
+    });
+  }
+
+  if (missingOrderIdsToFetch.length > 0) {
+    const { data: extraOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id, sequence_id, status, delivery_date')
+      .in('id', [...new Set(missingOrderIdsToFetch)]);
+    for (const eo of extraOrders || []) {
+      ordersById.set(eo.id, eo as any);
+    }
+  }
+
+  for (const cand of draftDiscrepancyCandidates) {
+    const linkedOrder = cand.linkedOrderId ? ordersById.get(cand.linkedOrderId) : null;
+    const savedDate = linkedOrder?.delivery_date
+      ? String(linkedOrder.delivery_date).slice(0, 10)
+      : cand.meta?.deliveryDate
+      ? String(cand.meta.deliveryDate).slice(0, 10)
+      : null;
+
+    if (savedDate && savedDate !== cand.expectedDate) {
+      const orderTag = linkedOrder ? `Pedido #${linkedOrder.sequence_id} [${linkedOrder.status}]` : `Borrador [${cand.draft.status}]`;
+      dateDiscrepancies.push(
+        `- [DISCREPANCIA_FECHA] ${cand.draft.client_detected_name || cand.draft.source_email} | ${orderTag} | asunto="${cand.draft.email_subject}" | texto dice "${cand.matchedPhrase}" (esperado ${cand.expectedDate}) pero quedó en ${savedDate}`
+      );
+    }
+  }
+
+  // Dynamic focus matching: STRICT explicit `#` for sequence_id (`/#(\d{3,8})\b/g`) + client name tokens
   const cleanFocus = focusQuery.trim().toLowerCase();
-  const seqMatch = cleanFocus.match(/#?(\d{3,6})/);
+  const seqMatches = [...cleanFocus.matchAll(/#(\d{3,8})\b/g)].map(m => Number(m[1])).slice(0, 2);
   const focusLines: string[] = [];
+
+  if (seqMatches.length > 0) {
+    for (const seqNum of seqMatches) {
+      let oHit = allOrders.find(o => o.sequence_id === seqNum);
+      if (!oHit) {
+        const { data: directOrder } = await supabaseAdmin
+          .from('orders')
+          .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number')
+          .eq('sequence_id', seqNum)
+          .maybeSingle();
+        if (directOrder) oHit = directOrder as any;
+      }
+      if (oHit) {
+        const prof = profileMap.get(oHit.profile_id || '');
+        focusLines.push(
+          `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${prof?.company_name || oHit.customer_name || oHit.profile_id}", estado=${oHit.status}, delivery_date=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=$${oHit.total}, kg=${oHit.total_weight_kg}, OC="${oHit.purchase_order_number || ''}"`
+        );
+        const { data: items, count } = await supabaseAdmin
+          .from('order_items')
+          .select('quantity, unit, unit_price, variant_label, nickname, products(accounting_id, name, unit_of_measure)', { count: 'exact' })
+          .eq('order_id', oHit.id)
+          .limit(40);
+        if (items && items.length > 0) {
+          const itemStrs = items.map((it: any) => {
+            const p = Array.isArray(it.products) ? it.products[0] : it.products;
+            const aid = p?.accounting_id ? `#${p.accounting_id}` : '#S/N';
+            const name = p?.name || it.nickname || 'Producto';
+            const unit = it.unit || p?.unit_of_measure || '';
+            return `${aid} ${name} (${it.quantity} ${unit}${it.variant_label ? ` ${it.variant_label}` : ''}) $${it.unit_price}`;
+          });
+          focusLines.push(
+            `  LÍNEAS DE #${oHit.sequence_id} (mostrando ${items.length} de ${count ?? items.length} ítems): ${itemStrs.join(' | ')}`
+          );
+        }
+      }
+    }
+  }
 
   if (cleanFocus.length >= 3) {
     const tokens = cleanFocus
       .replace(/[#¿?¡!.,]/g, ' ')
       .split(/\s+/)
-      .filter(t => t.length >= 3 && !['para', 'ayer', 'hoy', 'pedido', 'pedidos', 'correo', 'correos', 'quien', 'quienes', 'estado', 'paso', 'que'].includes(t));
+      .filter(t => t.length >= 3 && !['para', 'ayer', 'hoy', 'pedido', 'pedidos', 'correo', 'correos', 'quien', 'quienes', 'estado', 'paso', 'que', 'trae', 'tiene'].includes(t));
 
     const matchedProfiles = profiles.filter((p: any) => {
       const hay = `${p.company_name || ''} ${p.contact_name || ''} ${p.email || ''}`.toLowerCase();
       return tokens.some(t => hay.includes(t));
     });
 
-    if (seqMatch) {
-      const seqNum = Number(seqMatch[1]);
-      const oHit = allOrders.find((o: any) => o.sequence_id === seqNum);
-      if (oHit) {
-        const prof = profileMap.get(oHit.profile_id);
-        focusLines.push(
-          `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${prof?.company_name || oHit.customer_name || oHit.profile_id}", estado=${oHit.status}, delivery_date=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=$${oHit.total}, kg=${oHit.total_weight_kg}, OC="${oHit.purchase_order_number || ''}"`
-        );
-      }
-    }
-
     for (const mp of matchedProfiles.slice(0, 3)) {
       const mpOrders = allOrders
-        .filter((o: any) => o.profile_id === mp.id)
+        .filter(o => o.profile_id === mp.id)
         .slice(0, 5)
-        .map((o: any) => `#${o.sequence_id} [${o.status}] entrega=${o.delivery_date} creado=${formatBogotaTimestamp(o.created_at)} $${o.total}`);
+        .map(o => `#${o.sequence_id} [${o.status}] entrega=${o.delivery_date} creado=${formatBogotaTimestamp(o.created_at)} $${o.total}`);
       const mpDrafts = recentDrafts
         .filter((d: any) => d.profile_id === mp.id)
         .slice(0, 5)
         .map((d: any) => {
           const m = getDraftMeta(d);
-          const snippet = String(d.email_body || '').replace(/\s+/g, ' ').slice(0, 160);
-          return `borrador=${d.id.slice(0, 8)} [${d.status}] asunto="${d.email_subject}" fecha_extraida=${m.deliveryDate || 'null'} recibido=${formatBogotaTimestamp(d.created_at)} texto="${snippet}"`;
+          const snippet = String(d.email_body || '').replace(/\s+/g, ' ').slice(0, 150);
+          return `borrador=${d.id.slice(0, 8)} [${d.status}] asunto="${d.email_subject}" fecha_ext=${m.deliveryDate || 'null'} recibido=${formatBogotaTimestamp(d.created_at)} texto="${snippet}"`;
         });
       focusLines.push(
         `SEDE FOCAL "${mp.company_name}" (email=${mp.email || 'N/A'}, dias_config=${JSON.stringify(mp.logistics_data?.allowed_days || mp.logistics_data?.days || [])}):\n  Pedidos recientes: ${mpOrders.join(' | ') || 'Ninguno'}\n  Borradores 48h: ${mpDrafts.join(' | ') || 'Ninguno'}`
@@ -166,47 +304,56 @@ export async function buildOrdersCopilotContext(params: {
 
   const lines: string[] = [
     `=== SNAPSHOT OPERATIVO PEDIDOS Y CORREOS (FECHA OBJETIVO: ${targetDate} - ${radar.weekdayName.toUpperCase()}) ===`,
-    `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())}`,
+    `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())} | Último borrador ingerido en Supabase (Bogotá): ${lastDraftReceivedAtBogota || 'Sin registros'}`,
     `1) PEDIDOS PARA ${targetDate}: total=${targetOrders.length} | por_estado=${JSON.stringify(byStatus)} | splits_$0=${zeroSplitCount} | sin_espacio_bodega=${missingSpacesCount}`,
-    `2) RADAR DE FRECUENCIAS ($0): habituales=${radar.summary.habitualCount} | cubiertos=${radar.summary.coveredCount} | anomalias=${radar.summary.totalAnomalies} (otra_fecha=${radar.summary.otherDateAnomalyCount}, borrador_atascado=${radar.summary.stuckDraftCount}, silencio=${radar.summary.silentMissingCount})`,
+    `2) RADAR DE FRECUENCIAS v2 (8 sem >=75%, $0): habituales=${radar.summary.habitualCount} | cubiertos=${radar.summary.coveredCount} | urgentes=${radar.summary.urgentAnomaliesCount} (otra_fecha=${radar.summary.otherDateAnomalyCount}, borrador_atascado=${radar.summary.stuckDraftCount}, vencidos_30m=${radar.summary.overdueSilentMissingCount}) | en_ventana=${radar.summary.inWindowCount}`,
   ];
 
+  if (dateDiscrepancies.length > 0) {
+    lines.push(`3) ALERTAS DETERMINÍSTICAS [DISCREPANCIA_FECHA] (${dateDiscrepancies.length}):`);
+    lines.push(...dateDiscrepancies.slice(0, 15));
+  }
+
   if (radar.anomalies.length > 0) {
-    lines.push('   DETALLE ANOMALÍAS (Top 25):');
+    lines.push('4) DETALLE ANOMALÍAS RADAR (Top 25):');
     for (const a of radar.anomalies.slice(0, 25)) {
       if (a.status === 'other_date_anomaly' && a.otherDateOrder) {
         lines.push(`   - [OTRA_FECHA] ${a.clientName}: habitual=${a.expectedReason}, pero #${a.otherDateOrder.sequenceId} quedó para ${a.otherDateOrder.deliveryDate} [${a.otherDateOrder.status}]`);
       } else if (a.status === 'stuck_draft' && a.pendingDraft) {
         lines.push(`   - [BORRADOR_PENDIENTE] ${a.clientName}: asunto="${a.pendingDraft.subject}" fecha=${a.pendingDraft.extractedDeliveryDate || 'sin_fecha'} recibido=${formatBogotaTimestamp(a.pendingDraft.createdAt)}`);
+      } else if (a.isOverdue) {
+        lines.push(`   - [FALTA_POR_PEDIR_VENCIDO] ${a.clientName}: ${a.expectedReason} | hora_habitual=${a.avgOrderTimeBogota || 'N/D'}`);
       } else {
-        lines.push(`   - [FALTA_POR_PEDIR] ${a.clientName}: ${a.expectedReason} | hora_habitual=${a.avgOrderTimeBogota || 'N/D'}`);
+        lines.push(`   - [EN_VENTANA] ${a.clientName}: ${a.expectedReason} | hora_habitual=${a.avgOrderTimeBogota || 'N/D'}`);
       }
     }
   }
 
   if (recentOtherDateOrders.length > 0) {
-    lines.push(`3) PEDIDOS CREADOS ÚLTIMAS 36H PARA OTRA FECHA (!= ${targetDate}) [Top 20]:`);
-    for (const o of recentOtherDateOrders.slice(0, 20)) {
-      const prof = profileMap.get(o.profile_id);
+    lines.push(`5) PEDIDOS CREADOS ÚLTIMAS 36H PARA OTRA FECHA (!= ${targetDate}) [Top 15]:`);
+    for (const o of recentOtherDateOrders.slice(0, 15)) {
+      const prof = profileMap.get(o.profile_id || '');
       lines.push(`   - #${o.sequence_id} | ${prof?.company_name || o.customer_name || 'Cliente'} | entrega=${o.delivery_date} | estado=${o.status} | creado=${formatBogotaTimestamp(o.created_at)} | origen=${o.origin_source}`);
     }
   }
 
-  lines.push(`4) BANDEJA CORREOS ÚLTIMAS 48H (total=${recentDrafts.length}, pendientes=${pendingDrafts.length}) [Top 20]:`);
-  for (const d of recentDrafts.slice(0, 20)) {
+  lines.push(`6) BANDEJA CORREOS ÚLTIMAS 48H (total=${recentDrafts.length}, pendientes=${pendingDrafts.length}) [Top 15]:`);
+  for (const d of recentDrafts.slice(0, 15)) {
     const m = getDraftMeta(d);
-    const snippet = String(d.email_body || '').replace(/\s+/g, ' ').slice(0, 140);
+    const snippet = String(d.email_body || '').replace(/\s+/g, ' ').slice(0, 130);
     lines.push(`   - [${d.status}] ${d.client_detected_name || d.source_email} | asunto="${d.email_subject}" | fecha_ext=${m.deliveryDate || 'null'} | recibido=${formatBogotaTimestamp(d.created_at)} | "${snippet}"`);
   }
 
   if (focusLines.length > 0) {
-    lines.push('5) FOCO DINÁMICO SOLICITADO:');
+    lines.push('7) FOCO DINÁMICO SOLICITADO:');
     lines.push(...focusLines);
   }
 
   return {
     targetDate,
     generatedAtBogota: formatBogotaTimestamp(now.toISOString()),
+    lastDraftReceivedAt,
+    lastDraftReceivedAtBogota,
     radar,
     stats: {
       ordersForTargetDate: targetOrders.length,
@@ -216,6 +363,8 @@ export async function buildOrdersCopilotContext(params: {
       recentOtherDateOrdersCount: recentOtherDateOrders.length,
       recentDraftsCount: recentDrafts.length,
       pendingDraftsCount: pendingDrafts.length,
+      dateDiscrepancyCount: dateDiscrepancies.length,
+      urgentAnomalies: radar.summary.urgentAnomaliesCount,
       totalAnomalies: radar.summary.totalAnomalies,
     },
     promptText: lines.join('\n'),

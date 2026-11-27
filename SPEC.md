@@ -18586,51 +18586,53 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Escenario 503: Bloque 2 — Motor de Frecuencias & Radar de Clientes Silenciosos ($0 / 0 Tokens) (SDD v1.9.457)
+### Escenario 503: Bloque 2 — Motor de Frecuencias & Radar de Clientes Silenciosos v2 ($0 / 0 Tokens) (SDD v1.9.458)
 - **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
 - **Archivos en Alcance:**
-  - `src/lib/orders/frequencyEngine.ts` *(nuevo helper puro)*
-  - `src/app/api/orders/frequency-radar/route.ts` *(nuevo endpoint GET)*
-  - `src/components/orders/FrequencyRadarDrawer.tsx` *(nuevo componente UI)*
+  - `src/lib/orders/frequencyEngine.ts` *(helper puro + `fetchOrdersWindowPaginated` PostgREST-safe)*
+  - `src/app/api/orders/frequency-radar/route.ts` *(endpoint GET)*
+  - `src/lib/orders/ordersCopilotContextBuilder.ts` *(consumidor de paginación + etiquetas `[FALTA_POR_PEDIR_VENCIDO]` vs `[EN_VENTANA]`)*
+  - `src/components/orders/FrequencyRadarDrawer.tsx` *(componente UI 100% informativo)*
   - `src/app/admin/orders/loading/page.tsx` *(montaje de píldora y drawer)*
-- **Alcance Contractual:**
-  1. **Motor Determinístico (`src/lib/orders/frequencyEngine.ts`):**
-     - `computeFrequencyRadar({ targetDate, profiles, recentOrders, recentDrafts })`: evalúa cada perfil B2B activo sobre ventana histórica de 56 días (8 semanas) + `logistics_data.days`/`allowed_days`.
-     - Clasifica en 4 estados de anomalía para `targetDate`:
-       - `'covered'`: ya tiene pedido en `orders` para `targetDate`.
-       - `'other_date_anomaly'`: no tiene pedido para `targetDate`, pero en las últimas 36h registró un pedido o borrador aprobado con `delivery_date !== targetDate` (ej. caso `#2312`).
-       - `'stuck_draft'`: tiene borrador en `order_drafts` (últimas 48h) en estado `'pending'` sin aprobar.
-       - `'silent_missing'`: cliente habitual para el día de la semana de `targetDate` (tasa histórica `>= 60%` o configurado en `logistics_data.days`/`allowed_days` con `>= 2` pedidos en los últimos 30 días) sin pedido ni borrador reciente, reportando su hora promedio histórica de envío.
-  2. **Endpoint Autenticado (`src/app/api/orders/frequency-radar/route.ts`):**
-     - Protegido con `verifyStaffBearer(req, supabaseAdmin)` (`401`/`403` si falla).
-     - Parámetro `?date=YYYY-MM-DD` (default fecha operativa Bogotá). Retorna `{ targetDate, weekdayName, summary, anomalies, covered }`.
-  3. **Interfaz Industrial (`src/components/orders/FrequencyRadarDrawer.tsx` + `src/app/admin/orders/loading/page.tsx`):**
-     - Píldora compacta `Radar Frecuencias` en la cabecera de `/admin/orders/loading` con contador de anomalías.
-     - Drawer lateral con pestañas (`Anomalías`, `Correo otra fecha`, `Borrador atascado`, `Faltan por pedir`, `Cubiertos`), buscador y 100% íconos `lucide-react` (cero emojis).
+- **Alcance Contractual (Calibración v2 post-Goldfish):**
+  1. **Motor Determinístico Puro (`src/lib/orders/frequencyEngine.ts`):**
+     - **Habitualidad estrictamente por histórico real:** Evalúa cada perfil B2B activo exclusivamente sobre las **8 ocurrencias previas exactas** del día `targetIsoDay` dentro de los 56 días calendario anteriores a `targetDate` (denominador fijo `totalWindowWeeks = 8`, exigiendo `historicalRatePct >= 75`, es decir `>= 6/8` semanas con al menos un pedido válido no `cancelled`/`billing_only`).
+     - **`logistics_data` estrictamente informativo:** `profiles.logistics_data.days`/`allowed_days` se conserva en `configuredInProfile: boolean` solo como dato informativo; jamás dispara habitualidad ni falsos positivos.
+     - **Plurales exactos en español:** Formateo limpio `lunes`, `martes`, `miércoles`, `jueves`, `viernes`, `sábados`, `domingos` (cero `"juevess"`/`"vierness"`).
+     - **Regla `other_date_anomaly` (`OTRA FECHA`):** Dispara únicamente si el cliente no tiene pedido para `targetDate` y en las últimas 36h registró un pedido con **`delivery_date > targetDate`** (reprogramado hacia adelante, ej. `#2312 -> 2026-11-28`; nunca por pedidos anteriores `< targetDate`).
+     - **Reloj calendario Bogotá (`isOverdue: boolean` y `avgOrderTimeMinutes: number | null`):**
+       - `targetDate <= todayBogota` ⇒ `isOverdue = true` siempre.
+       - `targetDate > tomorrowBogota` ⇒ `isOverdue = false` siempre.
+       - `targetDate === tomorrowBogota` (operación estándar `D+1`) ⇒ `isOverdue = avgOrderTimeMinutes !== null && nowBogotaMinutes >= Math.min(1439, avgOrderTimeMinutes + 30)`.
+       - `other_date_anomaly` y `stuck_draft` tienen `isOverdue = true`; `covered` tiene `isOverdue = false`.
+     - **Contadores explícitos en `FrequencyRadarResult.summary`:** `habitualCount`, `coveredCount`, `otherDateAnomalyCount`, `stuckDraftCount`, `silentMissingCount`, `overdueSilentMissingCount`, `inWindowCount`, `totalAnomalies`, y **`urgentAnomaliesCount`** (`otherDateAnomalyCount + stuckDraftCount + overdueSilentMissingCount`).
+  2. **Paginación Completa PostgREST-Safe (`fetchOrdersWindowPaginated`):**
+     - Helper compartido en `frequencyEngine.ts` que consulta `orders` por bloques `.range(from, from + 999)` ordenados por `.order('id', { ascending: true })` (excluyendo `cancelled` y `billing_only`), usado tanto por `src/app/api/orders/frequency-radar/route.ts` como por `src/lib/orders/ordersCopilotContextBuilder.ts` (eliminando el tope silencioso `.limit(2000)` / `max_rows = 1000`).
+  3. **Interfaz Estrictamente Informativa (`FrequencyRadarDrawer.tsx`) & Copiloto (`ordersCopilotContextBuilder.ts`):**
+     - La píldora en `/admin/orders/loading` muestra **`urgentAnomaliesCount`** (sin ruido de clientes `"En ventana"`).
+     - El Drawer es 100% de solo lectura (cero botones WhatsApp ni mutaciones) y distingue visualmente en `silent_missing` **`Vencido (+30m)`** vs **`En ventana`**.
+     - `ordersCopilotContextBuilder.ts` consume `fetchOrdersWindowPaginated` y distingue en el snapshot `[FALTA_POR_PEDIR_VENCIDO]` vs `[EN_VENTANA]`.
 
 ---
 
-### Escenario 504: Bloque 3 — Copiloto IA de Pedidos & Emails en Ciclo Cerrado (Patrón SECOP §62) (SDD v1.9.457)
+### Escenario 504: Bloque 3 — Copiloto IA de Pedidos & Emails en Ciclo Cerrado v2 (Patrón SECOP §62) (SDD v1.9.458)
 - **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
 - **Archivos en Alcance:**
-  - `src/lib/orders/ordersCopilotContextBuilder.ts` *(nuevo ensamblador server-side)*
-  - `src/app/api/orders/copilot/route.ts` *(nuevo endpoint POST)*
-  - `src/components/orders/OrdersAiCopilot.tsx` *(nuevo componente UI)*
+  - `src/lib/orders/ordersCopilotContextBuilder.ts` *(ensamblador server-side)*
+  - `src/app/api/orders/copilot/route.ts` *(endpoint POST)*
+  - `src/components/orders/OrdersAiCopilot.tsx` *(componente UI)*
   - `src/app/admin/orders/loading/page.tsx` *(montaje exclusivo del widget)*
-- **Alcance Contractual:**
+- **Alcance Contractual (Calibración v2 post-Goldfish):**
   1. **Ensamblador Determinista Server-Side (`src/lib/orders/ordersCopilotContextBuilder.ts`):**
-     - Lectura 100% pasiva en servidor desde Supabase (jamás acepta pedidos ni correos enviados por JSON desde el navegador, jamás lee `src/**`, cero `fetch` externos).
-     - Ensambla snapshot acotado (`< 5.000` tokens) para `targetDate`:
-       1. Pedidos del día `targetDate` agrupados por estado (`pending_approval`, `para_compra`, `picking`, `shipped`, splits `$0`, sin espacio de bodega).
-       2. Pedidos creados en últimas 36h para otras fechas (`!== targetDate`).
-       3. Borradores `order_drafts` de últimas 48h (asunto, remitente, estado, fecha extraída y extracto de 220 caracteres).
-       4. Salida del Motor de Frecuencias (`computeFrequencyRadar`).
-       5. Foco dinámico (`focusQuery`): si el usuario menciona un `#sequence_id` o nombre de cliente, adjunta sus últimos 5 pedidos, últimos 5 borradores y `logistics_data.days`.
+     - Usa `fetchOrdersWindowPaginated` (8 semanas completas paginadas con `.range()`) para paridad 1:1 con Escenario 503 v2 y emite `[FALTA_POR_PEDIR_VENCIDO]` vs `[EN_VENTANA]`.
+     - Consulta `lastDraftReceivedAt` vía `order_drafts` (`order('created_at', { ascending: false }).limit(1)`) sin tope de 48h, reportándolo como último borrador ingerido en Supabase (hora Bogotá).
+     - **Detector Determinístico `[DISCREPANCIA_FECHA]` (`0` tokens):** sobre borradores no `rejected` de las últimas 48h, omite asuntos con fecha numérica explícita (`DD/MM/YYYY` o `YYYY-MM-DD`), recorta citas `RE:`/`RV:`, aplica `resolveExplicitRelativeDeliveryDate` respetando la regla `delta === 0` de mismo día, y resuelve el pedido vinculado tanto desde `meta.orderId`/`meta.order_id` como desde `meta.attachments[*].orderId` (con fallback a consulta directa en `orders`).
+     - **Foco bajo demanda en `order_items`:** exige `#` obligatorio (`/#(\d{3,8})\b/g`), soporta consulta directa a `orders` si el `#pedido` está fuera de los 56 días o cancelado, y hace join con `products(accounting_id, name, unit_of_measure)` (tope 40 líneas por pedido, usando `#accounting_id`, jamás `SKU` ni `base_price`).
   2. **Endpoint Read-Only (`src/app/api/orders/copilot/route.ts`):**
-     - Protegido con `verifyStaffBearer(req, supabaseAdmin)`.
-     - Invoca `gemini-2.5-flash` con prompt estricto de ciclo cerrado (solo lectura, cita exacta de `#sequence_id` y `[EML-...]`, cero alucinaciones).
+     - Protegido con `verifyStaffBearer(req, supabaseAdmin)` (`if (auth.ok === false)`).
+     - Invoca `gemini-2.5-flash` (`temperature: 0.1`, `maxOutputTokens: 900`) priorizando `[DISCREPANCIA_FECHA]`, `[OTRA_FECHA]`, `[BORRADOR_PENDIENTE]` y `[FALTA_POR_PEDIR_VENCIDO]`.
   3. **Widget Flotante Exclusivo (`src/components/orders/OrdersAiCopilot.tsx`):**
-     - Montado únicamente en `src/app/admin/orders/loading/page.tsx` (`bottom-4 right-4 z-[60]`, íconos `lucide-react` sin emojis, superficie sólida industrial clara, chips de consulta rápida y micrófono opcional `Web Speech API` `es-CO` que hidrata el input sin envío automático).
+     - Montado únicamente en `src/app/admin/orders/loading/page.tsx` (`bottom-4 right-4 z-[60]`, micrófono nativo `Web Speech API` `es-CO` sin transcripción server-side) con Chip #1 `"Auditoría de cierre: ¿qué se voló o quedó en día equivocado?"`.
 
 
 ---
@@ -18666,3 +18668,60 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - CRUD `/api/transport/gps-kits` (`GET`/`POST`/`PATCH`/`DELETE`) con limpieza de `fleet_vehicles` al desactivar (`is_active = false`) o eliminar.
      - Acción atómica `assign_gps_kit` en `/api/transport/vehicles` (exige `admin.transport.edit`), bloqueando con `HTTP 409 Conflict` si el vehículo destino tiene GPS fijo (`gps_imei != null && gps_kit_id == null`), liberando el kit de cualquier vehículo previo y limpiando su `last_gps_sync` si venía de `hardware_gps`.
      - UI: gestión de kits en `FleetManagement.tsx` y selector rápido de 1 clic en Monitor Global (`admin/transport/page.tsx`).
+
+
+---
+
+### Escenario 500: Soberanía Horaria `America/Bogota` (UTC-5) y Blindaje Dual-TZ (SDD)
+- **Estado del Contrato:** `🟡 FASE 0 FUNDACIÓN IMPLEMENTADA (EN EJECUCIÓN POR DOMINIOS)`
+- **Archivos Fundación:**
+  - `src/lib/dateUtils.ts`
+  - `scripts/audit-bogota-dates.mjs`
+  - `.agents/AGENTS.md` (Regla 7)
+- **Alcance Contractual:**
+  1. **Núcleo Soberano (`src/lib/dateUtils.ts`):**
+     - `getBogotaDateString(input?: Date | string): string` — retorna `'YYYY-MM-DD'` en `America/Bogota` (`UTC-5`); retorna sin desplazamiento las cadenas date-only `'YYYY-MM-DD'`.
+     - `parseBogotaDate(dateStr: string): Date` — ancla `'YYYY-MM-DD'` al mediodía local (`12:00:00.000`) para evitar desplazamientos `-1 día` en Colombia o UTC; parsea timestamps completos de forma segura.
+     - `formatBogotaDate(input?: Date | string | null, options?: Intl.DateTimeFormatOptions, fallback?: string): string` — retorna `fallback ?? '---'` si es nulo/vacío/inválido; ancla `'YYYY-MM-DD'` en `Date.UTC(y, m - 1, d, 12, 0, 0)` con `timeZone: 'America/Bogota'` y locale `'es-CO'`.
+     - `addBogotaDays(dateStr: string, days: number): string` — suma/resta días calendario enteros con aritmética UTC al mediodía.
+     - `getBogotaDayRangeUtcIso(dateStr: string): { startUtcIso: string; endUtcIso: string }` — preserva rango exacto `T00:00:00.000-05:00` a `T23:59:59.999-05:00`.
+     - `diffBogotaDays(fromDateStr: string, toDateStr: string): number` — diferencia entera exacta (`to - from`) en calendario Bogotá.
+  2. **Auditoría Automatizada (`scripts/audit-bogota-dates.mjs`):**
+     - `--test`: ejecuta aserciones deterministas bajo procesos hijos `TZ=UTC` y `TZ=America/Bogota`.
+     - Modo escaneo por defecto (soporta lista de rutas opcional y `--json`): detecta violaciones Clases A1, A2, B1, B2 y C en `src/`, excluyendo `src/lib/dateUtils.ts`, `src/lib/orders/bogotaDateParser.ts` y las 3 líneas UTC legítimas verificadas (`src/app/api/orders/resolve-agreement-pricing/route.ts:240`, `src/app/ops/driver/page.tsx:125`, `src/lib/telemetry/apps360.ts:103`).
+  3. **Gobernanza Poka-Yoke:** Regla 7 en `.agents/AGENTS.md` prohíbe patrones crudos UTC/local y exige `@/lib/dateUtils`.
+
+
+---
+
+### Escenario 503: Optimización Quirúrgica de Disk IO Supabase, Erradicación de Error 42703 (`tax_rate`), Estabilidad de Auth y Cron Purga GPS (SDD v1.9.458)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`verify-db-perf-503.mjs\` EXIT 0; 0 errores TS en archivos del Escenario 503)`
+- **Archivos en Alcance (libres de `READ-ONLY LOCK`):**
+  - `src/lib/data.ts`
+  - `src/app/api/products/sync-prices/route.ts`
+  - `src/app/api/commercial/cost-matrix/bulk-import/route.ts`
+  - `src/app/api/commercial/cost-matrix/sync-product/route.ts`
+  - `src/components/CommercialUnifiedDashboard.tsx`
+  - `src/lib/authContext.tsx`
+  - `src/app/login/page.tsx`
+  - `src/app/api/cron/purge-gps-logs/route.ts`
+  - `vercel.json`
+  - `scripts/verify-db-perf-503.mjs` (nuevo, 100% read-only)
+- **Alcance Contractual:**
+  1. **Filtrado Estricto de `getAppSettings()` (`src/lib/data.ts`):**
+     - Exportar lista cerrada `PUBLIC_APP_SETTINGS_KEYS` (15 claves exactas verificadas en `layout.tsx`, `page.tsx`, `ProductGridContainer.tsx` y `api/storefront/products/route.ts`):
+       `['friogan_storefront_mode', 'store_status', 'cutoff_hour_public', 'min_order_hogar', 'delivery_fee', 'store_vacation_config', 'global_banner', 'global_banner_en', 'contact_phone', 'enable_b2b_lead_capture', 'app_logo_url', 'hero_image_url', 'home_catalog_title', 'home_featured_title', 'scarcity_locked_skus']`.
+     - Filtrar `getAppSettingsCached` con `.in('key', [...PUBLIC_APP_SETTINGS_KEYS])`, reduciendo el payload público de `~1.3 MB` a `< 4 KB` y cerrando exposición `anon` de borradores/historiales internos.
+  2. **Caché de Catálogo & Invalidación por Tag (`src/lib/data.ts` + Endpoints de Precios):**
+     - Elevar `revalidate` de `getVisibleProductsCached` y `getWebCategories` de `60` a `900` segundos (15 min), manteniendo `tags: ['products']`.
+     - Invocar `revalidateTag('products', 'max')` (o firma nativa del proyecto) en `sync-prices/route.ts`, `cost-matrix/bulk-import/route.ts` y `cost-matrix/sync-product/route.ts`.
+  3. **Corrección Error SQL `42703` (`src/components/CommercialUnifiedDashboard.tsx`):**
+     - Reemplazar `products(..., tax_rate)` por `products(..., iva_rate)` en `L648` y `it.products?.tax_rate` por `it.products?.iva_rate` en `L3711`.
+  4. **Estabilidad de Auth (`src/lib/authContext.tsx` + `src/app/login/page.tsx`):**
+     - Deduplicar `fetchProfile` por `activeProfileId` usando `loadedProfileIdRef` e `inFlightProfileRef` (`Map<string, Promise<void>>`), asignando `loadedProfileIdRef.current` exclusivamente tras respuesta exitosa de BD (nunca desde `localStorage`) y limpiando ambos refs en `signOut`, `SIGNED_OUT` e `is_active === false`.
+     - Elevar **ambos** timeouts de `6000 ms` (`L86` y `L208`) a `12000 ms` en `authContext.tsx`, y `safetyTimeout` de `10000 ms` a `15000 ms` en `login/page.tsx:412`.
+  5. **Purga Nocturna GPS Blindada (`src/app/api/cron/purge-gps-logs/route.ts` + `vercel.json`):**
+     - Usar `createAdminClient()` para atravesar RLS de `vehicle_gps_logs`, agregar guarda `isSandboxMode()` y autorización estricta (`x-vercel-cron` / `CRON_SECRET` / `SUPABASE_SERVICE_ROLE_KEY`).
+     - Registrar `/api/cron/purge-gps-logs` en `vercel.json` (`30 5 * * *` = 12:30 AM COT).
+  6. **Verificación Read-Only (`scripts/verify-db-perf-503.mjs`):**
+     - Medir KB y latencia de `app_settings` sin filtrar vs. filtrada, verificar `HTTP 200` en la consulta con `iva_rate` y medir `/auth/v1/health`, `profiles` y `products`.

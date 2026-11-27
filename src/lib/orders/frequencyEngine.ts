@@ -1,9 +1,11 @@
 /**
- * Deterministic ($0 / 0-token) B2B Order Frequency & Silent-Client Anomaly Engine.
- * Crosses historical orders (56d), profile logistics_data.days/allowed_days, and recent order_drafts (48h).
+ * Deterministic ($0 / 0-token) B2B Order Frequency & Silent-Client Anomaly Engine (v2).
+ * Uses strictly paginated 8-week (56d) historical orders (>= 75%, i.e., >= 6/8 prior occurrences),
+ * forward-only other_date_anomaly (delivery_date > targetDate), and Bogotá +30m overdue clock.
  */
 
-import { getBogotaWeekdayLong } from './bogotaDateParser';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getBogotaDateStr, getBogotaWeekdayLong } from './bogotaDateParser';
 
 export type FrequencyAnomalyStatus =
   | 'covered'
@@ -25,11 +27,16 @@ export interface FrequencyRadarOrderInput {
   id: string;
   sequence_id?: number | null;
   profile_id?: string | null;
+  customer_name?: string | null;
   status?: string | null;
   delivery_date?: string | null;
   created_at?: string | null;
   total?: number | null;
+  total_weight_kg?: number | null;
   origin_source?: string | null;
+  purchase_order_number?: string | null;
+  warehouse_spaces?: any[] | null;
+  logistics_data?: Record<string, any> | null;
 }
 
 export interface FrequencyRadarDraftInput {
@@ -48,11 +55,13 @@ export interface FrequencyRadarEntry {
   clientName: string;
   email: string | null;
   status: FrequencyAnomalyStatus;
+  isOverdue: boolean;
   expectedReason: string;
   historicalHits: number;
   historicalWeeks: number;
   historicalRatePct: number;
   configuredInProfile: boolean;
+  avgOrderTimeMinutes: number | null;
   avgOrderTimeBogota: string | null;
   targetOrder?: {
     id: string;
@@ -85,7 +94,10 @@ export interface FrequencyRadarResult {
     otherDateAnomalyCount: number;
     stuckDraftCount: number;
     silentMissingCount: number;
+    overdueSilentMissingCount: number;
+    inWindowCount: number;
     totalAnomalies: number;
+    urgentAnomaliesCount: number;
   };
   anomalies: FrequencyRadarEntry[];
   covered: FrequencyRadarEntry[];
@@ -93,11 +105,60 @@ export interface FrequencyRadarResult {
 
 const EXCLUDED_ORDER_STATUSES = new Set(['cancelled', 'billing_only']);
 
+const WEEKDAY_PLURALS: Record<number, string> = {
+  1: 'lunes',
+  2: 'martes',
+  3: 'miércoles',
+  4: 'jueves',
+  5: 'viernes',
+  6: 'sábados',
+  7: 'domingos',
+};
+
+/**
+ * PostgREST-safe paginated fetcher for orders in [startDate, ...],
+ * ordered deterministically by `id ASC` to bypass max_rows=1000 truncation.
+ */
+export async function fetchOrdersWindowPaginated(
+  supabaseAdmin: SupabaseClient,
+  startDate: string,
+  selectColumns = 'id, sequence_id, profile_id, status, delivery_date, created_at, total, origin_source'
+): Promise<FrequencyRadarOrderInput[]> {
+  const PAGE_SIZE = 1000;
+  const allRows: FrequencyRadarOrderInput[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select(selectColumns)
+      .gte('delivery_date', startDate)
+      .not('status', 'in', '(cancelled,billing_only)')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const rows = (data || []) as unknown as FrequencyRadarOrderInput[];
+    allRows.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+    if (from >= 20000) break;
+  }
+
+  return allRows;
+}
+
 function getIsoDayFromDateStr(dateStr: string): number {
   const d = new Date(`${dateStr}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return 1;
   const jsDay = d.getUTCDay();
   return jsDay === 0 ? 7 : jsDay;
+}
+
+function addDaysToDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
 }
 
 function normalizeAllowedIsoDays(logisticsData: Record<string, any> | null | undefined): number[] {
@@ -113,15 +174,6 @@ function normalizeAllowedIsoDays(logisticsData: Record<string, any> | null | und
       .filter((d: number) => d >= 1 && d <= 7);
   }
   return [];
-}
-
-function getIsoWeekKey(dateStr: string): string {
-  const d = new Date(`${dateStr}T12:00:00Z`);
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
 function getBogotaMinutesOfDay(isoTimestamp: string): number | null {
@@ -159,17 +211,32 @@ export function computeFrequencyRadar(params: {
   const { targetDate, profiles, recentOrders, recentDrafts, now = new Date() } = params;
   const targetIsoDay = getIsoDayFromDateStr(targetDate);
   const weekdayName = getBogotaWeekdayLong(targetDate);
+  const weekdayPlural = WEEKDAY_PLURALS[targetIsoDay] || weekdayName;
 
-  // Build 8 distinct weeks window strictly BEFORE targetDate
-  const targetMs = new Date(`${targetDate}T12:00:00Z`).getTime();
+  const todayBogota = getBogotaDateStr(now);
+  const tomorrowBogota = addDaysToDateStr(todayBogota, 1);
+  const nowBogotaMinutes = getBogotaMinutesOfDay(now.toISOString()) ?? 0;
+
+  // Up to 8 prior occurrences of targetIsoDay (-7d, -14d, ..., -56d),
+  // using only dates where the system already has operational orders (handles <8w history cleanly).
+  const expectedPriorDates = new Set<string>();
+  for (let w = 1; w <= 8; w++) {
+    expectedPriorDates.add(addDaysToDateStr(targetDate, -7 * w));
+  }
+  const activePriorDates = new Set<string>();
+  for (const o of recentOrders || []) {
+    if (!o.delivery_date || EXCLUDED_ORDER_STATUSES.has(String(o.status || '').toLowerCase())) continue;
+    const dStr = String(o.delivery_date).slice(0, 10);
+    if (expectedPriorDates.has(dStr)) activePriorDates.add(dStr);
+  }
+  const totalWindowWeeks = Math.max(2, activePriorDates.size);
+
   const cutoff36hMs = now.getTime() - 36 * 3600 * 1000;
-  const cutoff30dMs = targetMs - 30 * 86400 * 1000;
 
   const validOrders = (recentOrders || []).filter(
     o => o.profile_id && o.delivery_date && !EXCLUDED_ORDER_STATUSES.has(String(o.status || '').toLowerCase())
   );
 
-  // Index orders by profile
   const ordersByProfile = new Map<string, FrequencyRadarOrderInput[]>();
   for (const o of validOrders) {
     const pid = String(o.profile_id);
@@ -177,7 +244,6 @@ export function computeFrequencyRadar(params: {
     ordersByProfile.get(pid)!.push(o);
   }
 
-  // Index recent drafts (last 48h) by profile
   const draftsByProfile = new Map<string, FrequencyRadarDraftInput[]>();
   for (const d of recentDrafts || []) {
     if (!d.profile_id) continue;
@@ -185,16 +251,6 @@ export function computeFrequencyRadar(params: {
     if (!draftsByProfile.has(pid)) draftsByProfile.set(pid, []);
     draftsByProfile.get(pid)!.push(d);
   }
-
-  // Determine how many distinct historical weeks exist in the dataset before targetDate
-  const allHistWeeks = new Set<string>();
-  for (const o of validOrders) {
-    const dStr = String(o.delivery_date).slice(0, 10);
-    if (dStr < targetDate) {
-      allHistWeeks.add(getIsoWeekKey(dStr));
-    }
-  }
-  const totalWindowWeeks = Math.max(1, Math.min(8, allHistWeeks.size || 6));
 
   const anomalies: FrequencyRadarEntry[] = [];
   const covered: FrequencyRadarEntry[] = [];
@@ -210,19 +266,13 @@ export function computeFrequencyRadar(params: {
     const allowedIsoDays = normalizeAllowedIsoDays(p.logistics_data);
     const configuredInProfile = allowedIsoDays.includes(targetIsoDay);
 
-    // Historical orders before targetDate
-    const histWeekdayWeeks = new Set<string>();
+    const matchedPriorDates = new Set<string>();
     const weekdaySubmitMinutes: number[] = [];
-    let ordersLast30d = 0;
 
     for (const o of pOrders) {
       const dStr = String(o.delivery_date).slice(0, 10);
-      const oMs = new Date(`${dStr}T12:00:00Z`).getTime();
-      if (oMs >= cutoff30dMs && dStr < targetDate) {
-        ordersLast30d++;
-      }
-      if (dStr < targetDate && getIsoDayFromDateStr(dStr) === targetIsoDay) {
-        histWeekdayWeeks.add(getIsoWeekKey(dStr));
+      if (expectedPriorDates.has(dStr)) {
+        matchedPriorDates.add(dStr);
         if (o.created_at) {
           const mins = getBogotaMinutesOfDay(o.created_at);
           if (mins !== null) weekdaySubmitMinutes.push(mins);
@@ -230,31 +280,24 @@ export function computeFrequencyRadar(params: {
       }
     }
 
-    const historicalHits = histWeekdayWeeks.size;
+    const historicalHits = matchedPriorDates.size;
     const historicalRatePct = Math.round((historicalHits / totalWindowWeeks) * 100);
+    const minRequiredHits = totalWindowWeeks >= 6 ? Math.ceil(totalWindowWeeks * 0.75) : Math.max(2, totalWindowWeeks - 1);
 
-    // Habitual criterion: >= 50% of weeks (min 2 hits) OR configured in profile with >= 2 orders in last 30d
-    const isHabitual =
-      (historicalHits >= 2 && historicalRatePct >= 50) ||
-      (configuredInProfile && ordersLast30d >= 2);
+    // Strict historical habituality: >= 75% on 6-8w (e.g. 6/8), or (N-1)/N on shorter history (e.g. 2/3, 3/4).
+    if (historicalHits < minRequiredHits) continue;
 
-    if (!isHabitual) continue;
-
-    const avgOrderTimeBogota =
+    const avgOrderTimeMinutes =
       weekdaySubmitMinutes.length > 0
-        ? formatMinutesAs12h(
-            Math.round(weekdaySubmitMinutes.reduce((a, b) => a + b, 0) / weekdaySubmitMinutes.length)
-          )
+        ? Math.round(weekdaySubmitMinutes.reduce((a, b) => a + b, 0) / weekdaySubmitMinutes.length)
         : null;
+    const avgOrderTimeBogota =
+      avgOrderTimeMinutes !== null ? formatMinutesAs12h(avgOrderTimeMinutes) : null;
 
     const clientName = p.company_name || p.contact_name || 'Cliente B2B';
-    const expectedReason = configuredInProfile && historicalHits >= 2
-      ? `${historicalHits}/${totalWindowWeeks} ${weekdayName}s + Ficha`
-      : configuredInProfile
-      ? `Ficha logística (${weekdayName})`
-      : `${historicalHits}/${totalWindowWeeks} ${weekdayName}s (${historicalRatePct}%)`;
+    const expectedReason = `${historicalHits}/${totalWindowWeeks} ${weekdayPlural} (${historicalRatePct}%)`;
 
-    // 1. Check if covered on targetDate
+    // 1. Covered on targetDate
     const targetOrder = pOrders.find(o => String(o.delivery_date).slice(0, 10) === targetDate);
     if (targetOrder) {
       covered.push({
@@ -262,11 +305,13 @@ export function computeFrequencyRadar(params: {
         clientName,
         email: p.email || null,
         status: 'covered',
+        isOverdue: false,
         expectedReason,
         historicalHits,
         historicalWeeks: totalWindowWeeks,
         historicalRatePct,
         configuredInProfile,
+        avgOrderTimeMinutes,
         avgOrderTimeBogota,
         targetOrder: {
           id: targetOrder.id,
@@ -278,12 +323,12 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 2. Check if an order was created in the last 36h for a DIFFERENT delivery_date (e.g. #2312)
+    // 2. Forward-only other_date_anomaly: created in last 36h with delivery_date > targetDate
     const otherDateOrder = pOrders
       .filter(o => {
         const dStr = String(o.delivery_date).slice(0, 10);
         const crMs = o.created_at ? new Date(o.created_at).getTime() : 0;
-        return dStr !== targetDate && crMs >= cutoff36hMs;
+        return dStr > targetDate && crMs >= cutoff36hMs;
       })
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
 
@@ -293,11 +338,13 @@ export function computeFrequencyRadar(params: {
         clientName,
         email: p.email || null,
         status: 'other_date_anomaly',
+        isOverdue: true,
         expectedReason,
         historicalHits,
         historicalWeeks: totalWindowWeeks,
         historicalRatePct,
         configuredInProfile,
+        avgOrderTimeMinutes,
         avgOrderTimeBogota,
         otherDateOrder: {
           id: otherDateOrder.id,
@@ -310,7 +357,7 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 3. Check if there is an unapproved pending draft in order_drafts
+    // 3. Pending unapproved draft in last 48h
     const pendingDraft = pDrafts
       .filter(d => String(d.status || '').toLowerCase() === 'pending')
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
@@ -321,11 +368,13 @@ export function computeFrequencyRadar(params: {
         clientName,
         email: p.email || null,
         status: 'stuck_draft',
+        isOverdue: true,
         expectedReason,
         historicalHits,
         historicalWeeks: totalWindowWeeks,
         historicalRatePct,
         configuredInProfile,
+        avgOrderTimeMinutes,
         avgOrderTimeBogota,
         pendingDraft: {
           id: pendingDraft.id,
@@ -337,29 +386,43 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 4. Silent missing
+    // 4. Silent missing with formal Bogotá calendar clock (+30 min grace)
+    let isOverdue = false;
+    if (targetDate <= todayBogota) {
+      isOverdue = true;
+    } else if (targetDate > tomorrowBogota) {
+      isOverdue = false;
+    } else {
+      isOverdue =
+        avgOrderTimeMinutes !== null &&
+        nowBogotaMinutes >= Math.min(1439, avgOrderTimeMinutes + 30);
+    }
+
     anomalies.push({
       profileId: pid,
       clientName,
       email: p.email || null,
       status: 'silent_missing',
+      isOverdue,
       expectedReason,
       historicalHits,
       historicalWeeks: totalWindowWeeks,
       historicalRatePct,
       configuredInProfile,
+      avgOrderTimeMinutes,
       avgOrderTimeBogota,
     });
   }
 
-  const priorityRank: Record<FrequencyAnomalyStatus, number> = {
-    other_date_anomaly: 1,
-    stuck_draft: 2,
-    silent_missing: 3,
-    covered: 4,
+  const priorityRank = (e: FrequencyRadarEntry): number => {
+    if (e.status === 'other_date_anomaly') return 1;
+    if (e.status === 'stuck_draft') return 2;
+    if (e.status === 'silent_missing' && e.isOverdue) return 3;
+    if (e.status === 'silent_missing') return 4;
+    return 5;
   };
   anomalies.sort((a, b) => {
-    const diff = priorityRank[a.status] - priorityRank[b.status];
+    const diff = priorityRank(a) - priorityRank(b);
     if (diff !== 0) return diff;
     return b.historicalHits - a.historicalHits;
   });
@@ -367,6 +430,13 @@ export function computeFrequencyRadar(params: {
   const otherDateAnomalyCount = anomalies.filter(a => a.status === 'other_date_anomaly').length;
   const stuckDraftCount = anomalies.filter(a => a.status === 'stuck_draft').length;
   const silentMissingCount = anomalies.filter(a => a.status === 'silent_missing').length;
+  const overdueSilentMissingCount = anomalies.filter(
+    a => a.status === 'silent_missing' && a.isOverdue
+  ).length;
+  const inWindowCount = anomalies.filter(
+    a => a.status === 'silent_missing' && !a.isOverdue
+  ).length;
+  const urgentAnomaliesCount = otherDateAnomalyCount + stuckDraftCount + overdueSilentMissingCount;
 
   return {
     targetDate,
@@ -378,7 +448,10 @@ export function computeFrequencyRadar(params: {
       otherDateAnomalyCount,
       stuckDraftCount,
       silentMissingCount,
+      overdueSilentMissingCount,
+      inWindowCount,
       totalAnomalies: anomalies.length,
+      urgentAnomaliesCount,
     },
     anomalies,
     covered,

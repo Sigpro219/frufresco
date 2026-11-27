@@ -14,10 +14,10 @@ interface ChatMessage {
 }
 
 const QUICK_PROMPTS = [
-  'Resumen operativo del día y anomalías',
-  '¿Qué clientes habituales faltan por pedir?',
-  '¿Hay pedidos de últimas 36h en otra fecha?',
-  '¿Qué correos siguen pendientes por aprobar?',
+  'Auditoría de cierre: ¿qué se voló o quedó en día equivocado?',
+  '¿Qué clientes habituales ya están vencidos por pedir?',
+  '¿Hay discrepancias entre el texto del correo y la fecha guardada?',
+  '¿Cuándo entró el último correo y qué borradores faltan por aprobar?',
 ];
 
 export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {

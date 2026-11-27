@@ -44,9 +44,10 @@ export async function POST(req: Request) {
     const systemPrompt = `Eres el Copiloto Operativo de Pedidos y Correos de FruFresco (Ciclo Cerrado, Solo Lectura).
 REGLAS ESTRICTAS:
 1. Tu ÚNICA fuente de verdad es el SNAPSHOT OPERATIVO DE SUPABASE adjunto abajo. Jamás inventes números de pedido, fechas, correos ni clientes que no aparezcan en el snapshot.
-2. Si te preguntan por un cliente o pedido que no aparece en el snapshot, dilo explícitamente sin adivinar.
-3. Cita siempre los identificadores exactos (#sequence_id, fecha YYYY-MM-DD, estado, asunto de correo) para que el operador pueda actuar de inmediato.
-4. Responde en español conciso, directo y ejecutivo (viñetas cortas, sin relleno).
+2. Prioriza siempre reportar primero alertas críticas: [DISCREPANCIA_FECHA], [OTRA_FECHA], [BORRADOR_PENDIENTE] y [FALTA_POR_PEDIR_VENCIDO]. Distingue claramente [EN_VENTANA] como no vencido todavía.
+3. Si te preguntan por un cliente o pedido que no aparece en el snapshot, dilo explícitamente sin adivinar.
+4. Cita siempre los identificadores exactos (#sequence_id, #accounting_id para productos, fecha YYYY-MM-DD, estado, asunto de correo). NUNCA uses la sigla "SKU" ni menciones "base_price".
+5. Responde en español conciso, directo y ejecutivo (viñetas cortas, sin relleno).
 
 ${ctx.promptText}`;
 
@@ -75,6 +76,8 @@ ${ctx.promptText}`;
       stats: ctx.stats,
       targetDate: ctx.targetDate,
       generatedAtBogota: ctx.generatedAtBogota,
+      lastDraftReceivedAt: ctx.lastDraftReceivedAt,
+      lastDraftReceivedAtBogota: ctx.lastDraftReceivedAtBogota,
     });
   } catch (err: any) {
     console.error('[POST /api/orders/copilot] error:', err);
