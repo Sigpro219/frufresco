@@ -1,10 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 import {
   computeFrequencyRadar,
   fetchOrdersWindowPaginated,
+  type DraftExtractedItemLike,
+  type FrequencyRadarDraftInput,
+  type FrequencyRadarOrderInput,
+  type FrequencyRadarProfileInput,
   type FrequencyRadarResult,
 } from './frequencyEngine';
-import { getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from './bogotaDateParser';
+import {
+  hasExplicitNumericDate,
+  resolveExplicitRelativeDeliveryDate,
+  stripQuotedEmailHistory,
+} from './bogotaDateParser';
 
 export interface OrdersCopilotContext {
   targetDate: string;
@@ -27,6 +36,26 @@ export interface OrdersCopilotContext {
   promptText: string;
 }
 
+interface CopilotDraftRow extends FrequencyRadarDraftInput {
+  email_body?: string | null;
+  order_id?: string | null;
+}
+
+interface JoinedProductRef {
+  accounting_id?: number | null;
+  name?: string | null;
+  unit_of_measure?: string | null;
+}
+
+interface OrderItemJoinRow {
+  quantity: number;
+  unit: string | null;
+  unit_price: number;
+  variant_label: string | null;
+  nickname: string | null;
+  products: JoinedProductRef | JoinedProductRef[] | null;
+}
+
 function formatBogotaTimestamp(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -41,41 +70,92 @@ function formatBogotaTimestamp(iso: string | null | undefined): string {
   });
 }
 
-function getDraftMeta(draft: any): Record<string, any> {
-  const items = Array.isArray(draft?.extracted_items) ? draft.extracted_items : [];
-  return items.find((i: any) => i && i.isMetadata) || {};
+function getDraftMeta(draft: CopilotDraftRow): DraftExtractedItemLike {
+  const items = Array.isArray(draft.extracted_items) ? draft.extracted_items : [];
+  return items.find(i => Boolean(i && i.isMetadata)) || {};
 }
 
-function resolveDraftOrderId(draft: any, meta: Record<string, any>): string | null {
-  if (meta?.orderId) return String(meta.orderId);
-  if (meta?.order_id) return String(meta.order_id);
-  if (Array.isArray(meta?.attachments)) {
+function resolveDraftOrderId(draft: CopilotDraftRow, meta: DraftExtractedItemLike): string | null {
+  if (meta.orderId) return String(meta.orderId);
+  if (meta.order_id) return String(meta.order_id);
+  if (Array.isArray(meta.attachments)) {
     for (const att of meta.attachments) {
       if (att?.orderId) return String(att.orderId);
       if (att?.order_id) return String(att.order_id);
     }
   }
-  return draft?.order_id ? String(draft.order_id) : null;
+  return draft.order_id ? String(draft.order_id) : null;
 }
 
-function stripQuotedEmailHistory(body: string): string {
-  if (!body) return '';
-  const cutMarkers = [
-    /\r?\n-{2,}\s*(?:Mensaje reenviado|Forwarded message|Original Message)\s*-{2,}/i,
-    /\r?\n(?:De|From):\s*[^\r\n]+\r?\n(?:Enviado|Sent|Date):/i,
-    /\r?\nEl\s+\d{1,2}\/\d{1,2}\/\d{2,4}.*escribi[oó]:/i,
-  ];
-  let clean = body;
-  for (const rx of cutMarkers) {
-    const idx = clean.search(rx);
-    if (idx > 0) clean = clean.slice(0, idx);
+function compareOrdersDesc(a: FrequencyRadarOrderInput, b: FrequencyRadarOrderInput): number {
+  const dA = String(a.delivery_date || '').slice(0, 10);
+  const dB = String(b.delivery_date || '').slice(0, 10);
+  if (dA !== dB) return dB.localeCompare(dA);
+  return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+}
+
+export interface DraftDateDiscrepancy {
+  draftId: string;
+  clientLabel: string;
+  orderTag: string;
+  subject: string;
+  matchedPhrase: string;
+  expectedDate: string;
+  savedDate: string;
+}
+
+/**
+ * Pure deterministic [DISCREPANCIA_FECHA] detector shared by context builder and unit tests.
+ */
+export function detectDraftDateDiscrepancies(params: {
+  recentDrafts: CopilotDraftRow[];
+  ordersById: Map<string, FrequencyRadarOrderInput>;
+  now?: Date;
+}): DraftDateDiscrepancy[] {
+  const { recentDrafts, ordersById, now = new Date() } = params;
+  const out: DraftDateDiscrepancy[] = [];
+
+  for (const d of recentDrafts) {
+    if (String(d.status || '').toLowerCase() === 'rejected') continue;
+    const subject = String(d.email_subject || '');
+    const cleanBodyFirstBlock = stripQuotedEmailHistory(String(d.email_body || ''));
+    if (hasExplicitNumericDate(subject) || hasExplicitNumericDate(cleanBodyFirstBlock)) continue;
+
+    const refDate = d.created_at ? new Date(d.created_at) : now;
+    const rel = resolveExplicitRelativeDeliveryDate(`${subject}\n${cleanBodyFirstBlock}`, refDate);
+    if (!rel) continue;
+
+    const explicitSameDay = /\b(para\s+hoy|entrega\s+hoy|mismo\s+d[ií]a|hoy\s+mismo|despacho\s+hoy)\b/i.test(
+      `${subject}\n${cleanBodyFirstBlock}`
+    );
+    if (rel.isSameDay && !explicitSameDay) continue;
+
+    const meta = getDraftMeta(d);
+    const linkedOrderId = resolveDraftOrderId(d, meta);
+    const linkedOrder = linkedOrderId ? ordersById.get(linkedOrderId) : undefined;
+    const savedDate = linkedOrder?.delivery_date
+      ? String(linkedOrder.delivery_date).slice(0, 10)
+      : meta.deliveryDate
+      ? String(meta.deliveryDate).slice(0, 10)
+      : null;
+
+    if (savedDate && savedDate !== rel.date) {
+      const orderTag = linkedOrder
+        ? `Pedido #${linkedOrder.sequence_id} [${linkedOrder.status}]`
+        : `Borrador [${d.status}]`;
+      out.push({
+        draftId: d.id,
+        clientLabel: d.client_detected_name || d.source_email || 'Cliente',
+        orderTag,
+        subject,
+        matchedPhrase: rel.matchedPhrase,
+        expectedDate: rel.date,
+        savedDate,
+      });
+    }
   }
-  return clean;
-}
 
-function hasExplicitNumericDate(text: string): boolean {
-  if (!text) return false;
-  return /\b(?:\d{2}[\/-]\d{2}[\/-]\d{4}|\d{4}[\/-]\d{2}[\/-]\d{2})\b/.test(text);
+  return out;
 }
 
 /**
@@ -92,11 +172,9 @@ export async function buildOrdersCopilotContext(params: {
   const targetDate =
     params.targetDate && /^\d{4}-\d{2}-\d{2}$/.test(params.targetDate)
       ? params.targetDate
-      : getBogotaDateStr(now);
+      : getBogotaDateString(now);
 
-  const histStart = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 56 * 86400 * 1000)
-    .toISOString()
-    .split('T')[0];
+  const histStart = addBogotaDays(targetDate, -56);
   const cutoff48hIso = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
   const cutoff36hIso = new Date(now.getTime() - 36 * 3600 * 1000).toISOString();
 
@@ -125,12 +203,12 @@ export async function buildOrdersCopilotContext(params: {
       .maybeSingle(),
   ]);
 
-  const profiles = profilesRes.data || [];
-  const recentDrafts = draftsRes.data || [];
-  const profileMap = new Map(profiles.map((p: any) => [p.id, p]));
-  const ordersById = new Map(allOrders.map(o => [o.id, o]));
+  const profiles = (profilesRes.data || []) as FrequencyRadarProfileInput[];
+  const recentDrafts = (draftsRes.data || []) as CopilotDraftRow[];
+  const profileMap = new Map<string, FrequencyRadarProfileInput>(profiles.map(p => [p.id, p]));
+  const ordersById = new Map<string, FrequencyRadarOrderInput>(allOrders.map(o => [o.id, o]));
 
-  const lastDraftReceivedAt = latestDraftRes.data?.created_at || null;
+  const lastDraftReceivedAt: string | null = latestDraftRes.data?.created_at || null;
   const lastDraftReceivedAtBogota = lastDraftReceivedAt ? formatBogotaTimestamp(lastDraftReceivedAt) : null;
 
   const radar = computeFrequencyRadar({
@@ -155,80 +233,44 @@ export async function buildOrdersCopilotContext(params: {
     if (!Array.isArray(o.warehouse_spaces) || o.warehouse_spaces.length === 0) missingSpacesCount++;
   }
 
-  const recentOtherDateOrders = allOrders.filter(
-    o =>
-      (o.created_at || '') >= cutoff36hIso &&
-      String(o.delivery_date || '').slice(0, 10) !== targetDate
-  );
+  const recentOtherDateOrders = allOrders
+    .filter(
+      o =>
+        (o.created_at || '') >= cutoff36hIso &&
+        String(o.delivery_date || '').slice(0, 10) !== targetDate
+    )
+    .sort(compareOrdersDesc);
 
-  const pendingDrafts = recentDrafts.filter((d: any) => String(d.status || '').toLowerCase() === 'pending');
+  const pendingDrafts = recentDrafts.filter(d => String(d.status || '').toLowerCase() === 'pending');
 
-  // Deterministic [DISCREPANCIA_FECHA] detector (0 tokens)
-  const dateDiscrepancies: string[] = [];
+  // Preload linked orderIds missing from allOrders (e.g. cancelled or outside 56d)
   const missingOrderIdsToFetch: string[] = [];
-  const draftDiscrepancyCandidates: Array<{
-    draft: any;
-    meta: Record<string, any>;
-    expectedDate: string;
-    matchedPhrase: string;
-    linkedOrderId: string | null;
-  }> = [];
-
   for (const d of recentDrafts) {
     if (String(d.status || '').toLowerCase() === 'rejected') continue;
-    const subject = String(d.email_subject || '');
-    if (hasExplicitNumericDate(subject)) continue;
-
-    const cleanBodyFirstBlock = stripQuotedEmailHistory(String(d.email_body || ''));
-    const refDate = d.created_at ? new Date(d.created_at) : now;
-    const rel = resolveExplicitRelativeDeliveryDate(`${subject}\n${cleanBodyFirstBlock}`, refDate);
-    if (!rel) continue;
-
-    // Respect delta===0 same-day rule
-    const explicitSameDay = /\b(para\s+hoy|entrega\s+hoy|mismo\s+d[ií]a|hoy\s+mismo|despacho\s+hoy)\b/i.test(
-      `${subject}\n${cleanBodyFirstBlock}`
-    );
-    if (rel.isSameDay && !explicitSameDay) continue;
-
     const meta = getDraftMeta(d);
     const linkedOrderId = resolveDraftOrderId(d, meta);
     if (linkedOrderId && !ordersById.has(linkedOrderId)) {
       missingOrderIdsToFetch.push(linkedOrderId);
     }
-    draftDiscrepancyCandidates.push({
-      draft: d,
-      meta,
-      expectedDate: rel.date,
-      matchedPhrase: rel.matchedPhrase,
-      linkedOrderId,
-    });
   }
-
   if (missingOrderIdsToFetch.length > 0) {
     const { data: extraOrders } = await supabaseAdmin
       .from('orders')
       .select('id, sequence_id, status, delivery_date')
       .in('id', [...new Set(missingOrderIdsToFetch)]);
-    for (const eo of extraOrders || []) {
-      ordersById.set(eo.id, eo as any);
+    for (const eo of (extraOrders || []) as FrequencyRadarOrderInput[]) {
+      ordersById.set(eo.id, eo);
     }
   }
 
-  for (const cand of draftDiscrepancyCandidates) {
-    const linkedOrder = cand.linkedOrderId ? ordersById.get(cand.linkedOrderId) : null;
-    const savedDate = linkedOrder?.delivery_date
-      ? String(linkedOrder.delivery_date).slice(0, 10)
-      : cand.meta?.deliveryDate
-      ? String(cand.meta.deliveryDate).slice(0, 10)
-      : null;
-
-    if (savedDate && savedDate !== cand.expectedDate) {
-      const orderTag = linkedOrder ? `Pedido #${linkedOrder.sequence_id} [${linkedOrder.status}]` : `Borrador [${cand.draft.status}]`;
-      dateDiscrepancies.push(
-        `- [DISCREPANCIA_FECHA] ${cand.draft.client_detected_name || cand.draft.source_email} | ${orderTag} | asunto="${cand.draft.email_subject}" | texto dice "${cand.matchedPhrase}" (esperado ${cand.expectedDate}) pero quedó en ${savedDate}`
-      );
-    }
-  }
+  const dateDiscrepancies = detectDraftDateDiscrepancies({
+    recentDrafts,
+    ordersById,
+    now,
+  }).map(
+    disc =>
+      `- [DISCREPANCIA_FECHA] ${disc.clientLabel} | ${disc.orderTag} | asunto="${disc.subject}" | texto dice "${disc.matchedPhrase}" (esperado ${disc.expectedDate}) pero quedó en ${disc.savedDate}`
+  );
 
   // Dynamic focus matching: STRICT explicit `#` for sequence_id (`/#(\d{3,8})\b/g`) + client name tokens
   const cleanFocus = focusQuery.trim().toLowerCase();
@@ -244,20 +286,21 @@ export async function buildOrdersCopilotContext(params: {
           .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number')
           .eq('sequence_id', seqNum)
           .maybeSingle();
-        if (directOrder) oHit = directOrder as any;
+        if (directOrder) oHit = directOrder as FrequencyRadarOrderInput;
       }
       if (oHit) {
         const prof = profileMap.get(oHit.profile_id || '');
         focusLines.push(
-          `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${prof?.company_name || oHit.customer_name || oHit.profile_id}", estado=${oHit.status}, delivery_date=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=$${oHit.total}, kg=${oHit.total_weight_kg}, OC="${oHit.purchase_order_number || ''}"`
+          `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${prof?.company_name || oHit.profile_id || 'Cliente'}", estado=${oHit.status}, delivery_date=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=$${oHit.total}, kg=${oHit.total_weight_kg}, OC="${oHit.purchase_order_number || ''}"`
         );
         const { data: items, count } = await supabaseAdmin
           .from('order_items')
           .select('quantity, unit, unit_price, variant_label, nickname, products(accounting_id, name, unit_of_measure)', { count: 'exact' })
           .eq('order_id', oHit.id)
           .limit(40);
-        if (items && items.length > 0) {
-          const itemStrs = items.map((it: any) => {
+        const typedItems = (items || []) as OrderItemJoinRow[];
+        if (typedItems.length > 0) {
+          const itemStrs = typedItems.map(it => {
             const p = Array.isArray(it.products) ? it.products[0] : it.products;
             const aid = p?.accounting_id ? `#${p.accounting_id}` : '#S/N';
             const name = p?.name || it.nickname || 'Producto';
@@ -265,7 +308,7 @@ export async function buildOrdersCopilotContext(params: {
             return `${aid} ${name} (${it.quantity} ${unit}${it.variant_label ? ` ${it.variant_label}` : ''}) $${it.unit_price}`;
           });
           focusLines.push(
-            `  LÍNEAS DE #${oHit.sequence_id} (mostrando ${items.length} de ${count ?? items.length} ítems): ${itemStrs.join(' | ')}`
+            `  LÍNEAS DE #${oHit.sequence_id} (mostrando ${typedItems.length} de ${count ?? typedItems.length} ítems): ${itemStrs.join(' | ')}`
           );
         }
       }
@@ -278,7 +321,7 @@ export async function buildOrdersCopilotContext(params: {
       .split(/\s+/)
       .filter(t => t.length >= 3 && !['para', 'ayer', 'hoy', 'pedido', 'pedidos', 'correo', 'correos', 'quien', 'quienes', 'estado', 'paso', 'que', 'trae', 'tiene'].includes(t));
 
-    const matchedProfiles = profiles.filter((p: any) => {
+    const matchedProfiles = profiles.filter(p => {
       const hay = `${p.company_name || ''} ${p.contact_name || ''} ${p.email || ''}`.toLowerCase();
       return tokens.some(t => hay.includes(t));
     });
@@ -286,12 +329,13 @@ export async function buildOrdersCopilotContext(params: {
     for (const mp of matchedProfiles.slice(0, 3)) {
       const mpOrders = allOrders
         .filter(o => o.profile_id === mp.id)
+        .sort(compareOrdersDesc)
         .slice(0, 5)
         .map(o => `#${o.sequence_id} [${o.status}] entrega=${o.delivery_date} creado=${formatBogotaTimestamp(o.created_at)} $${o.total}`);
       const mpDrafts = recentDrafts
-        .filter((d: any) => d.profile_id === mp.id)
+        .filter(d => d.profile_id === mp.id)
         .slice(0, 5)
-        .map((d: any) => {
+        .map(d => {
           const m = getDraftMeta(d);
           const snippet = String(d.email_body || '').replace(/\s+/g, ' ').slice(0, 150);
           return `borrador=${d.id.slice(0, 8)} [${d.status}] asunto="${d.email_subject}" fecha_ext=${m.deliveryDate || 'null'} recibido=${formatBogotaTimestamp(d.created_at)} texto="${snippet}"`;
@@ -306,7 +350,7 @@ export async function buildOrdersCopilotContext(params: {
     `=== SNAPSHOT OPERATIVO PEDIDOS Y CORREOS (FECHA OBJETIVO: ${targetDate} - ${radar.weekdayName.toUpperCase()}) ===`,
     `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())} | Último borrador ingerido en Supabase (Bogotá): ${lastDraftReceivedAtBogota || 'Sin registros'}`,
     `1) PEDIDOS PARA ${targetDate}: total=${targetOrders.length} | por_estado=${JSON.stringify(byStatus)} | splits_$0=${zeroSplitCount} | sin_espacio_bodega=${missingSpacesCount}`,
-    `2) RADAR DE FRECUENCIAS v2 (8 sem >=75%, $0): habituales=${radar.summary.habitualCount} | cubiertos=${radar.summary.coveredCount} | urgentes=${radar.summary.urgentAnomaliesCount} (otra_fecha=${radar.summary.otherDateAnomalyCount}, borrador_atascado=${radar.summary.stuckDraftCount}, vencidos_30m=${radar.summary.overdueSilentMissingCount}) | en_ventana=${radar.summary.inWindowCount}`,
+    `2) RADAR DE FRECUENCIAS v2 (progresivo hasta 8 sem, $0): habituales=${radar.summary.habitualCount} | cubiertos=${radar.summary.coveredCount} | urgentes=${radar.summary.urgentAnomaliesCount} (otra_fecha=${radar.summary.otherDateAnomalyCount}, borrador_atascado=${radar.summary.stuckDraftCount}, vencidos_30m=${radar.summary.overdueSilentMissingCount}) | en_ventana=${radar.summary.inWindowCount}`,
   ];
 
   if (dateDiscrepancies.length > 0) {
@@ -333,7 +377,7 @@ export async function buildOrdersCopilotContext(params: {
     lines.push(`5) PEDIDOS CREADOS ÚLTIMAS 36H PARA OTRA FECHA (!= ${targetDate}) [Top 15]:`);
     for (const o of recentOtherDateOrders.slice(0, 15)) {
       const prof = profileMap.get(o.profile_id || '');
-      lines.push(`   - #${o.sequence_id} | ${prof?.company_name || o.customer_name || 'Cliente'} | entrega=${o.delivery_date} | estado=${o.status} | creado=${formatBogotaTimestamp(o.created_at)} | origen=${o.origin_source}`);
+      lines.push(`   - #${o.sequence_id} | ${prof?.company_name || prof?.contact_name || 'Cliente'} | entrega=${o.delivery_date} | estado=${o.status} | creado=${formatBogotaTimestamp(o.created_at)} | origen=${o.origin_source}`);
     }
   }
 

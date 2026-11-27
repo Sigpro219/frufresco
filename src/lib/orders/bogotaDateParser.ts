@@ -1,7 +1,9 @@
 /**
  * Pure Bogotá (UTC-5) calendar & deterministic Spanish relative delivery-date parser.
- * Zero external dependencies; safe for both Node API routes and React Client Components.
+ * Delegates date math strictly to `@/lib/dateUtils`.
  */
+
+import { addBogotaDays, getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
 
 const SPANISH_WEEKDAYS_LONG = [
   'domingo',
@@ -27,35 +29,48 @@ const WEEKDAY_NAME_TO_JS_DAY: Record<string, number> = {
   sábado: 6,
 };
 
-/** Returns YYYY-MM-DD in America/Bogota timezone. */
+/** Returns YYYY-MM-DD in America/Bogota timezone (delegates to dateUtils). */
 export function getBogotaDateStr(now: Date = new Date()): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-}
-
-/** Parses YYYY-MM-DD at noon UTC to avoid DST/offset day shifts. */
-function parseDateNoonUtc(dateStr: string): Date {
-  return new Date(`${dateStr}T12:00:00Z`);
-}
-
-/** Formats a UTC Date as YYYY-MM-DD. */
-function formatDateUtc(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return getBogotaDateString(now);
 }
 
 /** Returns short Spanish weekday badge (LUN..DOM) for a YYYY-MM-DD string. */
 export function getBogotaWeekdayShort(dateStr: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
-  const d = parseDateNoonUtc(dateStr);
+  const d = parseBogotaDate(dateStr);
   if (Number.isNaN(d.getTime())) return '';
-  return SPANISH_WEEKDAYS_SHORT[d.getUTCDay()] || '';
+  return SPANISH_WEEKDAYS_SHORT[d.getDay()] || '';
 }
 
 /** Returns long Spanish weekday name (lunes..domingo) for a YYYY-MM-DD string. */
 export function getBogotaWeekdayLong(dateStr: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
-  const d = parseDateNoonUtc(dateStr);
+  const d = parseBogotaDate(dateStr);
   if (Number.isNaN(d.getTime())) return '';
-  return SPANISH_WEEKDAYS_LONG[d.getUTCDay()] || '';
+  return SPANISH_WEEKDAYS_LONG[d.getDay()] || '';
+}
+
+/** Strips quoted RE:/RV:/Forwarded history from an email body before date parsing. */
+export function stripQuotedEmailHistory(body: string): string {
+  if (!body) return '';
+  const cutMarkers = [
+    /\r?\n-{2,}\s*(?:Mensaje reenviado|Forwarded message|Original Message)\s*-{2,}/i,
+    /\r?\n(?:De|From):\s*[^\r\n]+\r?\n(?:Enviado|Sent|Date):/i,
+    /\r?\nEl\s+\d{1,2}\/\d{1,2}\/\d{2,4}.*escribi[oó]:/i,
+    /\r?\n\[DEBUG\]\s*Attachments info:/i,
+  ];
+  let clean = body;
+  for (const rx of cutMarkers) {
+    const idx = clean.search(rx);
+    if (idx > 0) clean = clean.slice(0, idx);
+  }
+  return clean;
+}
+
+/** Detects explicit numeric dates (DD/MM/YYYY or YYYY-MM-DD) in subject or clean body. */
+export function hasExplicitNumericDate(text: string): boolean {
+  if (!text) return false;
+  return /\b(?:\d{2}[\/-]\d{2}[\/-]\d{4}|\d{4}[\/-]\d{2}[\/-]\d{2})\b/.test(text);
 }
 
 /**
@@ -63,15 +78,13 @@ export function getBogotaWeekdayLong(dateStr: string): string {
  * never performs mental weekday arithmetic across years/timezones.
  */
 export function buildBogotaCalendarContext(now: Date = new Date()): string {
-  const todayStr = getBogotaDateStr(now);
-  const base = parseDateNoonUtc(todayStr);
-  const todayName = SPANISH_WEEKDAYS_LONG[base.getUTCDay()];
+  const todayStr = getBogotaDateString(now);
+  const todayName = getBogotaWeekdayLong(todayStr);
   const upcoming: string[] = [];
   for (let offset = 1; offset <= 7; offset++) {
-    const d = new Date(base.getTime());
-    d.setUTCDate(d.getUTCDate() + offset);
+    const nextStr = addBogotaDays(todayStr, offset);
     const label = offset === 1 ? 'mañana ' : '';
-    upcoming.push(`${label}${SPANISH_WEEKDAYS_LONG[d.getUTCDay()]} = ${formatDateUtc(d)}`);
+    upcoming.push(`${label}${getBogotaWeekdayLong(nextStr)} = ${nextStr}`);
   }
   return `FECHA ACTUAL EN BOGOTÁ (UTC-5): ${todayName} ${todayStr} | PRÓXIMOS 7 DÍAS: ${upcoming.join(' | ')}`;
 }
@@ -92,45 +105,34 @@ export function resolveExplicitRelativeDeliveryDate(
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-  const todayStr = getBogotaDateStr(refDate);
-  const base = parseDateNoonUtc(todayStr);
+  const todayStr = getBogotaDateString(refDate);
+  const base = parseBogotaDate(todayStr);
 
-  // 1. Pasado mañana
   const pasadoMatch = normalized.match(/\b(?:para\s+)?pasado\s+manana\b/);
   if (pasadoMatch) {
-    const d = new Date(base.getTime());
-    d.setUTCDate(d.getUTCDate() + 2);
-    return { date: formatDateUtc(d), matchedPhrase: pasadoMatch[0], isSameDay: false };
+    return { date: addBogotaDays(todayStr, 2), matchedPhrase: pasadoMatch[0], isSameDay: false };
   }
 
-  // 2. Para mañana / entrega mañana
   const mananaMatch = normalized.match(/\b(?:para|entrega(?:\s+el\s+dia)?|despacho)\s+manana\b/);
   if (mananaMatch) {
-    const d = new Date(base.getTime());
-    d.setUTCDate(d.getUTCDate() + 1);
-    return { date: formatDateUtc(d), matchedPhrase: mananaMatch[0], isSameDay: false };
+    return { date: addBogotaDays(todayStr, 1), matchedPhrase: mananaMatch[0], isSameDay: false };
   }
 
-  // 3. Para hoy / entrega hoy / mismo día
   const hoyMatch = normalized.match(/\b(?:para\s+hoy|entrega\s+hoy|mismo\s+dia|hoy\s+mismo|despacho\s+hoy)\b/);
   if (hoyMatch) {
     return { date: todayStr, matchedPhrase: hoyMatch[0], isSameDay: true };
   }
 
-  // 4. Explicit weekday: "para el jueves", "entrega viernes", "despacho el lunes"
   const weekdayMatch = normalized.match(
     /\b(?:para(?:\s+el(?:\s+dia)?)?|entrega(?:\s+el(?:\s+dia)?)?|despacho(?:\s+el(?:\s+dia)?)?)\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/
   );
   if (weekdayMatch) {
     const targetDay = WEEKDAY_NAME_TO_JS_DAY[weekdayMatch[1]];
     if (typeof targetDay === 'number') {
-      const currentDay = base.getUTCDay();
-      let delta = (targetDay - currentDay + 7) % 7;
-      // "para el jueves" written on Thursday typically means today unless specified; keep delta=0 only if same day
-      const d = new Date(base.getTime());
-      d.setUTCDate(d.getUTCDate() + delta);
+      const currentDay = base.getDay();
+      const delta = (targetDay - currentDay + 7) % 7;
       return {
-        date: formatDateUtc(d),
+        date: addBogotaDays(todayStr, delta),
         matchedPhrase: weekdayMatch[0],
         isSameDay: delta === 0,
       };

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffBearer } from '@/lib/auth/verifyStaffBearer';
 import { computeFrequencyRadar, fetchOrdersWindowPaginated } from '@/lib/orders/frequencyEngine';
-import { getBogotaDateStr } from '@/lib/orders/bogotaDateParser';
+import { addBogotaDays, getBogotaDateString } from '@/lib/dateUtils';
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -25,11 +25,9 @@ export async function GET(req: Request) {
     const rawDate = searchParams.get('date');
     const now = new Date();
     const targetDate =
-      rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : getBogotaDateStr(now);
+      rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : getBogotaDateString(now);
 
-    const histStart = new Date(new Date(`${targetDate}T12:00:00Z`).getTime() - 56 * 86400 * 1000)
-      .toISOString()
-      .split('T')[0];
+    const histStart = addBogotaDays(targetDate, -56);
     const cutoff48hIso = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
 
     const [profilesRes, recentOrders, draftsRes] = await Promise.all([
@@ -58,11 +56,9 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ success: true, ...result });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error calculando radar de frecuencias';
     console.error('[GET /api/orders/frequency-radar] error:', err);
-    return NextResponse.json(
-      { success: false, error: err?.message || 'Error calculando radar de frecuencias' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

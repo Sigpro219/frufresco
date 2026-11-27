@@ -18557,8 +18557,8 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Escenario 502: Bloque 1 — Blindaje de Fechas Bogotá, Cero Reprogramación Silenciosa & Decisión Humana en Pedidos (SDD v1.9.457)
-- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+### Escenario 502: Bloque 1 — Blindaje de Fechas Bogotá, Cero Reprogramación Silenciosa & Decisión Humana en Pedidos (SDD v1.9.459)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc\` + \`audit-bogota-dates\` + \`tests\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
 - **Archivos en Alcance:**
   - `src/lib/orders/bogotaDateParser.ts` *(nuevo helper puro)*
   - `src/app/api/orders/email-ingest/route.ts`
@@ -18566,12 +18566,15 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   - `src/components/EmailDraftsModule.tsx`
 - **Alcance Contractual:**
   1. **Helper Puro de Calendario Bogotá (`src/lib/orders/bogotaDateParser.ts`):**
-     - `getBogotaDateStr(now?: Date): string`: retorna `YYYY-MM-DD` en zona `America/Bogota` (nunca UTC).
-     - `buildBogotaCalendarContext(now?: Date): string`: genera la fecha actual en Bogotá con su día de la semana en español + tabla explícita de los próximos 7 días (`HOY: miércoles 2026-11-25 | jueves = 2026-11-26 | viernes = 2026-11-27 ...`) para eliminar aritmética de calendario en Gemini.
-     - `resolveExplicitRelativeDeliveryDate(text: string, refDate?: Date): { date: string; matchedPhrase: string } | null`: parser determinístico para frases explícitas en español (`"para hoy"`, `"para mañana"`, `"para pasado mañana"`, `"para el (lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)"`, `"entrega (el )?<día>"`) cuando no exista una fecha numérica explícita (`DD/MM/YYYY` o `YYYY-MM-DD`) en asunto/cuerpo.
+     - Delega estrictamente en `getBogotaDateString` y `addBogotaDays` de `@/lib/dateUtils` (cero `.toISOString().split('T')[0]`).
+     - `getBogotaDateStr(now?: Date): string`: wrapper directo sobre `getBogotaDateString(now)`.
+     - `stripQuotedEmailHistory(body: string): string` y `hasExplicitNumericDate(text: string): boolean`: helpers compartidos para recortar citas `RE:`/`RV:` y detectar fechas numéricas (`DD/MM/YYYY` o `YYYY-MM-DD`).
+     - `buildBogotaCalendarContext(now?: Date): string`: genera `'FECHA ACTUAL EN BOGOTÁ (UTC-5): ... | PRÓXIMOS 7 DÍAS: ...'`.
+     - `resolveExplicitRelativeDeliveryDate(text: string, refDate?: Date): { date: string; matchedPhrase: string; isSameDay: boolean } | null`: parser determinístico para frases explícitas en español (`"para hoy"`, `"para mañana"`, `"para pasado mañana"`, `"para el (lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)"`, `"entrega (el )?<día>"`) cuando no exista una fecha numérica explícita (`DD/MM/YYYY` o `YYYY-MM-DD`) en asunto ni cuerpo limpio.
   2. **Blindaje en `src/app/api/orders/email-ingest/route.ts` y `src/app/api/orders/reparse-draft/route.ts`:**
      - Reemplazar `FECHA ACTUAL DEL SISTEMA: ${new Date().toISOString().split('T')[0]}` (en los 3 prompts de `email-ingest` y en `reparse-draft`) por `buildBogotaCalendarContext()`.
-     - Aplicar override determinístico con `resolveExplicitRelativeDeliveryDate(subject + '\n' + cleanedBodyText)` cuando se detecte frase relativa explícita sin fecha numérica explícita, guardando `deliveryDateSourcePhrase` en la metadata del borrador.
+     - Recortar historial citado `RE:`/`RV:` con `stripQuotedEmailHistory` antes del parseo; aplicar override determinístico con `resolveExplicitRelativeDeliveryDate(subject + '\n' + cleanBody)` únicamente cuando **no** exista fecha numérica explícita (`hasExplicitNumericDate`) en asunto ni cuerpo limpio; cuando aplique, este valor tiene **precedencia absoluta** sobre `att.deliveryDate` / `primarySource.deliveryDate` / `extractedData.deliveryDate` de Gemini y guarda `deliveryDateSourcePhrase` en metadata.
+     - Soberanía horaria `@/lib/dateUtils` (`addBogotaDays`, `getBogotaDateString`, `formatBogotaDate`): prohibido `.toISOString().split('T')[0]` o `.toLocaleDateString` sin `America/Bogota`.
   3. **Cero Reprogramación Silenciosa & Compuerta de Decisión Humana (`src/components/EmailDraftsModule.tsx`):**
      - Ampliar lista `forbidden` en `extractPoFallback` con `'para'`, `'del'`, `'los'`, `'las'`, `'por'`, `'con'`, `'gracias'`, `'verdura'`, `'hoy'`, `'manana'`, `'mañana'`, `'jueves'`, `'viernes'`, `'sabado'`, `'sábado'`, `'lunes'`, `'martes'`, `'miercoles'`, `'miércoles'` para evitar falsos OC como `"para"`.
      - Eliminar la sobreescritura silenciosa de `docDate` por `getNextAllowedDeliveryDate` al abrir un borrador:
@@ -18579,24 +18582,25 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
        - Invocar `getNextAllowedDeliveryDate(minDeliveryDate, allowedDays)` **únicamente** cuando `!docDate` (`deliveryDateSource = 'frequency_suggested'`).
        - Al editar manualmente `<input type="date">`, actualizar `deliveryDateSource = 'manual'`.
      - Mostrar junto al selector de fecha el día de la semana (`LUN/MAR/MIÉ/JUE/VIE/SÁB/DOM`) + píldora de origen (`Del correo`, `Sugerida por frecuencia`, `Editada manual`).
-     - Reemplazar los `window.confirm` de restricción logística por un modal explícito de 2 botones (`dateConflictModal`) siempre que `(matchedProfile && !deliveryRestrictionStatus.isValid)` O `(deliveryDateSource === 'frequency_suggested' && deliveryDate > minDeliveryDate)`:
+     - Reemplazar los `window.confirm` de restricción logística por un modal explícito de 2 botones (`dateConflictModal`, `zIndex: 12500` estrictamente superior a `showConfirmModal` `11000`, invocando el flujo correspondiente: `handleSendManualReceipt` o `handleConfirmOrderDirectly`) siempre que `(matchedProfile && !deliveryRestrictionStatus.isValid)` O `(deliveryDateSource === 'frequency_suggested' && deliveryDate > minDeliveryDate)`:
        - Botón 1: `Usar fecha actual (Despacho excepcional)`
        - Botón 2: `Reprogramar al próximo día de frecuencia`
        - Anexar traza `[DECISIÓN FECHA: ...]` en `admin_notes`.
 
 ---
 
-### Escenario 503: Bloque 2 — Motor de Frecuencias & Radar de Clientes Silenciosos v2 ($0 / 0 Tokens) (SDD v1.9.458)
-- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+### Escenario 503: Bloque 2 — Motor de Frecuencias & Radar de Clientes Silenciosos v2 ($0 / 0 Tokens) (SDD v1.9.459)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc\` + \`audit-bogota-dates\` + \`tests\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
 - **Archivos en Alcance:**
   - `src/lib/orders/frequencyEngine.ts` *(helper puro + `fetchOrdersWindowPaginated` PostgREST-safe)*
   - `src/app/api/orders/frequency-radar/route.ts` *(endpoint GET)*
   - `src/lib/orders/ordersCopilotContextBuilder.ts` *(consumidor de paginación + etiquetas `[FALTA_POR_PEDIR_VENCIDO]` vs `[EN_VENTANA]`)*
   - `src/components/orders/FrequencyRadarDrawer.tsx` *(componente UI 100% informativo)*
   - `src/app/admin/orders/loading/page.tsx` *(montaje de píldora y drawer)*
-- **Alcance Contractual (Calibración v2 post-Goldfish):**
+- **Alcance Contractual (Calibración v2 post-Goldfish & Tirano):**
   1. **Motor Determinístico Puro (`src/lib/orders/frequencyEngine.ts`):**
-     - **Habitualidad estrictamente por histórico real:** Evalúa cada perfil B2B activo exclusivamente sobre las **8 ocurrencias previas exactas** del día `targetIsoDay` dentro de los 56 días calendario anteriores a `targetDate` (denominador fijo `totalWindowWeeks = 8`, exigiendo `historicalRatePct >= 75`, es decir `>= 6/8` semanas con al menos un pedido válido no `cancelled`/`billing_only`).
+     - **Habitualidad estrictamente por histórico real (denominador progresivo hasta 8 semanas):** Evalúa cada perfil B2B activo sobre las 8 ocurrencias previas exactas de `targetIsoDay` dentro de los 56 días anteriores a `targetDate`, tomando como denominador las fechas con operación real en el sistema (`totalWindowWeeks = Math.max(2, activePriorDates.size)`) y exigiendo `minRequiredHits = totalWindowWeeks >= 6 ? Math.ceil(totalWindowWeeks * 0.75) : Math.max(2, totalWindowWeeks - 1)` (escala automáticamente a `>= 75%` / `>= 6/8` al completar 6–8 semanas de histórico, y evita falsos ceros en históricos menores).
+     - **Higiene estricta & `@/lib/dateUtils`:** Cero `any` injustificados, cero `as unknown as`, y uso de `addBogotaDays`/`getBogotaDateString` en lugar de `.toISOString().split('T')[0]`.
      - **`logistics_data` estrictamente informativo:** `profiles.logistics_data.days`/`allowed_days` se conserva en `configuredInProfile: boolean` solo como dato informativo; jamás dispara habitualidad ni falsos positivos.
      - **Plurales exactos en español:** Formateo limpio `lunes`, `martes`, `miércoles`, `jueves`, `viernes`, `sábados`, `domingos` (cero `"juevess"`/`"vierness"`).
      - **Regla `other_date_anomaly` (`OTRA FECHA`):** Dispara únicamente si el cliente no tiene pedido para `targetDate` y en las últimas 36h registró un pedido con **`delivery_date > targetDate`** (reprogramado hacia adelante, ej. `#2312 -> 2026-11-28`; nunca por pedidos anteriores `< targetDate`).
@@ -18615,8 +18619,8 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Escenario 504: Bloque 3 — Copiloto IA de Pedidos & Emails en Ciclo Cerrado v2 (Patrón SECOP §62) (SDD v1.9.458)
-- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc --noEmit\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
+### Escenario 504: Bloque 3 — Copiloto IA de Pedidos & Emails en Ciclo Cerrado v2 (Patrón SECOP §62) (SDD v1.9.459)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO EN LOCAL (\`tsc\` + \`audit-bogota-dates\` + \`tests\` EXIT 0) — BLOQUEADO PARA PUSH HASTA >= 00:00 COT 2026-11-27`
 - **Archivos en Alcance:**
   - `src/lib/orders/ordersCopilotContextBuilder.ts` *(ensamblador server-side)*
   - `src/app/api/orders/copilot/route.ts` *(endpoint POST)*
@@ -18626,8 +18630,9 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   1. **Ensamblador Determinista Server-Side (`src/lib/orders/ordersCopilotContextBuilder.ts`):**
      - Usa `fetchOrdersWindowPaginated` (8 semanas completas paginadas con `.range()`) para paridad 1:1 con Escenario 503 v2 y emite `[FALTA_POR_PEDIR_VENCIDO]` vs `[EN_VENTANA]`.
      - Consulta `lastDraftReceivedAt` vía `order_drafts` (`order('created_at', { ascending: false }).limit(1)`) sin tope de 48h, reportándolo como último borrador ingerido en Supabase (hora Bogotá).
-     - **Detector Determinístico `[DISCREPANCIA_FECHA]` (`0` tokens):** sobre borradores no `rejected` de las últimas 48h, omite asuntos con fecha numérica explícita (`DD/MM/YYYY` o `YYYY-MM-DD`), recorta citas `RE:`/`RV:`, aplica `resolveExplicitRelativeDeliveryDate` respetando la regla `delta === 0` de mismo día, y resuelve el pedido vinculado tanto desde `meta.orderId`/`meta.order_id` como desde `meta.attachments[*].orderId` (con fallback a consulta directa en `orders`).
-     - **Foco bajo demanda en `order_items`:** exige `#` obligatorio (`/#(\d{3,8})\b/g`), soporta consulta directa a `orders` si el `#pedido` está fuera de los 56 días o cancelado, y hace join con `products(accounting_id, name, unit_of_measure)` (tope 40 líneas por pedido, usando `#accounting_id`, jamás `SKU` ni `base_price`).
+     - **Detector Determinístico `[DISCREPANCIA_FECHA]` (`0` tokens):** sobre borradores no `rejected` de las últimas 48h, recorta citas `RE:`/`RV:` con `stripQuotedEmailHistory`, omite si `hasExplicitNumericDate` detecta fecha numérica (`DD/MM/YYYY` o `YYYY-MM-DD`) en asunto **o** cuerpo limpio, aplica `resolveExplicitRelativeDeliveryDate` respetando la regla `delta === 0` de mismo día, y resuelve el pedido vinculado tanto desde `meta.orderId`/`meta.order_id` como desde `meta.attachments[*].orderId` (con fallback a consulta directa en `orders`).
+     - **Foco bajo demanda en `order_items` y por cliente:** exige `#` obligatorio (`/#(\d{3,8})\b/g`), soporta consulta directa a `orders` si el `#pedido` está fuera de los 56 días o cancelado, y hace join con `products(accounting_id, name, unit_of_measure)` (tope 40 líneas por pedido, usando `#accounting_id`, jamás `SKU` ni `base_price`). En foco por cliente y en `recentOtherDateOrders`, ordena descendentemente por `delivery_date DESC, created_at DESC` antes de `.slice(...)` (nunca orden arbitrario por UUID).
+     - **Higiene & Arnés de Pruebas (`tests/orders/ordersIntelligence502_504.test.ts`):** Cero `any`/`as unknown as`, uso de `@/lib/dateUtils` y suite determinística verde cubriendo `bogotaDateParser.ts`, `frequencyEngine.ts` y `[DISCREPANCIA_FECHA]`.
   2. **Endpoint Read-Only (`src/app/api/orders/copilot/route.ts`):**
      - Protegido con `verifyStaffBearer(req, supabaseAdmin)` (`if (auth.ok === false)`).
      - Invoca `gemini-2.5-flash` (`temperature: 0.1`, `maxOutputTokens: 900`) priorizando `[DISCREPANCIA_FECHA]`, `[OTRA_FECHA]`, `[BORRADOR_PENDIENTE]` y `[FALTA_POR_PEDIR_VENCIDO]`.
@@ -18637,7 +18642,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Escenario 502: Kits GPS Portátiles Itinerantes, Ingesta Dual (Apps-360 + Webhook Genérico) y Coexistencia con Baliza QR (SDD v1.9.457)
+### Escenario 505: Kits GPS Portátiles Itinerantes, Ingesta Dual (Apps-360 + Webhook Genérico) y Coexistencia con Baliza QR (SDD v1.9.457)
 - **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO (\`tsc --noEmit\` EXIT 0)`
 - **Archivos en Alcance (libres de `READ-ONLY LOCK`):**
   - `supabase/migrations/20261126_portable_gps_kits.sql` (nuevo)

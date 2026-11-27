@@ -6237,7 +6237,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
             : `[DECISIÓN FECHA: Reprogramado a ${chosenDate} por frecuencia habitual]`;
           setDateConflictModal(null);
           if (mode === 'exceptional') {
-            setTimeout(() => handleApprove(), 0);
+            setTimeout(() => handleSendManualReceipt(), 0);
           } else {
             setDeliveryDate(chosenDate);
             setDeliveryDateSource('manual');
@@ -9544,6 +9544,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
                           setDeliveryDate(formatDateToYYYYMMDD(nextV));
                           return;
                         }
+                        dateDecisionTraceRef.current = null;
                         setDeliveryDateSource('manual');
                         setDeliveryDate(newDate);
                       }
@@ -16236,7 +16237,7 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1300,
+            zIndex: 12500,
             backgroundColor: 'rgba(15, 23, 42, 0.55)',
             display: 'flex',
             alignItems: 'center',

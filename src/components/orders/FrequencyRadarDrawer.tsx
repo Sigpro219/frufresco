@@ -48,8 +48,8 @@ export default function FrequencyRadarDrawer({ targetDate }: FrequencyRadarDrawe
         throw new Error(json.error || 'Error cargando radar de frecuencias');
       }
       setData(json);
-    } catch (e: any) {
-      setError(e?.message || 'Error consultando radar');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error consultando radar');
     } finally {
       setLoading(false);
     }

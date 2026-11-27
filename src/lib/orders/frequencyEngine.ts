@@ -1,17 +1,24 @@
 /**
  * Deterministic ($0 / 0-token) B2B Order Frequency & Silent-Client Anomaly Engine (v2).
- * Uses strictly paginated 8-week (56d) historical orders (>= 75%, i.e., >= 6/8 prior occurrences),
+ * Uses strictly paginated 8-week (56d) historical orders, progressive denominator up to 8 weeks,
  * forward-only other_date_anomaly (delivery_date > targetDate), and Bogotá +30m overdue clock.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getBogotaDateStr, getBogotaWeekdayLong } from './bogotaDateParser';
+import { addBogotaDays, getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
+import { getBogotaWeekdayLong } from './bogotaDateParser';
 
 export type FrequencyAnomalyStatus =
   | 'covered'
   | 'other_date_anomaly'
   | 'stuck_draft'
   | 'silent_missing';
+
+export interface ProfileLogisticsData {
+  allowed_days?: number[];
+  days?: number[];
+  [key: string]: unknown;
+}
 
 export interface FrequencyRadarProfileInput {
   id: string;
@@ -20,14 +27,18 @@ export interface FrequencyRadarProfileInput {
   email?: string | null;
   is_active?: boolean | null;
   role?: string | null;
-  logistics_data?: Record<string, any> | null;
+  logistics_data?: ProfileLogisticsData | null;
+}
+
+export interface OrderLogisticsData {
+  is_off_agreement_split?: boolean;
+  [key: string]: unknown;
 }
 
 export interface FrequencyRadarOrderInput {
   id: string;
   sequence_id?: number | null;
   profile_id?: string | null;
-  customer_name?: string | null;
   status?: string | null;
   delivery_date?: string | null;
   created_at?: string | null;
@@ -35,8 +46,17 @@ export interface FrequencyRadarOrderInput {
   total_weight_kg?: number | null;
   origin_source?: string | null;
   purchase_order_number?: string | null;
-  warehouse_spaces?: any[] | null;
-  logistics_data?: Record<string, any> | null;
+  warehouse_spaces?: string[] | null;
+  logistics_data?: OrderLogisticsData | null;
+}
+
+export interface DraftExtractedItemLike {
+  isMetadata?: boolean;
+  deliveryDate?: string | null;
+  orderId?: string | null;
+  order_id?: string | null;
+  attachments?: Array<{ orderId?: string | null; order_id?: string | null }>;
+  [key: string]: unknown;
 }
 
 export interface FrequencyRadarDraftInput {
@@ -47,7 +67,7 @@ export interface FrequencyRadarDraftInput {
   email_subject?: string | null;
   status?: string | null;
   created_at?: string | null;
-  extracted_items?: any[] | null;
+  extracted_items?: DraftExtractedItemLike[] | null;
 }
 
 export interface FrequencyRadarEntry {
@@ -138,7 +158,13 @@ export async function fetchOrdersWindowPaginated(
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) throw error;
-    const rows = (data || []) as unknown as FrequencyRadarOrderInput[];
+    const rawList: unknown[] = Array.isArray(data) ? data : [];
+    const rows: FrequencyRadarOrderInput[] = [];
+    for (const item of rawList) {
+      if (item && typeof item === 'object' && 'id' in item) {
+        rows.push(item as FrequencyRadarOrderInput);
+      }
+    }
     allRows.push(...rows);
     if (rows.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
@@ -149,29 +175,23 @@ export async function fetchOrdersWindowPaginated(
 }
 
 function getIsoDayFromDateStr(dateStr: string): number {
-  const d = new Date(`${dateStr}T12:00:00Z`);
+  const d = parseBogotaDate(dateStr);
   if (Number.isNaN(d.getTime())) return 1;
-  const jsDay = d.getUTCDay();
+  const jsDay = d.getDay();
   return jsDay === 0 ? 7 : jsDay;
 }
 
-function addDaysToDateStr(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().split('T')[0];
-}
-
-function normalizeAllowedIsoDays(logisticsData: Record<string, any> | null | undefined): number[] {
+function normalizeAllowedIsoDays(logisticsData: ProfileLogisticsData | null | undefined): number[] {
   if (!logisticsData) return [];
   if (Array.isArray(logisticsData.allowed_days) && logisticsData.allowed_days.length > 0) {
     return logisticsData.allowed_days
-      .map((d: any) => Number(d))
-      .filter((d: number) => d >= 1 && d <= 7);
+      .map(d => Number(d))
+      .filter(d => d >= 1 && d <= 7);
   }
   if (Array.isArray(logisticsData.days) && logisticsData.days.length > 0) {
     return logisticsData.days
-      .map((d: any) => (Number(d) === 0 ? 7 : Number(d)))
-      .filter((d: number) => d >= 1 && d <= 7);
+      .map(d => (Number(d) === 0 ? 7 : Number(d)))
+      .filter(d => d >= 1 && d <= 7);
   }
   return [];
 }
@@ -196,7 +216,7 @@ function formatMinutesAs12h(mins: number): string {
 
 function getDraftExtractedDeliveryDate(draft: FrequencyRadarDraftInput): string | null {
   const items = Array.isArray(draft.extracted_items) ? draft.extracted_items : [];
-  const meta = items.find((i: any) => i && i.isMetadata);
+  const meta = items.find(i => Boolean(i && i.isMetadata));
   const raw = meta?.deliveryDate || null;
   return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
 }
@@ -213,15 +233,13 @@ export function computeFrequencyRadar(params: {
   const weekdayName = getBogotaWeekdayLong(targetDate);
   const weekdayPlural = WEEKDAY_PLURALS[targetIsoDay] || weekdayName;
 
-  const todayBogota = getBogotaDateStr(now);
-  const tomorrowBogota = addDaysToDateStr(todayBogota, 1);
+  const todayBogota = getBogotaDateString(now);
+  const tomorrowBogota = addBogotaDays(todayBogota, 1);
   const nowBogotaMinutes = getBogotaMinutesOfDay(now.toISOString()) ?? 0;
 
-  // Up to 8 prior occurrences of targetIsoDay (-7d, -14d, ..., -56d),
-  // using only dates where the system already has operational orders (handles <8w history cleanly).
   const expectedPriorDates = new Set<string>();
   for (let w = 1; w <= 8; w++) {
-    expectedPriorDates.add(addDaysToDateStr(targetDate, -7 * w));
+    expectedPriorDates.add(addBogotaDays(targetDate, -7 * w));
   }
   const activePriorDates = new Set<string>();
   for (const o of recentOrders || []) {
@@ -284,7 +302,6 @@ export function computeFrequencyRadar(params: {
     const historicalRatePct = Math.round((historicalHits / totalWindowWeeks) * 100);
     const minRequiredHits = totalWindowWeeks >= 6 ? Math.ceil(totalWindowWeeks * 0.75) : Math.max(2, totalWindowWeeks - 1);
 
-    // Strict historical habituality: >= 75% on 6-8w (e.g. 6/8), or (N-1)/N on shorter history (e.g. 2/3, 3/4).
     if (historicalHits < minRequiredHits) continue;
 
     const avgOrderTimeMinutes =
@@ -297,7 +314,6 @@ export function computeFrequencyRadar(params: {
     const clientName = p.company_name || p.contact_name || 'Cliente B2B';
     const expectedReason = `${historicalHits}/${totalWindowWeeks} ${weekdayPlural} (${historicalRatePct}%)`;
 
-    // 1. Covered on targetDate
     const targetOrder = pOrders.find(o => String(o.delivery_date).slice(0, 10) === targetDate);
     if (targetOrder) {
       covered.push({
@@ -323,7 +339,6 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 2. Forward-only other_date_anomaly: created in last 36h with delivery_date > targetDate
     const otherDateOrder = pOrders
       .filter(o => {
         const dStr = String(o.delivery_date).slice(0, 10);
@@ -357,7 +372,6 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 3. Pending unapproved draft in last 48h
     const pendingDraft = pDrafts
       .filter(d => String(d.status || '').toLowerCase() === 'pending')
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
@@ -386,7 +400,6 @@ export function computeFrequencyRadar(params: {
       continue;
     }
 
-    // 4. Silent missing with formal Bogotá calendar clock (+30 min grace)
     let isOverdue = false;
     if (targetDate <= todayBogota) {
       isOverdue = true;

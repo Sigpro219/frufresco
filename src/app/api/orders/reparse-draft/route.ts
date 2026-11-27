@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import { fetchGeminiExtraction, findBestProductMatchDetails, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 import { resolveCanonicalConversion } from '@/lib/orders/unitConversionEngine';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
-import { buildBogotaCalendarContext, getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from '@/lib/orders/bogotaDateParser';
+import { buildBogotaCalendarContext, hasExplicitNumericDate, resolveExplicitRelativeDeliveryDate, stripQuotedEmailHistory } from '@/lib/orders/bogotaDateParser';
+import { getBogotaDateString } from '@/lib/dateUtils';
 
 const getSupabaseAdmin = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -412,14 +413,18 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
     if (extractedData.address) metadata.address = extractedData.address;
 
     const refDate = draft.created_at ? new Date(draft.created_at) : new Date();
-    const todayBogotaStr = getBogotaDateStr(refDate);
-    const relMatch = resolveExplicitRelativeDeliveryDate(`${draft.email_subject || ''}\n${draft.email_body || ''}`, refDate);
-    if (relMatch) {
+    const todayBogotaStr = getBogotaDateString(refDate);
+    const cleanBody = stripQuotedEmailHistory(String(draft.email_body || ''));
+    const combinedText = `${draft.email_subject || ''}\n${cleanBody}`;
+    const hasNumeric = hasExplicitNumericDate(draft.email_subject || '') || hasExplicitNumericDate(cleanBody);
+    const relMatch = hasNumeric ? null : resolveExplicitRelativeDeliveryDate(combinedText, refDate);
+    const explicitSameDay = Boolean(relMatch?.isSameDay) || /\b(para\s+hoy|entrega\s+hoy|mismo\s+d[ií]a|hoy\s+mismo|despacho\s+hoy)\b/i.test(combinedText);
+    if (relMatch && (!relMatch.isSameDay || explicitSameDay)) {
       metadata.deliveryDate = relMatch.date;
       metadata.deliveryDateSourcePhrase = relMatch.matchedPhrase;
     } else if (extractedData.deliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(extractedData.deliveryDate).trim())) {
       const cleanD = String(extractedData.deliveryDate).trim();
-      if (cleanD > todayBogotaStr) {
+      if (cleanD > todayBogotaStr || (cleanD === todayBogotaStr && explicitSameDay)) {
         metadata.deliveryDate = cleanD;
       }
     }

@@ -14,7 +14,9 @@ const getSupabaseAdmin = () => {
 
 import { fetchGeminiExtraction, resolveClientProfile, findBestProductMatch, recordLearningMemory, extractPurchaseOrderFromText } from '@/lib/orders/order-parser-engine';
 import { hasExplicitLibraWord, isKgUnitName } from '@/lib/orders/unitConversionEngine';
-import { buildBogotaCalendarContext, getBogotaDateStr, resolveExplicitRelativeDeliveryDate } from '@/lib/orders/bogotaDateParser';
+import { buildBogotaCalendarContext, hasExplicitNumericDate, resolveExplicitRelativeDeliveryDate, stripQuotedEmailHistory } from '@/lib/orders/bogotaDateParser';
+import { getBogotaDateString } from '@/lib/dateUtils';
+import { formatBogotaDate } from '@/lib/dateUtils';
 import {
   extractDraftSummary,
   filterCandidateDraftsForClient,
@@ -1565,9 +1567,11 @@ export async function POST(req: Request) {
     }
 
     // Escenario 454 & 502 SDD: Sanitización Bogotá + parser determinístico de frases relativas
-    const todayBogotaStr = getBogotaDateStr();
-    const combinedDateText = `${subject || ''}\n${currentPlainText || ''}`;
-    const deterministicRelativeDate = resolveExplicitRelativeDeliveryDate(combinedDateText);
+    const todayBogotaStr = getBogotaDateString();
+    const cleanBodyForDate = stripQuotedEmailHistory(cleanedBodyText || currentPlainText || '');
+    const combinedDateText = `${subject || ''}\n${cleanBodyForDate}`;
+    const hasNumericInSubjectOrBody = hasExplicitNumericDate(subject || '') || hasExplicitNumericDate(cleanBodyForDate);
+    const deterministicRelativeDate = hasNumericInSubjectOrBody ? null : resolveExplicitRelativeDeliveryDate(combinedDateText);
     const explicitSameDayRequested = Boolean(deterministicRelativeDate?.isSameDay) || /\b(para hoy|entrega hoy|mismo d[ií]a|hoy mismo|despacho hoy)\b/i.test(combinedDateText);
     const sanitizeIngestedDeliveryDate = (rawDate: string | null | undefined): string | null => {
       if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(rawDate).trim())) return null;
@@ -1578,7 +1582,7 @@ export async function POST(req: Request) {
 
     // Extract date from subject or body if present as fallback/override
     let targetDeliveryDate = sanitizeIngestedDeliveryDate(extractedData.deliveryDate);
-    let deliveryDateSourcePhrase: string | null = deterministicRelativeDate?.matchedPhrase || null;
+    const deliveryDateSourcePhrase: string | null = deterministicRelativeDate?.matchedPhrase || null;
     let hasExplicitNumericSubjectDate = false;
     if (subject) {
       const dateMatchSlash = subject.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
@@ -1599,6 +1603,7 @@ export async function POST(req: Request) {
     if (!hasExplicitNumericSubjectDate && deterministicRelativeDate) {
       targetDeliveryDate = sanitizeIngestedDeliveryDate(deterministicRelativeDate.date);
     }
+    const hasDeterministicDateOverride = Boolean((hasExplicitNumericSubjectDate || deterministicRelativeDate) && targetDeliveryDate);
 
     // 5. Build drafts for public.order_drafts (Opción B: Cada adjunto con productos es un borrador independiente)
     const draftsToInsert: any[] = [];
@@ -1709,7 +1714,7 @@ export async function POST(req: Request) {
               address: att.address || extractedData.address || null,
               addressDetected: addressDetected,
               deliverySlot: att.deliverySlot || finalDeliverySlot,
-              deliveryDate: sanitizeIngestedDeliveryDate(att.deliveryDate) || targetDeliveryDate || null,
+              deliveryDate: hasDeterministicDateOverride ? targetDeliveryDate : (sanitizeIngestedDeliveryDate(att.deliveryDate) || targetDeliveryDate || null),
               deliveryDateSourcePhrase,
               phone: att.phone || extractedData.phone || null,
               nit: att.nit || extractedData.nit || null,
@@ -1782,7 +1787,7 @@ export async function POST(req: Request) {
             address: primarySource.address || extractedData.address || null,
             addressDetected: addressDetected,
             deliverySlot: primarySource.deliverySlot || finalDeliverySlot,
-            deliveryDate: sanitizeIngestedDeliveryDate(primarySource.deliveryDate) || targetDeliveryDate || null,
+            deliveryDate: hasDeterministicDateOverride ? targetDeliveryDate : (sanitizeIngestedDeliveryDate(primarySource.deliveryDate) || targetDeliveryDate || null),
             deliveryDateSourcePhrase,
             phone: primarySource.phone || extractedData.phone || null,
             nit: primarySource.nit || extractedData.nit || null,
@@ -2099,7 +2104,7 @@ export async function POST(req: Request) {
           },
         });
 
-        const today = new Date().toLocaleDateString('es-CO');
+        const today = formatBogotaDate(new Date());
         
         // Cargar memoria de alias de productos
         const { data: aliasRecord } = await supabaseAdmin

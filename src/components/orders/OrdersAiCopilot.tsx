@@ -13,6 +13,32 @@ interface ChatMessage {
   content: string;
 }
 
+interface SpeechRecognitionResultItem {
+  transcript?: string;
+}
+
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<ArrayLike<SpeechRecognitionResultItem>>;
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((evt: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+interface WindowWithSpeech extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
 const QUICK_PROMPTS = [
   'Auditoría de cierre: ¿qué se voló o quedó en día equivocado?',
   '¿Qué clientes habituales ya están vencidos por pedir?',
@@ -28,7 +54,7 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   const sendMessage = async (overrideText?: string) => {
     const text = (overrideText ?? inputValue).trim();
@@ -65,8 +91,8 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
       }
 
       setMessages([...nextMessages, { role: 'assistant', content: json.reply }]);
-    } catch (e: any) {
-      setError(e?.message || 'Error de conexión con Copiloto');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error de conexión con Copiloto');
     } finally {
       setLoading(false);
     }
@@ -79,7 +105,8 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
       setListening(false);
       return;
     }
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as WindowWithSpeech;
+    const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRec) {
       setError('Tu navegador no soporta dictado por voz nativo.');
       return;
@@ -88,9 +115,9 @@ export default function OrdersAiCopilot({ targetDate }: OrdersAiCopilotProps) {
     rec.lang = 'es-CO';
     rec.interimResults = true;
     rec.continuous = false;
-    rec.onresult = (evt: any) => {
+    rec.onresult = (evt: SpeechRecognitionEventLike) => {
       const transcript = Array.from(evt.results)
-        .map((r: any) => r[0]?.transcript || '')
+        .map(r => r[0]?.transcript || '')
         .join(' ')
         .trim();
       setInputValue(transcript);

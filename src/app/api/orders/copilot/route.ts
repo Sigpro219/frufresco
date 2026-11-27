@@ -4,6 +4,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { verifyStaffBearer } from '@/lib/auth/verifyStaffBearer';
 import { buildOrdersCopilotContext } from '@/lib/orders/ordersCopilotContextBuilder';
 
+interface CopilotInputMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -21,11 +26,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
     }
 
-    const body = await req.json();
-    const messages = Array.isArray(body?.messages) ? body.messages : [];
+    const body = (await req.json()) as { messages?: unknown; targetDate?: unknown };
+    const rawMessages = Array.isArray(body?.messages) ? body.messages : [];
+    const messages: CopilotInputMessage[] = rawMessages
+      .filter(
+        (m): m is CopilotInputMessage =>
+          Boolean(m && typeof m === 'object' && 'content' in m && 'role' in m)
+      )
+      .map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content || ''),
+      }));
     const targetDate = typeof body?.targetDate === 'string' ? body.targetDate : undefined;
 
-    const lastUserMsg = [...messages].reverse().find((m: any) => m?.role === 'user')?.content || '';
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
     if (!lastUserMsg.trim()) {
       return NextResponse.json({ success: false, error: 'Mensaje requerido' }, { status: 400 });
     }
@@ -61,9 +75,9 @@ ${ctx.promptText}`;
       },
     });
 
-    const history = messages.slice(-6, -1).map((m: any) => ({
+    const history = messages.slice(-6, -1).map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: String(m.content || '') }],
+      parts: [{ text: m.content }],
     }));
 
     const chat = model.startChat({ history });
@@ -79,11 +93,9 @@ ${ctx.promptText}`;
       lastDraftReceivedAt: ctx.lastDraftReceivedAt,
       lastDraftReceivedAtBogota: ctx.lastDraftReceivedAtBogota,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error en Copiloto de Pedidos';
     console.error('[POST /api/orders/copilot] error:', err);
-    return NextResponse.json(
-      { success: false, error: err?.message || 'Error en Copiloto de Pedidos' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
