@@ -8,6 +8,24 @@ const STOREFRONT_PRODUCT_FALLBACK_COLUMNS =
   'id, sku, name, display_name, name_en, description, category, inventory_group, tags, unit_of_measure, web_unit, weight_kg, options_config, image_url, web_conversion_factor, accounting_id, iva_rate, keywords, is_active, show_on_web, min_inventory_level';
 const STOREFRONT_PRODUCT_COLUMNS = `${STOREFRONT_PRODUCT_FALLBACK_COLUMNS}, pricing_model_prices(price, model_id)`;
 
+export const PUBLIC_APP_SETTINGS_KEYS = [
+  'friogan_storefront_mode',
+  'store_status',
+  'cutoff_hour_public',
+  'min_order_hogar',
+  'delivery_fee',
+  'store_vacation_config',
+  'global_banner',
+  'global_banner_en',
+  'contact_phone',
+  'enable_b2b_lead_capture',
+  'app_logo_url',
+  'hero_image_url',
+  'home_catalog_title',
+  'home_featured_title',
+  'scarcity_locked_skus',
+] as const;
+
 /**
  * Fetches all products visible on the web.
  * Cached for 1 hour by default and deduplicated per-request via React.cache.
@@ -67,7 +85,7 @@ const getVisibleProductsCached = unstable_cache(
     return productList.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
   },
   ['visible-products'],
-  { revalidate: 60, tags: ['products'] }
+  { revalidate: 900, tags: ['products'] }
 );
 
 export const getVisibleProducts = cache((pricingModelId?: string) => getVisibleProductsCached(pricingModelId));
@@ -111,7 +129,10 @@ export const getProductSalesRanking = cache(() => getProductSalesRankingCached()
 const getAppSettingsCached = unstable_cache(
   async () => {
     try {
-      const { data, error } = await supabase.from('app_settings').select('key, value');
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', [...PUBLIC_APP_SETTINGS_KEYS]);
       if (error) {
         console.warn('Warning fetching app settings:', error.message || error);
         return [];
@@ -140,7 +161,7 @@ export const getWebCategories = unstable_cache(
     return ['Todos', ...categories];
   },
   ['web-categories'],
-  { revalidate: 60, tags: ['products', 'web-categories', 'settings'] }
+  { revalidate: 900, tags: ['products', 'web-categories', 'settings'] }
 );
 
 /**
