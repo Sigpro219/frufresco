@@ -18815,3 +18815,16 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
      - `query_product_prices`: tarifas soberanas múltiples (Acuerdo > `General Institucional` > `Clientes Hogar`, cero `products.base_price`).
   2. **Loop de Function Calling en `route.ts`:** `tools: [{ functionDeclarations: COPILOT_TOOL_DECLARATIONS }]`, loop hasta 5 rondas en paralelo (`Promise.all`), trazabilidad en `toolsUsed`.
   3. **Semáforo Andon en Snapshot Base (`ordersCopilotContextBuilder.ts`):** integra `evaluateInventoryGateStatus` para la fecha objetivo.
+
+---
+
+### Escenario 508: Notificación en Vivo al Cerrar Inventario de Hoy (`daily_inventory_closings`) en `/admin/orders/loading`
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `supabase/migrations/20261127_enable_realtime_daily_inventory_closings.sql` (nuevo)
+  - `src/app/admin/orders/loading/page.tsx`
+- **Alcance Contractual (Aprobado por `/goldfish`):**
+  1. **Publicación Realtime Idempotente:** Migración SQL que agrega `public.daily_inventory_closings` a `supabase_realtime` si aún no está publicada.
+  2. **Refresco Atómico (`refreshInventoryClosingAndGate`):** Actualiza en paralelo `todayClosingState` e `inventoryGateStatus` (`evaluateInventoryGateStatus`) calculando `getBogotaDateString()` dinámicamente en cada llamada (sin congelar fechas en filtros).
+  3. **Doble Capa de Sincronización ($0 tokens):** Suscripción pasiva Realtime (`supabase.channel('daily-inventory-closings-live')` con `removeChannel` al desmontar) + fallback en `visibilitychange`/`focus` y el `pollInterval` existente de 25s.
+  4. **Toast Flotante Dedicado:** Avisa únicamente en transiciones reales hacia `partial` o `locked` (ignorando `null -> ...`), con auto-cierre a 8s, botón manual `X` y cero emojis (Lucide icons).

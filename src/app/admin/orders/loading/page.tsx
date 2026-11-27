@@ -260,6 +260,9 @@ function OrderLoadingContent() {
 
     const [inventoryGateStatus, setInventoryGateStatus] = useState<InventoryGateStatus | null>(null);
     const [todayClosingState, setTodayClosingState] = useState<'locked' | 'partial' | 'reopened' | 'none' | null>(null);
+    const [inventoryToast, setInventoryToast] = useState<{ title: string; subtitle: string; tone: 'green' | 'amber' } | null>(null);
+    const prevTodayClosingStateRef = useRef<'locked' | 'partial' | 'reopened' | 'none' | null>(null);
+    const todayClosingAuthorRef = useRef<string | null>(null);
     const [showInventoryGateModal, setShowInventoryGateModal] = useState(false);
     const [gateOverrideConfirmed, setGateOverrideConfirmed] = useState(false);
     const [gateOverrideReason, setGateOverrideReason] = useState('');
@@ -376,29 +379,112 @@ function OrderLoadingContent() {
         }
     }, [dateQueryParam]);
 
-    useEffect(() => {
-        let cancelled = false;
+    const refreshInventoryClosingAndGate = useCallback(async (isCancelled?: () => boolean) => {
         const todayStr = getBogotaDateString();
         const gateTargetDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : todayStr;
-        evaluateInventoryGateStatus({ supabase, targetDate: gateTargetDate })
-            .then((res) => { if (!cancelled) setInventoryGateStatus(res); })
-            .catch((err) => console.warn('Inventory gate status fetch warning:', err));
+        try {
+            const [gateRes, closingRes] = await Promise.all([
+                evaluateInventoryGateStatus({ supabase, targetDate: gateTargetDate }).catch((err) => {
+                    console.warn('Inventory gate status fetch warning:', err);
+                    return null;
+                }),
+                supabase
+                    .from('daily_inventory_closings')
+                    .select('is_locked, notes, closed_by_name')
+                    .eq('closing_date', todayStr)
+                    .maybeSingle(),
+            ]);
 
-        supabase
-            .from('daily_inventory_closings')
-            .select('is_locked, notes')
-            .eq('closing_date', todayStr)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (cancelled) return;
-                if (!data) setTodayClosingState('none');
-                else if (data.is_locked) setTodayClosingState('locked');
-                else if (isPartialClosingNote(data.notes)) setTodayClosingState('partial');
-                else setTodayClosingState('reopened');
-            });
+            if (isCancelled?.()) return;
+            if (gateRes) setInventoryGateStatus(gateRes);
 
+            const closingData = closingRes.data as { is_locked?: boolean | null; notes?: string | null; closed_by_name?: string | null } | null;
+            todayClosingAuthorRef.current = closingData?.closed_by_name || null;
+
+            if (!closingData) setTodayClosingState('none');
+            else if (closingData.is_locked) setTodayClosingState('locked');
+            else if (isPartialClosingNote(closingData.notes)) setTodayClosingState('partial');
+            else setTodayClosingState('reopened');
+        } catch (err) {
+            console.warn('Inventory closing refresh warning:', err);
+        }
+    }, [selectedDate]);
+
+    useEffect(() => {
+        let cancelled = false;
+        refreshInventoryClosingAndGate(() => cancelled);
         return () => { cancelled = true; };
-    }, [refreshTrigger, selectedDate]);
+    }, [refreshInventoryClosingAndGate, refreshTrigger]);
+
+    useEffect(() => {
+        let active = true;
+        const closingChannel = supabase
+            .channel('daily-inventory-closings-live')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'daily_inventory_closings' },
+                (payload) => {
+                    if (!active) return;
+                    const changedDate =
+                        (payload.new as { closing_date?: string } | null)?.closing_date ||
+                        (payload.old as { closing_date?: string } | null)?.closing_date;
+                    if (!changedDate || changedDate === getBogotaDateString()) {
+                        refreshInventoryClosingAndGate(() => !active);
+                    }
+                }
+            )
+            .subscribe();
+
+        const handleWakeRefresh = () => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            refreshInventoryClosingAndGate(() => !active);
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('focus', handleWakeRefresh);
+        }
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', handleWakeRefresh);
+        }
+
+        return () => {
+            active = false;
+            supabase.removeChannel(closingChannel);
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('focus', handleWakeRefresh);
+            }
+            if (typeof document !== 'undefined') {
+                document.removeEventListener('visibilitychange', handleWakeRefresh);
+            }
+        };
+    }, [refreshInventoryClosingAndGate]);
+
+    useEffect(() => {
+        const prev = prevTodayClosingStateRef.current;
+        prevTodayClosingStateRef.current = todayClosingState;
+        if (!prev || !todayClosingState || prev === todayClosingState) return;
+
+        if (todayClosingState === 'locked' && (prev === 'none' || prev === 'reopened' || prev === 'partial')) {
+            const authorPart = todayClosingAuthorRef.current ? ` por ${todayClosingAuthorRef.current}` : '';
+            setInventoryToast({
+                tone: 'green',
+                title: 'Inventario de hoy cerrado oficialmente',
+                subtitle: `Cerrado${authorPart}. Ya puedes aprobar y lanzar la operación de mañana.`,
+            });
+        } else if (todayClosingState === 'partial' && (prev === 'none' || prev === 'reopened')) {
+            setInventoryToast({
+                tone: 'amber',
+                title: 'Cierre parcial de inventario avalado',
+                subtitle: 'Conteo físico listo. Ya puedes aprobar y lanzar la operación de mañana.',
+            });
+        }
+    }, [todayClosingState]);
+
+    useEffect(() => {
+        if (!inventoryToast) return;
+        const timer = setTimeout(() => setInventoryToast(null), 8000);
+        return () => clearTimeout(timer);
+    }, [inventoryToast]);
 
     const [dateCounts, setDateCounts] = useState<{ yesterday: number; today: number; tomorrow: number }>({ yesterday: 0, today: 0, tomorrow: 0 });
 
@@ -2000,6 +2086,7 @@ useEffect(() => {
             if (typeof document !== 'undefined' && document.hidden) return;
             fetchOrders(false);
             fetchDateCounts();
+            refreshInventoryClosingAndGate(() => !active);
             // SPEC.md Escenario 430: Drenar la cola de correos salientes cuyo buffer de 2 min haya vencido
             fetch('/api/mail/process', { method: 'POST' }).catch(() => {});
         }, 25000);
@@ -2009,7 +2096,7 @@ useEffect(() => {
             clearInterval(pollInterval);
             supabase.removeChannel(ordersChannel);
         };
-    }, [selectedDate, refreshTrigger, fetchDateCounts]);
+    }, [selectedDate, refreshTrigger, fetchDateCounts, refreshInventoryClosingAndGate]);
 
     // Buscador Global en Vivo (todas las fechas y todos los estados) aislado de `orders` y KPIs (Escenario 473)
     useEffect(() => {
@@ -3564,6 +3651,56 @@ useEffect(() => {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: THEME.colors.background, fontFamily: THEME.typography?.fontFamilyMain || 'var(--font-outfit), sans-serif' }}>
+            {inventoryToast && (
+                <div
+                    role="status"
+                    style={{
+                        position: 'fixed',
+                        top: '94px',
+                        right: '24px',
+                        zIndex: 90,
+                        maxWidth: '400px',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                        padding: '12px 14px',
+                        borderRadius: '12px',
+                        backgroundColor: inventoryToast.tone === 'green' ? '#ECFDF5' : '#FFFBEB',
+                        border: `1.5px solid ${inventoryToast.tone === 'green' ? '#34D399' : '#FBBF24'}`,
+                        color: inventoryToast.tone === 'green' ? '#065F46' : '#92400E',
+                        boxShadow: '0 12px 30px rgba(15, 23, 42, 0.16)',
+                    }}
+                >
+                    <CheckCircle2
+                        size={19}
+                        color={inventoryToast.tone === 'green' ? '#059669' : '#D97706'}
+                        style={{ flexShrink: 0, marginTop: '1px' }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 800, lineHeight: 1.25 }}>
+                            {inventoryToast.title}
+                        </div>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 600, marginTop: '2px', lineHeight: 1.35 }}>
+                            {inventoryToast.subtitle}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setInventoryToast(null)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '2px',
+                            cursor: 'pointer',
+                            color: 'inherit',
+                            opacity: 0.7,
+                        }}
+                        title="Cerrar notificación"
+                    >
+                        <X size={15} />
+                    </button>
+                </div>
+            )}
             
             <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0.4rem 2rem' }}>
                 <header style={{ marginBottom: '0.65rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
