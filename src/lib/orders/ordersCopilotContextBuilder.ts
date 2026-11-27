@@ -25,7 +25,66 @@ import {
 const GENERAL_INSTITUCIONAL_ID = 'd90a91e5-827c-473d-9d4f-3e28c7c91e15';
 const CLIENTES_HOGAR_ID = 'f7043ca1-94d5-4d25-bd10-fbf30ce120ee';
 const HEADER_CACHE_TTL_MS = 120_000;
-const MAX_PROMPT_CHARS = 22_000;
+const MAX_PROMPT_CHARS = 24_000;
+
+const PRODUCT_STOPWORDS = new Set([
+  'cuanto', 'cuanta', 'cuantos', 'cuantas', 'debemos', 'debo', 'hay', 'enviar', 'despachar',
+  'mandar', 'alistar', 'comprar', 'necesitamos', 'necesito', 'manana', 'hoy', 'ayer',
+  'pedido', 'pedidos', 'orden', 'ordenes', 'producto', 'productos', 'referencia', 'referencias',
+  'item', 'items', 'suma', 'sumatoria', 'total', 'totales', 'kilo', 'kilos', 'libra', 'libras',
+  'unidad', 'unidades', 'paquete', 'paquetes', 'bulto', 'bultos', 'canastilla', 'canastillas',
+  'para', 'del', 'los', 'las', 'una', 'uno', 'unos', 'unas', 'con', 'sin', 'que', 'tiene',
+  'tienen', 'por', 'favor', 'dame', 'dime', 'muestra', 'muestrame', 'ver', 'lista', 'precio',
+  'precios', 'acuerdo', 'acuerdos', 'hogar', 'institucional', 'cliente', 'clientes', 'correo',
+  'correos', 'bandeja', 'entrada', 'cual', 'cuales', 'como', 'esta', 'estan', 'son', 'fue',
+  'ser', 'todo', 'todos', 'todas', 'sobre', 'entre', 'cada', 'mas', 'menos', 'valor', 'vale',
+  'cuesta', 'tarifa', 'tarifas', 'fecha', 'entrega', 'dia', 'dias', 'semana', 'mes',
+]);
+
+function normalizeTextNoAccents(text: string): string {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Extracts up to 5 explicit order sequence numbers from natural-language queries:
+ * `#2435`, `pedido 2435`, `pedidos 2435, 2432 y 2397`, `2711_2435`.
+ */
+export function extractFocalOrderSequences(query: string): number[] {
+  const clean = String(query || '').trim().toLowerCase();
+  const seqSet = new Set<number>();
+  for (const m of clean.matchAll(/#(\d{3,8})\b/g)) {
+    seqSet.add(Number(m[1]));
+  }
+  for (const m of clean.matchAll(/\b\d{4}_(\d{3,8})\b/g)) {
+    seqSet.add(Number(m[1]));
+  }
+  for (const m of clean.matchAll(
+    /\b(?:pedidos?|ordenes|órdenes|remisi[oó]n|remisiones|ped|nro|num)\s*[:#-]?\s*((?:#?\d{3,8}(?:\s*(?:,|y|e|&|\s)\s*#?\d{3,8})*))/gi
+  )) {
+    for (const numMatch of m[1].matchAll(/\d{3,8}/g)) {
+      seqSet.add(Number(numMatch[0]));
+    }
+  }
+  return [...seqSet].filter(n => Number.isFinite(n) && n > 0).slice(0, 5);
+}
+
+/**
+ * Extracts normalized product search terms (accent-free) for demand summation & price lookups.
+ */
+export function extractProductSearchTerms(query: string): string[] {
+  const norm = normalizeTextNoAccents(query)
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(/\b\d{4}_\d{3,8}\b/g, ' ')
+    .replace(/[#¿?¡!.,:;()/"']/g, ' ');
+  const tokens = norm
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 3 && !/^\d+$/.test(t) && !PRODUCT_STOPWORDS.has(t));
+  return [...new Set(tokens)].slice(0, 6);
+}
 
 export interface OrdersCopilotContext {
   targetDate: string;
@@ -680,13 +739,9 @@ export async function buildOrdersCopilotContext(params: {
     .filter(o => (o.created_at || '') >= cutoff36hIso && String(o.delivery_date || '').slice(0, 10) !== targetDate)
     .sort(compareOrdersDesc);
 
-  // 8. Dynamic Focus (anchored order numbers + OC + clients + products/prices)
+  // 8. Dynamic Focus (anchored order numbers [up to 5] + OC + clients + demand summation + products/prices)
   const cleanFocus = focusQuery.trim().toLowerCase();
-  const seqSet = new Set<number>();
-  for (const m of cleanFocus.matchAll(/#(\d{3,8})\b/g)) seqSet.add(Number(m[1]));
-  for (const m of cleanFocus.matchAll(/\b(?:pedido|orden|ped|nro|num|remisi[oó]n)\s*#?\s*(\d{3,8})\b/gi)) seqSet.add(Number(m[1]));
-  for (const m of cleanFocus.matchAll(/\b\d{4}_(\d{3,8})\b/g)) seqSet.add(Number(m[1]));
-  const seqMatches = [...seqSet].slice(0, 2);
+  const seqMatches = extractFocalOrderSequences(focusQuery);
 
   const ocSet = new Set<string>();
   for (const m of cleanFocus.matchAll(/\b(?:oc|orden\s+de\s+compra)\s*[:#-]?\s*([a-z0-9-]{3,20})\b/gi)) {
@@ -696,84 +751,206 @@ export async function buildOrdersCopilotContext(params: {
   const focusLines: string[] = [];
   const focalOrders: ExtendedOrderInput[] = [];
 
+  const missingSeqs: number[] = [];
   for (const seqNum of seqMatches) {
-    let oHit = allOrders.find(o => o.sequence_id === seqNum);
-    if (!oHit) {
-      const { data: directOrder } = await supabaseAdmin
-        .from('orders')
-        .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, logistics_data')
-        .eq('sequence_id', seqNum)
-        .maybeSingle();
-      if (directOrder) oHit = directOrder as ExtendedOrderInput;
-    }
+    const oHit = allOrders.find(o => o.sequence_id === seqNum);
     if (oHit) focalOrders.push(oHit);
+    else missingSeqs.push(seqNum);
+  }
+  if (missingSeqs.length > 0) {
+    const { data: directOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id, sequence_id, profile_id, status, delivery_date, created_at, total, total_weight_kg, origin_source, purchase_order_number, logistics_data')
+      .in('sequence_id', missingSeqs);
+    for (const dOrd of (directOrders || []) as ExtendedOrderInput[]) {
+      if (!focalOrders.some(f => f.id === dOrd.id)) focalOrders.push(dOrd);
+    }
   }
 
-  if (ocSet.size > 0 && focalOrders.length < 2) {
+  if (ocSet.size > 0 && focalOrders.length < 5) {
     for (const o of allOrders) {
       const po = String(o.purchase_order_number || '').trim().toUpperCase();
       if (po && ocSet.has(po) && !focalOrders.some(f => f.id === o.id)) {
         focalOrders.push(o);
-        if (focalOrders.length >= 2) break;
+        if (focalOrders.length >= 5) break;
       }
     }
   }
 
-  for (const oHit of focalOrders) {
-    const [{ data: extraNoteRow }, { data: items, count }] = await Promise.all([
-      supabaseAdmin.from('orders').select('admin_notes').eq('id', oHit.id).maybeSingle(),
-      supabaseAdmin
-        .from('order_items')
-        .select('product_id, quantity, unit, unit_price, variant_label, nickname, products(accounting_id, name, unit_of_measure)', { count: 'exact' })
-        .eq('order_id', oHit.id)
-        .limit(40),
-    ]);
-
-    const cName = getOrderClientLabel(oHit, profileMap);
-    const ag = resolver.resolveForProfile(oHit.profile_id, profileMap);
-    const adminNotesSnippet = String((extraNoteRow as { admin_notes?: string } | null)?.admin_notes || '')
-      .replace(/\s+/g, ' ')
-      .slice(0, 320);
-
-    focusLines.push(
-      `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${cName}", estado=${oHit.status}, entrega=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=${formatCop(oHit.total)}, kg=${oHit.total_weight_kg || 0}, OC="${oHit.purchase_order_number || ''}", acuerdo=${ag ? `${ag.quote.client_name || ag.quote.model_snapshot_name} [${ag.lifecycleState}, vence=${ag.effectiveUntil || 'N/D'}]` : 'Sin acuerdo (General/Hogar)'}`
+  if (focalOrders.length > 0) {
+    const focalDetails = await Promise.all(
+      focalOrders.map(async oHit => {
+        const [{ data: extraNoteRow }, { data: items, count }] = await Promise.all([
+          supabaseAdmin.from('orders').select('admin_notes').eq('id', oHit.id).maybeSingle(),
+          supabaseAdmin
+            .from('order_items')
+            .select('product_id, quantity, unit, unit_price, variant_label, nickname, products(accounting_id, name, unit_of_measure)', { count: 'exact' })
+            .eq('order_id', oHit.id)
+            .limit(80),
+        ]);
+        return { oHit, extraNoteRow, items, count };
+      })
     );
-    if (adminNotesSnippet) {
-      focusLines.push(`  NOTAS ADMIN #${oHit.sequence_id}: "${adminNotesSnippet}"`);
-    }
 
-    const typedItems = (items || []) as OrderItemJoinRow[];
-    const focalProdIds = typedItems.map(i => i.product_id).filter((v): v is string => Boolean(v));
-    const agPricesMap = new Map<string, number>();
-    if (ag && focalProdIds.length > 0) {
+    const allFocalProdIds = [
+      ...new Set(
+        focalDetails.flatMap(d =>
+          ((d.items || []) as OrderItemJoinRow[]).map(i => i.product_id).filter((v): v is string => Boolean(v))
+        )
+      ),
+    ];
+    const focalQuoteIds = [
+      ...new Set(
+        focalDetails
+          .map(d => resolver.resolveForProfile(d.oHit.profile_id, profileMap)?.quote.id)
+          .filter((v): v is string => Boolean(v))
+      ),
+    ];
+
+    const agPriceByQuoteProd = new Map<string, number>();
+    if (focalQuoteIds.length > 0 && allFocalProdIds.length > 0) {
       const { data: qItems } = await supabaseAdmin
         .from('quote_items')
-        .select('product_id, unit_price')
-        .eq('quote_id', ag.quote.id)
-        .in('product_id', focalProdIds);
-      for (const qi of (qItems || []) as Array<{ product_id: string; unit_price: number }>) {
-        agPricesMap.set(qi.product_id, Number(qi.unit_price || 0));
+        .select('quote_id, product_id, unit_price')
+        .in('quote_id', focalQuoteIds)
+        .in('product_id', allFocalProdIds);
+      for (const qi of (qItems || []) as Array<{ quote_id: string; product_id: string; unit_price: number }>) {
+        agPriceByQuoteProd.set(`${qi.quote_id}|${qi.product_id}`, Number(qi.unit_price || 0));
       }
     }
 
-    if (typedItems.length > 0) {
-      const itemStrs = typedItems.map(it => {
-        const p = Array.isArray(it.products) ? it.products[0] : it.products;
-        const aid = p?.accounting_id ? `#${p.accounting_id}` : '#S/N';
-        const name = p?.name || it.nickname || 'Producto';
-        const unit = it.unit || p?.unit_of_measure || '';
-        const agP = it.product_id ? agPricesMap.get(it.product_id) : undefined;
-        const priceDiffNote =
-          agP !== undefined && Math.abs(agP - Number(it.unit_price || 0)) > 1
-            ? ` [ACUERDO=${formatCop(agP)}]`
-            : Number(it.unit_price || 0) === 0
-            ? ' [EN_$0]'
-            : '';
-        return `${aid} ${name} (${it.quantity} ${unit}${it.variant_label ? ` ${it.variant_label}` : ''}) ${formatCop(it.unit_price)}${priceDiffNote}`;
-      });
+    for (const { oHit, extraNoteRow, items, count } of focalDetails) {
+      const cName = getOrderClientLabel(oHit, profileMap);
+      const ag = resolver.resolveForProfile(oHit.profile_id, profileMap);
+      const adminNotesSnippet = String((extraNoteRow as { admin_notes?: string } | null)?.admin_notes || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 320);
+
       focusLines.push(
-        `  LÍNEAS #${oHit.sequence_id} (${typedItems.length}/${count ?? typedItems.length}): ${itemStrs.join(' | ')}`
+        `PEDIDO FOCAL #${oHit.sequence_id}: cliente="${cName}", estado=${oHit.status}, entrega=${oHit.delivery_date}, creado=${formatBogotaTimestamp(oHit.created_at)}, origen=${oHit.origin_source}, total=${formatCop(oHit.total)}, kg=${oHit.total_weight_kg || 0}, OC="${oHit.purchase_order_number || ''}", acuerdo=${ag ? `${ag.quote.client_name || ag.quote.model_snapshot_name} [${ag.lifecycleState}, vence=${ag.effectiveUntil || 'N/D'}]` : 'Sin acuerdo (General/Hogar)'}`
       );
+      if (adminNotesSnippet) {
+        focusLines.push(`  NOTAS ADMIN #${oHit.sequence_id}: "${adminNotesSnippet}"`);
+      }
+
+      const typedItems = (items || []) as OrderItemJoinRow[];
+      if (typedItems.length > 0) {
+        const itemStrs = typedItems.map(it => {
+          const p = Array.isArray(it.products) ? it.products[0] : it.products;
+          const aid = p?.accounting_id ? `#${p.accounting_id}` : '#S/N';
+          const name = p?.name || it.nickname || 'Producto';
+          const unit = it.unit || p?.unit_of_measure || '';
+          const agP =
+            ag && it.product_id ? agPriceByQuoteProd.get(`${ag.quote.id}|${it.product_id}`) : undefined;
+          const priceDiffNote =
+            agP !== undefined && Math.abs(agP - Number(it.unit_price || 0)) > 1
+              ? ` [ACUERDO=${formatCop(agP)}]`
+              : Number(it.unit_price || 0) === 0
+              ? ' [EN_$0]'
+              : '';
+          return `${aid} ${name} (${it.quantity} ${unit}${it.variant_label ? ` ${it.variant_label}` : ''}) ${formatCop(it.unit_price)}${priceDiffNote}`;
+        });
+        focusLines.push(
+          `  LÍNEAS #${oHit.sequence_id} (${typedItems.length}/${count ?? typedItems.length}): ${itemStrs.join(' | ')}`
+        );
+      }
+    }
+  }
+
+  // 8B. Deterministic Product Demand Summation (e.g. "cuanto champiñon y cuanta papaya debemos enviar mañana?")
+  const searchTerms = extractProductSearchTerms(focusQuery);
+  const normFocusNoAcc = normalizeTextNoAccents(focusQuery);
+  const wantsDemandSum =
+    /\b(cuant[oa]s?|sumatoria|suma|total\s+de|enviar|despachar|mandar|necesitamos|alistar|comprar|llevamos|salen|hay\s+de)\b/i.test(
+      normFocusNoAcc
+    );
+
+  if (wantsDemandSum && searchTerms.length > 0 && focalOrders.length === 0) {
+    let demandDate = targetDate;
+    const explicitDateMatch = normFocusNoAcc.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (explicitDateMatch) {
+      demandDate = explicitDateMatch[1];
+    } else if (/\bhoy\b/.test(normFocusNoAcc)) {
+      demandDate = todayBogota;
+    } else if (/\bmanana\b/.test(normFocusNoAcc)) {
+      demandDate = addBogotaDays(todayBogota, 1);
+    }
+
+    const demandOrders = allOrders.filter(o => String(o.delivery_date || '').slice(0, 10) === demandDate);
+    if (demandOrders.length > 0) {
+      const demandOrderMap = new Map<string, ExtendedOrderInput>(demandOrders.map(o => [o.id, o]));
+      const demandIds = demandOrders.map(o => o.id);
+      // Chunk by 40 orders to stay well under PostgREST 1000-row limit
+      const chunks: string[][] = [];
+      for (let i = 0; i < demandIds.length; i += 40) chunks.push(demandIds.slice(i, i + 40));
+
+      const chunkResults = await Promise.all(
+        chunks.map(cIds =>
+          supabaseAdmin
+            .from('order_items')
+            .select('order_id, product_id, quantity, unit, variant_label, nickname, products(accounting_id, name, unit_of_measure)')
+            .in('order_id', cIds)
+        )
+      );
+
+      type DemandItemRow = {
+        order_id: string;
+        quantity: number;
+        unit: string | null;
+        variant_label: string | null;
+        nickname: string | null;
+        products: JoinedProductRef | JoinedProductRef[] | null;
+      };
+      const allDemandItems = chunkResults.flatMap(r => (r.data || []) as DemandItemRow[]);
+
+      focusLines.push(`SUMATORIA DETERMINÍSTICA DE DEMANDA PARA ${demandDate} (${demandOrders.length} pedidos activos):`);
+      for (const term of searchTerms) {
+        const byProduct = new Map<
+          string,
+          { acc: string; name: string; unit: string; totalQty: number; breakdown: string[] }
+        >();
+        const totalByUnit = new Map<string, number>();
+
+        for (const it of allDemandItems) {
+          const p = Array.isArray(it.products) ? it.products[0] : it.products;
+          const pName = p?.name || it.nickname || '';
+          const accStr = p?.accounting_id ? String(p.accounting_id) : '';
+          const haystack = normalizeTextNoAccents(`${pName} ${it.variant_label || ''} ${accStr}`);
+          if (!haystack.includes(term)) continue;
+
+          const unit = it.unit || p?.unit_of_measure || 'Unidad';
+          const qty = Number(it.quantity || 0);
+          const key = `${accStr || 'SN'}|${pName}|${unit}`;
+          const cur = byProduct.get(key) || {
+            acc: accStr ? `#${accStr}` : '#S/N',
+            name: pName || 'Producto',
+            unit,
+            totalQty: 0,
+            breakdown: [],
+          };
+          cur.totalQty = Math.round((cur.totalQty + qty) * 1000) / 1000;
+          const ord = demandOrderMap.get(it.order_id);
+          if (ord) {
+            cur.breakdown.push(`#${ord.sequence_id} ${getOrderClientLabel(ord, profileMap)}: ${qty} ${unit}`);
+          }
+          byProduct.set(key, cur);
+          totalByUnit.set(unit, Math.round(((totalByUnit.get(unit) || 0) + qty) * 1000) / 1000);
+        }
+
+        if (byProduct.size === 0) {
+          focusLines.push(`  - Término "${term}": 0 unidades en pedidos de ${demandDate}.`);
+        } else {
+          const unitTotalsStr = [...totalByUnit.entries()].map(([u, q]) => `${q} ${u}`).join(' + ');
+          focusLines.push(`  - Término "${term}" -> GRAN TOTAL: ${unitTotalsStr}`);
+          for (const grp of byProduct.values()) {
+            focusLines.push(
+              `    * ${grp.acc} ${grp.name}: ${grp.totalQty} ${grp.unit} (${grp.breakdown.slice(0, 12).join('; ')}${grp.breakdown.length > 12 ? `; ... +${grp.breakdown.length - 12} más` : ''})`
+            );
+          }
+        }
+      }
+    } else {
+      focusLines.push(`SUMATORIA DETERMINÍSTICA (${demandDate}): 0 pedidos activos para esa fecha.`);
     }
   }
 
@@ -924,8 +1101,16 @@ export async function buildOrdersCopilotContext(params: {
   const lines: string[] = [
     `=== SNAPSHOT OPERATIVO v3 (BOGOTÁ HOY: ${todayBogota} | FECHA OBJETIVO: ${targetDate} - ${radar.weekdayName.toUpperCase()}) ===`,
     `Generado (Bogotá): ${formatBogotaTimestamp(now.toISOString())} | Último borrador Supabase: ${lastDraftReceivedAtBogota || 'Sin registros'}`,
-    `1) CARGA ${targetDate}: pedidos=${targetOrders.length} | valor=${formatCop(targetKpi.totalCop)} | peso=${(targetKpi.totalKg / 1000).toFixed(2)} TON (${targetKpi.totalKg.toFixed(1)} kg) | aprobacion=${targetKpi.approvalRate}% | cobertura_hab=${targetKpi.habRate}% | por_estado=${JSON.stringify(targetKpi.byStatus)} | splits_$0=${targetKpi.zeroSplit} | total_$0=${targetKpi.zeroTotal} | sin_bodega=${targetKpi.missingSpaces}`,
   ];
+
+  if (focusLines.length > 0) {
+    lines.push('0) FOCO DINÁMICO Y CONSULTA DIRECTA (PRIORIDAD MÁXIMA):');
+    lines.push(...focusLines);
+  }
+
+  lines.push(
+    `1) CARGA ${targetDate}: pedidos=${targetOrders.length} | valor=${formatCop(targetKpi.totalCop)} | peso=${(targetKpi.totalKg / 1000).toFixed(2)} TON (${targetKpi.totalKg.toFixed(1)} kg) | aprobacion=${targetKpi.approvalRate}% | cobertura_hab=${targetKpi.habRate}% | por_estado=${JSON.stringify(targetKpi.byStatus)} | splits_$0=${targetKpi.zeroSplit} | total_$0=${targetKpi.zeroTotal} | sin_bodega=${targetKpi.missingSpaces}`
+  );
 
   if (todayKpi) {
     lines.push(
@@ -1020,14 +1205,9 @@ export async function buildOrdersCopilotContext(params: {
     }
   }
 
-  if (focusLines.length > 0) {
-    lines.push('9) FOCO DINÁMICO SOLICITADO:');
-    lines.push(...focusLines);
-  }
-
   let promptText = lines.join('\n');
   if (promptText.length > MAX_PROMPT_CHARS) {
-    promptText = `${promptText.slice(0, MAX_PROMPT_CHARS - 60)}\n...[SNAPSHOT RECORTADO AL TOPE DE 22K CHARS]`;
+    promptText = `${promptText.slice(0, MAX_PROMPT_CHARS - 60)}\n...[SNAPSHOT RECORTADO AL TOPE DE 24K CHARS]`;
   }
 
   return {

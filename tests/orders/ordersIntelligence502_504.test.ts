@@ -11,7 +11,11 @@ import {
   type FrequencyRadarOrderInput,
   type FrequencyRadarProfileInput,
 } from '../../src/lib/orders/frequencyEngine';
-import { detectDraftDateDiscrepancies } from '../../src/lib/orders/ordersCopilotContextBuilder';
+import {
+  detectDraftDateDiscrepancies,
+  extractFocalOrderSequences,
+  extractProductSearchTerms,
+} from '../../src/lib/orders/ordersCopilotContextBuilder';
 import { sanitizeGeminiHistory } from '../../src/app/api/orders/copilot/route';
 
 test('Escenario 502: Gourmet Titán 2026-11-25 "para el jueves" -> 2026-11-26', () => {
@@ -198,4 +202,14 @@ test('Escenario 505: sanitizeGeminiHistory garantiza primer rol user, alternanci
   for (let i = 1; i < c3.history.length; i++) {
     assert.notEqual(c3.history[i].role, c3.history[i - 1].role);
   }
+});
+
+test('Escenario 505-B: extractFocalOrderSequences y extractProductSearchTerms para multi-pedido y sumatoria', () => {
+  assert.deepEqual(extractFocalOrderSequences('que productos tiene el pedido 2435'), [2435]);
+  assert.deepEqual(extractFocalOrderSequences('muestrame los pedidos 2435, 2432 y #2397'), [2397, 2435, 2432]);
+  assert.deepEqual(extractFocalOrderSequences('2711_2435'), [2435]);
+  assert.deepEqual(
+    extractProductSearchTerms('cuanto champiñon y cuanta papaya debemos enviar mañana?'),
+    ['champinon', 'papaya']
+  );
 });
