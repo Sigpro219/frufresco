@@ -1008,14 +1008,15 @@ export async function POST(request: Request) {
                     if (route.metrics) {
                         let returnEta: string | undefined;
                         if (route.vehicleEndTime) {
-                            try {
+                            const endMs = new Date(route.vehicleEndTime).getTime();
+                            if (Number.isFinite(endMs)) {
                                 returnEta = new Intl.DateTimeFormat('en-GB', {
                                     timeZone: 'America/Bogota',
                                     hour: '2-digit',
                                     minute: '2-digit',
                                     hour12: false,
-                                }).format(new Date(route.vehicleEndTime));
-                            } catch (_) {}
+                                }).format(new Date(endMs));
+                            }
                         }
                         routeMetrics[vehicleId] = {
                             distance_km: Math.round(((Number(route.metrics.travelDistanceMeters) || 0) / 1000) * 10) / 10,

@@ -18912,7 +18912,7 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   - `src/components/RouteSpaghettiMapModal.tsx`
 - **Alcance Contractual (Blindado tras Goldfish Modo 1):**
   1. **Telemetría Real en `/api/transport/optimize`:**
-     - En `route_metrics[vehicleId]`: agregar `service_min?: number` (desde `route.metrics.visitDuration`) y `return_eta?: string` (desde `route.vehicleEndTime` en formato 24h `HH:MM` `America/Bogota`).
+     - En `route_metrics[vehicleId]`: agregar `service_min?: number` (desde `route.metrics.visitDuration`) y `return_eta?: string` (desde `route.vehicleEndTime` validado con `Number.isFinite(new Date(...).getTime())` en formato 24h `HH:MM` `America/Bogota`, sin bloques `catch` vacíos).
      - En `stop_leg_metrics[orderId]`: agregar `service_min?: number` (`unloadingTime` real del clúster en líder `idx === 0`, `0` en `idx > 0`) y `cluster_size?: number` (en líder cuando `memberIds.length > 1`).
   2. **Cabecera de Vehículo en `RoutePlanner.tsx`:**
      - Consumir `duration` ya retornado por `getEstimatedTimesForVehicle` para mostrar `Cargue {loadStart} ({duration}m) → Salida {departure}`.

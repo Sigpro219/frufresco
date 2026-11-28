@@ -3609,9 +3609,9 @@ useEffect(() => {
                 }
             }
 
-            const totalKg = selectedList.reduce((s: number, o: any) => s + (Number(o.total_weight_kg) || 0), 0);
+            const totalKg = selectedList.reduce((s, o) => s + (Number(o.total_weight_kg) || 0), 0);
             const allSpaces = selectedList
-                .flatMap((o: any) => {
+                .flatMap((o) => {
                     const assigned = allocatedSpacesMap[o.id];
                     return Array.isArray(assigned) && assigned.length > 0 ? assigned : (Array.isArray(o.warehouse_spaces) ? o.warehouse_spaces : []);
                 })
