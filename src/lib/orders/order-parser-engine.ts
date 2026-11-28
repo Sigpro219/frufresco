@@ -380,10 +380,53 @@ export interface ProductMatchResult {
 export function findBestProductMatchDetails(
   rawName: string,
   products: any[],
-  learnedMemory: any[] = []
+  learnedMemory: any[] = [],
+  explicitAccountingId?: string | number | null
 ): ProductMatchResult {
   const cleanInput = sanitizeDocText(rawName);
-  if (!cleanInput || !products || products.length === 0) {
+  const rawAccInput = explicitAccountingId !== undefined && explicitAccountingId !== null
+    ? String(explicitAccountingId).trim().replace(/^#/, '')
+    : '';
+  if ((!cleanInput && !rawAccInput) || !products || products.length === 0) {
+    return { product: null, confidence: 'LOW', confidenceScore: 0, matchSource: 'NONE', matchReason: 'Sin datos de entrada' };
+  }
+
+  // Prioridad 0A (Soberanía Absoluta accounting_id explícito): antes de memoria histórica o nombre
+  if (rawAccInput) {
+    const isNumericAcc = /^\d+$/.test(rawAccInput);
+    const numAcc = isNumericAcc ? Number(rawAccInput) : NaN;
+    const lowerAcc = rawAccInput.toLowerCase();
+    const matchedByExplicit = products.find((p) => {
+      if (p.accounting_id !== undefined && p.accounting_id !== null && String(p.accounting_id).trim() !== '') {
+        const pAccStr = String(p.accounting_id).trim().replace(/^#/, '');
+        if (isNumericAcc && /^\d+$/.test(pAccStr) && Number(pAccStr) === numAcc) return true;
+        if (pAccStr.toLowerCase() === lowerAcc) return true;
+      }
+      if (p.sku && String(p.sku).trim().toLowerCase() === lowerAcc) return true;
+      return false;
+    });
+    if (matchedByExplicit) {
+      return {
+        product: matchedByExplicit,
+        confidence: 'HIGH',
+        confidenceScore: 100,
+        matchSource: 'EXACT',
+        matchReason: `Identificador contable explícito (#${matchedByExplicit.accounting_id ?? rawAccInput})`
+      };
+    }
+    // Regla Anti-Adivinanza: si vino un accounting_id numérico explícito y no existe en catálogo, no adivinar por nombre
+    if (isNumericAcc) {
+      return {
+        product: null,
+        confidence: 'LOW',
+        confidenceScore: 0,
+        matchSource: 'NONE',
+        matchReason: `Identificador contable explícito (#${rawAccInput}) no encontrado en catálogo`
+      };
+    }
+  }
+
+  if (!cleanInput) {
     return { product: null, confidence: 'LOW', confidenceScore: 0, matchSource: 'NONE', matchReason: 'Sin datos de entrada' };
   }
 
@@ -393,9 +436,12 @@ export function findBestProductMatchDetails(
     .replace(/\b(?:kg|kls?|kilos?|g|gr|grs|gramos?|lbs?|libras?|unidades?|uds?|unds?|paquetes?|atados?|litros?|lt)\b/gi, '')
     .trim();
 
-  // Prioridad 0 (SPEC.md Escenario 429): Coincidencia Mandatoria por accounting_id si el texto incluye #ID o código numérico
+  // Prioridad 0B (SPEC.md Escenario 429 & 515): Coincidencia Mandatoria por accounting_id en texto
+  // Solo acepta prefijo explícito (#, ID:, COD:), cadena solo numérica o separador estructural (-, –, —, :, |) seguido de letra.
+  // PROHIBIDO espacio simple para que cantidades ("15 calabacin") jamás se interpreten como accounting_id.
   const idMatch = rawName.match(/(?:#|\b(?:id|cod|codigo|código|idproducto)\s*[:#]?\s*)(\d{1,6})\b/i)
-    || rawName.match(/^\s*(\d{1,6})\s*$/);
+    || rawName.match(/^\s*(\d{1,6})\s*$/)
+    || rawName.match(/^\s*(\d{1,6})\s*[-–—:|]\s*(?=[a-zA-ZáéíóúñÁÉÍÓÚÑ])/);
   if (idMatch && idMatch[1]) {
     const candidateAccId = Number(idMatch[1]);
     const matchedByAcc = products.find(p => Number(p.accounting_id) === candidateAccId);
@@ -521,9 +567,10 @@ export function findBestProductMatchDetails(
 export function findBestProductMatch(
   rawName: string,
   products: any[],
-  learnedMemory: any[] = []
+  learnedMemory: any[] = [],
+  explicitAccountingId?: string | number | null
 ): any | null {
-  return findBestProductMatchDetails(rawName, products, learnedMemory).product;
+  return findBestProductMatchDetails(rawName, products, learnedMemory, explicitAccountingId).product;
 }
 
 /**

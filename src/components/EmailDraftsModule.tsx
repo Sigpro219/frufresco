@@ -3258,9 +3258,12 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
     let extractedId = '';
     const idMatch = raw.match(/\(([^)]+)\)$/);
     if (idMatch) {
-      extractedId = idMatch[1].trim().toLowerCase();
+      extractedId = idMatch[1].trim().replace(/^#/, '').toLowerCase();
     }
     const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const directIdQuery = !extractedId && /^#?\d{1,6}$/.test(raw)
+      ? raw.replace(/^#/, '').toLowerCase()
+      : '';
 
     const isStrictAgreement = !allowOffAgreementPurchases && agreementProductIds.size > 0;
     const eligibleProducts = isStrictAgreement
@@ -3297,6 +3300,10 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
       const phoneticNickname = normNickname.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
 
       if (extractedId && (normAcc === extractedId || normSku === extractedId)) {
+        return true;
+      }
+
+      if (directIdQuery && (normAcc === directIdQuery || normAcc.startsWith(directIdQuery) || normSku === directIdQuery)) {
         return true;
       }
 
@@ -3372,10 +3379,15 @@ export default function EmailDraftsModule({ onDraftsChange, topOffset }: EmailDr
         if (wordsB[0] === queryWords[0] || (phoneticWordsB[0] && phoneticWordsB[0] === queryTokens[0])) scoreB += 5000;
       }
 
-      // Exact match with extracted accounting ID or SKU gets highest boost
-      if (extractedId) {
-        if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 8000;
-        if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 8000;
+      // Soberanía absoluta accounting_id (Escenario 515): +100.000 pts supera cualquier coincidencia por nombre
+      const targetIdMatch = extractedId || directIdQuery || (/^\d{1,6}$/.test(cleanQuery) ? cleanQuery : '');
+      if (targetIdMatch) {
+        const accA = (getAccountingIdDisplay(a) || '').toLowerCase();
+        const accB = (getAccountingIdDisplay(b) || '').toLowerCase();
+        const skuA = (a.sku || '').toLowerCase();
+        const skuB = (b.sku || '').toLowerCase();
+        if (accA === targetIdMatch || skuA === targetIdMatch) scoreA += 100000;
+        if (accB === targetIdMatch || skuB === targetIdMatch) scoreB += 100000;
       }
 
       // Prioritize items in active agreement

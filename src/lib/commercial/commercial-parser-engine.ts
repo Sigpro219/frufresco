@@ -300,13 +300,27 @@ export async function enrichCommercialProposal(
   clientProfileId: string | null,
   supabaseAdmin: any
 ): Promise<CommercialExtractedItem[]> {
-  // 1. Fetch active products
-  const { data: dbProducts } = await supabaseAdmin
-    .from('products')
-    .select('id, sku, name, unit_of_measure, accounting_id, iva_rate')
-    .eq('is_active', true);
-
-  const catalog = dbProducts || [];
+  // 1. Fetch active products (paginated >1000)
+  const catalog: any[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data: dbProducts } = await supabaseAdmin
+      .from('products')
+      .select('id, sku, name, unit_of_measure, accounting_id, iva_rate')
+      .eq('is_active', true)
+      .range(from, to);
+    if (dbProducts && dbProducts.length > 0) {
+      catalog.push(...dbProducts);
+      hasMore = dbProducts.length === pageSize;
+      page++;
+    } else {
+      hasMore = false;
+    }
+  }
 
   // 2. Fetch General Institucional cached prices (pricing_model_prices)
   let generalPricesMap: Record<string, number> = {};
@@ -368,8 +382,8 @@ export async function enrichCommercialProposal(
 
   // Enrich each item
   return items.map((item) => {
-    // Match product
-    const match = findBestProductMatchDetails(item.client_product_name, catalog);
+    // Match product (Prioridad 0 para accounting_id explícito)
+    const match = findBestProductMatchDetails(item.client_product_name, catalog, [], item.accounting_id);
     const matchedProd = match.product;
 
     const accountingId = item.accounting_id || (matchedProd ? (matchedProd.accounting_id ? String(matchedProd.accounting_id) : matchedProd.sku) : '');

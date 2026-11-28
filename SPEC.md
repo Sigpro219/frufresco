@@ -18951,6 +18951,43 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
+### Escenario 515: Soberanía Absoluta de `accounting_id` en Matching de Productos, Blindaje Padre-Hijo en Acuerdos y Saneamiento CESAP
+- **Estado del Contrato:** `🟢 EN IMPLEMENTACIÓN (Blindado por Goldfish Modo 1)`
+- **Archivos en Alcance:**
+  - `src/lib/orders/order-parser-engine.ts`
+  - `src/app/api/commercial/digest-agreement-file/route.ts`
+  - `src/app/admin/orders/create/page.tsx`
+  - `src/components/EmailDraftsModule.tsx`
+  - `src/app/api/orders/email-ingest/route.ts`
+  - `src/app/api/orders/reparse-draft/route.ts`
+  - `src/lib/commercial/commercial-parser-engine.ts`
+  - `src/lib/commercial/agreementConflictGuard.ts`
+  - `src/lib/orders/ordersCopilotTools.ts`
+  - `src/app/api/b2b/consumption/route.ts`
+- **Alcance Contractual:**
+  1. **Prioridad 0 Absoluta para `accounting_id` en `order-parser-engine.ts`:**
+     - `findBestProductMatchDetails` y `findBestProductMatch` aceptan parámetro opcional `explicitAccountingId?: string | number | null` evaluado antes de memoria histórica y nombre.
+     - Detección de código numérico inicial en texto libre restringida estrictamente a separador estructural inequívoco (`/^\s*(\d{1,6})\s*[-–—:|]\s*[a-zA-ZáéíóúñÁÉÍÓÚÑ]/`), jamás espacio simple, evitando que cantidades (`"15 calabacin"`) se interpreten como `#15`.
+  2. **Endurecimiento de `digest-agreement-file/route.ts`:**
+     - `rawAccId` explícito sube a **Capa 1** (por encima de memoria histórica por nombre). Si viene un `accounting_id` numérico explícito no hallado en catálogo, devuelve `unmatched` sin caer a fuzzy/nombre.
+     - Se elimina **Capa 7** (substring `includes` mutuo que producía `pas[tusa] -> #735 Tusa`) y se corrige el umbral roto de L347 a `confidenceScore >= 70`.
+  3. **Paridad de Buscadores UI (`orders/create` y `EmailDraftsModule`):**
+     - Coincidencia exacta por `accounting_id` (con `#`, entre paréntesis o digitado directo) suma `+100.000` puntos, prevaleciendo siempre sobre coincidencias por palabras del nombre (`+18.000` máx).
+  4. **Cierre de Puntos Ciegos y Paginación (>1.000 productos):**
+     - `email-ingest`, `reparse-draft` y `commercial-parser-engine` incluyen `accounting_id` en `select`, paginan el catálogo completo con `.range()` y pasan códigos explícitos al motor.
+  5. **Blindaje Jerárquico Padre–Hijo & Compatibilidad:**
+     - `agreementConflictGuard.ts` expande `parent_id` y sedes hijas para detectar y limpiar acuerdos duplicados entre matriz y sucursales.
+     - `ordersCopilotTools.ts` (`query_product_prices`) y `/api/b2b/consumption` resuelven `parent_id` para heredar el acuerdo de la matriz cuando la sede no tiene acuerdo propio.
+  6. **Saneamiento BD CESAP:**
+     - Corrección de los 3 ítems erróneos en `#226` (`#735`→`#149`, `#1347`→`#15`, `#1386`→`#463`) y degradación de `#205` a `status = 'superseded'`.
+- **Golden Cases de Aceptación:**
+  1. `"15 calabacin"` → NO interpreta `15` como `#15`; empareja por nombre/cantidad.
+  2. `"149 - Papa pastusa cero lvda"` o `explicitAccountingId = "149"` → SIEMPRE resuelve `#149` con prioridad absoluta sobre nombre y memoria histórica.
+  3. `"Papa pastusa cero lvda"` sin ID en `digest-agreement-file` → NUNCA hace substring match contra `#735 Tusa`.
+  4. Buscador UI (`orders/create` y `EmailDraftsModule`) con `"149"`, `"#149"` o `"Papa (149)"` → `#149` queda estrictamente #1 (`+100.000`).
+
+---
+
 ### Hoja de Ruta Fase 2 — Red de Nodos B2C Cross-Docking, Última Milla & Posicionamiento Agresivo (Sin Impacto en Código Fase 1)
 - **Fase 1 (Vigente — Operación Central B2B & Cimiento Único):**
   - Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga Hogar (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.

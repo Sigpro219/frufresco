@@ -44,7 +44,12 @@ export async function GET(request: Request) {
             }
         }
 
-        // 1. Fetch Agreements to get agreement prices
+        // 1. Fetch Agreements to get agreement prices (incluyendo herencia de matriz parent_id para sedes)
+        const agreementClientIds = [...clientIds];
+        if (clientProfile?.parent_id && !agreementClientIds.includes(clientProfile.parent_id)) {
+            agreementClientIds.push(clientProfile.parent_id);
+        }
+
         const { data: quoteAgreements } = await supabaseAdmin
             .from('quotes')
             .select(`
@@ -54,7 +59,7 @@ export async function GET(request: Request) {
                     unit_price
                 )
             `)
-            .in('client_id', clientIds)
+            .in('client_id', agreementClientIds)
             .eq('status', 'agreement');
 
         const agreementMap: Record<string, number> = {};

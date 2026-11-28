@@ -748,11 +748,26 @@ export async function POST(req: Request) {
     let profile: any = null;
     let globalDbProducts: any[] = [];
     try {
-      const { data: dbProducts } = await supabaseAdmin
-        .from('products')
-        .select('id, name, unit_of_measure, weight_kg')
-        .eq('is_active', true);
-      if (dbProducts) globalDbProducts = dbProducts;
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+        const { data: dbProducts, error: prodErr } = await supabaseAdmin
+          .from('products')
+          .select('id, name, accounting_id, sku, unit_of_measure, weight_kg')
+          .eq('is_active', true)
+          .range(from, to);
+        if (prodErr) throw prodErr;
+        if (dbProducts && dbProducts.length > 0) {
+          globalDbProducts.push(...dbProducts);
+          hasMore = dbProducts.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
     } catch (e) {
       console.error('[Email Ingest] Error pre-fetching active products:', e);
     }

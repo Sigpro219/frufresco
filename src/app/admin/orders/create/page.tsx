@@ -871,9 +871,12 @@ function CreateOrderContent() {
         let extractedId = '';
         const idMatch = raw.match(/\(([^)]+)\)$/);
         if (idMatch) {
-            extractedId = idMatch[1].trim().toLowerCase();
+            extractedId = idMatch[1].trim().replace(/^#/, '').toLowerCase();
         }
         const cleanQuery = raw.replace(/\s*\([^)]*\)$/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const directIdQuery = !extractedId && /^#?\d{1,6}$/.test(raw)
+            ? raw.replace(/^#/, '').toLowerCase()
+            : '';
 
         const isStrictAgreement = !allowOffAgreementPurchases && !isGiftRemissionClient && agreementProductIds.size > 0;
         const isB2CHogarMode = clientType === 'B2C' && !isGiftRemissionClient;
@@ -912,6 +915,10 @@ function CreateOrderContent() {
             const phoneticNickname = normNickname.replace(/z/g, 's').replace(/ce/g, 'se').replace(/ci/g, 'si');
 
             if (extractedId && (normAcc === extractedId || normSku === extractedId)) {
+                return true;
+            }
+
+            if (directIdQuery && (normAcc === directIdQuery || normAcc.startsWith(directIdQuery) || normSku === directIdQuery)) {
                 return true;
             }
 
@@ -986,9 +993,14 @@ function CreateOrderContent() {
                 if (wordsB[0] === queryWords[0] || (phoneticWordsB[0] && phoneticWordsB[0] === queryTokens[0])) scoreB += 5000;
             }
 
-            if (extractedId) {
-                if ((getAccountingIdDisplay(a) || '').toLowerCase() === extractedId || (a.sku || '').toLowerCase() === extractedId) scoreA += 8000;
-                if ((getAccountingIdDisplay(b) || '').toLowerCase() === extractedId || (b.sku || '').toLowerCase() === extractedId) scoreB += 8000;
+            const targetIdMatch = extractedId || directIdQuery || (/^\d{1,6}$/.test(cleanQuery) ? cleanQuery : '');
+            if (targetIdMatch) {
+                const accA = (getAccountingIdDisplay(a) || '').toLowerCase();
+                const accB = (getAccountingIdDisplay(b) || '').toLowerCase();
+                const skuA = (a.sku || '').toLowerCase();
+                const skuB = (b.sku || '').toLowerCase();
+                if (accA === targetIdMatch || skuA === targetIdMatch) scoreA += 100000;
+                if (accB === targetIdMatch || skuB === targetIdMatch) scoreB += 100000;
             }
 
             if (cleanQuery && normNameA === cleanQuery) scoreA += 3000;
@@ -3673,15 +3685,16 @@ function CreateOrderContent() {
                 const originalName = item.originalName || 'Producto Desconocido';
                 const quantity = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 0;
 
-                // SPEC.md Escenario 429: Buscar primero en productos del acuerdo evaluando nombre + observaciones/variantes
+                const explicitAccId = item.accounting_id || item.accountingId || item.code || item.plu || null;
+                // SPEC.md Escenario 429 & 515: Prioridad 0 para accounting_id explícito; si no viene, buscar primero en productos del acuerdo
                 const fullNameToMatch = [originalName, item.observations].filter(Boolean).join(' ').trim();
-                let matchResult = findBestProductMatchDetails(fullNameToMatch, candidateProductPool, learnedMemory);
+                let matchResult = findBestProductMatchDetails(fullNameToMatch, candidateProductPool, learnedMemory, explicitAccId);
                 if (!matchResult.product && fullNameToMatch !== originalName) {
-                    matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory);
+                    matchResult = findBestProductMatchDetails(originalName, candidateProductPool, learnedMemory, explicitAccId);
                 }
                 if (effectiveAgrIds.size > 0 && candidateProductPool.length > effectiveAgrIds.size) {
                     const agrProducts = products.filter(p => effectiveAgrIds.has(p.id));
-                    const agrMatch = findBestProductMatchDetails(fullNameToMatch, agrProducts, learnedMemory);
+                    const agrMatch = findBestProductMatchDetails(fullNameToMatch, agrProducts, learnedMemory, explicitAccId);
                     if (agrMatch.product) {
                         matchResult = agrMatch;
                     }

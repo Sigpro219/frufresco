@@ -301,18 +301,30 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
       }
     }
 
-    // Load active products catalog & product_conversions for automatic SKU matching and canonical unit resolution
-    const [{ data: allProducts }, { data: allConversions }] = await Promise.all([
-      supabase
+    // Load active products catalog (paginated >1000) & product_conversions for automatic accounting_id/SKU matching
+    const productCatalog: any[] = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data: chunk } = await supabase
         .from('products')
-        .select('id, name, sku, unit_of_measure, weight_kg, options_config')
-        .eq('is_active', true),
-      supabase
-        .from('product_conversions')
-        .select('product_id, from_unit, to_unit, conversion_factor')
-    ]);
-
-    const productCatalog = allProducts || [];
+        .select('id, name, accounting_id, sku, unit_of_measure, weight_kg, options_config')
+        .eq('is_active', true)
+        .range(from, to);
+      if (chunk && chunk.length > 0) {
+        productCatalog.push(...chunk);
+        hasMore = chunk.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+    const { data: allConversions } = await supabase
+      .from('product_conversions')
+      .select('product_id, from_unit, to_unit, conversion_factor');
     const conversionsList = allConversions || [];
 
     // Load client exceptions / nicknames memory if profile is assigned
@@ -338,7 +350,8 @@ Responde ÚNICAMENTE en JSON válido con el siguiente esquema:
 
     let cleanItems = (extractedData.items || []).filter(it => it.quantity > 0).map(it => {
       const itName = it.name.trim();
-      const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory);
+      const explicitAccId = (it as any).plu || (it as any).accounting_id || (it as any).code || null;
+      const matchResult = findBestProductMatchDetails(itName, productCatalog, learnedMemory, explicitAccId);
       const matchedProd = matchResult.product;
       const rawDocUnit = it.unit && String(it.unit).trim() !== '' ? String(it.unit).trim() : null;
       const prodConversions = matchedProd

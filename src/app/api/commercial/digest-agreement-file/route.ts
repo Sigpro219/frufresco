@@ -302,61 +302,62 @@ export async function POST(req: Request) {
       let matchedProd: any = null;
       let matchConfidence: 'high' | 'medium' | 'low' | 'unmatched' = 'unmatched';
 
-      // Capa 1: Memoria de auto-aprendizaje histórico del cliente
-      if (clientLearnedMap[normalizedName]) {
-        const learnedId = clientLearnedMap[normalizedName];
-        matchedProd = catalog.find((p: any) => p.id === learnedId);
+      // Capa 1 (Soberanía Absoluta): Coincidencia O(1) por Código Contable (#ID) o SKU explícito
+      const cleanAccId = rawAccId ? rawAccId.replace(/[^0-9a-zA-Z_-]/g, '').trim() : '';
+      const isExplicitNumericAccId = Boolean(cleanAccId && /^\d+$/.test(cleanAccId));
+      if (cleanAccId) {
+        const numericNormalizedId = isExplicitNumericAccId ? String(Number(cleanAccId)) : '';
+        matchedProd =
+          accIdMap.get(cleanAccId) ||
+          (numericNormalizedId ? accIdMap.get(numericNormalizedId) : undefined) ||
+          skuMap.get(cleanAccId.toLowerCase());
         if (matchedProd) matchConfidence = 'high';
       }
 
-      // Capa 2: Coincidencia O(1) por Código Contable (#ID) o SKU explícito
-      if (!matchedProd && rawAccId) {
-        const cleanAccId = rawAccId.replace(/[^0-9a-zA-Z_-]/g, '').trim();
-        matchedProd = accIdMap.get(cleanAccId) || skuMap.get(cleanAccId.toLowerCase());
-        if (matchedProd) matchConfidence = 'high';
-      }
-
-      // Capa 3: Extracción de ID embebido en el nombre del documento (ej. "Tomate #1504", "(ID: 1504)", "Doc ID: 1504")
-      if (!matchedProd && rawName) {
-        const embeddedIdMatch = rawName.match(/(?:#|id[:\s]*|c[oó]d(?:igo)?[:\s]*)(\d+)/i);
+      // Capa 2: Extracción de ID embebido en el nombre del documento (ej. "Tomate #1504", "(ID: 1504)", "149 - Papa")
+      if (!matchedProd && !isExplicitNumericAccId && rawName) {
+        const embeddedIdMatch =
+          rawName.match(/(?:#|id[:\s]*|c[oó]d(?:igo)?[:\s]*)(\d+)/i) ||
+          rawName.match(/^\s*(\d{1,6})\s*[-–—:|]\s*(?=[a-zA-ZáéíóúñÁÉÍÓÚÑ])/);
         if (embeddedIdMatch && embeddedIdMatch[1]) {
-          const embId = embeddedIdMatch[1];
-          matchedProd = accIdMap.get(embId);
+          const embId = String(Number(embeddedIdMatch[1]));
+          matchedProd = accIdMap.get(embeddedIdMatch[1]) || accIdMap.get(embId);
           if (matchedProd) matchConfidence = 'high';
         }
       }
 
-      // Capa 4: Coincidencia EXACTA O(1) Normalizada (insensible a tildes, mayúsculas, signos)
-      if (!matchedProd && normalizedName) {
-        matchedProd = normMap.get(normalizedName);
-        if (matchedProd) matchConfidence = 'high';
-      }
-
-      // Capa 5: Coincidencia O(1) sin unidades ni presentaciones (ej. "kg", "gr", "1000g", "und", "paquete")
-      if (!matchedProd && normalizedName) {
-        const strippedDoc = stripUnits(normalizedName);
-        if (strippedDoc && strippedDoc.length >= 3) {
-          matchedProd = strippedMap.get(strippedDoc);
+      // Regla Anti-Adivinanza (Escenario 515): Si venía un accounting_id numérico explícito que NO existe en catálogo, NO adivinar por nombre
+      if (!matchedProd && !isExplicitNumericAccId) {
+        // Capa 3: Memoria de auto-aprendizaje histórico del cliente
+        if (clientLearnedMap[normalizedName]) {
+          const learnedId = clientLearnedMap[normalizedName];
+          matchedProd = catalog.find((p: any) => p.id === learnedId);
           if (matchedProd) matchConfidence = 'high';
         }
-      }
 
-      // Capa 6: Coincidencia por Tokens (Fuzzy / Token Inclusivity) & Motor Central (solo para productos no resueltos)
-      if (!matchedProd && rawName) {
-        const matchDetails = findBestProductMatchDetails(rawName, indexedCatalog);
-        if (matchDetails.product && (matchDetails.confidenceScore >= 70 || matchDetails.confidenceScore >= 0.7)) {
-          matchedProd = matchDetails.product;
-          matchConfidence = matchDetails.confidence === 'HIGH' ? 'high' : 'medium';
+        // Capa 4: Coincidencia EXACTA O(1) Normalizada (insensible a tildes, mayúsculas, signos)
+        if (!matchedProd && normalizedName) {
+          matchedProd = normMap.get(normalizedName);
+          if (matchedProd) matchConfidence = 'high';
         }
-      }
 
-      // Capa 7: Coincidencia por Inclusión de Frase Completa (Substring Match usando _norm precalculado)
-      if (!matchedProd && normalizedName && normalizedName.length >= 4) {
-        matchedProd = indexedCatalog.find((p: any) => {
-          const pNorm = p._norm || '';
-          return pNorm.includes(normalizedName) || normalizedName.includes(pNorm);
-        });
-        if (matchedProd) matchConfidence = 'medium';
+        // Capa 5: Coincidencia O(1) sin unidades ni presentaciones (ej. "kg", "gr", "1000g", "und", "paquete")
+        if (!matchedProd && normalizedName) {
+          const strippedDoc = stripUnits(normalizedName);
+          if (strippedDoc && strippedDoc.length >= 3) {
+            matchedProd = strippedMap.get(strippedDoc);
+            if (matchedProd) matchConfidence = 'high';
+          }
+        }
+
+        // Capa 6: Coincidencia por Tokens (Fuzzy / Token Inclusivity) & Motor Central (umbral estricto >= 70)
+        if (!matchedProd && rawName) {
+          const matchDetails = findBestProductMatchDetails(rawName, indexedCatalog, [], rawAccId);
+          if (matchDetails.product && matchDetails.confidenceScore >= 70) {
+            matchedProd = matchDetails.product;
+            matchConfidence = matchDetails.confidence === 'HIGH' ? 'high' : 'medium';
+          }
+        }
       }
 
       // Cálculo de Costos y Márgenes

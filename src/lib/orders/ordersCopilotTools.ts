@@ -860,15 +860,44 @@ export async function executeCopilotTool(
 
     let clientAgreement: { quoteId: string; clientName: string; validUntil: string | null } | null = null;
     if (clientQuery) {
-      const { data: qs } = await supabaseAdmin
-        .from('quotes')
-        .select('id, client_name, valid_until')
-        .eq('status', 'agreement')
-        .ilike('client_name', `%${clientQuery}%`)
-        .order('valid_until', { ascending: false })
-        .limit(1);
-      if (qs && qs[0]) {
-        clientAgreement = { quoteId: qs[0].id, clientName: qs[0].client_name, validUntil: qs[0].valid_until };
+      const { data: matchedProfs } = await supabaseAdmin
+        .from('profiles')
+        .select('id, parent_id, company_name')
+        .or(`company_name.ilike.%${clientQuery}%,contact_name.ilike.%${clientQuery}%`)
+        .limit(5);
+
+      const hierarchyIds: string[] = [];
+      for (const prof of (matchedProfs || []) as Array<{ id: string; parent_id?: string | null }>) {
+        if (prof.id && !hierarchyIds.includes(prof.id)) hierarchyIds.push(prof.id);
+        if (prof.parent_id && !hierarchyIds.includes(prof.parent_id)) hierarchyIds.push(prof.parent_id);
+      }
+
+      if (hierarchyIds.length > 0) {
+        const { data: qsByProfile } = await supabaseAdmin
+          .from('quotes')
+          .select('id, client_id, client_name, valid_until')
+          .eq('status', 'agreement')
+          .in('client_id', hierarchyIds)
+          .order('created_at', { ascending: false });
+        if (qsByProfile && qsByProfile.length > 0) {
+          // Priorizar acuerdo directo de sede antes que matriz
+          const directProfIds = new Set((matchedProfs || []).map((p: any) => p.id));
+          const picked = qsByProfile.find((q: any) => directProfIds.has(q.client_id)) || qsByProfile[0];
+          clientAgreement = { quoteId: picked.id, clientName: picked.client_name, validUntil: picked.valid_until };
+        }
+      }
+
+      if (!clientAgreement) {
+        const { data: qs } = await supabaseAdmin
+          .from('quotes')
+          .select('id, client_name, valid_until')
+          .eq('status', 'agreement')
+          .ilike('client_name', `%${clientQuery}%`)
+          .order('valid_until', { ascending: false })
+          .limit(1);
+        if (qs && qs[0]) {
+          clientAgreement = { quoteId: qs[0].id, clientName: qs[0].client_name, validUntil: qs[0].valid_until };
+        }
       }
     }
 

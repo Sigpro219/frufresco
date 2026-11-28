@@ -14,12 +14,53 @@ export interface AgreementConflict {
     channel: 'individual' | 'master';
 }
 
+async function expandHierarchyClientIds(
+    supabase: any,
+    clientIds: string[]
+): Promise<{
+    allIds: string[];
+    directSet: Set<string>;
+    relationTagById: Map<string, string>;
+}> {
+    const directIds = Array.from(new Set((clientIds || []).filter(Boolean)));
+    const directSet = new Set(directIds);
+    const allSet = new Set(directIds);
+    const relationTagById = new Map<string, string>();
+    if (directIds.length === 0) {
+        return { allIds: [], directSet, relationTagById };
+    }
+
+    const [{ data: directProfs }, { data: childProfs }] = await Promise.all([
+        supabase.from('profiles').select('id, parent_id').in('id', directIds),
+        supabase.from('profiles').select('id, parent_id').in('parent_id', directIds),
+    ]);
+
+    for (const p of directProfs || []) {
+        if (p.parent_id && !directSet.has(p.parent_id)) {
+            allSet.add(p.parent_id);
+            if (!relationTagById.has(p.parent_id)) {
+                relationTagById.set(p.parent_id, 'Matriz');
+            }
+        }
+    }
+    for (const c of childProfs || []) {
+        if (c.id && !directSet.has(c.id)) {
+            allSet.add(c.id);
+            if (!relationTagById.has(c.id)) {
+                relationTagById.set(c.id, 'Sede');
+            }
+        }
+    }
+
+    return { allIds: Array.from(allSet), directSet, relationTagById };
+}
+
 export async function checkClientAgreementConflicts(
     supabase: any,
     clientIds: string[],
     excludeQuoteId?: string | null
 ): Promise<AgreementConflict[]> {
-    const uniqueIds = Array.from(new Set((clientIds || []).filter(Boolean)));
+    const { allIds: uniqueIds, relationTagById } = await expandHierarchyClientIds(supabase, clientIds);
     if (uniqueIds.length === 0) return [];
 
     const conflictsMap = new Map<string, AgreementConflict>();
@@ -54,9 +95,11 @@ export async function checkClientAgreementConflicts(
 
     (quotesRes.data || []).forEach((q: any) => {
         if (!q.client_id) return;
+        const baseName = profNameMap.get(q.client_id) || q.client_name || q.client_id;
+        const relTag = relationTagById.get(q.client_id);
         addConflict({
             clientId: q.client_id,
-            clientName: profNameMap.get(q.client_id) || q.client_name || q.client_id,
+            clientName: relTag ? `${baseName} (${relTag})` : baseName,
             existingQuoteId: q.id,
             existingQuoteNumber: q.quote_number,
             existingName: q.model_snapshot_name || `Acuerdo #${q.quote_number || ''}`,
@@ -141,7 +184,7 @@ export async function cleanupConflictingAgreementsForClients(
     clientIds: string[],
     opts?: { keepQuoteId?: string | null; keepModelId?: string | null }
 ): Promise<void> {
-    const uniqueIds = Array.from(new Set((clientIds || []).filter(Boolean)));
+    const { allIds: uniqueIds } = await expandHierarchyClientIds(supabase, clientIds);
     if (uniqueIds.length === 0) return;
 
     const keepQuoteId = opts?.keepQuoteId || null;
