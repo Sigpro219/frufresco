@@ -3205,198 +3205,235 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 </div>
             )}
 
-            {confirmedManifest && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(12px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 2000, padding: '2rem'
-                }} onClick={() => setConfirmedManifest(null)}>
+            {confirmedManifest && (() => {
+                const totalRoutes = confirmedManifest.length;
+                const totalStops = confirmedManifest.reduce((acc, r) => acc + (r.stops_count ?? r.stops?.length ?? 0), 0);
+                const totalKg = confirmedManifest.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
+                const totalCrates = confirmedManifest.reduce(
+                    (acc, r) => acc + (r.stops || []).reduce((sAcc: number, st: any) => sAcc + (Number(st.crates) || 0), 0),
+                    0
+                );
+
+                return (
                     <div style={{
-                        backgroundColor: '#FFFFFF', borderRadius: '30px',
-                        width: '95%', maxWidth: '750px', maxHeight: '90vh',
-                        padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
-                        display: 'flex', flexDirection: 'column', gap: '1.5rem',
-                        position: 'relative', overflow: 'hidden'
-                    }} onClick={e => e.stopPropagation()}>
-                        
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10B981' }}></div>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>DESPACHO / PLAN DE RUTAS</span>
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(12px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 2000, padding: '1.5rem'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#FFFFFF', borderRadius: '24px',
+                            width: '96%', maxWidth: '1080px', maxHeight: '90vh',
+                            padding: '1.5rem 1.75rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                            display: 'flex', flexDirection: 'column', gap: '1rem',
+                            position: 'relative', overflow: 'hidden'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            padding: '2px 8px', borderRadius: '999px',
+                                            backgroundColor: '#ECFDF5', color: '#047857',
+                                            fontSize: '0.65rem', fontWeight: '900', letterSpacing: '0.08em'
+                                        }}>
+                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                                            DESPACHO SELLADO
+                                        </span>
+                                    </div>
+                                    <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                        Manifiesto de Despacho Confirmado
+                                    </h2>
+                                    <div style={{ marginTop: '4px', fontSize: '0.8rem', fontWeight: '600', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+                                        Enviado a Picking · {totalRoutes} rutas · {totalStops} entregas · {(totalKg / 1000).toFixed(2)} t · {totalCrates} can.
+                                    </div>
                                 </div>
-                                <h2 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1E293B', letterSpacing: '-0.02em' }}>
-                                    Manifiesto de Despacho Confirmado
-                                </h2>
+                                <button
+                                    onClick={() => setConfirmedManifest(null)}
+                                    title="Cerrar"
+                                    style={{
+                                        background: '#F1F5F9', border: 'none', width: '32px', height: '32px',
+                                        borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                        justifyContent: 'center', fontWeight: 'bold', color: '#64748B', flexShrink: 0
+                                    }}
+                                ><X size={16} /></button>
                             </div>
-                            <button
-                                onClick={() => setConfirmedManifest(null)}
+
+                            <div
                                 style={{
-                                    background: '#F1F5F9', border: 'none', width: '32px', height: '32px',
-                                    borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
+                                    flex: 1, overflowY: 'auto', paddingRight: '0.25rem',
+                                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
+                                    gap: '0.85rem', alignItems: 'start'
                                 }}
-                            ><X size={16} /></button>
-                        </div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: '0.5rem' }} className="print-area">
-                            <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: '1.5' }}>
-                                Las rutas han sido generadas y enviadas al equipo de alistamiento de bodega (Picking) con éxito. A continuación el resumen para el operador de transporte:
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                className="print-area"
+                            >
                                 {confirmedManifest.map((route: any, idx: number) => (
                                     <div key={idx} style={{
-                                        border: '1px solid #E2E8F0', borderRadius: '16px',
-                                        padding: '1.25rem', backgroundColor: '#F8FAFC',
-                                        display: 'flex', flexDirection: 'column', gap: '1rem'
+                                        border: '1px solid #E2E8F0', borderRadius: '14px',
+                                        backgroundColor: '#F8FAFC', overflow: 'hidden',
+                                        display: 'flex', flexDirection: 'column'
                                     }}>
                                         <div style={{
-                                            display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '1rem',
-                                            alignItems: 'center', borderBottom: route.stops && route.stops.length > 0 ? '1px solid #F1F5F9' : 'none',
-                                            paddingBottom: route.stops && route.stops.length > 0 ? '0.75rem' : 0
+                                            backgroundColor: '#FFFFFF',
+                                            borderBottom: route.stops && route.stops.length > 0 ? '1px solid #E2E8F0' : 'none',
+                                            padding: '0.7rem 0.9rem',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem'
                                         }}>
-                                            <div>
-                                                <div style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <Truck size={14} /> {route.vehicle_plate}
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '700', marginTop: '2px' }}>Conductor: {route.driver_name}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
+                                                <Truck size={14} color="#0F172A" style={{ flexShrink: 0 }} />
+                                                <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                                                    {route.vehicle_plate}
+                                                </span>
+                                                <span
+                                                    title={route.driver_name}
+                                                    style={{
+                                                        fontSize: '0.74rem', color: '#64748B', fontWeight: '600',
+                                                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                                    }}
+                                                >
+                                                    {route.driver_name}
+                                                </span>
                                             </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ENTREGAS / PESO</div>
-                                                <div style={{ fontWeight: '800', color: '#1E293B', fontSize: '0.85rem', marginTop: '2px' }}>{route.stops_count} entregas • {formatNumber(route.total_kilos || 0, 1)} kg</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: '800' }}>ESPACIOS BODEGA</div>
-                                                <div style={{ fontWeight: '900', color: '#0EA5E9', fontSize: '0.85rem', marginTop: '2px' }}>
-                                                    {route.warehouse_spaces && route.warehouse_spaces.length > 0 
-                                                        ? `[${route.warehouse_spaces.join(', ')}]` 
-                                                        : 'Por asignar'}
-                                                </div>
+                                            <div style={{
+                                                whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                                                fontSize: '0.74rem', fontWeight: '700', color: '#334155', flexShrink: 0
+                                            }}>
+                                                {route.stops_count ?? (route.stops ? route.stops.length : 0)} par. · {formatNumber(route.total_kilos || 0, 1)} kg{route.departure_time ? ` · Salida ${route.departure_time}` : ''}
                                             </div>
                                         </div>
 
                                         {route.stops && route.stops.length > 0 && (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingLeft: '0.25rem' }}>
-                                                <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
-                                                    Secuencia de Carga y Entrega
-                                                </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                                    {route.stops.map((stop: any, sIdx: number) => (
-                                                        <div key={sIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#334155' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <span style={{ 
-                                                                    backgroundColor: '#E2E8F0', color: '#475569', 
-                                                                    fontSize: '0.65rem', fontWeight: '800', 
-                                                                    borderRadius: '50%', width: '18px', height: '18px', 
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center' 
-                                                                }}>{sIdx + 1}</span>
-                                                                <span style={{ fontWeight: '700', color: '#1E293B' }}>{stop.customer_name}</span>
-                                                            </div>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{formatNumber(stop.total_weight_kg || 0, 1)} kg ({stop.crates} can.)</span>
-                                                                <span style={{ 
-                                                                    fontSize: '0.7rem', fontWeight: '850', 
-                                                                    backgroundColor: 'rgba(14, 165, 233, 0.08)', color: '#0284C7', 
-                                                                    padding: '2px 6px', borderRadius: '4px' 
-                                                                }}>
-                                                                    {(() => {
-                                                                        const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
-                                                                        return label ? `ESP ${label}` : (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin Espacio');
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                            <div style={{ padding: '0.55rem 0.85rem', display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
+                                                {route.stops.map((stop: any, sIdx: number) => (
+                                                    <div
+                                                        key={sIdx}
+                                                        style={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '20px minmax(0, 1fr) auto auto',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem'
+                                                        }}
+                                                    >
+                                                        <span style={{
+                                                            backgroundColor: '#E2E8F0', color: '#475569',
+                                                            fontSize: '0.65rem', fontWeight: '800',
+                                                            borderRadius: '50%', width: '18px', height: '18px',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                        }}>{sIdx + 1}</span>
+                                                        <span
+                                                            title={stop.customer_name}
+                                                            style={{
+                                                                fontWeight: '700', color: '#1E293B', fontSize: '0.76rem',
+                                                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                                            }}
+                                                        >
+                                                            {stop.customer_name}
+                                                        </span>
+                                                        <span style={{
+                                                            whiteSpace: 'nowrap', fontSize: '0.72rem',
+                                                            color: '#64748B', fontVariantNumeric: 'tabular-nums'
+                                                        }}>
+                                                            {formatNumber(stop.total_weight_kg || 0, 1)} kg · {stop.crates} can.
+                                                        </span>
+                                                        <span style={{
+                                                            whiteSpace: 'nowrap', fontSize: '0.68rem', fontWeight: '800',
+                                                            backgroundColor: '#E0F2FE', color: '#0369A1',
+                                                            padding: '2px 7px', borderRadius: '5px', fontVariantNumeric: 'tabular-nums'
+                                                        }}>
+                                                            {(() => {
+                                                                const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
+                                                                return label ? `ESP ${label}` : (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? `ESP ${stop.warehouse_spaces.join(', ')}` : 'Sin ESP');
+                                                            })()}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                        </div>
 
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                            <button
-                                onClick={() => {
-                                    const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'short', year: 'numeric' });
-                                    let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
-                                    confirmedManifest.forEach((r, i) => {
-                                        text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${formatNumber(r.total_kilos || 0, 1)} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
-                                        if (r.stops && r.stops.length > 0) {
-                                            r.stops.forEach((stop: any, sIdx: number) => {
-                                                const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
-                                                text += `  *${sIdx+1}.* *${stop.customer_name}* (${formatNumber(stop.total_weight_kg || 0, 1)} kg) -> Espacios: ${label || (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A')}\n`;
-                                            });
-                                        } else {
-                                            text += `  (No hay detalles de paradas)\n`;
-                                        }
-                                        text += `\n`;
-                                    });
-                                    text += `----------------------------------------\n\n_¡Listos para cargar! _`;
-                                    
-                                    navigator.clipboard.writeText(text);
-                                    setCopiedWhatsApp(true);
-                                    setTimeout(() => setCopiedWhatsApp(false), 4000);
-                                }}
-                                style={{
-                                    flex: 1, padding: '1rem', borderRadius: '14px',
-                                    border: `1px solid ${copiedWhatsApp ? '#A7F3D0' : '#CBD5E1'}`,
-                                    backgroundColor: copiedWhatsApp ? '#ECFDF5' : 'white',
-                                    color: copiedWhatsApp ? '#065F46' : '#334155',
-                                    fontWeight: '800', cursor: 'pointer',
-                                    fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                {copiedWhatsApp ? <CheckCircle2 size={16} strokeWidth={2} color="#059669" /> : <MessageSquare size={16} strokeWidth={2} />}
-                                {copiedWhatsApp ? '¡Copiado para WhatsApp!' : 'Copiar WhatsApp'}
-                            </button>
-                            <button
-                                onClick={printManifestViaNewWindow}
-                                style={{
-                                    flex: 1, padding: '1rem', borderRadius: '14px', border: '1px solid #0EA5E9',
-                                    backgroundColor: '#EFF6FF', color: '#0284C7', fontWeight: '800', cursor: 'pointer',
-                                    fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                <Printer size={16} strokeWidth={2} /> Imprimir Plan
-                            </button>
-                            <button
-                                onClick={() => setConfirmedManifest(null)}
-                                style={{
-                                    flex: 1.2, padding: '1rem', borderRadius: '14px', border: 'none',
-                                    backgroundColor: '#10B981', color: 'white', fontWeight: '900', cursor: 'pointer',
-                                    fontSize: '0.9rem', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                Finalizar
-                            </button>
-                        </div>
-                        {popupBlockedWarning && (
-                            <div style={{
-                                marginTop: '0.5rem',
-                                padding: '0.45rem 0.75rem',
-                                borderRadius: '8px',
-                                backgroundColor: '#FEE2E2',
-                                border: '1px solid #FCA5A5',
-                                color: '#991B1B',
-                                fontSize: '0.74rem',
-                                fontWeight: 700,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}>
-                                <AlertTriangle size={14} />
-                                Por favor habilita las ventanas emergentes (popups) en tu navegador para imprimir.
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
+                                <button
+                                    onClick={() => {
+                                        const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'short', year: 'numeric' });
+                                        let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
+                                        confirmedManifest.forEach((r, i) => {
+                                            text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${formatNumber(r.total_kilos || 0, 1)} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
+                                            if (r.stops && r.stops.length > 0) {
+                                                r.stops.forEach((stop: any, sIdx: number) => {
+                                                    const label = getOrderSpaceDisplayLabel({ warehouse_spaces: stop.warehouse_spaces, logistics_data: stop.logistics_data });
+                                                    text += `  *${sIdx+1}.* *${stop.customer_name}* (${formatNumber(stop.total_weight_kg || 0, 1)} kg) -> Espacios: ${label || (stop.warehouse_spaces && stop.warehouse_spaces.length > 0 ? stop.warehouse_spaces.join(', ') : 'N/A')}\n`;
+                                                });
+                                            } else {
+                                                text += `  (No hay detalles de paradas)\n`;
+                                            }
+                                            text += `\n`;
+                                        });
+                                        text += `----------------------------------------\n\n_¡Listos para cargar! _`;
+                                        
+                                        navigator.clipboard.writeText(text);
+                                        setCopiedWhatsApp(true);
+                                        setTimeout(() => setCopiedWhatsApp(false), 4000);
+                                    }}
+                                    style={{
+                                        flex: 1, padding: '0.9rem 1rem', borderRadius: '14px',
+                                        border: `1px solid ${copiedWhatsApp ? '#A7F3D0' : '#CBD5E1'}`,
+                                        backgroundColor: copiedWhatsApp ? '#ECFDF5' : 'white',
+                                        color: copiedWhatsApp ? '#065F46' : '#334155',
+                                        fontWeight: '800', cursor: 'pointer',
+                                        fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {copiedWhatsApp ? <CheckCircle2 size={16} strokeWidth={2} color="#059669" /> : <MessageSquare size={16} strokeWidth={2} />}
+                                    {copiedWhatsApp ? '¡Copiado para WhatsApp!' : 'Copiar WhatsApp'}
+                                </button>
+                                <button
+                                    onClick={printManifestViaNewWindow}
+                                    style={{
+                                        flex: 1, padding: '0.9rem 1rem', borderRadius: '14px', border: '1px solid #0EA5E9',
+                                        backgroundColor: '#EFF6FF', color: '#0284C7', fontWeight: '800', cursor: 'pointer',
+                                        fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <Printer size={16} strokeWidth={2} /> Imprimir Plan
+                                </button>
+                                <button
+                                    onClick={() => setConfirmedManifest(null)}
+                                    style={{
+                                        flex: 1.2, padding: '0.9rem 1rem', borderRadius: '14px', border: 'none',
+                                        backgroundColor: '#10B981', color: 'white', fontWeight: '900', cursor: 'pointer',
+                                        fontSize: '0.9rem', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Finalizar
+                                </button>
                             </div>
-                        )}
+                            {popupBlockedWarning && (
+                                <div style={{
+                                    marginTop: '0.25rem',
+                                    padding: '0.45rem 0.75rem',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#FEE2E2',
+                                    border: '1px solid #FCA5A5',
+                                    color: '#991B1B',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}>
+                                    <AlertTriangle size={14} />
+                                    Por favor habilita las ventanas emergentes (popups) en tu navegador para imprimir.
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
             <RouteSpaghettiMapModal
                 isOpen={spaghettiOpen}
                 onClose={() => {
