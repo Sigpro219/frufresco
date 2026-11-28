@@ -37,6 +37,8 @@ export interface RouteSpaghettiMapModalProps {
             total_min: number;
             wait_min: number;
             break_min: number;
+            service_min?: number;
+            return_eta?: string;
         }
     >;
     stopLegMetrics: Record<
@@ -45,6 +47,8 @@ export interface RouteSpaghettiMapModalProps {
             distance_km: number;
             travel_min: number;
             is_same_site_followup?: boolean;
+            service_min?: number;
+            cluster_size?: number;
         }
     >;
     stopEtas: Record<string, string>;
@@ -511,7 +515,7 @@ export function RouteSpaghettiMapModal({
                             minHeight: 0,
                         }}
                     >
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div style={{ flex: 1, minHeight: 0, overflowY: visibleVehicles.length === 1 ? 'hidden' : 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                             {visibleVehicles.length === 0 && (
                                 <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', textAlign: 'center', fontSize: '12px', color: '#475569' }}>
                                     No hay camiones con paradas asignadas para mostrar.
@@ -555,7 +559,9 @@ export function RouteSpaghettiMapModal({
                                             overflow: 'hidden',
                                             backgroundColor: '#FFFFFF',
                                             boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
-                                            flexShrink: 0,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            ...(visibleVehicles.length === 1 ? { flex: 1, minHeight: 0 } : { flexShrink: 0 }),
                                         }}
                                     >
                                         {/* Vehicle Card Header */}
@@ -656,7 +662,7 @@ export function RouteSpaghettiMapModal({
                                         </div>
 
                                         {/* Stops Breakdown */}
-                                        <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                        <div style={visibleVehicles.length === 1 ? { flex: 1, minHeight: 0, overflowY: 'auto' } : { maxHeight: '360px', overflowY: 'auto' }}>
                                             {vehicleStops.map((stop, sIdx) => {
                                                 const leg = stopLegMetrics?.[stop.orderId];
                                                 const eta = stopEtas?.[stop.orderId];

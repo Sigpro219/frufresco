@@ -18859,6 +18859,71 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
+### Escenario 511: Pantalla Final de Confirmación de Cambio de Estado y Navegación a Siguiente Estación en Modales de Lanzamiento (Digital y Manual)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/admin/orders/loading/page.tsx`
+  - `src/components/ManualDispatchWizardModal.tsx`
+- **Alcance Contractual (Blindado tras Goldfish Modo 1):**
+  1. **Verificación Real en BD y Snapshot Congelado (`handleBulkAction` / `handleFinalizeLaunch`):**
+     - Ambos flujos ejecutan `.update({ status: 'para_compra' }).in('id', ids).select('id')` para obtener `updatedCount` real desde Supabase y calcular `failedCount = Math.max(0, requestedCount - updatedCount)`.
+     - `handleBulkAction` retorna `Promise<LaunchSummary | null>` (`null` si aborta o falla) y congela `totalKg`, `maxSpace`, `launchedAtCot` y `batchDate` (validado con `/^\d{4}-\d{2}-\d{2}$/`) **antes** de `setRefreshTrigger` / `onSuccess()` para que el refresco en segundo plano no ponga los totales en `0`.
+     - En Modo Digital (`LockWarningModal`), solo se abre `showPostLaunchModal` si `launchRes && launchRes.updatedCount > 0`.
+  2. **Paso Final de Confirmación Dentro del Modal (Cero Cierre Abrupto / Cero `alert()` / Cero Escape por Backdrop):**
+     - **Modo Digital (`loading/page.tsx`):** En `showPostLaunchModal`, el clic en backdrop nunca cierra el modal; al confirmar impresión (`postLaunchPrintConfirmed`), el modal activa `activeDigitalBatchBanner` y transiciona internamente a `postLaunchStep = 'confirmed'` (reset a `'documents'` en nuevo lanzamiento).
+     - **Modo Manual (`ManualDispatchWizardModal.tsx`):** Al completar `handleFinalizeLaunch`, se elimina `alert(...)` y `onClose()` inmediato; invoca `onSuccess()`, congela `launchSummary`, actualiza el header (`{launchSummary.updatedCount} Pedidos Sellados`) y resetea `launchSummary` / `currentStep` al abrir o cerrar (`isOpen`).
+  3. **Contenido Obligatorio de la Pantalla Final (Lucide Icons, Cero Emojis, Soberanía `America/Bogota`):**
+     - Sello verde con icono `CheckCircle2`: `"{updatedCount} / {requestedCount} pedidos sellados en estado COMPRAS / QA (para_compra)"`.
+     - Resumen numérico: masa total en `TON` y `kg`, rango de espacios (`Espacios 1–{maxSpace}` si `maxSpace > 0`), fecha/hora de sello en `America/Bogota` (`formatBogotaDate(..., { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })`), y conteo explícito de `failedCount` (`0 fallidos` en verde o alerta ámbar si `> 0`).
+  4. **3 Botones de Decisión de Salida (El Usuario Elige Siguiente Estación):**
+     - **Primario (verde, `<Link>`):** `Ir a Compras →` hacia `/admin/procurement`.
+     - **Secundario (`<Link>`):** `Ver Avance en Planta →` hacia `/ops/picking/dashboard?date=${batchDate}`.
+     - **Terciario (neutro, `<button>`):** `Volver a Cargue de Pedidos` (única acción que cierra el modal explícitamente hacia la galería).
+
+---
+
+### Escenario 512: Semáforo de Frescura GPS y Ocultamiento de Pines Fantasmas (> 12h) en Mapa de Flota (`/admin/transport`)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/admin/transport/page.tsx`
+- **Alcance Contractual (Blindado tras Goldfish Modo 1):**
+  1. **Clasificación de Frescura GPS (`getGpsFreshnessState(v): 'none' | 'live' | 'stale' | 'expired'`):**
+     - Precondición obligatoria: si `!hasRealGps(v)`, retorna `'none'` (jamás `'expired'`).
+     - Basada en `ageMs = Date.now() - new Date(v.last_gps_sync).getTime()`:
+       - `'live'` (`<= 15 min`): señal viva (naranja en movimiento / verde-azul detenido con señal).
+       - `'stale'` (`> 15 min` y `<= 12 h`): pin en **gris pizarra (`#64748B`, opacidad `0.68`, sin brillo activo)** por encima de `isAvailable`.
+       - `'expired'` (`> 12 h`): ping fantasma de jornadas anteriores; oculto por defecto en el mapa en vivo (y en gris pizarra cuando sea visible).
+     - En el popover del pin (`L1402`), reemplazar `'Señal vencida'` por `Sin señal hace X min / X h / X d` (tanto para `'stale'` como `'expired'`), conservando el watchdog rojo en ruta (`> 15 min`).
+  2. **Toggle Opcional y Excepción de Ruta Activa (`showExpiredGps`):**
+     - Estado `showExpiredGps` (`false` por defecto) con botón en la barra superior del mapa (`Mostrar offline >12h (N)` / `Ocultar offline >12h`) visible únicamente cuando existan vehículos `'expired'`.
+     - **Priorización de Ruta Viva y Excepción Operativa:** Al resolver `activeRoute` (`L1137`), priorizar `liveRoutes` sobre rutas `'completed'`; si `activeRoute.status` está en `'loading' | 'rectified' | 'in_transit'`, el vehículo se mantiene visible en el mapa (en gris si su señal es `'stale'`/`'expired'`).
+  3. **Coherencia con `LiveFleetMapControls`, Leyenda y Sidebar:**
+     - `LiveFleetMapControls` (`Centrar Flota`) y la leyenda inferior (`Detenidos con GPS`) operan sobre `visibleMapVehicles` para que los pines ocultos no descuadren el encuadre ni el conteo visible.
+     - En `sidebarMode === 'fleet'`, si el usuario hace clic sobre un vehículo `'expired'` cuando `showExpiredGps === false`, se activa `showExpiredGps = true` automáticamente para enfocar el pin.
+  4. **Cero Emojis (Lucide Icons) y Cero Regresión en KPIs:** Los contadores superiores de flota (`totalVehicles`, `vehiclesOnRoute`, `vehiclesAvailable`) no cambian su definición operativa.
+
+---
+
+### Escenario 513: Lectura Sin Ambigüedades de Tiempos de Ruta, Servicio y Consolidación en `RoutePlanner` y `/api/transport/optimize`
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/api/transport/optimize/route.ts`
+  - `src/components/RoutePlanner.tsx`
+  - `src/components/RouteSpaghettiMapModal.tsx`
+- **Alcance Contractual (Blindado tras Goldfish Modo 1):**
+  1. **Telemetría Real en `/api/transport/optimize`:**
+     - En `route_metrics[vehicleId]`: agregar `service_min?: number` (desde `route.metrics.visitDuration`) y `return_eta?: string` (desde `route.vehicleEndTime` en formato 24h `HH:MM` `America/Bogota`).
+     - En `stop_leg_metrics[orderId]`: agregar `service_min?: number` (`unloadingTime` real del clúster en líder `idx === 0`, `0` en `idx > 0`) y `cluster_size?: number` (en líder cuando `memberIds.length > 1`).
+  2. **Cabecera de Vehículo en `RoutePlanner.tsx`:**
+     - Consumir `duration` ya retornado por `getEstimatedTimesForVehicle` para mostrar `Cargue {loadStart} ({duration}m) → Salida {departure}`.
+     - En la píldora de telemetría mostrar: `{km} km · {travel_min}m manejo`, `{service_min}m servicio` (si disponible), `{wait_min}m espera` (si `> 0`), `{break_min}m descanso` (si `> 0`), `Total {Xh Ym}` (`total_min`) y `Retorno ~{return_eta}` (si disponible).
+  3. **Tarjetas de Parada y Modo LIFO (`RoutePlanner.tsx`):**
+     - Paradas líder con `service_min > 0`: chip `~{service_min}m servicio` (y `({cluster_size} pedidos)` si `cluster_size > 1`) junto al `ETA`.
+     - Paradas contiguas con `is_same_site_followup === true`: chip `Misma parada (#k)` donde `k = leaderRealStopIndex + 1` calculado sobre `assignedOrders` (inmune a `Cargue LIFO`).
+  4. **Limpieza y Retrocompatibilidad:** `clearGoogleRouteTelemetry()` limpia también `setRouteStartTimes({})`. Todos los campos nuevos son opcionales (`?`) en `RoutePlanner.tsx` y `RouteSpaghettiMapModal.tsx` para compatibilidad con borradores legados.
+
+---
+
 ### Hoja de Ruta Fase 2 — Red de Nodos B2C Cross-Docking, Última Milla & Posicionamiento Agresivo (Sin Impacto en Código Fase 1)
 - **Fase 1 (Vigente — Operación Central B2B & Cimiento Único):**
   - Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga Hogar (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.

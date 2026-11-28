@@ -540,6 +540,16 @@ function OrderLoadingContent() {
     const [dispatchMode, setDispatchMode] = useState<'digital' | 'contingency'>('digital');
     const [showLockWarningModal, setShowLockWarningModal] = useState(false);
     const [showPostLaunchModal, setShowPostLaunchModal] = useState(false);
+    const [postLaunchStep, setPostLaunchStep] = useState<'documents' | 'confirmed'>('documents');
+    const [digitalLaunchSummary, setDigitalLaunchSummary] = useState<{
+        requestedCount: number;
+        updatedCount: number;
+        failedCount: number;
+        totalKg: number;
+        maxSpace: number;
+        launchedAtCot: string;
+        batchDate: string;
+    } | null>(null);
     const [postLaunchPrintConfirmed, setPostLaunchPrintConfirmed] = useState(false);
     const [postLaunchOpenedRemissions, setPostLaunchOpenedRemissions] = useState(false);
     const [postLaunchOpenedLabels, setPostLaunchOpenedLabels] = useState(false);
@@ -3529,18 +3539,27 @@ useEffect(() => {
         setShowConfirmModal(true);
     };
 
-    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false) => {
-        if (selectedOrders.size === 0) return;
+    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false): Promise<{
+        ok: boolean;
+        requestedCount: number;
+        updatedCount: number;
+        failedCount: number;
+        totalKg: number;
+        maxSpace: number;
+        launchedAtCot: string;
+        batchDate: string;
+    } | null> => {
+        if (selectedOrders.size === 0) return null;
         
         const selectedList = orders.filter(o => selectedOrders.has(o.id));
         if (targetStatus === 'para_compra') {
             if (!inventoryGateStatus) {
                 alert('Verificando estado de cierre de inventario. Espera un momento e intenta de nuevo.');
-                return;
+                return null;
             }
             if (inventoryGateStatus.level !== 'green') {
                 setShowInventoryGateModal(true);
-                return;
+                return null;
             }
             const todayStr = getBogotaDateString();
             const tomorrowStr = getTomorrowDateStr();
@@ -3549,11 +3568,11 @@ useEffect(() => {
 
             if (invalidDateOrders.length > 0 && !isSuperAdmin) {
                 alert(`No se puede proceder: Hay pedidos seleccionados con fecha diferente a hoy (${todayStr}) o mañana (${tomorrowStr}).`);
-                return;
+                return null;
             }
             if (!isWithinCutoffWindow() && !isSuperAdmin) {
                 alert(`No se puede proceder: Fuera de la ventana de corte operativo (10:00 AM a 23:50 PM).`);
-                return;
+                return null;
             }
         }
 
@@ -3561,16 +3580,23 @@ useEffect(() => {
             ? `¿Estás seguro de enviar ${selectedOrders.size} pedidos al PROCESO LOGÍSTICO (Compras, Picking y Ruteo)?` 
             : `¿Cambiar estado de ${selectedOrders.size} pedidos a ${targetStatus}?`;
         
-        if (!skipNativeConfirm && !confirm(confirmMsg)) return;
+        if (!skipNativeConfirm && !confirm(confirmMsg)) return null;
 
         setUpdateLoading(true);
         try {
-            const { error } = await supabase
+            const targetIds = Array.from(selectedOrders);
+            const { data: updatedRows, error } = await supabase
                 .from('orders')
                 .update({ status: targetStatus }) 
-                .in('id', Array.from(selectedOrders));
+                .in('id', targetIds)
+                .select('id');
 
             if (error) throw error;
+            const updatedCount = Array.isArray(updatedRows) ? updatedRows.length : 0;
+            if (targetStatus === 'para_compra' && updatedCount === 0) {
+                alert('No se actualizó ningún pedido en base de datos. Verifica los permisos o el estado actual.');
+                return null;
+            }
 
             let allocatedSpacesMap: Record<string, number[]> = {};
             let spaceAllocErrorMsg: string | null = null;
@@ -3582,6 +3608,26 @@ useEffect(() => {
                     console.warn('[handleBulkAction] Advertencia asignando bahías de alistamiento:', spaceErr);
                 }
             }
+
+            const totalKg = selectedList.reduce((s: number, o: any) => s + (Number(o.total_weight_kg) || 0), 0);
+            const allSpaces = selectedList
+                .flatMap((o: any) => {
+                    const assigned = allocatedSpacesMap[o.id];
+                    return Array.isArray(assigned) && assigned.length > 0 ? assigned : (Array.isArray(o.warehouse_spaces) ? o.warehouse_spaces : []);
+                })
+                .map(Number)
+                .filter((n: number) => Number.isFinite(n) && n > 0);
+            const maxSpace = allSpaces.length > 0 ? Math.max(...allSpaces) : 0;
+            const batchDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr();
+            const launchedAtCot = formatBogotaDate(new Date(), {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+            });
 
             const launchedIds = new Set(selectedOrders);
             setSelectedOrders(new Set());
@@ -3601,9 +3647,21 @@ useEffect(() => {
                 alert('Pedidos enviados a Proceso Logístico correctamente');
             }
 
+            return {
+                ok: true,
+                requestedCount: targetIds.length,
+                updatedCount,
+                failedCount: Math.max(0, targetIds.length - updatedCount),
+                totalKg,
+                maxSpace,
+                launchedAtCot,
+                batchDate,
+            };
+
         } catch (err: any) {
             console.error('Error in bulk update:', err);
             alert(`Error al actualizar: ${err.message}`);
+            return null;
         } finally {
             setUpdateLoading(false);
         }
@@ -5995,10 +6053,12 @@ useEffect(() => {
                                             return;
                                         }
                                         const ids = Array.from(selectedOrders);
-                                        setLastLaunchedOrderIds(ids);
                                         setShowLockWarningModal(false);
-                                        await handleBulkAction('para_compra', true);
-                                        const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
+                                        const launchRes = await handleBulkAction('para_compra', true);
+                                        if (!launchRes || !launchRes.ok || launchRes.updatedCount === 0) return;
+                                        setLastLaunchedOrderIds(ids);
+                                        setDigitalLaunchSummary(launchRes);
+                                        const targetShiftDate = launchRes.batchDate;
                                         try {
                                             const shiftRes = await fetch('/api/ops/shifts', {
                                                 method: 'POST',
@@ -6012,6 +6072,7 @@ useEffect(() => {
                                         } catch (shiftErr) {
                                             console.warn('[Opción A] Error activando turno digital_native:', shiftErr);
                                         }
+                                        setPostLaunchStep('documents');
                                         setPostLaunchPrintConfirmed(false);
                                         setShowPostLaunchModal(true);
                                     }}
@@ -6156,7 +6217,7 @@ useEffect(() => {
                         backgroundColor: 'rgba(15, 23, 42, 0.75)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         zIndex: 2200, backdropFilter: 'blur(8px)', padding: '1rem'
-                    }} onClick={() => { if (postLaunchPrintConfirmed) setShowPostLaunchModal(false); }}>
+                    }}>
                         <div style={{
                             backgroundColor: '#FFFFFF',
                             borderRadius: '20px',
@@ -6178,27 +6239,36 @@ useEffect(() => {
                                 </div>
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
-                                        ¡Tanda Lanzada Exitosamente a Operación!
+                                        {postLaunchStep === 'confirmed'
+                                            ? 'Tanda Sellada y Confirmada en Operación'
+                                            : '¡Tanda Lanzada Exitosamente a Operación!'}
                                     </h3>
                                     <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: '700', marginTop: '2px' }}>
-                                        {lastLaunchedOrderIds.length} pedidos transferidos a compras y picking
+                                        {digitalLaunchSummary
+                                            ? `${digitalLaunchSummary.updatedCount} / ${digitalLaunchSummary.requestedCount} pedidos sellados en estado COMPRAS / QA (para_compra)`
+                                            : `${lastLaunchedOrderIds.length} pedidos transferidos a compras y picking`}
                                     </div>
                                 </div>
                             </div>
 
                             {(() => {
-                                const launchedIdSet = new Set(lastLaunchedOrderIds.map(String));
-                                const launchedRows = orders.filter((o: any) => launchedIdSet.has(String(o.id)));
-                                const totalKg = launchedRows.reduce((s: number, o: any) => s + (Number(o.total_weight_kg) || 0), 0);
-                                const allSpaces = launchedRows.flatMap((o: any) => Array.isArray(o.warehouse_spaces) ? o.warehouse_spaces : []).map(Number).filter((n: number) => Number.isFinite(n) && n > 0);
-                                const maxSpace = allSpaces.length > 0 ? Math.max(...allSpaces) : 0;
-                                const handleCloseBatch = () => {
+                                const totalKg = digitalLaunchSummary?.totalKg ?? 0;
+                                const maxSpace = digitalLaunchSummary?.maxSpace ?? 0;
+                                const updatedCount = digitalLaunchSummary?.updatedCount ?? lastLaunchedOrderIds.length;
+                                const requestedCount = digitalLaunchSummary?.requestedCount ?? lastLaunchedOrderIds.length;
+                                const failedCount = digitalLaunchSummary?.failedCount ?? 0;
+                                const batchDate = digitalLaunchSummary?.batchDate || (/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ? selectedDate : getTomorrowDateStr());
+                                const launchedAtCot = digitalLaunchSummary?.launchedAtCot || '';
+                                const handleConfirmToFinalScreen = () => {
+                                    setActiveDigitalBatchBanner({ count: updatedCount, totalKg, maxSpace, date: batchDate });
+                                    setPostLaunchStep('confirmed');
+                                    window.showToast?.(`Turno Digital Activo: ${updatedCount} pedidos sellados en para_compra.`, 'success');
+                                };
+                                const handleCloseToGallery = () => {
                                     setShowPostLaunchModal(false);
+                                    setPostLaunchStep('documents');
                                     setPostLaunchOpenedRemissions(false);
                                     setPostLaunchOpenedLabels(false);
-                                    const batchDate = selectedDate || getTomorrowDateStr();
-                                    setActiveDigitalBatchBanner({ count: lastLaunchedOrderIds.length, totalKg, maxSpace, date: batchDate });
-                                    window.showToast?.(`Turno Digital Activo: ${lastLaunchedOrderIds.length} pedidos lanzados a operación.`, 'success');
                                 };
                                 return (
                                     <>
@@ -6217,7 +6287,7 @@ useEffect(() => {
                                             color: '#0F172A',
                                             fontVariantNumeric: 'tabular-nums'
                                         }}>
-                                            <span>{lastLaunchedOrderIds.length} Pedidos</span>
+                                            <span>{updatedCount} / {requestedCount} Pedidos</span>
                                             <span style={{ color: '#CBD5E1' }}>•</span>
                                             <span>{(totalKg / 1000).toFixed(2)} TON ({totalKg.toFixed(1)} kg)</span>
                                             {maxSpace > 0 && (
@@ -6226,162 +6296,255 @@ useEffect(() => {
                                                     <span style={{ color: '#0369A1' }}>Espacios 1–{maxSpace}</span>
                                                 </>
                                             )}
-                                        </div>
-
-                                        <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
-                                            Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora los <strong>2 documentos físicos obligatorios</strong> (Remisiones y Rótulos Térmicos):
-                                        </div>
-
-                                        {/* Document Cards */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
-                                            {/* Remisiones */}
-                                            <a
-                                                href={`/admin/orders/contingency-print?mode=remissions&orderIds=${lastLaunchedOrderIds.join(',')}&date=${selectedDate || getTomorrowDateStr()}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={() => setPostLaunchOpenedRemissions(true)}
-                                                style={{
-                                                    backgroundColor: postLaunchOpenedRemissions ? '#F0FDF4' : '#F8FAFC',
-                                                    border: postLaunchOpenedRemissions ? '1.5px solid #10B981' : '1.5px solid #0284C7',
-                                                    borderRadius: '12px',
-                                                    padding: '1rem',
-                                                    textDecoration: 'none',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    justifyContent: 'space-between',
-                                                    gap: '8px',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.85rem' }}>
-                                                            <Printer size={16} /> Remisiones
-                                                        </span>
-                                                        {postLaunchOpenedRemissions && (
-                                                            <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '9999px' }}>
-                                                                ✓ Abierto
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                                        Juegos en duplicado (Original Cliente y Copia Archivo) para firma en entrega.
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    padding: '7px 10px',
-                                                    backgroundColor: '#0284C7',
-                                                    color: '#FFFFFF',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    textAlign: 'center',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '5px'
-                                                }}>
-                                                    <span>Imprimir Remisiones ({lastLaunchedOrderIds.length})</span>
-                                                    <ExternalLink size={12} />
-                                                </div>
-                                            </a>
-
-                                            {/* Rótulos Térmicos */}
-                                            <a
-                                                href={`/admin/orders/print-labels?orderIds=${lastLaunchedOrderIds.join(',')}&type=product&filter=requires_label`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={() => setPostLaunchOpenedLabels(true)}
-                                                style={{
-                                                    backgroundColor: postLaunchOpenedLabels ? '#F0FDF4' : '#F8FAFC',
-                                                    border: postLaunchOpenedLabels ? '1.5px solid #10B981' : '1.5px solid #7E22CE',
-                                                    borderRadius: '12px',
-                                                    padding: '1rem',
-                                                    textDecoration: 'none',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    justifyContent: 'space-between',
-                                                    gap: '8px',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#6B21A8', fontWeight: '900', fontSize: '0.85rem' }}>
-                                                            <Tag size={16} /> Rótulos Térmicos
-                                                        </span>
-                                                        {postLaunchOpenedLabels && (
-                                                            <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '9999px' }}>
-                                                                ✓ Abierto
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
-                                                        Etiquetas adhesivas con QR y célula para rotulado de canastillas en piso.
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    padding: '7px 10px',
-                                                    backgroundColor: '#7E22CE',
-                                                    color: '#FFFFFF',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: '800',
-                                                    textAlign: 'center',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '5px'
-                                                }}>
-                                                    <span>Imprimir Rótulos</span>
-                                                    <ExternalLink size={12} />
-                                                </div>
-                                            </a>
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
-                                            <label style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '8px',
-                                                fontSize: '0.78rem',
-                                                fontWeight: '700',
-                                                color: postLaunchPrintConfirmed ? '#0D7A57' : '#334155',
-                                                cursor: 'pointer',
-                                                userSelect: 'none'
+                                            {launchedAtCot && (
+                                                <>
+                                                    <span style={{ color: '#CBD5E1' }}>•</span>
+                                                    <span style={{ color: '#475569' }}>Sello: {launchedAtCot} COT</span>
+                                                </>
+                                            )}
+                                            <span style={{ color: '#CBD5E1' }}>•</span>
+                                            <span style={{
+                                                padding: '2px 7px',
+                                                borderRadius: '9999px',
+                                                backgroundColor: failedCount === 0 ? '#DCFCE7' : '#FEF3C7',
+                                                color: failedCount === 0 ? '#166534' : '#92400E',
+                                                fontSize: '0.70rem',
+                                                fontWeight: '900'
                                             }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={postLaunchPrintConfirmed}
-                                                    onChange={(e) => setPostLaunchPrintConfirmed(e.target.checked)}
-                                                    style={{
-                                                        width: '16px',
-                                                        height: '16px',
-                                                        accentColor: '#0D7A57',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                />
-                                                <span>Confirmo que ya imprimí Remisiones y Rótulos Térmicos</span>
-                                            </label>
-                                            <button
-                                                type="button"
-                                                disabled={!postLaunchPrintConfirmed}
-                                                onClick={handleCloseBatch}
-                                                style={{
-                                                    padding: '8px 18px',
-                                                    backgroundColor: postLaunchPrintConfirmed ? '#0D7A57' : '#CBD5E1',
-                                                    color: postLaunchPrintConfirmed ? '#FFFFFF' : '#64748B',
-                                                    borderRadius: '9px',
-                                                    fontSize: '0.80rem',
-                                                    fontWeight: '800',
-                                                    border: 'none',
-                                                    cursor: postLaunchPrintConfirmed ? 'pointer' : 'not-allowed',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                Confirmar Cierre de Tanda
-                                            </button>
+                                                {failedCount} fallidos
+                                            </span>
                                         </div>
+
+                                        {postLaunchStep === 'confirmed' ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div style={{
+                                                    padding: '1rem 1.15rem',
+                                                    borderRadius: '12px',
+                                                    backgroundColor: '#F0FDF4',
+                                                    border: '1.5px solid #86EFAC',
+                                                    color: '#14532D',
+                                                    fontSize: '0.84rem',
+                                                    fontWeight: '700',
+                                                    lineHeight: '1.5'
+                                                }}>
+                                                    Cambio de estado confirmado en base de datos ({updatedCount} pedidos en <strong>COMPRAS / QA</strong>). Elige a qué estación deseas pasar ahora:
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', borderTop: '1px solid #E2E8F0', paddingTop: '0.9rem' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleCloseToGallery}
+                                                        style={{
+                                                            padding: '9px 15px',
+                                                            backgroundColor: '#FFFFFF',
+                                                            color: '#475569',
+                                                            borderRadius: '9px',
+                                                            fontSize: '0.80rem',
+                                                            fontWeight: '800',
+                                                            border: '1px solid #CBD5E1',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Volver a Cargue de Pedidos
+                                                    </button>
+                                                    <Link
+                                                        href={`/ops/picking/dashboard?date=${batchDate}`}
+                                                        style={{
+                                                            padding: '9px 16px',
+                                                            backgroundColor: '#EFF6FF',
+                                                            color: '#1D4ED8',
+                                                            borderRadius: '9px',
+                                                            fontSize: '0.80rem',
+                                                            fontWeight: '800',
+                                                            border: '1px solid #BFDBFE',
+                                                            textDecoration: 'none',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px'
+                                                        }}
+                                                    >
+                                                        <span>Ver Avance en Planta</span>
+                                                        <ArrowRight size={14} />
+                                                    </Link>
+                                                    <Link
+                                                        href="/admin/procurement"
+                                                        style={{
+                                                            padding: '9px 18px',
+                                                            backgroundColor: '#0D7A57',
+                                                            color: '#FFFFFF',
+                                                            borderRadius: '9px',
+                                                            fontSize: '0.82rem',
+                                                            fontWeight: '900',
+                                                            border: 'none',
+                                                            textDecoration: 'none',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            boxShadow: '0 4px 12px rgba(13, 122, 87, 0.28)'
+                                                        }}
+                                                    >
+                                                        <span>Ir a Compras</span>
+                                                        <ArrowRight size={15} />
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ fontSize: '0.80rem', color: '#475569', lineHeight: '1.4' }}>
+                                                    Los pedidos ya están en estado <strong>para_compra</strong> y sincronizados con tablets. Imprime ahora los <strong>2 documentos físicos obligatorios</strong> (Remisiones y Rótulos Térmicos):
+                                                </div>
+
+                                                {/* Document Cards */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+                                                    {/* Remisiones */}
+                                                    <a
+                                                        href={`/admin/orders/contingency-print?mode=remissions&orderIds=${lastLaunchedOrderIds.join(',')}&date=${batchDate}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={() => setPostLaunchOpenedRemissions(true)}
+                                                        style={{
+                                                            backgroundColor: postLaunchOpenedRemissions ? '#F0FDF4' : '#F8FAFC',
+                                                            border: postLaunchOpenedRemissions ? '1.5px solid #10B981' : '1.5px solid #0284C7',
+                                                            borderRadius: '12px',
+                                                            padding: '1rem',
+                                                            textDecoration: 'none',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            justifyContent: 'space-between',
+                                                            gap: '8px',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#0369A1', fontWeight: '900', fontSize: '0.85rem' }}>
+                                                                    <Printer size={16} /> Remisiones
+                                                                </span>
+                                                                {postLaunchOpenedRemissions && (
+                                                                    <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '9999px' }}>
+                                                                        Abierto
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                                                Juegos en duplicado (Original Cliente y Copia Archivo) para firma en entrega.
+                                                            </div>
+                                                        </div>
+                                                        <div style={{
+                                                            padding: '7px 10px',
+                                                            backgroundColor: '#0284C7',
+                                                            color: '#FFFFFF',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '800',
+                                                            textAlign: 'center',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span>Imprimir Remisiones ({lastLaunchedOrderIds.length})</span>
+                                                            <ExternalLink size={12} />
+                                                        </div>
+                                                    </a>
+
+                                                    {/* Rótulos Térmicos */}
+                                                    <a
+                                                        href={`/admin/orders/print-labels?orderIds=${lastLaunchedOrderIds.join(',')}&type=product&filter=requires_label`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={() => setPostLaunchOpenedLabels(true)}
+                                                        style={{
+                                                            backgroundColor: postLaunchOpenedLabels ? '#F0FDF4' : '#F8FAFC',
+                                                            border: postLaunchOpenedLabels ? '1.5px solid #10B981' : '1.5px solid #7E22CE',
+                                                            borderRadius: '12px',
+                                                            padding: '1rem',
+                                                            textDecoration: 'none',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            justifyContent: 'space-between',
+                                                            gap: '8px',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#6B21A8', fontWeight: '900', fontSize: '0.85rem' }}>
+                                                                    <Tag size={16} /> Rótulos Térmicos
+                                                                </span>
+                                                                {postLaunchOpenedLabels && (
+                                                                    <span style={{ fontSize: '0.66rem', fontWeight: '800', color: '#065F46', backgroundColor: '#D1FAE5', padding: '2px 7px', borderRadius: '9999px' }}>
+                                                                        Abierto
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.70rem', color: '#64748B', marginTop: '4px' }}>
+                                                                Etiquetas adhesivas con QR y célula para rotulado de canastillas en piso.
+                                                            </div>
+                                                        </div>
+                                                        <div style={{
+                                                            padding: '7px 10px',
+                                                            backgroundColor: '#7E22CE',
+                                                            color: '#FFFFFF',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '800',
+                                                            textAlign: 'center',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '5px'
+                                                        }}>
+                                                            <span>Imprimir Rótulos</span>
+                                                            <ExternalLink size={12} />
+                                                        </div>
+                                                    </a>
+                                                </div>
+
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
+                                                    <label style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: '700',
+                                                        color: postLaunchPrintConfirmed ? '#0D7A57' : '#334155',
+                                                        cursor: 'pointer',
+                                                        userSelect: 'none'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={postLaunchPrintConfirmed}
+                                                            onChange={(e) => setPostLaunchPrintConfirmed(e.target.checked)}
+                                                            style={{
+                                                                width: '16px',
+                                                                height: '16px',
+                                                                accentColor: '#0D7A57',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        />
+                                                        <span>Confirmo que ya imprimí Remisiones y Rótulos Térmicos</span>
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        disabled={!postLaunchPrintConfirmed}
+                                                        onClick={handleConfirmToFinalScreen}
+                                                        style={{
+                                                            padding: '8px 18px',
+                                                            backgroundColor: postLaunchPrintConfirmed ? '#0D7A57' : '#CBD5E1',
+                                                            color: postLaunchPrintConfirmed ? '#FFFFFF' : '#64748B',
+                                                            borderRadius: '9px',
+                                                            fontSize: '0.80rem',
+                                                            fontWeight: '800',
+                                                            border: 'none',
+                                                            cursor: postLaunchPrintConfirmed ? 'pointer' : 'not-allowed',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        Confirmar Cierre de Tanda
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
                                     </>
                                 );
                             })()}

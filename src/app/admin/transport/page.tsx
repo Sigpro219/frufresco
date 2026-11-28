@@ -234,6 +234,7 @@ export default function TransportControlTower() {
     const [qrLoadingRouteId, setQrLoadingRouteId] = useState<string | null>(null);
     const [qrCopied, setQrCopied] = useState(false);
     const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(false);
+    const [showExpiredGps, setShowExpiredGps] = useState<boolean>(false);
     const [fitTrigger, setFitTrigger] = useState<number>(0);
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
     const [sidebarMode, setSidebarMode] = useState<'routes' | 'fleet'>('routes');
@@ -615,8 +616,24 @@ export default function TransportControlTower() {
         const syncMs = new Date(v.last_gps_sync).getTime();
         return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !Number.isNaN(syncMs);
     };
-    const isGpsFresh = (v: any): boolean =>
-        hasRealGps(v) && (Date.now() - new Date(v.last_gps_sync).getTime() <= 15 * 60 * 1000);
+    const getGpsFreshnessState = (v: any): 'none' | 'live' | 'stale' | 'expired' => {
+        if (!hasRealGps(v)) return 'none';
+        const ageMs = Date.now() - new Date(v.last_gps_sync).getTime();
+        if (ageMs <= 15 * 60 * 1000) return 'live';
+        if (ageMs <= 12 * 60 * 60 * 1000) return 'stale';
+        return 'expired';
+    };
+    const formatGpsAgeLabel = (lastSync?: string | null): string => {
+        if (!lastSync) return 'Sin señal';
+        const diffMs = Math.max(0, Date.now() - new Date(lastSync).getTime());
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 60) return `Sin señal hace ${mins} min`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `Sin señal hace ${hours} h`;
+        const days = Math.floor(hours / 24);
+        return `Sin señal hace ${days} d`;
+    };
+    const isGpsFresh = (v: any): boolean => getGpsFreshnessState(v) === 'live';
 
     const activeFleet = fleetData.filter(v => v.status !== 'inactive');
     const vehiclesWithRealGps = activeFleet.filter(hasRealGps);
@@ -629,6 +646,15 @@ export default function TransportControlTower() {
     const vehiclesMaintenance = activeFleet.filter(v => v.status === 'maintenance').length;
     const vehiclesAvailable = Math.max(0, totalVehicles - vehiclesOnRoute - vehiclesMaintenance);
     const liveRoutes = activeRoutes.filter(r => ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
+    const hasActiveMapRoute = (v: any): boolean => {
+        const match = liveRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
+        return Boolean(match && ['loading', 'rectified', 'in_transit'].includes(match.status));
+    };
+    const expiredGpsVehicles = vehiclesWithRealGps.filter(v => getGpsFreshnessState(v) === 'expired' && !hasActiveMapRoute(v));
+    const visibleMapVehicles = showExpiredGps
+        ? vehiclesWithRealGps
+        : vehiclesWithRealGps.filter(v => getGpsFreshnessState(v) !== 'expired' || hasActiveMapRoute(v));
+    const visibleStoppedGps = visibleMapVehicles.filter(v => !isGpsFresh(v) || (v.speed || 0) === 0);
     const completedHistoryRoutes = activeRoutes.filter(r => !['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
     const displayedRoutes = showHistoryRoutes ? activeRoutes : liveRoutes;
     const sortedFleetForSidebar = [...activeFleet].sort((a, b) => {
@@ -870,6 +896,9 @@ export default function TransportControlTower() {
                                                     type="button"
                                                     onClick={() => {
                                                         if (real) {
+                                                            if (getGpsFreshnessState(v) === 'expired') {
+                                                                setShowExpiredGps(true);
+                                                            }
                                                             setSelectedVehicleId(v.id);
                                                             setFocusPoint({ lat: Number(v.last_latitude), lng: Number(v.last_longitude), seq: Date.now() });
                                                         }
@@ -1117,7 +1146,7 @@ export default function TransportControlTower() {
                                             <LiveFleetMapControls
                                                 showTraffic={showTrafficLayer}
                                                 fitTrigger={fitTrigger}
-                                                points={vehiclesWithRealGps.map((v: any) => ({ lat: Number(v.last_latitude), lng: Number(v.last_longitude) }))}
+                                                points={visibleMapVehicles.map((v: any) => ({ lat: Number(v.last_latitude), lng: Number(v.last_longitude) }))}
                                                 focusPoint={focusPoint}
                                             />
                                             {/* Bodega Central Marker */}
@@ -1131,16 +1160,20 @@ export default function TransportControlTower() {
                                             </AdvancedMarker>
 
                                             {/* Fleet Vehicles on Live Map (Zero-Mock: solo vehículos activos con telemetría GPS real) */}
-                                            {vehiclesWithRealGps.map((v: any) => {
+                                            {visibleMapVehicles.map((v: any) => {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
-                                                const activeRoute = activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
+                                                const activeRoute =
+                                                    liveRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id)) ||
+                                                    activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
                                                 
                                                 const pos = { lat: Number(v.last_latitude), lng: Number(v.last_longitude) };
 
-                                                const fresh = isGpsFresh(v);
+                                                const freshness = getGpsFreshnessState(v);
+                                                const fresh = freshness === 'live';
+                                                const isStaleOrExpired = freshness === 'stale' || freshness === 'expired';
                                                 const isMoving = fresh && (v.speed || 0) > 0;
-                                                const isInRoute = isMoving || (activeRoute && (activeRoute.status === 'in_transit' || activeRoute.status === 'loading'));
+                                                const isInRoute = isMoving || (activeRoute && ['loading', 'rectified', 'in_transit'].includes(activeRoute.status));
                                                 const isAvailable = !isMoving && (v.status === 'available' || (!activeRoute && v.status !== 'maintenance'));
                                                 const isHovered = hoveredVehicleId === v.id;
                                                 const isSelected = selectedVehicleId === v.id;
@@ -1177,11 +1210,14 @@ export default function TransportControlTower() {
                                                                 borderRadius: '10px', 
                                                                 background: isMoving
                                                                     ? 'linear-gradient(135deg, #FF6B00 0%, #EA580C 100%)' // Naranja Fuego en Movimiento
-                                                                    : isInRoute 
-                                                                        ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)' 
-                                                                        : isAvailable 
-                                                                            ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)' 
-                                                                            : 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', 
+                                                                    : isStaleOrExpired
+                                                                        ? '#64748B'
+                                                                        : isInRoute
+                                                                            ? 'linear-gradient(135deg, #0284C7 0%, #0D7A57 100%)'
+                                                                            : isAvailable
+                                                                                ? 'linear-gradient(135deg, #0D7A57 0%, #10B981 100%)'
+                                                                                : 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)',
+                                                                opacity: isStaleOrExpired ? 0.68 : 1,
                                                                 display: 'flex', 
                                                                 alignItems: 'center', 
                                                                 justifyContent: 'center', 
@@ -1190,9 +1226,11 @@ export default function TransportControlTower() {
                                                                 fontSize: isPopoverOpen ? '0.85rem' : '0.75rem',
                                                                 boxShadow: isMoving
                                                                     ? '0 0 18px rgba(255, 107, 0, 0.9), 0 4px 10px rgba(0,0,0,0.22)'
-                                                                    : isPopoverOpen 
-                                                                        ? '0 8px 18px rgba(13, 122, 87, 0.4)' 
-                                                                        : '0 4px 10px rgba(0,0,0,0.18)',
+                                                                    : isStaleOrExpired
+                                                                        ? '0 2px 6px rgba(15, 23, 42, 0.16)'
+                                                                        : isPopoverOpen
+                                                                            ? '0 8px 18px rgba(13, 122, 87, 0.4)'
+                                                                            : '0 4px 10px rgba(0,0,0,0.18)',
                                                                 border: isMoving
                                                                     ? '2px solid #FED7AA'
                                                                     : isPopoverOpen ? '3px solid white' : '2px solid white',
@@ -1398,8 +1436,8 @@ export default function TransportControlTower() {
                                                                             <span style={{ fontWeight: '900', display: 'flex', alignItems: 'center', gap: '4px', color: !fresh ? '#B91C1C' : (v.speed || 0) > 0 ? '#EA580C' : (v.ignition_status ? '#D97706' : '#64748B') }}>
                                                                                 {!fresh ? (
                                                                                     <>
-                                                                                        <AlertTriangle size={11} style={{ color: '#B91C1C' }} />
-                                                                                        <span>Señal vencida</span>
+                                                                                        <AlertTriangle size={11} style={{ color: '#64748B' }} />
+                                                                                        <span style={{ color: '#475569' }}>{formatGpsAgeLabel(v.last_gps_sync)}</span>
                                                                                     </>
                                                                                 ) : (v.speed || 0) > 0 ? (
                                                                                     <>
@@ -1578,6 +1616,29 @@ export default function TransportControlTower() {
                                                 <LocateFixed size={13} color={THEME.colors.primary} />
                                                 <span>Centrar Flota</span>
                                             </button>
+                                            {expiredGpsVehicles.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowExpiredGps(prev => !prev)}
+                                                    style={{
+                                                        padding: '7px 12px',
+                                                        borderRadius: THEME.radius.md,
+                                                        border: showExpiredGps ? '1.5px solid #64748B' : `1px solid ${THEME.colors.border}`,
+                                                        backgroundColor: showExpiredGps ? '#F1F5F9' : 'rgba(255,255,255,0.95)',
+                                                        color: '#334155',
+                                                        fontSize: '0.72rem',
+                                                        fontWeight: '800',
+                                                        cursor: 'pointer',
+                                                        boxShadow: THEME.shadow.sm,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    <Clock size={13} color="#64748B" />
+                                                    <span>{showExpiredGps ? `Ocultar offline >12h (${expiredGpsVehicles.length})` : `Mostrar offline >12h (${expiredGpsVehicles.length})`}</span>
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Floating Map Legend HUD */}
@@ -1610,7 +1671,7 @@ export default function TransportControlTower() {
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                 <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
-                                                <span>Detenidos con GPS ({vehiclesStoppedGps.length})</span>
+                                                <span>Detenidos con GPS ({visibleStoppedGps.length})</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#64748B' }}>
                                                 <div style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#94A3B8' }}></div>

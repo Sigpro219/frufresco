@@ -78,9 +78,23 @@ export default function ManualDispatchWizardModal({
     const [pdfProgressText, setPdfProgressText] = useState<string>('');
     const [isExportingRelacion, setIsExportingRelacion] = useState<boolean>(false);
     const [gateStatus, setGateStatus] = useState<InventoryGateStatus | null>(null);
+    const [launchSummary, setLaunchSummary] = useState<{
+        requestedCount: number;
+        updatedCount: number;
+        failedCount: number;
+        totalKg: number;
+        maxSpace: number;
+        launchedAtCot: string;
+        batchDate: string;
+    } | null>(null);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen) {
+            setLaunchSummary(null);
+            return;
+        }
+        setLaunchSummary(null);
+        setCurrentStep(1);
         setGateStatus(null);
         evaluateInventoryGateStatus({ supabase, targetDate: deliveryDate || getBogotaDateString() })
             .then(setGateStatus)
@@ -704,17 +718,48 @@ export default function ManualDispatchWizardModal({
 
         setFinalizingLoading(true);
         try {
+            const targetIds = Array.from(selectedOrderIds);
+            const totalKgSnapshot = selectedOrdersList.reduce((sum, o) => sum + resolveOrderWeightKg(o), 0);
+            const allSpacesSnapshot = selectedOrdersList
+                .flatMap(o => manualSpacesMap[o.id] || (Array.isArray(o.warehouse_spaces) ? o.warehouse_spaces : []))
+                .map(Number)
+                .filter(n => Number.isFinite(n) && n > 0);
+            const maxSpaceSnapshot = allSpacesSnapshot.length > 0 ? Math.max(...allSpacesSnapshot) : 0;
+            const safeBatchDate = /^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) ? deliveryDate : getBogotaDateString();
 
-            const { error } = await supabase
+            const { data: updatedRows, error } = await supabase
                 .from('orders')
                 .update({ status: 'para_compra' })
-                .in('id', Array.from(selectedOrderIds));
+                .in('id', targetIds)
+                .select('id');
 
             if (error) throw error;
+            const updatedCount = Array.isArray(updatedRows) ? updatedRows.length : 0;
+            if (updatedCount === 0) {
+                alert('No se actualizó ningún pedido en base de datos. Verifica permisos o estado actual.');
+                return;
+            }
 
-            alert('Tanda sellada y enviada a Proceso Logístico con éxito (status: PARA COMPRA).');
+            const launchedAtCot = formatBogotaDate(new Date(), {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+            });
+
             onSuccess();
-            onClose();
+            setLaunchSummary({
+                requestedCount: targetIds.length,
+                updatedCount,
+                failedCount: Math.max(0, targetIds.length - updatedCount),
+                totalKg: totalKgSnapshot,
+                maxSpace: maxSpaceSnapshot,
+                launchedAtCot,
+                batchDate: safeBatchDate,
+            });
         } catch (err: any) {
             console.error('Error al finalizar tanda:', err);
             alert(`Error al sellar tanda: ${err?.message || 'Error desconocido'}`);
@@ -984,7 +1029,7 @@ export default function ManualDispatchWizardModal({
                                 </span>
                             </div>
                             <p style={{ color: '#64748B', margin: '4px 0 0', fontSize: '0.84rem' }}>
-                                Tanda Programada: <strong>{deliveryDate}</strong> &bull; <strong>{selectedOrderIds.size} Pedidos Seleccionados</strong> &bull; 4 Bloques Secuenciales Obligatorios
+                                Tanda Programada: <strong>{deliveryDate}</strong> &bull; <strong>{launchSummary ? `${launchSummary.updatedCount} Pedidos Sellados` : `${selectedOrderIds.size} Pedidos Seleccionados`}</strong> &bull; 4 Bloques Secuenciales Obligatorios
                             </p>
                         </div>
                     </div>
@@ -997,6 +1042,98 @@ export default function ManualDispatchWizardModal({
                     </button>
                 </div>
 
+                {launchSummary ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1rem 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '1.15rem 1.35rem', borderRadius: '16px', backgroundColor: '#F0FDF4', border: '1.5px solid #86EFAC' }}>
+                            <div style={{
+                                width: '50px', height: '50px', borderRadius: '14px',
+                                backgroundColor: '#DCFCE7', color: '#0D7A57',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1px solid #86EFAC', flexShrink: 0
+                            }}>
+                                <CheckCircle2 size={28} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#14532D' }}>
+                                    {launchSummary.updatedCount} / {launchSummary.requestedCount} pedidos sellados en estado COMPRAS / QA (para_compra)
+                                </div>
+                                <div style={{ fontSize: '0.82rem', color: '#166534', fontWeight: '700', marginTop: '3px' }}>
+                                    Cambio de estado confirmado en base de datos. Ya puedes pasar a la siguiente estación.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+                            padding: '0.85rem 1.15rem', borderRadius: '12px',
+                            backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0',
+                            fontSize: '0.84rem', fontWeight: '800', color: '#0F172A',
+                            fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            <span>{(launchSummary.totalKg / 1000).toFixed(2)} TON ({launchSummary.totalKg.toFixed(1)} kg)</span>
+                            {launchSummary.maxSpace > 0 && (
+                                <>
+                                    <span style={{ color: '#CBD5E1' }}>•</span>
+                                    <span style={{ color: '#0369A1' }}>Espacios 1–{launchSummary.maxSpace}</span>
+                                </>
+                            )}
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <span style={{ color: '#475569' }}>Sello: {launchSummary.launchedAtCot} COT</span>
+                            <span style={{ color: '#CBD5E1' }}>•</span>
+                            <span style={{
+                                padding: '2px 8px', borderRadius: '9999px',
+                                backgroundColor: launchSummary.failedCount === 0 ? '#DCFCE7' : '#FEF3C7',
+                                color: launchSummary.failedCount === 0 ? '#166534' : '#92400E',
+                                fontSize: '0.76rem', fontWeight: '900'
+                            }}>
+                                {launchSummary.failedCount} fallidos
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setLaunchSummary(null);
+                                    onClose();
+                                }}
+                                style={{
+                                    padding: '10px 18px', backgroundColor: '#FFFFFF', color: '#475569',
+                                    borderRadius: '10px', fontSize: '0.85rem', fontWeight: '800',
+                                    border: '1px solid #CBD5E1', cursor: 'pointer'
+                                }}
+                            >
+                                Volver a Cargue de Pedidos
+                            </button>
+                            <Link
+                                href={`/ops/picking/dashboard?date=${launchSummary.batchDate}`}
+                                style={{
+                                    padding: '10px 18px', backgroundColor: '#EFF6FF', color: '#1D4ED8',
+                                    borderRadius: '10px', fontSize: '0.85rem', fontWeight: '800',
+                                    border: '1px solid #BFDBFE', textDecoration: 'none',
+                                    display: 'inline-flex', alignItems: 'center', gap: '6px'
+                                }}
+                            >
+                                <span>Ver Avance en Planta</span>
+                                <ArrowRight size={15} />
+                            </Link>
+                            <Link
+                                href="/admin/procurement"
+                                style={{
+                                    padding: '10px 20px', backgroundColor: '#0D7A57', color: '#FFFFFF',
+                                    borderRadius: '10px', fontSize: '0.88rem', fontWeight: '900',
+                                    border: 'none', textDecoration: 'none',
+                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                    boxShadow: '0 4px 14px rgba(13, 122, 87, 0.3)'
+                                }}
+                            >
+                                <span>Ir a Compras</span>
+                                <ArrowRight size={16} />
+                            </Link>
+                        </div>
+                    </div>
+                ) : (
+                <>
                 {/* Stepper Bar (Indicador de Progreso 4 Pasos) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                     {[
@@ -2113,6 +2250,8 @@ export default function ManualDispatchWizardModal({
                             )}
                         </div>
                     </div>
+                )}
+                </>
                 )}
 
             </div>

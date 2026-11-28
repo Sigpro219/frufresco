@@ -200,8 +200,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [showPreConfirm, setShowPreConfirm] = useState(false);
     const [optimizationSource, setOptimizationSource] = useState<'google' | null>(null);
     const [routePolylines, setRoutePolylines] = useState<Record<string, string>>({});
-    const [routeMetrics, setRouteMetrics] = useState<Record<string, { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number }>>({});
-    const [stopLegMetrics, setStopLegMetrics] = useState<Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean }>>({});
+    const [routeMetrics, setRouteMetrics] = useState<Record<string, { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number; service_min?: number; return_eta?: string }>>({});
+    const [stopLegMetrics, setStopLegMetrics] = useState<Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean; service_min?: number; cluster_size?: number }>>({});
     const [trafficMode, setTrafficMode] = useState<'live_predictive' | 'weekday_projected' | null>(null);
     const [optimizerErrorBanner, setOptimizerErrorBanner] = useState<string | null>(null);
     const [excludedNoGpsIds, setExcludedNoGpsIds] = useState<string[]>([]);
@@ -896,6 +896,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
         setIsOptimized(false);
         setOptimizationSource(null);
         setTheoreticalMetrics(null);
+        setRouteStartTimes({});
         setStopEtas({});
         setRoutePolylines({});
         setRouteMetrics({});
@@ -2421,7 +2422,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                         </div>
                                                     </div>
                                                     {assignedOrders.length > 0 && (() => {
-                                                        const { loadStart, departure } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
+                                                        const { loadStart, departure, duration } = getEstimatedTimesForVehicle(vehicle.id, cratesNeeded);
                                                         const validStopsForMaps = assignedOrders
                                                             .map(oid => orders.find(o => o.id === oid))
                                                             .filter((o): o is Order => Boolean(o))
@@ -2433,14 +2434,22 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                             }));
                                                         const mapChunks = buildGoogleMapsDirectionChunks(validStopsForMaps);
                                                         const vMetrics = routeMetrics[vehicle.id];
+                                                        const totalHours = vMetrics ? Math.floor(vMetrics.total_min / 60) : 0;
+                                                        const totalRemMins = vMetrics ? Math.round(vMetrics.total_min % 60) : 0;
+                                                        const totalDurationStr = totalHours > 0 ? `${totalHours}h ${totalRemMins}m` : `${totalRemMins}m`;
                                                         return (
                                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', flexShrink: 0 }}>
                                                                 <span style={{ fontSize: '0.60rem', fontWeight: '800', backgroundColor: '#ECFDF5', color: '#065F46', padding: '2px 6px', borderRadius: '6px', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                                                                    Cargue {loadStart} → Salida {departure}
+                                                                    Cargue {loadStart} ({duration}m) → Salida {departure}
                                                                 </span>
                                                                 {vMetrics && (
-                                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#1E3A5F', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '1px 6px', borderRadius: '5px', whiteSpace: 'nowrap' }}>
-                                                                        {formatNumber(vMetrics.distance_km, 1)} km · {Math.round(vMetrics.travel_min)} min
+                                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', color: '#1E3A5F', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', padding: '2px 6px', borderRadius: '5px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                                        {formatNumber(vMetrics.distance_km, 1)} km · {Math.round(vMetrics.travel_min)}m manejo
+                                                                        {typeof vMetrics.service_min === 'number' ? ` · ${Math.round(vMetrics.service_min)}m servicio` : ''}
+                                                                        {vMetrics.wait_min > 0 ? ` · ${Math.round(vMetrics.wait_min)}m espera` : ''}
+                                                                        {vMetrics.break_min > 0 ? ` · ${Math.round(vMetrics.break_min)}m descanso` : ''}
+                                                                        {` · Total ${totalDurationStr}`}
+                                                                        {vMetrics.return_eta ? ` (Retorno ~${vMetrics.return_eta})` : ''}
                                                                     </span>
                                                                 )}
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -2635,6 +2644,32 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                                                                                 ETA {etaStr}
                                                                             </span>
                                                                         )}
+                                                                        {(() => {
+                                                                            const legMetric = stopLegMetrics[oid];
+                                                                            if (!legMetric) return null;
+                                                                            if (legMetric.is_same_site_followup) {
+                                                                                let leaderStopNum = stopNumber;
+                                                                                for (let i = realStopIndex - 1; i >= 0; i--) {
+                                                                                    if (!stopLegMetrics[assignedOrders[i]]?.is_same_site_followup) {
+                                                                                        leaderStopNum = i + 1;
+                                                                                        break;
+                                                                                    }
+                                                                                }
+                                                                                return (
+                                                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #CBD5E1', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                        Misma parada (#{leaderStopNum})
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            if (typeof legMetric.service_min === 'number' && legMetric.service_min > 0) {
+                                                                                return (
+                                                                                    <span style={{ fontSize: '0.58rem', fontWeight: '800', backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', padding: '1px 5px', borderRadius: '4px' }}>
+                                                                                        ~{legMetric.service_min}m servicio{legMetric.cluster_size && legMetric.cluster_size > 1 ? ` (${legMetric.cluster_size} pedidos)` : ''}
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        })()}
                                                                         {(() => {
                                                                             const resolvedWin = order ? resolveOrderDisplayWindow(order, params) : null;
                                                                             const slotText = resolvedWin?.displayLabel || 'Flexible';

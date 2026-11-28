@@ -587,6 +587,8 @@ export async function POST(request: Request) {
             }, { status: 200, headers: { 'x-request-id': requestId } });
         }
 
+        const clusterServiceMinMap = new Map<string, number>();
+
         // Expansión hermética: devuelve únicamente orderIds reales en routes, stop_etas y stop_leg_metrics
         const expandClusterAssignments = (
             rawAssign: Record<string, string[]>,
@@ -595,7 +597,7 @@ export async function POST(request: Request) {
         ) => {
             const expandedAssignments: Record<string, string[]> = {};
             const expandedStopEtas: Record<string, string> = {};
-            const expandedStopLegMetrics: Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean }> = {};
+            const expandedStopLegMetrics: Record<string, { distance_km: number; travel_min: number; is_same_site_followup?: boolean; service_min?: number; cluster_size?: number }> = {};
             Object.entries(rawAssign).forEach(([vid, clusterIds]) => {
                 const expanded: string[] = [];
                 clusterIds.forEach(cid => {
@@ -603,6 +605,7 @@ export async function POST(request: Request) {
                     const memberIds = cluster ? cluster.memberOrderIds : [String(cid)];
                     const etaVal = rawEtas[cid];
                     const legVal = rawLegMetrics[cid];
+                    const svcMin = clusterServiceMinMap.get(String(cid));
                     memberIds.forEach((realId, idx) => {
                         expanded.push(realId);
                         if (etaVal) expandedStopEtas[realId] = etaVal;
@@ -611,12 +614,15 @@ export async function POST(request: Request) {
                                 expandedStopLegMetrics[realId] = {
                                     distance_km: legVal.distance_km,
                                     travel_min: legVal.travel_min,
+                                    ...(typeof svcMin === 'number' ? { service_min: svcMin } : {}),
+                                    ...(memberIds.length > 1 ? { cluster_size: memberIds.length } : {}),
                                 };
                             } else {
                                 expandedStopLegMetrics[realId] = {
                                     distance_km: 0,
                                     travel_min: 0,
                                     is_same_site_followup: true,
+                                    service_min: 0,
                                 };
                             }
                         }
@@ -638,6 +644,7 @@ export async function POST(request: Request) {
                     const cashDwellDelta = cluster.isCashOnDelivery ? 5 : 0;
                     const rawUnloading = Math.ceil(base_setup + ((time_unload + time_delivery) / 10) * cluster.crates) + cashDwellDelta;
                     const unloadingTime = Math.max(5, Math.min(isNaN(rawUnloading) ? 15 : rawUnloading, 180));
+                    clusterServiceMinMap.set(String(cluster.clusterId), unloadingTime);
 
                     let shipmentTimeWindow: Record<string, string | number> = cluster.timeWindow;
                     if (cluster.isPriority) {
@@ -982,6 +989,8 @@ export async function POST(request: Request) {
             total_min: number;
             wait_min: number;
             break_min: number;
+            service_min?: number;
+            return_eta?: string;
         }> = {};
 
         vehicles.forEach((v: any) => {
@@ -997,12 +1006,25 @@ export async function POST(request: Request) {
                         routePolylines[vehicleId] = route.routePolyline.points;
                     }
                     if (route.metrics) {
+                        let returnEta: string | undefined;
+                        if (route.vehicleEndTime) {
+                            try {
+                                returnEta = new Intl.DateTimeFormat('en-GB', {
+                                    timeZone: 'America/Bogota',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false,
+                                }).format(new Date(route.vehicleEndTime));
+                            } catch (_) {}
+                        }
                         routeMetrics[vehicleId] = {
                             distance_km: Math.round(((Number(route.metrics.travelDistanceMeters) || 0) / 1000) * 10) / 10,
                             travel_min: Math.round(parseGcpDurationSeconds(route.metrics.travelDuration) / 60),
                             total_min: Math.round(parseGcpDurationSeconds(route.metrics.totalDuration) / 60),
                             wait_min: Math.round(parseGcpDurationSeconds(route.metrics.waitDuration) / 60),
                             break_min: Math.round(parseGcpDurationSeconds(route.metrics.breakDuration) / 60),
+                            service_min: Math.round(parseGcpDurationSeconds(route.metrics.visitDuration) / 60),
+                            ...(returnEta ? { return_eta: returnEta } : {}),
                         };
                     }
 
