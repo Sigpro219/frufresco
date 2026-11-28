@@ -153,131 +153,6 @@ function SpaghettiPolylinesLayer({
     return null;
 }
 
-function DirectionsPolylineHydrator({
-    vehicles,
-    visibleStops,
-    effectivePolylines,
-    attemptedRef,
-    isSealedView,
-    onHydrated,
-    onHydratingChange,
-}: {
-    vehicles: Array<{ id: string; plate: string; orderIds: string[] }>;
-    visibleStops: Array<{ vehicleId: string; gpsStatus: string; lat: number | null; lng: number | null }>;
-    effectivePolylines: Record<string, string>;
-    attemptedRef: React.MutableRefObject<Set<string>>;
-    isSealedView: boolean;
-    onHydrated: (
-        vehicleId: string,
-        polyline: string,
-        metrics: { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number }
-    ) => void;
-    onHydratingChange: (vehicleId: string, active: boolean) => void;
-}) {
-    const map = useMap();
-
-    useEffect(() => {
-        if (!map || typeof google === 'undefined' || !google.maps?.DirectionsService) return;
-
-        const targets = vehicles.filter(
-            (v) => v.orderIds.length > 0 && !effectivePolylines[v.id]?.trim() && !attemptedRef.current.has(v.id)
-        );
-        if (targets.length === 0) return;
-
-        let cancelled = false;
-        const service = new google.maps.DirectionsService();
-
-        (async () => {
-            for (const v of targets) {
-                if (cancelled) break;
-                if (attemptedRef.current.has(v.id)) continue;
-                attemptedRef.current.add(v.id);
-
-                const rawCoords = visibleStops
-                    .filter((s) => s.vehicleId === v.id && s.gpsStatus === 'valid' && s.lat !== null && s.lng !== null)
-                    .map((s) => ({ lat: s.lat as number, lng: s.lng as number }));
-
-                const dedupCoords: Array<{ lat: number; lng: number }> = [];
-                for (const pt of rawCoords) {
-                    const prev = dedupCoords[dedupCoords.length - 1];
-                    if (!prev || Math.abs(prev.lat - pt.lat) >= 0.0001 || Math.abs(prev.lng - pt.lng) >= 0.0001) {
-                        dedupCoords.push(pt);
-                    }
-                }
-                if (dedupCoords.length === 0) continue;
-
-                onHydratingChange(v.id, true);
-                try {
-                    const result = await new Promise<google.maps.DirectionsResult | null>((resolve) => {
-                        service.route(
-                            {
-                                origin: { lat: BODEGA_CENTRAL.lat, lng: BODEGA_CENTRAL.lng },
-                                destination: { lat: BODEGA_CENTRAL.lat, lng: BODEGA_CENTRAL.lng },
-                                waypoints: dedupCoords.slice(0, 23).map((pt) => ({ location: pt, stopover: true })),
-                                travelMode: google.maps.TravelMode.DRIVING,
-                                optimizeWaypoints: false,
-                            },
-                            (res, status) => {
-                                if (status === google.maps.DirectionsStatus.OK && res) {
-                                    resolve(res);
-                                } else {
-                                    resolve(null);
-                                }
-                            }
-                        );
-                    });
-
-                    if (!cancelled && result?.routes?.[0]) {
-                        const route0 = result.routes[0];
-                        const rawOverview = route0.overview_polyline as any;
-                        const encoded = typeof rawOverview === 'string' ? rawOverview : (rawOverview?.points || '');
-                        if (encoded) {
-                            let totalMeters = 0;
-                            let totalSeconds = 0;
-                            for (const leg of route0.legs || []) {
-                                totalMeters += leg.distance?.value || 0;
-                                totalSeconds += leg.duration?.value || 0;
-                            }
-                            const distance_km = Math.round((totalMeters / 1000) * 10) / 10;
-                            const travel_min = Math.round(totalSeconds / 60);
-                            const computedMetrics = {
-                                distance_km,
-                                travel_min,
-                                total_min: travel_min,
-                                wait_min: 0,
-                                break_min: 0,
-                            };
-                            onHydrated(v.id, encoded, computedMetrics);
-
-                            if (isSealedView) {
-                                fetch('/api/transport/routes', {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        routeId: v.id,
-                                        routePolyline: encoded,
-                                        routeMetrics: computedMetrics,
-                                    }),
-                                }).catch(() => {});
-                            }
-                        }
-                    }
-                } finally {
-                    if (!cancelled) onHydratingChange(v.id, false);
-                }
-
-                await new Promise((r) => setTimeout(r, 120));
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [map, vehicles, visibleStops, effectivePolylines, attemptedRef, isSealedView, onHydrated, onHydratingChange]);
-
-    return null;
-}
-
 export function RouteSpaghettiMapModal({
     isOpen,
     onClose,
@@ -433,6 +308,57 @@ export function RouteSpaghettiMapModal({
     }, [visibleVehicles, effectivePolylines]);
 
     const isHydratingAny = Object.values(hydratingIds).some(Boolean);
+
+    useEffect(() => {
+        if (!isOpen || !isSealedView) return;
+        const targets = visibleVehicles.filter(
+            (v) => v.orderIds.length > 0 && !effectivePolylines?.[v.id]?.trim() && !attemptedRef.current.has(v.id)
+        );
+        if (targets.length === 0) return;
+
+        let cancelled = false;
+        (async () => {
+            for (const v of targets) {
+                if (cancelled) break;
+                if (attemptedRef.current.has(v.id)) continue;
+                attemptedRef.current.add(v.id);
+
+                setHydratingIds((prev) => ({ ...prev, [v.id]: true }));
+                try {
+                    const res = await fetch('/api/transport/routes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ routeId: v.id }),
+                    });
+                    if (!cancelled && res.ok) {
+                        const data = await res.json();
+                        if (data?.route_polyline) {
+                            const met = data.route_metrics || {
+                                distance_km: 0,
+                                travel_min: 0,
+                                total_min: 0,
+                                wait_min: 0,
+                                break_min: 0,
+                            };
+                            setHydratedPolylines((prev) => ({ ...prev, [v.id]: data.route_polyline }));
+                            setHydratedMetrics((prev) => ({ ...prev, [v.id]: met }));
+                            onPolylineHydrated?.(v.id, data.route_polyline, met);
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Error hydrating sealed polyline:', err);
+                } finally {
+                    if (!cancelled) {
+                        setHydratingIds((prev) => ({ ...prev, [v.id]: false }));
+                    }
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, isSealedView, visibleVehicles, effectivePolylines, onPolylineHydrated]);
 
     if (!isOpen) return null;
 
@@ -605,21 +531,6 @@ export function RouteSpaghettiMapModal({
                             <SpaghettiPolylinesLayer
                                 items={polylineItems}
                                 markerPoints={validMarkerPoints}
-                            />
-                            <DirectionsPolylineHydrator
-                                vehicles={visibleVehicles}
-                                visibleStops={visibleStops}
-                                effectivePolylines={effectivePolylines}
-                                attemptedRef={attemptedRef}
-                                isSealedView={isSealedView}
-                                onHydrated={(vid, poly, met) => {
-                                    setHydratedPolylines((prev) => ({ ...prev, [vid]: poly }));
-                                    setHydratedMetrics((prev) => ({ ...prev, [vid]: met }));
-                                    onPolylineHydrated?.(vid, poly, met);
-                                }}
-                                onHydratingChange={(vid, active) => {
-                                    setHydratingIds((prev) => (prev[vid] === active ? prev : { ...prev, [vid]: active }));
-                                }}
                             />
 
                             {/* Bodega Central Pin */}
