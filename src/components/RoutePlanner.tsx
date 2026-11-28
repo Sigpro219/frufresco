@@ -1725,7 +1725,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             </section>
 
             {/* SECCIÓN 2: FLOTA Y RUTAS (Toma el relevo sticky en top:133px al pasar el último pedido) */}
-            <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', minWidth: 0, overflow: 'visible' }}>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', minWidth: 0, overflow: 'visible', order: (!showAllDates && orders.length === 0 && sealedRoutes.length > 0) ? 3 : 0 }}>
                 <div style={{
                     position: 'sticky',
                     top: '133px',
@@ -2158,7 +2158,8 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
 
                     return (
                         <div style={{
-                            marginTop: '1.5rem',
+                            order: (!showAllDates && orders.length === 0 && sealedRoutes.length > 0) ? 2 : 0,
+                            marginTop: (!showAllDates && orders.length === 0 && sealedRoutes.length > 0) ? '0.25rem' : '1.5rem',
                             backgroundColor: '#FFFFFF',
                             border: '1px solid #E2E8F0',
                             borderRadius: '18px',
@@ -3770,6 +3771,23 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 trafficMode={spaghettiOverride ? spaghettiOverride.trafficMode : trafficMode}
                 initialVehicleId={spaghettiVehicleId}
                 isSealedView={spaghettiOverride ? spaghettiOverride.isSealedView : false}
+                onPolylineHydrated={(vid, poly, met) => {
+                    setSealedRoutes((prev) =>
+                        prev.map((r) =>
+                            String(r.id) === String(vid)
+                                ? { ...r, route_polyline: poly, route_metrics: r.route_metrics || met }
+                                : r
+                        )
+                    );
+                    setSpaghettiOverride((prev) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            routePolylines: { ...prev.routePolylines, [vid]: poly },
+                            routeMetrics: prev.routeMetrics[vid] ? prev.routeMetrics : { ...prev.routeMetrics, [vid]: met },
+                        };
+                    });
+                }}
             />
             </div>
             <style>{`

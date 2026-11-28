@@ -187,3 +187,59 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: error.message || 'Error interno consultando rutas' }, { status: 500 });
     }
 }
+
+export async function PATCH(request: Request) {
+    try {
+        const auth = await verifySessionAndPermission(request, 'admin.transport.edit');
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+        }
+
+        const body = await request.json().catch(() => null);
+        const routeId = typeof body?.routeId === 'string' ? body.routeId.trim() : '';
+        const routePolyline = typeof body?.routePolyline === 'string' ? body.routePolyline.trim() : '';
+        const routeMetrics = body?.routeMetrics && typeof body.routeMetrics === 'object' ? body.routeMetrics : null;
+
+        if (!routeId || !routePolyline) {
+            return NextResponse.json(
+                { error: 'routeId y routePolyline son obligatorios' },
+                { status: 400 }
+            );
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const { data: existing, error: fetchErr } = await supabase
+            .from('routes')
+            .select('id, logic_parameters_snapshot')
+            .eq('id', routeId)
+            .maybeSingle();
+
+        if (fetchErr) throw fetchErr;
+        if (!existing) {
+            return NextResponse.json({ error: 'Ruta no encontrada' }, { status: 404 });
+        }
+
+        const existingSnapshot =
+            existing.logic_parameters_snapshot && typeof existing.logic_parameters_snapshot === 'object'
+                ? existing.logic_parameters_snapshot
+                : {};
+
+        const nextSnapshot = {
+            ...existingSnapshot,
+            route_polyline: routePolyline,
+            ...(routeMetrics && !existingSnapshot.route_metrics ? { route_metrics: routeMetrics } : {}),
+        };
+
+        const { error: updateErr } = await supabase
+            .from('routes')
+            .update({ logic_parameters_snapshot: nextSnapshot })
+            .eq('id', routeId);
+
+        if (updateErr) throw updateErr;
+
+        return NextResponse.json({ ok: true });
+    } catch (error: any) {
+        console.error('Error caching route polyline:', error);
+        return NextResponse.json({ error: error.message || 'Error interno guardando polilínea' }, { status: 500 });
+    }
+}
