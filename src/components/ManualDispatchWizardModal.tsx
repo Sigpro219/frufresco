@@ -43,12 +43,10 @@ import { acquireSaveFileHandle, isSavePickerAborted, saveWorkbookWithPicker } fr
 import { DirectPdfDocKey, saveRemotePrintUrlAsPdfDirect } from '@/components/print/savePdfDirect';
 import WasteFormatPrintButton from '@/components/admin/orders/WasteFormatPrintButton';
 import { exportRelacionDocumentosWithPicker } from '@/lib/exportRelacionDocumentosExcel';
-import { useAuth, checkUserPermission } from '@/lib/authContext';
 import { getBogotaDateString } from '@/lib/dateUtils';
 import {
     resolveInitialInventory,
     evaluateInventoryGateStatus,
-    recordInventoryGateOverride,
     type InventoryGateStatus
 } from '@/lib/inventory/resolveInitialInventory';
 
@@ -79,24 +77,11 @@ export default function ManualDispatchWizardModal({
     const [pdfBusyDoc, setPdfBusyDoc] = useState<DirectPdfDocKey | null>(null);
     const [pdfProgressText, setPdfProgressText] = useState<string>('');
     const [isExportingRelacion, setIsExportingRelacion] = useState<boolean>(false);
-    const { user, profile } = useAuth();
     const [gateStatus, setGateStatus] = useState<InventoryGateStatus | null>(null);
-    const [emergencyChecked, setEmergencyChecked] = useState<boolean>(false);
-    const [emergencyReason, setEmergencyReason] = useState<string>('');
-
-    const canAuthorizeOverride = Boolean(
-        profile?.role === 'admin' ||
-        profile?.role === 'sys_admin' ||
-        profile?.role === 'supervisor' ||
-        profile?.custom_permissions?.includes('*') ||
-        checkUserPermission(profile, 'admin.orders') ||
-        checkUserPermission(profile, 'admin.inventory')
-    );
 
     useEffect(() => {
         if (!isOpen) return;
-        setEmergencyChecked(false);
-        setEmergencyReason('');
+        setGateStatus(null);
         evaluateInventoryGateStatus({ supabase, targetDate: deliveryDate || getBogotaDateString() })
             .then(setGateStatus)
             .catch(err => console.warn('[ManualDispatchWizardModal] Error evaluando compuerta de inventario:', err));
@@ -708,30 +693,17 @@ export default function ManualDispatchWizardModal({
             alert('Debes confirmar la verificación de los rótulos térmicos y documentos físicos antes de finalizar.');
             return;
         }
-        if (gateStatus && gateStatus.level !== 'green') {
-            if (!canAuthorizeOverride) {
-                alert(`Inventario pendiente de cierre (${gateStatus.lastOperatedDate || ''}). Solo un Administrador o Supervisor puede autorizar el lanzamiento de emergencia.`);
-                return;
-            }
-            if (!emergencyChecked || emergencyReason.trim().length < 8) {
-                alert('Debes marcar la autorización de emergencia y escribir un motivo válido (mínimo 8 caracteres).');
-                return;
-            }
+        if (!gateStatus) {
+            alert('Verificando estado de cierre de inventario. Espera un momento e intenta de nuevo.');
+            return;
+        }
+        if (gateStatus.level !== 'green') {
+            alert(`Lanzamiento bloqueado: inventario pendiente de cierre (${gateStatus.lastOperatedDate || ''}). Registra Cierre Parcial (Conteo Físico) o Cierre Total antes de lanzar.`);
+            return;
         }
 
         setFinalizingLoading(true);
         try {
-            if (gateStatus && gateStatus.level !== 'green') {
-                await recordInventoryGateOverride({
-                    supabase,
-                    targetOperationDate: deliveryDate || getBogotaDateString(),
-                    pendingClosingDate: gateStatus.lastOperatedDate,
-                    sourceKind: gateStatus.sourceKind,
-                    reason: emergencyReason,
-                    authorizedBy: user?.id || null,
-                    authorizedByName: profile?.contact_name || profile?.company_name || user?.email || 'Administrador',
-                });
-            }
 
             const { error } = await supabase
                 .from('orders')
@@ -2097,37 +2069,9 @@ export default function ManualDispatchWizardModal({
                                                 </Link>
                                             </div>
                                             <div style={{ fontSize: '0.70rem', marginBottom: '6px' }}>{gateStatus.detail}</div>
-                                            {canAuthorizeOverride ? (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, cursor: 'pointer' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={emergencyChecked}
-                                                            onChange={(e) => setEmergencyChecked(e.target.checked)}
-                                                        />
-                                                        Autorizar lanzamiento de emergencia (auditado)
-                                                    </label>
-                                                    {emergencyChecked && (
-                                                        <input
-                                                            type="text"
-                                                            value={emergencyReason}
-                                                            onChange={(e) => setEmergencyReason(e.target.value)}
-                                                            placeholder="Motivo obligatorio (mín. 8 caracteres)..."
-                                                            style={{
-                                                                width: '100%',
-                                                                padding: '6px 8px',
-                                                                borderRadius: '6px',
-                                                                border: '1px solid #CBD5E1',
-                                                                backgroundColor: '#FFFFFF',
-                                                                color: '#0F172A',
-                                                                fontSize: '0.72rem'
-                                                            }}
-                                                        />
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div style={{ fontWeight: 800 }}>Solo Admin/Supervisor puede autorizar emergencia.</div>
-                                            )}
+                                            <div style={{ fontWeight: 800 }}>
+                                                Lanzamiento bloqueado: registra Cierre Parcial (Conteo Físico) o Cierre Total de inventario para continuar.
+                                            </div>
                                         </div>
                                     )}
                                     <button
@@ -2135,11 +2079,11 @@ export default function ManualDispatchWizardModal({
                                         disabled={
                                             finalizingLoading ||
                                             selectedOrderIds.size === 0 ||
-                                            Boolean(gateStatus && gateStatus.level !== 'green' && (!canAuthorizeOverride || !emergencyChecked || emergencyReason.trim().length < 8))
+                                            Boolean(!gateStatus || gateStatus.level !== 'green')
                                         }
                                         style={{
                                             padding: '12px 24px',
-                                            backgroundColor: (selectedOrderIds.size === 0 || Boolean(gateStatus && gateStatus.level !== 'green' && (!canAuthorizeOverride || !emergencyChecked || emergencyReason.trim().length < 8))) ? '#94A3B8' : '#059669',
+                                            backgroundColor: (selectedOrderIds.size === 0 || Boolean(!gateStatus || gateStatus.level !== 'green')) ? '#94A3B8' : '#059669',
                                             color: '#FFFFFF',
                                             border: 'none',
                                             borderRadius: '12px',

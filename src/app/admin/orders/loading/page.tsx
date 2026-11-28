@@ -22,7 +22,7 @@ import { GalleryOmnibox, normalizeSearchText } from '@/components/common/Gallery
 import { isValidDeliveryDate, getNextValidDeliveryDate, calculateStandardMinDeliveryDate, formatDateToYYYYMMDD, getBogotaNow } from '@/lib/colombianHolidays';
 import { addBogotaDays, formatBogotaDate, getBogotaDateString } from '@/lib/dateUtils';
 import { ensureUniversalStagingSpaces, formatSpaceLabel } from '@/lib/stagingSpaceAllocator';
-import { evaluateInventoryGateStatus, recordInventoryGateOverride, isPartialClosingNote, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
+import { evaluateInventoryGateStatus, isPartialClosingNote, type InventoryGateStatus } from '@/lib/inventory/resolveInitialInventory';
 import { 
     MessageSquare, 
     Phone, 
@@ -264,17 +264,6 @@ function OrderLoadingContent() {
     const prevTodayClosingStateRef = useRef<'locked' | 'partial' | 'reopened' | 'none' | null>(null);
     const todayClosingAuthorRef = useRef<string | null>(null);
     const [showInventoryGateModal, setShowInventoryGateModal] = useState(false);
-    const [gateOverrideConfirmed, setGateOverrideConfirmed] = useState(false);
-    const [gateOverrideReason, setGateOverrideReason] = useState('');
-    const [isRecordingOverride, setIsRecordingOverride] = useState(false);
-
-    const canAuthorizeInventoryOverride = useMemo(() => {
-        if (!profile) return false;
-        const role = (profile.role || '').toLowerCase();
-        if (role === 'admin' || role === 'sys_admin' || role === 'supervisor') return true;
-        if (profile.custom_permissions?.includes('*')) return true;
-        return checkUserPermission(profile, 'admin.orders', roles);
-    }, [profile, roles]);
 
     const canView = hasPermission('admin.orders');
 
@@ -3540,14 +3529,16 @@ useEffect(() => {
         setShowConfirmModal(true);
     };
 
-    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false, skipInventoryGate: boolean = false) => {
+    const handleBulkAction = async (targetStatus: string, skipNativeConfirm: boolean = false) => {
         if (selectedOrders.size === 0) return;
         
         const selectedList = orders.filter(o => selectedOrders.has(o.id));
         if (targetStatus === 'para_compra') {
-            if (!skipInventoryGate && inventoryGateStatus && inventoryGateStatus.level !== 'green') {
-                setGateOverrideConfirmed(false);
-                setGateOverrideReason('');
+            if (!inventoryGateStatus) {
+                alert('Verificando estado de cierre de inventario. Espera un momento e intenta de nuevo.');
+                return;
+            }
+            if (inventoryGateStatus.level !== 'green') {
                 setShowInventoryGateModal(true);
                 return;
             }
@@ -5994,17 +5985,19 @@ useEffect(() => {
                                     type="button"
                                     disabled={updateLoading}
                                     onClick={async () => {
-                                        if (inventoryGateStatus && inventoryGateStatus.level !== 'green') {
+                                        if (!inventoryGateStatus) {
+                                            alert('Verificando estado de cierre de inventario. Espera un momento e intenta de nuevo.');
+                                            return;
+                                        }
+                                        if (inventoryGateStatus.level !== 'green') {
                                             setShowLockWarningModal(false);
-                                            setGateOverrideConfirmed(false);
-                                            setGateOverrideReason('');
                                             setShowInventoryGateModal(true);
                                             return;
                                         }
                                         const ids = Array.from(selectedOrders);
                                         setLastLaunchedOrderIds(ids);
                                         setShowLockWarningModal(false);
-                                        await handleBulkAction('para_compra', true, true);
+                                        await handleBulkAction('para_compra', true);
                                         const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
                                         try {
                                             const shiftRes = await fetch('/api/ops/shifts', {
@@ -6139,109 +6132,18 @@ useEffect(() => {
                                     <span>Ir a Completar y Cerrar Inventario ({inventoryGateStatus.lastOperatedDate || 'Hoy'})</span>
                                 </Link>
 
-                                {canAuthorizeInventoryOverride ? (
-                                    <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#FFF7ED', border: '1px solid #FDBA74', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.75rem', fontWeight: 800, color: '#9A3412', cursor: 'pointer' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={gateOverrideConfirmed}
-                                                onChange={(e) => setGateOverrideConfirmed(e.target.checked)}
-                                                style={{ marginTop: '2px' }}
-                                            />
-                                            <span>Autorizo lanzar la operación asumiendo el inventario heredado actual (override de emergencia auditado).</span>
-                                        </label>
-                                        <textarea
-                                            value={gateOverrideReason}
-                                            onChange={(e) => setGateOverrideReason(e.target.value)}
-                                            placeholder="Motivo obligatorio (mín. 8 caracteres)..."
-                                            rows={2}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.5rem 0.65rem',
-                                                borderRadius: '8px',
-                                                border: '1px solid #FDBA74',
-                                                fontSize: '0.76rem',
-                                                resize: 'vertical',
-                                            }}
-                                        />
-                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowInventoryGateModal(false)}
-                                                style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
-                                            >
-                                                Cancelar
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride}
-                                                onClick={async () => {
-                                                    setIsRecordingOverride(true);
-                                                    try {
-                                                        await recordInventoryGateOverride({
-                                                            supabase,
-                                                            targetOperationDate: inventoryGateStatus.targetDate || getBogotaDateString(),
-                                                            pendingClosingDate: inventoryGateStatus.lastOperatedDate,
-                                                            sourceKind: inventoryGateStatus.sourceKind,
-                                                            reason: gateOverrideReason,
-                                                            authorizedBy: currentUser?.id || profile?.id || null,
-                                                            authorizedByName: profile?.contact_name || currentUser?.email || 'Administrador',
-                                                        });
-                                                        const ids = Array.from(selectedOrders);
-                                                        setLastLaunchedOrderIds(ids);
-                                                        setShowInventoryGateModal(false);
-                                                        await handleBulkAction('para_compra', true, true);
-                                                        const targetShiftDate = (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) ? selectedDate : getTomorrowDateStr();
-                                                        try {
-                                                            const shiftRes = await fetch('/api/ops/shifts', {
-                                                                method: 'POST',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                credentials: 'include',
-                                                                body: JSON.stringify({ action: 'set_mode', mode: 'digital_native', shift_date: targetShiftDate })
-                                                            });
-                                                            if (!shiftRes.ok) {
-                                                                console.warn('[Opción A Override] No se pudo activar turno digital_native:', shiftRes.status);
-                                                            }
-                                                        } catch (shiftErr) {
-                                                            console.warn('[Opción A Override] Error activando turno digital_native:', shiftErr);
-                                                        }
-                                                        setPostLaunchPrintConfirmed(false);
-                                                        setShowPostLaunchModal(true);
-                                                    } catch (ovErr: any) {
-                                                        alert('Error registrando autorización de emergencia: ' + (ovErr?.message || ovErr));
-                                                    } finally {
-                                                        setIsRecordingOverride(false);
-                                                    }
-                                                }}
-                                                style={{
-                                                    padding: '7px 14px',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    backgroundColor: (!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride) ? '#CBD5E1' : '#DC2626',
-                                                    color: '#FFFFFF',
-                                                    fontSize: '0.75rem',
-                                                    fontWeight: 900,
-                                                    cursor: (!gateOverrideConfirmed || gateOverrideReason.trim().length < 8 || isRecordingOverride) ? 'not-allowed' : 'pointer',
-                                                }}
-                                            >
-                                                {isRecordingOverride ? 'Autorizando...' : 'Autorizar Lanzamiento de Emergencia'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontSize: '0.72rem', color: '#991B1B', fontWeight: 700 }}>
-                                            Solo Administración / Jefatura puede autorizar un lanzamiento de emergencia.
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowInventoryGateModal(false)}
-                                            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
-                                        >
-                                            Cerrar
-                                        </button>
-                                    </div>
-                                )}
+                                <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '0.74rem', color: '#991B1B', fontWeight: 800 }}>
+                                        Lanzamiento bloqueado: es obligatorio registrar Cierre Parcial (Conteo Físico) o Cierre Total de inventario antes de lanzar la operación.
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowInventoryGateModal(false)}
+                                        style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#334155', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
+                                    >
+                                        Entendido
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

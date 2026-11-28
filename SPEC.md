@@ -18846,6 +18846,30 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
-### Hoja de Ruta Comercial — SEO & Posicionamiento B2C Hogar (Fase 1 vs. Fase 2)
-- **Fase 1 (Vigente — Sin cambios en SEO técnico):** Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.
-- **Fase 2 (Pendiente — Post-estabilización operativa):** Activar estrategia agresiva de posicionamiento B2C Hogar combinando SEO programático (sitemap dinámico de productos/categorías, JSON-LD `Product`, landings por zona de Bogotá) y pauta paga en Google Buscador (Google Ads geo-cercado), condicionada a pedido mínimo B2C rentable, geofencing de cobertura y ventana suave D+1 post-10:00 AM (Escenario 501).
+### Escenario 510: Enmienda de Bloqueo Duro Fail-Closed en Compuerta de Inventario (Derogación de Override — Opción A)
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/admin/orders/loading/page.tsx`
+  - `src/components/ManualDispatchWizardModal.tsx`
+  - `src/lib/inventory/resolveInitialInventory.ts` (lectura)
+- **Alcance Contractual:**
+  1. Enmienda y deroga la acción secundaria `Autorizar Lanzamiento de Emergencia` (checkbox + motivo de override) del Escenario 457 tanto en Modo Digital (`/admin/orders/loading`) como en Modo Manual (`ManualDispatchWizardModal`).
+  2. Regla binaria estricta: `official_closing` (Cierre Total) y `partial_closing` (Cierre Parcial — Conteo Físico OK) otorgan `level === 'green'` (go ahead); cualquier estado distinto o `null` (error de red / carga en curso) opera **fail-closed** bloqueando la transición a `para_compra`.
+  3. Eliminación del parámetro bypass `skipInventoryGate` y purga total de imports/estados muertos de override.
+
+---
+
+### Hoja de Ruta Fase 2 — Red de Nodos B2C Cross-Docking, Última Milla & Posicionamiento Agresivo (Sin Impacto en Código Fase 1)
+- **Fase 1 (Vigente — Operación Central B2B & Cimiento Único):**
+  - Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga Hogar (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.
+- **Fase 2 (Pendiente — Alta Ingeniería sobre la Misma Plataforma, Una Sola Cadena de Abastecimiento):**
+  1. **Separación Logística vs. Fiscal ("Nodo = Cliente Institucional solo en Logística"):**
+     - El Nodo B2C se modela como un *"cliente institucional adicional"* **únicamente en la capa logística** (consolidación en Compras Corabastos, camión troncal de las 4:00 AM en 1 parada masiva, traslado interno NIC 2 excluido de facturación DIAN/World Office vía discriminador `internal_node_transfer`).
+     - Comercial y fiscalmente, el cliente B2C **siempre compra y se factura directamente a Investments Cortés SAS** (cero doble ingreso, cero doble IVA).
+  2. **Ingeniería Lean de Nodo (Cross-Docking, Takt Time, Lead Time y Predicción de Demanda):**
+     - Cross-docking puro para pedidos programados + micro-buffer predictivo de SKUs Pareto (aislado por `node_id` en Kardex y cierres diarios para no contaminar la Compra Neta B2B), gobernado en vivo por **Takt Time** ($\text{Tiempo Disponible} / \text{Demanda de la Franja}$) y **Lead Time** (Click $\rightarrow$ Picking $\rightarrow$ Puerta) como semáforo Andon.
+  3. **Última Milla Híbrida & Mix de Canales:**
+     - Despacho en radio corto (2–3 km por nodo) con flota dedicada (`/ops/driver`, Baliza QR, `/track/[token]`) + conectores elásticos 3PL (ej. Rappi Cargo / mensajería urbana) para absorber picos sobre el mismo inventario del nodo.
+  4. **Posicionamiento Agresivo Nodo por Nodo:**
+     - SEO programático (sitemap dinámico de productos/categorías, JSON-LD `Product`, landings locales) + Google Ads geo-cercado al polígono de cada nodo (`GeofencingManager`), regulado por el Takt Time disponible.
+  - **Compuerta Pre-Código Fase 2:** Antes de implementar Fase 2, formalizar en `SPEC.md` los esquemas de `internal_node_transfer`, `node_id` multi-bodega y webhooks/conciliación 3PL.
