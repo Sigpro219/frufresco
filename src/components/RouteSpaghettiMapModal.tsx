@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Map as GoogleMap, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import {
     X,
@@ -55,11 +55,6 @@ export interface RouteSpaghettiMapModalProps {
     trafficMode: 'live_predictive' | 'weekday_projected' | null;
     initialVehicleId?: string | null;
     isSealedView?: boolean;
-    onPolylineHydrated?: (
-        vehicleId: string,
-        polyline: string,
-        metrics: { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number }
-    ) => void;
 }
 
 const ROUTE_COLORS = [
@@ -166,37 +161,16 @@ export function RouteSpaghettiMapModal({
     trafficMode,
     initialVehicleId = null,
     isSealedView = false,
-    onPolylineHydrated,
 }: RouteSpaghettiMapModalProps) {
     const [selectedVehicleId, setSelectedVehicleId] = useState<string>(initialVehicleId || 'ALL');
     const [activeStopKey, setActiveStopKey] = useState<string | null>(null);
-    const [hydratedPolylines, setHydratedPolylines] = useState<Record<string, string>>({});
-    const [hydratedMetrics, setHydratedMetrics] = useState<
-        Record<string, { distance_km: number; travel_min: number; total_min: number; wait_min: number; break_min: number }>
-    >({});
-    const [hydratingIds, setHydratingIds] = useState<Record<string, boolean>>({});
-    const attemptedRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         if (isOpen) {
             setSelectedVehicleId(initialVehicleId || 'ALL');
             setActiveStopKey(null);
-        } else {
-            setHydratedPolylines({});
-            setHydratedMetrics({});
-            setHydratingIds({});
-            attemptedRef.current.clear();
         }
     }, [isOpen, initialVehicleId]);
-
-    const effectivePolylines = useMemo(
-        () => ({ ...hydratedPolylines, ...(routePolylines || {}) }),
-        [hydratedPolylines, routePolylines]
-    );
-    const effectiveMetrics = useMemo(
-        () => ({ ...hydratedMetrics, ...(routeMetrics || {}) }),
-        [hydratedMetrics, routeMetrics]
-    );
 
     const orderById = useMemo(() => {
         const map = new Map<string, any>();
@@ -241,7 +215,7 @@ export function RouteSpaghettiMapModal({
     const polylineItems = useMemo<PolylineRenderItem[]>(() => {
         const items: PolylineRenderItem[] = [];
         for (const v of visibleVehicles) {
-            const encoded = effectivePolylines?.[v.id];
+            const encoded = routePolylines?.[v.id];
             if (!encoded || typeof encoded !== 'string' || encoded.trim().length === 0) {
                 continue;
             }
@@ -256,7 +230,7 @@ export function RouteSpaghettiMapModal({
             }
         }
         return items;
-    }, [visibleVehicles, effectivePolylines, selectedVehicleId]);
+    }, [visibleVehicles, routePolylines, selectedVehicleId]);
 
     const visibleStops = useMemo(() => {
         const stops: Array<{
@@ -303,62 +277,9 @@ export function RouteSpaghettiMapModal({
 
     const vehiclesWithoutPolyline = useMemo(() => {
         return visibleVehicles.filter(
-            (v) => v.orderIds.length > 0 && (!effectivePolylines?.[v.id] || !effectivePolylines[v.id].trim())
+            (v) => v.orderIds.length > 0 && (!routePolylines?.[v.id] || !routePolylines[v.id].trim())
         );
-    }, [visibleVehicles, effectivePolylines]);
-
-    const isHydratingAny = Object.values(hydratingIds).some(Boolean);
-
-    useEffect(() => {
-        if (!isOpen || !isSealedView) return;
-        const targets = visibleVehicles.filter(
-            (v) => v.orderIds.length > 0 && !effectivePolylines?.[v.id]?.trim() && !attemptedRef.current.has(v.id)
-        );
-        if (targets.length === 0) return;
-
-        let cancelled = false;
-        (async () => {
-            for (const v of targets) {
-                if (cancelled) break;
-                if (attemptedRef.current.has(v.id)) continue;
-                attemptedRef.current.add(v.id);
-
-                setHydratingIds((prev) => ({ ...prev, [v.id]: true }));
-                try {
-                    const res = await fetch('/api/transport/routes', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ routeId: v.id }),
-                    });
-                    if (!cancelled && res.ok) {
-                        const data = await res.json();
-                        if (data?.route_polyline) {
-                            const met = data.route_metrics || {
-                                distance_km: 0,
-                                travel_min: 0,
-                                total_min: 0,
-                                wait_min: 0,
-                                break_min: 0,
-                            };
-                            setHydratedPolylines((prev) => ({ ...prev, [v.id]: data.route_polyline }));
-                            setHydratedMetrics((prev) => ({ ...prev, [v.id]: met }));
-                            onPolylineHydrated?.(v.id, data.route_polyline, met);
-                        }
-                    }
-                } catch (err) {
-                    console.warn('Error hydrating sealed polyline:', err);
-                } finally {
-                    if (!cancelled) {
-                        setHydratingIds((prev) => ({ ...prev, [v.id]: false }));
-                    }
-                }
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isOpen, isSealedView, visibleVehicles, effectivePolylines, onPolylineHydrated]);
+    }, [visibleVehicles, routePolylines]);
 
     if (!isOpen) return null;
 
@@ -608,41 +529,36 @@ export function RouteSpaghettiMapModal({
                                 <div style={{
                                     padding: '12px',
                                     borderRadius: '12px',
-                                    border: (isSealedView || isHydratingAny) ? '1px solid #BFDBFE' : '1px solid #FCD34D',
-                                    backgroundColor: (isSealedView || isHydratingAny) ? '#EFF6FF' : '#FFFBEB',
-                                    color: (isSealedView || isHydratingAny) ? '#1E40AF' : '#78350F',
+                                    border: isSealedView ? '1px solid #BFDBFE' : '1px solid #FCD34D',
+                                    backgroundColor: isSealedView ? '#EFF6FF' : '#FFFBEB',
+                                    color: isSealedView ? '#1E40AF' : '#78350F',
                                     fontSize: '12px',
                                     display: 'flex',
                                     alignItems: 'flex-start',
                                     gap: '10px'
                                 }}>
-                                    {(isSealedView || isHydratingAny)
+                                    {isSealedView
                                         ? <Info size={16} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
                                         : <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
                                     }
                                     <div>
                                         <p style={{ margin: 0, fontWeight: 800 }}>
-                                            {isHydratingAny
-                                                ? 'Trazando ruta real sobre vías de Google Maps...'
-                                                : isSealedView
-                                                    ? 'Ruta confirmada sin polilínea guardada'
-                                                    : 'Modo Manual — sin polilínea ni métricas de tráfico de Google'}
+                                            {isSealedView
+                                                ? 'Ruta confirmada sin polilínea guardada'
+                                                : 'Modo Manual — sin polilínea ni métricas de tráfico de Google'}
                                         </p>
-                                        <p style={{ margin: '3px 0 0', fontSize: '11px', color: (isSealedView || isHydratingAny) ? '#1E3A8A' : '#92400E' }}>
-                                            {isHydratingAny
-                                                ? `Calculando trazo vial para ${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')}...`
-                                                : isSealedView
-                                                    ? `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')}: se muestran las paradas numeradas en secuencia y los enlaces directos a Google Maps.`
-                                                    : `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')} sin trazo optimizado vigente. No se generan distancias, tiempos ni líneas rectas sintéticas.`}
+                                        <p style={{ margin: '3px 0 0', fontSize: '11px', color: isSealedView ? '#1E3A8A' : '#92400E' }}>
+                                            {isSealedView
+                                                ? `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')}: se muestran las paradas numeradas en secuencia y los enlaces directos a Google Maps.`
+                                                : `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')} sin trazo optimizado vigente. No se generan distancias, tiempos ni líneas rectas sintéticas.`}
                                         </p>
                                     </div>
                                 </div>
                             )}
 
                             {visibleVehicles.map((v) => {
-                                const metrics = effectiveMetrics?.[v.id];
-                                const hasPolyline = Boolean(effectivePolylines?.[v.id]?.trim());
-                                const isHydratingThis = Boolean(hydratingIds[v.id]);
+                                const metrics = routeMetrics?.[v.id];
+                                const hasPolyline = Boolean(routePolylines?.[v.id]?.trim());
                                 const vehicleStops = visibleStops.filter((s) => s.vehicleId === v.id);
                                 const validOrdersForChunks = vehicleStops
                                     .filter((s) => s.gpsStatus === 'valid' && s.lat !== null && s.lng !== null)
@@ -723,11 +639,6 @@ export function RouteSpaghettiMapModal({
                                                             {metrics.total_min} min
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ) : isHydratingThis ? (
-                                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <Info size={13} color="#2563EB" style={{ flexShrink: 0 }} />
-                                                    <span>Trazando polilínea en Google Maps...</span>
                                                 </div>
                                             ) : !isSealedView ? (
                                                 <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400E', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>

@@ -3771,23 +3771,6 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 trafficMode={spaghettiOverride ? spaghettiOverride.trafficMode : trafficMode}
                 initialVehicleId={spaghettiVehicleId}
                 isSealedView={spaghettiOverride ? spaghettiOverride.isSealedView : false}
-                onPolylineHydrated={(vid, poly, met) => {
-                    setSealedRoutes((prev) =>
-                        prev.map((r) =>
-                            String(r.id) === String(vid)
-                                ? { ...r, route_polyline: poly, route_metrics: r.route_metrics || met }
-                                : r
-                        )
-                    );
-                    setSpaghettiOverride((prev) => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            routePolylines: { ...prev.routePolylines, [vid]: poly },
-                            routeMetrics: prev.routeMetrics[vid] ? prev.routeMetrics : { ...prev.routeMetrics, [vid]: met },
-                        };
-                    });
-                }}
             />
             </div>
             <style>{`
