@@ -18,6 +18,7 @@ import Link from 'next/link';
 import VariantModal from './VariantModal';
 import PdfCanvasViewer from './PdfCanvasViewer';
 import { generateOrderConfirmationHtml, generateOrderConfirmationText } from '@/lib/emailTemplates';
+import { isValidPurchaseOrderCode } from '@/lib/orderDuplicates';
 import { getFriendlyOrderId, buildDualUnitMetadata, resolvePhysicalInstruction, resolveProductCharacteristicsBadges, isRedundantAttribute } from '@/lib/orderUtils';
 import { isSpreadsheetFile, parseSpreadsheetWorkbook } from '@/lib/spreadsheets';
 import { useAuth } from '@/lib/authContext';
@@ -194,15 +195,18 @@ const extractPoFallback = (text: string): string => {
   if (!text || typeof text !== 'string') return '';
   const clean = text.trim();
   if (!clean) return '';
-  const rx = /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{3,25})\b/i;
-  const rx2 = /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/i;
-  const rx3 = /\b(OC[0-9]{4,15})\b/i;
-  const m = clean.match(rx) || clean.match(rx2) || clean.match(rx3);
-  if (m && m[1]) {
-    const cand = m[1].trim();
-    const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|para|del|los|las|por|con|gracias|verdura|hoy|manana|mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
-    if (!forbidden.test(cand) && cand.length >= 3) {
-      return cand;
+  const patterns = [
+    /\b(OC[0-9]{4,15})\b/gi,
+    /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/gi,
+    /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{4,25})\b/gi,
+  ];
+  const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|para|del|los|las|por|con|gracias|verdura|hoy|manana|mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+  for (const rx of patterns) {
+    for (const m of clean.matchAll(rx)) {
+      const cand = m[1]?.trim();
+      if (cand && !forbidden.test(cand) && isValidPurchaseOrderCode(cand)) {
+        return cand;
+      }
     }
   }
   return '';

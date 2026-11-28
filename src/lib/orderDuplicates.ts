@@ -69,6 +69,22 @@ export function getOrderClientKey(order: any): string {
 }
 
 /**
+ * Valida que un código de Orden de Compra (OC / SOLPED / PO) sea real y contenga al menos un dígito,
+ * evitando falsos positivos por palabras de texto ("para", "contrato") o fechas/años aislados ("28-11", "2026").
+ */
+export function isValidPurchaseOrderCode(raw?: string | null): boolean {
+    if (!raw) return false;
+    const trimmed = String(raw).trim();
+    if (trimmed.length < 4) return false;
+    if (/^(0+|n\/a|null|none|s\/n|na|sin\s*oc)$/i.test(trimmed)) return false;
+    if (!/\d/.test(trimmed)) return false;
+    if (/^20\d{2}$/.test(trimmed)) return false;
+    if (/^\d{1,2}[-/.]\d{1,2}([-/.]\d{2,4})?$/.test(trimmed)) return false;
+    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(trimmed)) return false;
+    return true;
+}
+
+/**
  * Extrae la firma del documento o número de orden de compra (OC) de un pedido.
  */
 export function getOrderDocumentSignature(order: any): { filename: string | null; ocNumber: string | null } {
@@ -77,7 +93,7 @@ export function getOrderDocumentSignature(order: any): { filename: string | null
 
     // 0. Prioridad Absoluta: Lectura directa de purchase_order_number nativo de BD (Escenario 436 SDD)
     const rawDirectOc = String(order.purchase_order_number || order.logistics_data?.purchase_order_number || '').trim();
-    if (rawDirectOc && rawDirectOc.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(rawDirectOc)) {
+    if (isValidPurchaseOrderCode(rawDirectOc)) {
         ocNumber = rawDirectOc;
     }
 
@@ -120,7 +136,7 @@ export function getOrderDocumentSignature(order: any): { filename: string | null
         const ocMatch = searchCorpus.match(/(?:OC|OCC|SC|SOLPED|ORDEN\s+DE\s+COMPRA|PO)[:#\s_-]*([0-9]{4,12})/i);
         if (ocMatch) {
             const candidate = ocMatch[1]?.trim();
-            if (candidate && candidate.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(candidate)) {
+            if (isValidPurchaseOrderCode(candidate)) {
                 ocNumber = candidate;
             }
         }
@@ -216,8 +232,8 @@ export function detectDuplicateOrders(orders: any[]): Map<string, DuplicateColli
         if (dateKey === 'nodate') continue;
 
         const docSig = getOrderDocumentSignature(order);
-        if (docSig.ocNumber && docSig.ocNumber.length >= 4 && !/^(0+|n\/a|null|none)$/i.test(docSig.ocNumber)) {
-            const ocKey = docSig.ocNumber.toLowerCase() + '___' + dateKey;
+        if (isValidPurchaseOrderCode(docSig.ocNumber)) {
+            const ocKey = docSig.ocNumber!.toLowerCase() + '___' + dateKey;
             if (!globalOcGroups.has(ocKey)) {
                 globalOcGroups.set(ocKey, []);
             }

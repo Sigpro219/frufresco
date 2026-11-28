@@ -5,6 +5,7 @@ import {
   CANONICAL_MODEL_CASCADE,
   getGeminiApiKey,
 } from '@/lib/ai/aiModelConfig';
+import { isValidPurchaseOrderCode } from '@/lib/orderDuplicates';
 
 /**
  * Sanitizador de Texto Inteligente para OCR/PDF/Email
@@ -563,17 +564,17 @@ export function extractPurchaseOrderFromText(text: string): string | null {
   if (!clean) return null;
 
   const patterns = [
-    /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{3,25})\b/i,
-    /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/i,
-    /\b(OC[0-9]{4,15})\b/i
+    /\b(OC[0-9]{4,15})\b/gi,
+    /\b(?:OCC|OC|PO|SOLPED)[\s_-]*([0-9]{4,15})\b/gi,
+    /\b(?:orden\s+de\s+compra|orden\s+compra|orden\s+de\s+pedido|o\.c\.|o\/c|occ|oc|p\.o\.|po|solped|pedido)\s*(?:n[°o\.]*|num(?:ero)?|#)?\s*[:=\s-]*([A-Za-z0-9\-_]{4,25})\b/gi
   ];
 
+  const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|para|del|los|las|por|con|gracias|verdura|hoy|manana|mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+
   for (const rx of patterns) {
-    const match = clean.match(rx);
-    if (match && match[1]) {
-      const candidate = match[1].trim();
-      const forbidden = /^(bogota|colombia|frufresco|alimentos|corabastos|lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
-      if (!forbidden.test(candidate) && candidate.length >= 3) {
+    for (const match of clean.matchAll(rx)) {
+      const candidate = match[1]?.trim();
+      if (candidate && !forbidden.test(candidate) && isValidPurchaseOrderCode(candidate)) {
         return candidate;
       }
     }

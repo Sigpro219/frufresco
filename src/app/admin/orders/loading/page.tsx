@@ -5486,7 +5486,7 @@ useEffect(() => {
                                                                     boxShadow: '0 1px 2px rgba(220, 38, 38, 0.15)'
                                                                 }} title={duplicateInfo.alertMessage}>
                                                                     <AlertTriangle size={10} strokeWidth={2.8} style={{ color: '#DC2626' }} />
-                                                                    <span>MISMA SEDE Y FECHA</span>
+                                                                    <span>{duplicateInfo.groupKey.startsWith('oc_') ? 'MISMA OC Y FECHA' : 'MISMA SEDE Y FECHA'}</span>
                                                                 </span>
                                                             )}
                                                         </div>
@@ -10169,9 +10169,9 @@ function OrderCard({ order, isSelected, onToggleSelect, onClick, duplicateInfo }
                                 fontSize: '0.68rem',
                                 fontWeight: '800',
                                 color: '#991B1B'
-                            }}>
+                            }} title={duplicateInfo.alertMessage}>
                                 <AlertTriangle size={11} strokeWidth={2.6} style={{ color: '#DC2626' }} />
-                                <span>MISMA SEDE Y FECHA DE ENTREGA</span>
+                                <span>{duplicateInfo.groupKey.startsWith('oc_') ? 'MISMA OC Y FECHA' : 'MISMA SEDE Y FECHA DE ENTREGA'}</span>
                             </div>
                         )}
                     </div>

@@ -18828,3 +18828,24 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
   2. **Refresco Atómico (`refreshInventoryClosingAndGate`):** Actualiza en paralelo `todayClosingState` e `inventoryGateStatus` (`evaluateInventoryGateStatus`) calculando `getBogotaDateString()` dinámicamente en cada llamada (sin congelar fechas en filtros).
   3. **Doble Capa de Sincronización ($0 tokens):** Suscripción pasiva Realtime (`supabase.channel('daily-inventory-closings-live')` con `removeChannel` al desmontar) + fallback en `visibilitychange`/`focus` y el `pollInterval` existente de 25s.
   4. **Toast Flotante Dedicado:** Avisa únicamente en transiciones reales hacia `partial` o `locked` (ignorando `null -> ...`), con auto-cierre a 8s, botón manual `X` y cero emojis (Lucide icons).
+
+---
+
+### Escenario 509: Blindaje Universal de Validación de OC y Diferenciación de Colisiones en `/admin/orders/loading`
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/lib/orderDuplicates.ts`
+  - `src/lib/orders/order-parser-engine.ts`
+  - `src/components/EmailDraftsModule.tsx`
+  - `src/app/admin/orders/loading/page.tsx`
+- **Alcance Contractual:**
+  1. **Validador Canónico Único (`isValidPurchaseOrderCode`):** Exportado desde `src/lib/orderDuplicates.ts` y consumido por `orderDuplicates.ts`, `order-parser-engine.ts` (`extractPurchaseOrderFromText`) y `EmailDraftsModule.tsx` (`extractPoFallback`). Reglas estrictas: longitud `>= 4`, rechazo de placeholders (`0+`, `n/a`, `null`, `none`, `s/n`, `na`, `sin oc`), exigencia obligatoria de al menos un dígito (`/\d/`), y rechazo de fechas/años aislados (`^\d{1,2}[-/]\d{1,2}([-/]\d{2,4})?$`, `^20\d{2}$`) para impedir falsos positivos como `"para"`, `"28-11"` o `"2026"`.
+  2. **Cierre de Puerta Trasera en Backend (`order-parser-engine.ts`):** `extractPurchaseOrderFromText` debe validar cada candidato con `isValidPurchaseOrderCode` (ampliando la lista `forbidden` con preposiciones y palabras comunes) para impedir contaminación de `order_drafts.po_number` y `orders.purchase_order_number`.
+  3. **Sin Cortocircuito en `extractPoFallback` (`EmailDraftsModule.tsx`):** Iterar todos los patrones (`rx`, `rx2`, `rx3`) en orden de mayor especificidad (`OC/OCC/PO/SOLPED` primero) sin abortar al primer match descartado, evitando perder OCs reales tras frases como `"Pedido para mañana OC 45001234"`.
+  4. **Etiqueta UI Diferenciada (`src/app/admin/orders/loading/page.tsx`):** Cuando `duplicateInfo.groupKey.startsWith('oc_')`, mostrar `MISMA OC Y FECHA` (tanto en vista tabla como en tarjetas, con `title={duplicateInfo.alertMessage}`); reservar `MISMA SEDE Y FECHA` exclusivamente para colisiones por cliente + sede + fecha.
+
+---
+
+### Hoja de Ruta Comercial — SEO & Posicionamiento B2C Hogar (Fase 1 vs. Fase 2)
+- **Fase 1 (Vigente — Sin cambios en SEO técnico):** Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.
+- **Fase 2 (Pendiente — Post-estabilización operativa):** Activar estrategia agresiva de posicionamiento B2C Hogar combinando SEO programático (sitemap dinámico de productos/categorías, JSON-LD `Product`, landings por zona de Bogotá) y pauta paga en Google Buscador (Google Ads geo-cercado), condicionada a pedido mínimo B2C rentable, geofencing de cobertura y ventana suave D+1 post-10:00 AM (Escenario 501).
