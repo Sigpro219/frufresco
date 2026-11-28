@@ -18924,6 +18924,33 @@ Queda **terminantemente prohibido** dar por entregado el proyecto o cerrar la Fa
 
 ---
 
+### Escenario 514: Visibilidad de Rutas Selladas en Planeación + Tarjetas Ejecutivas y Filtro de Fecha en Monitor Global
+- **Estado del Contrato:** `🟢 IMPLEMENTADO Y VERIFICADO`
+- **Archivos en Alcance:**
+  - `src/app/api/transport/routes/route.ts` (nuevo)
+  - `src/app/api/transport/confirm/route.ts`
+  - `src/app/admin/transport/page.tsx`
+  - `src/components/RoutePlanner.tsx`
+  - `src/components/RouteSpaghettiMapModal.tsx`
+- **Alcance Contractual (Blindado tras Goldfish Modo 1):**
+  1. **Endpoint Dedicado `GET /api/transport/routes?date=YYYY-MM-DD`:**
+     - Protegido con `verifySessionAndPermission(request, 'admin.transport.view')` y Service Role.
+     - Filtra por `orders.delivery_date = date` y `assigned_route_id IS NOT NULL` (sin full-scan), trayendo rutas (`status != 'cancelled'`) y `route_stops` ordenados por `sequence_number ASC`.
+     - Retorna `departure_time`, `driver_name`, `total_kilos`, `total_crates` (con fallback a suma de paradas si es `0`), `warehouse_spaces`, `delivery_date`, `route_polyline`, `route_metrics`, `stop_leg_metrics`, `traffic_mode` y `stops[]`.
+  2. **Persistencia de Telemetría en `POST /api/transport/confirm`:**
+     - Guarda opcionalmente `route_polyline`, `route_metrics`, `stop_leg_metrics` (solo los pedidos de esa ruta) y `traffic_mode` dentro de `routes.logic_parameters_snapshot` (sin DDL).
+  3. **Rutas Selladas Visibles en `RoutePlanner.tsx` y `RouteSpaghettiMapModal.tsx`:**
+     - En `Planeación`, cuando `!showAllDates && selectedDeliveryDate` tiene rutas confirmadas, se renderiza la sección de solo lectura **Rutas Confirmadas** con placa, conductor, estado en español, hora de salida 12h `America/Bogota`, `kg · can.`, paradas con `ESP` y `ETA`, botón **Mapa Espagueti** y botón **Ver Manifiesto**.
+     - `spaghettiOverride` aísla la vista de rutas selladas sin mutar `assignments`/`orders` del borrador ni depender de `fleet_vehicles.status = 'available'`.
+     - Zero-Mock en `RouteSpaghettiMapModal` (`isSealedView?: boolean`): si una ruta sellada no tiene polilínea guardada, muestra pins numerados + enlaces Google Maps sin líneas rectas sintéticas.
+     - `confirmedManifest`, `printManifestViaNewWindow()` y `Copiar WhatsApp` usan la `delivery_date` real de despacho (no `new Date()`). Si `showAllDates === true`, se oculta el bloque sellado con aviso de elegir fecha.
+  4. **Monitor Global (`src/app/admin/transport/page.tsx`):**
+     - `ActiveRoute` incluye `delivery_date` en `route_stops -> orders`, `driver_name`, `driver_id`, `logic_parameters_snapshot` y `start_time: string | null`.
+     - Tarjetas laterales: muestran `driver_name || driver?.contact_name || 'Sin conductor'` (cero `Ruta ID-xxxxx`, alineado también en `handleOpenQrBeacon`), hora de salida 12h `America/Bogota` (`start_time` si `in_transit`, o `logic_parameters_snapshot.fleet_start_time`), `total_crates` (fallback desde `route_stops`), `total_kilos`, fecha operativa `dd/MM` y estados traducidos al español.
+     - Separación real `liveRoutes` vs `historyRoutes`: `liveRoutes` conserva `status === 'in_transit'` siempre y el resto de activas con fecha operativa `>= hoy (America/Bogota)`; las activas rezagadas (`< hoy`) pasan a `historyRoutes` junto con completadas/canceladas. `stats.totalActive`, `stats.totalKilos` y el pin en el mapa vivo operan estrictamente sobre `liveRoutes`.
+
+---
+
 ### Hoja de Ruta Fase 2 — Red de Nodos B2C Cross-Docking, Última Milla & Posicionamiento Agresivo (Sin Impacto en Código Fase 1)
 - **Fase 1 (Vigente — Operación Central B2B & Cimiento Único):**
   - Se conserva intacto el SEO base higiénico actual (`src/app/robots.ts`, `src/app/sitemap.ts` con 5 URLs estáticas, `src/app/layout.tsx`) y `$0` en pauta paga Hogar (Google Ads / SEM) para proteger la capacidad logística mientras se consolida la operación B2B.

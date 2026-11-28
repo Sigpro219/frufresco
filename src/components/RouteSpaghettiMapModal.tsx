@@ -54,6 +54,7 @@ export interface RouteSpaghettiMapModalProps {
     stopEtas: Record<string, string>;
     trafficMode: 'live_predictive' | 'weekday_projected' | null;
     initialVehicleId?: string | null;
+    isSealedView?: boolean;
 }
 
 const ROUTE_COLORS = [
@@ -159,6 +160,7 @@ export function RouteSpaghettiMapModal({
     stopEtas,
     trafficMode,
     initialVehicleId = null,
+    isSealedView = false,
 }: RouteSpaghettiMapModalProps) {
     const [selectedVehicleId, setSelectedVehicleId] = useState<string>(initialVehicleId || 'ALL');
     const [activeStopKey, setActiveStopKey] = useState<string | null>(null);
@@ -524,14 +526,31 @@ export function RouteSpaghettiMapModal({
 
                             {/* Zero-Mock Notice when polyline is missing */}
                             {vehiclesWithoutPolyline.length > 0 && (
-                                <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid #FCD34D', backgroundColor: '#FFFBEB', color: '#78350F', fontSize: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                                    <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div style={{
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    border: isSealedView ? '1px solid #BFDBFE' : '1px solid #FCD34D',
+                                    backgroundColor: isSealedView ? '#EFF6FF' : '#FFFBEB',
+                                    color: isSealedView ? '#1E40AF' : '#78350F',
+                                    fontSize: '12px',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px'
+                                }}>
+                                    {isSealedView
+                                        ? <Info size={16} color="#2563EB" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                        : <AlertTriangle size={16} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    }
                                     <div>
                                         <p style={{ margin: 0, fontWeight: 800 }}>
-                                            Modo Manual — sin polilínea ni métricas de tráfico de Google
+                                            {isSealedView
+                                                ? 'Ruta confirmada sin polilínea guardada'
+                                                : 'Modo Manual — sin polilínea ni métricas de tráfico de Google'}
                                         </p>
-                                        <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#92400E' }}>
-                                            {vehiclesWithoutPolyline.map((v) => v.plate).join(', ')} sin trazo optimizado vigente. No se generan distancias, tiempos ni líneas rectas sintéticas.
+                                        <p style={{ margin: '3px 0 0', fontSize: '11px', color: isSealedView ? '#1E3A8A' : '#92400E' }}>
+                                            {isSealedView
+                                                ? `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')}: se muestran las paradas numeradas en secuencia y los enlaces directos a Google Maps. Las nuevas confirmaciones guardarán el trazo optimizado automáticamente.`
+                                                : `${vehiclesWithoutPolyline.map((v) => v.plate).join(', ')} sin trazo optimizado vigente. No se generan distancias, tiempos ni líneas rectas sintéticas.`}
                                         </p>
                                     </div>
                                 </div>

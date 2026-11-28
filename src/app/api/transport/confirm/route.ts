@@ -16,6 +16,10 @@ const ConfirmRequestSchema = z.object({
     params: z.record(z.string(), z.any()).optional(),
     routeStartTimes: z.record(z.string(), z.string()).optional(),
     stopEtas: z.record(z.string(), z.string()).optional(),
+    routePolylines: z.record(z.string(), z.string()).optional(),
+    routeMetrics: z.record(z.string(), z.any()).optional(),
+    stopLegMetrics: z.record(z.string(), z.any()).optional(),
+    trafficMode: z.enum(['live_predictive', 'weekday_projected']).nullable().optional(),
     preserveExistingSpaces: z.boolean().optional().default(true)
 });
 
@@ -47,7 +51,20 @@ export async function POST(request: Request) {
             }, { status: 400, headers: { 'x-request-id': requestId } });
         }
 
-        const { assignments, vehicles, isOptimized, theoreticalMetrics, params, routeStartTimes, stopEtas, preserveExistingSpaces } = parsed.data;
+        const {
+            assignments,
+            vehicles,
+            isOptimized,
+            theoreticalMetrics,
+            params,
+            routeStartTimes,
+            stopEtas,
+            routePolylines,
+            routeMetrics,
+            stopLegMetrics,
+            trafficMode,
+            preserveExistingSpaces
+        } = parsed.data;
 
         const allOrderIds: string[] = Object.values(assignments).flat() as string[];
         if (allOrderIds.length === 0) {
@@ -262,7 +279,17 @@ export async function POST(request: Request) {
                     total_crates: totalCrates,
                     logic_parameters_snapshot: {
                         ...params,
-                        fleet_start_time: departureTimeStr
+                        fleet_start_time: departureTimeStr,
+                        ...(routePolylines?.[vehicleId] ? { route_polyline: routePolylines[vehicleId] } : {}),
+                        ...(routeMetrics?.[vehicleId] ? { route_metrics: routeMetrics[vehicleId] } : {}),
+                        ...(stopLegMetrics
+                            ? {
+                                stop_leg_metrics: Object.fromEntries(
+                                    orderIds.filter((oid) => stopLegMetrics[oid]).map((oid) => [oid, stopLegMetrics[oid]])
+                                )
+                            }
+                            : {}),
+                        ...(trafficMode ? { traffic_mode: trafficMode } : {})
                     }
                 })
                 .select()

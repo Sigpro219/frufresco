@@ -114,8 +114,11 @@ interface ActiveRoute {
     status: string;
     total_orders: number;
     total_kilos: number;
-    start_time: string;
+    start_time: string | null;
     created_at: string;
+    driver_id?: string | null;
+    driver_name?: string | null;
+    logic_parameters_snapshot?: Record<string, any> | null;
     route_stops: {
         id: string;
         order_id: string;
@@ -123,10 +126,16 @@ interface ActiveRoute {
         completion_time: string | null;
         sequence_number: number;
         order?: {
+            delivery_date?: string | null;
             latitude: number;
             longitude: number;
-            customer_name: string;
+            customer_name?: string;
+            shipping_address?: string | null;
             crates_count?: number | null;
+            profiles?: {
+                company_name?: string | null;
+                contact_name?: string | null;
+            } | null;
         };
     }[];
     total_crates?: number;
@@ -135,6 +144,72 @@ interface ActiveRoute {
         phone?: string;
     };
 }
+
+const ACTIVE_ROUTE_STATUSES = ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'];
+
+const getRouteOperationalDate = (r: ActiveRoute): string => {
+    const firstOrderDate = r.route_stops?.find((s) => s.order?.delivery_date)?.order?.delivery_date;
+    return firstOrderDate ? getBogotaDateString(firstOrderDate) : getBogotaDateString(r.created_at);
+};
+
+const isCurrentLiveRoute = (r: ActiveRoute, todayBogota: string): boolean => {
+    if (!ACTIVE_ROUTE_STATUSES.includes(r.status)) return false;
+    if (r.status === 'in_transit') return true;
+    const opDate = getRouteOperationalDate(r);
+    return !opDate || opDate >= todayBogota;
+};
+
+const formatTime12hBogota = (timeOrIso: string | null | undefined): string | null => {
+    if (!timeOrIso) return null;
+    const raw = String(timeOrIso).trim();
+    const hhmm = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (hhmm) {
+        const h24 = parseInt(hhmm[1], 10);
+        const mins = hhmm[2];
+        if (!Number.isFinite(h24) || h24 < 0 || h24 > 23) return null;
+        const period = h24 >= 12 ? 'PM' : 'AM';
+        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+        return `${h12}:${mins} ${period}`;
+    }
+    const ms = new Date(raw).getTime();
+    if (!Number.isFinite(ms)) return null;
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Bogota',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    }).format(new Date(ms));
+};
+
+const getRouteDriverLabel = (r: ActiveRoute): string => {
+    return (r.driver_name || r.driver?.contact_name || '').trim() || 'Sin conductor';
+};
+
+const getRouteCrates = (r: ActiveRoute): number => {
+    if (Number(r.total_crates) > 0) return Number(r.total_crates);
+    return (r.route_stops || []).reduce((acc, st) => acc + (Number(st.order?.crates_count) || 0), 0);
+};
+
+const getRouteStatusMeta = (status: string): { label: string; bg: string; color: string; border: string } => {
+    switch (status) {
+        case 'in_transit':
+            return { label: 'EN TRÁNSITO', bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' };
+        case 'loading':
+            return { label: 'CARGANDO', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' };
+        case 'rectified':
+            return { label: 'RECTIFICADA', bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' };
+        case 'completed':
+            return { label: 'COMPLETADA', bg: '#ECFDF5', color: '#047857', border: '#A7F3D0' };
+        case 'cancelled':
+            return { label: 'CANCELADA', bg: '#FEF2F2', color: '#991B1B', border: '#FECACA' };
+        case 'planning':
+        case 'planned':
+        case 'assigned':
+            return { label: 'PROGRAMADA', bg: '#F1F5F9', color: '#334155', border: '#CBD5E1' };
+        default:
+            return { label: status.toUpperCase(), bg: '#F1F5F9', color: '#475569', border: '#E2E8F0' };
+    }
+};
 
 const BODEGA_COORDS = { lat: 4.633653, lng: -74.160647 };
 
@@ -262,7 +337,7 @@ export default function TransportControlTower() {
                 plate: data.plate,
                 url: fullUrl,
                 expiresAt: data.expires_at,
-                driverName: route.driver?.contact_name,
+                driverName: getRouteDriverLabel(route),
                 driverPhone: route.driver?.phone
             });
         } catch (err: any) {
@@ -397,7 +472,7 @@ export default function TransportControlTower() {
             if (routeIds.length > 0) {
                 const { data: stopsData, error: sErr } = await supabase
                     .from('route_stops')
-                    .select('*, order:orders(latitude, longitude, shipping_address, crates_count, profiles(company_name, contact_name))')
+                    .select('*, order:orders(delivery_date, latitude, longitude, shipping_address, crates_count, profiles(company_name, contact_name))')
                     .in('route_id', routeIds)
                     .order('sequence_number', { ascending: true })
                     .abortSignal(signal as AbortSignal);
@@ -427,9 +502,11 @@ export default function TransportControlTower() {
 
             setActiveRoutes(formatted);
 
-            const active = formatted.filter(r => r.status === 'in_transit' || r.status === 'loading' || r.status === 'rectified').length;
+            const todayBogota = getBogotaDateString();
+            const currentLive = formatted.filter(r => isCurrentLiveRoute(r, todayBogota));
+            const active = currentLive.length;
             const completed = formatted.filter(r => r.status === 'completed').length;
-            const weight = formatted.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
+            const weight = currentLive.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
             
             let novedadesCount = 0;
             try {
@@ -645,7 +722,9 @@ export default function TransportControlTower() {
     const vehiclesOnRoute = vehiclesMovingGps.length;
     const vehiclesMaintenance = activeFleet.filter(v => v.status === 'maintenance').length;
     const vehiclesAvailable = Math.max(0, totalVehicles - vehiclesOnRoute - vehiclesMaintenance);
-    const liveRoutes = activeRoutes.filter(r => ['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
+    const todayBogota = getBogotaDateString();
+    const liveRoutes = activeRoutes.filter(r => isCurrentLiveRoute(r, todayBogota));
+    const liveRouteIds = new Set(liveRoutes.map(r => r.id));
     const hasActiveMapRoute = (v: any): boolean => {
         const match = liveRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
         return Boolean(match && ['loading', 'rectified', 'in_transit'].includes(match.status));
@@ -655,7 +734,7 @@ export default function TransportControlTower() {
         ? vehiclesWithRealGps
         : vehiclesWithRealGps.filter(v => getGpsFreshnessState(v) !== 'expired' || hasActiveMapRoute(v));
     const visibleStoppedGps = visibleMapVehicles.filter(v => !isGpsFresh(v) || (v.speed || 0) === 0);
-    const completedHistoryRoutes = activeRoutes.filter(r => !['planning', 'planned', 'loading', 'rectified', 'in_transit', 'assigned'].includes(r.status));
+    const historyRoutes = activeRoutes.filter(r => !liveRouteIds.has(r.id));
     const displayedRoutes = showHistoryRoutes ? activeRoutes : liveRoutes;
     const sortedFleetForSidebar = [...activeFleet].sort((a, b) => {
         const aMov = isGpsFresh(a) && (a.speed || 0) > 0 ? 2 : hasRealGps(a) ? 1 : 0;
@@ -940,9 +1019,9 @@ export default function TransportControlTower() {
                                     </div>
                                 ) : (
                                 <>
-                                {completedHistoryRoutes.length > 0 && (
+                                {historyRoutes.length > 0 && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', color: THEME.colors.textSecondary }}>
-                                        <span>{showHistoryRoutes ? 'Mostrando activas + historial' : 'Solo rutas activas de hoy'}</span>
+                                        <span>{showHistoryRoutes ? 'Mostrando vigentes + rezagadas/historial' : 'Rutas activas vigentes'}</span>
                                         <button
                                             type="button"
                                             onClick={() => setShowHistoryRoutes(prev => !prev)}
@@ -953,7 +1032,7 @@ export default function TransportControlTower() {
                                             }}
                                         >
                                             <History size={12} />
-                                            {showHistoryRoutes ? 'Ocultar historial' : `Historial (${completedHistoryRoutes.length})`}
+                                            {showHistoryRoutes ? 'Ocultar historial' : `Historial / Rezagadas (${historyRoutes.length})`}
                                         </button>
                                     </div>
                                 )}
@@ -989,6 +1068,16 @@ export default function TransportControlTower() {
                                             const total = route.route_stops.length;
                                             const progress = total > 0 ? (done / total) * 100 : 0;
                                             const isInTransit = route.status === 'in_transit';
+                                            const driverLabel = getRouteDriverLabel(route);
+                                            const statusMeta = getRouteStatusMeta(route.status);
+                                            const departureTime = formatTime12hBogota(
+                                                (isInTransit && route.start_time) ? route.start_time : route.logic_parameters_snapshot?.fleet_start_time
+                                            );
+                                            const opDate = getRouteOperationalDate(route);
+                                            const opDateShort = opDate && /^\d{4}-\d{2}-\d{2}$/.test(opDate)
+                                                ? `${opDate.slice(8, 10)}/${opDate.slice(5, 7)}`
+                                                : '';
+                                            const routeCrates = getRouteCrates(route);
 
                                             return (
                                                 <div key={route.id} style={{ 
@@ -998,35 +1087,65 @@ export default function TransportControlTower() {
                                                     boxShadow: isInTransit ? '0 2px 8px rgba(13, 122, 87, 0.08)' : THEME.shadow.sm,
                                                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                                                 }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', marginBottom: '0.45rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
                                                             <div style={{ 
-                                                                width: '32px', height: '32px', borderRadius: '8px', 
+                                                                width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
                                                                 backgroundColor: isInTransit ? THEME.colors.primaryLight : '#F1F5F9',
                                                                 color: isInTransit ? THEME.colors.primary : THEME.colors.textSecondary,
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem'
                                                             }}>
-                                                                {getInitials(route.driver?.contact_name || route.vehicle_plate)}
+                                                                {getInitials(driverLabel)}
                                                             </div>
-                                                            <div>
-                                                                <div style={{ fontWeight: '900', fontSize: '0.92rem', color: THEME.colors.textMain }}>{route.vehicle_plate}</div>
-                                                                <div style={{ fontSize: '0.68rem', color: THEME.colors.textSecondary, fontWeight: '700' }}>
-                                                                    {route.driver?.contact_name ? route.driver.contact_name : `Ruta ID-${route.id.slice(0, 5)}`}
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <span style={{ fontWeight: '900', fontSize: '0.92rem', color: THEME.colors.textMain }}>{route.vehicle_plate}</span>
+                                                                    {opDateShort && (
+                                                                        <span style={{
+                                                                            fontSize: '0.62rem', fontWeight: '800', padding: '1px 5px', borderRadius: '4px',
+                                                                            backgroundColor: '#F1F5F9', color: '#475569', fontVariantNumeric: 'tabular-nums'
+                                                                        }}>{opDateShort}</span>
+                                                                    )}
+                                                                </div>
+                                                                <div
+                                                                    title={driverLabel}
+                                                                    style={{
+                                                                        fontSize: '0.69rem', color: THEME.colors.textSecondary, fontWeight: '700',
+                                                                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                                                    }}
+                                                                >
+                                                                    {driverLabel}
                                                                 </div>
                                                             </div>
                                                         </div>
                                                         <span style={{ 
-                                                            fontSize: '0.62rem', fontWeight: '800', padding: '3px 7px', borderRadius: '6px',
-                                                            backgroundColor: isInTransit ? '#ECFDF5' : '#F1F5F9', 
-                                                            color: isInTransit ? '#065F46' : THEME.colors.textSecondary,
-                                                            border: isInTransit ? '1px solid #A7F3D0' : '1px solid #E2E8F0'
+                                                            fontSize: '0.6rem', fontWeight: '800', padding: '3px 7px', borderRadius: '6px',
+                                                            backgroundColor: statusMeta.bg, color: statusMeta.color,
+                                                            border: `1px solid ${statusMeta.border}`, whiteSpace: 'nowrap', flexShrink: 0
                                                         }}>
-                                                            {route.status === 'in_transit' ? 'EN TRÁNSITO' : route.status.toUpperCase()}
+                                                            {statusMeta.label}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Salida + Carga Compacta */}
+                                                    <div style={{
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px',
+                                                        fontSize: '0.7rem', color: '#334155', fontWeight: '700',
+                                                        backgroundColor: '#F8FAFC', borderRadius: '6px', padding: '4px 8px',
+                                                        marginBottom: '6px', fontVariantNumeric: 'tabular-nums'
+                                                    }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                                                            <Clock size={11} color={THEME.colors.primary} />
+                                                            {departureTime ? `Salida ${departureTime}` : 'Salida por definir'}
+                                                        </span>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#475569', whiteSpace: 'nowrap' }}>
+                                                            <Package size={11} color="#64748B" />
+                                                            {routeCrates} can.
                                                         </span>
                                                     </div>
 
                                                     {/* Proportional Progress Track */}
-                                                    <div style={{ height: '5px', backgroundColor: '#E5E7EB', borderRadius: '4px', margin: '8px 0 6px', overflow: 'hidden' }}>
+                                                    <div style={{ height: '5px', backgroundColor: '#E5E7EB', borderRadius: '4px', margin: '4px 0 6px', overflow: 'hidden' }}>
                                                         <div style={{ 
                                                             width: `${progress}%`, height: '100%', 
                                                             background: isInTransit ? 'linear-gradient(90deg, #0D7A57 0%, #10B981 100%)' : '#059669', 
@@ -1034,9 +1153,9 @@ export default function TransportControlTower() {
                                                         }}></div>
                                                     </div>
 
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', alignItems: 'center', fontVariantNumeric: 'tabular-nums' }}>
                                                         <span style={{ color: THEME.colors.textSecondary, fontWeight: '700' }}>
-                                                            {done}/{total} paradas completadas
+                                                            {done}/{total} paradas
                                                         </span>
                                                         <span style={{ fontWeight: '900', color: THEME.colors.primary }}>
                                                             {Math.round(progress)}% &bull; {formatNumber(route.total_kilos || 0)} kg
@@ -1164,8 +1283,7 @@ export default function TransportControlTower() {
                                                 const driver = driversData.find((d: any) => d.id === v.driver_id);
                                                 const initials = getInitials(driver?.contact_name || '');
                                                 const activeRoute =
-                                                    liveRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id)) ||
-                                                    activeRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
+                                                    liveRoutes.find((r: any) => r.vehicle_plate === v.plate || (v.driver_id && r.driver_id === v.driver_id));
                                                 
                                                 const pos = { lat: Number(v.last_latitude), lng: Number(v.last_longitude) };
 

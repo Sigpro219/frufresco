@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isSandboxMode } from '@/lib/sandboxGuard';
 import { THEME, formatNumber, formatMoney } from '@/lib/adminTheme';
-import { formatBogotaDate } from '@/lib/dateUtils';
+import { formatBogotaDate, getBogotaDateString, parseBogotaDate } from '@/lib/dateUtils';
 import { getOperationalTargetDate } from '@/lib/ops/operationalCells';
 import { getOrderSpaceDisplayLabel } from '@/lib/stagingSpaceAllocator';
 import {
@@ -208,6 +208,19 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
     const [skippedWarnings, setSkippedWarnings] = useState<Array<{ orderId: string; reasons: any[] }>>([]);
     const [spaghettiOpen, setSpaghettiOpen] = useState<boolean>(false);
     const [spaghettiVehicleId, setSpaghettiVehicleId] = useState<string | null>(null);
+    const [sealedRoutes, setSealedRoutes] = useState<any[]>([]);
+    const [manifestDeliveryDate, setManifestDeliveryDate] = useState<string | null>(null);
+    const [spaghettiOverride, setSpaghettiOverride] = useState<{
+        vehicles: any[];
+        orders: any[];
+        assignments: Record<string, string[]>;
+        routePolylines: Record<string, string>;
+        routeMetrics: Record<string, any>;
+        stopLegMetrics: Record<string, any>;
+        stopEtas: Record<string, string>;
+        trafficMode: 'live_predictive' | 'weekday_projected' | null;
+        isSealedView: boolean;
+    } | null>(null);
 
     const isMounted = useRef(true);
     const isSandbox = isSandboxMode();
@@ -285,7 +298,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 }
             }
 
-            // 2. Fetch Orders (with date filter or all dates)
+            // 2. Fetch Orders + Sealed Routes (for specific date)
             let apiUrl = '/api/transport/orders';
             if (!showAllDates && selectedDeliveryDate) {
                 apiUrl += `?date=${selectedDeliveryDate}&t=${Date.now()}`;
@@ -293,9 +306,21 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 apiUrl += `?t=${Date.now()}`;
             }
 
-            const response = await fetch(apiUrl, { cache: 'no-store' });
+            const sealedPromise = (!showAllDates && selectedDeliveryDate)
+                ? fetch(`/api/transport/routes?date=${selectedDeliveryDate}&t=${Date.now()}`, { cache: 'no-store' })
+                    .then(r => (r.ok ? r.json() : []))
+                    .catch(() => [])
+                : Promise.resolve([]);
+
+            const [response, sealedData] = await Promise.all([
+                fetch(apiUrl, { cache: 'no-store' }),
+                sealedPromise
+            ]);
             if (!response.ok) throw new Error('Failed to fetch orders');
             const orderData = await response.json();
+            if (isMounted.current && fetchSeqRef.current === mySeq) {
+                setSealedRoutes(Array.isArray(sealedData) ? sealedData : []);
+            }
 
             // 3. Fetch Fleet with Driver Join (Matching FleetManagement logic)
             const { data: fleetData, error: fErr } = await supabase
@@ -795,7 +820,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     params,
                     routeStartTimes: dynamicStartTimes, // Pasar las horas de salida estimadas dinámicas
                     preserveExistingSpaces: true,
-                    ...(Object.keys(stopEtas).length > 0 ? { stopEtas } : {})
+                    ...(Object.keys(stopEtas).length > 0 ? { stopEtas } : {}),
+                    ...(Object.keys(routePolylines).length > 0 ? { routePolylines } : {}),
+                    ...(Object.keys(routeMetrics).length > 0 ? { routeMetrics } : {}),
+                    ...(Object.keys(stopLegMetrics).length > 0 ? { stopLegMetrics } : {}),
+                    ...(trafficMode ? { trafficMode } : {})
                 })
             });
 
@@ -826,6 +855,7 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         stops
                     };
                 });
+                setManifestDeliveryDate(!showAllDates && selectedDeliveryDate ? selectedDeliveryDate : getBogotaDateString());
                 setConfirmedManifest(enrichedConfirmations);
             }
             
@@ -1064,7 +1094,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
             return;
         }
 
-        const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
+        const resolvedManifestDate =
+            manifestDeliveryDate ||
+            confirmedManifest?.[0]?.delivery_date ||
+            (!showAllDates && selectedDeliveryDate ? selectedDeliveryDate : getBogotaDateString());
+        const dateStr = formatBogotaDate(parseBogotaDate(resolvedManifestDate), { day: 'numeric', month: 'long', year: 'numeric' });
 
         const routesHtml = confirmedManifest.map((route: any, idx: number) => {
             const stopsHtml = route.stops && route.stops.length > 0 
@@ -2028,6 +2062,287 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                         </button>
                     </div>
                 )}
+
+                {/* SECCIÓN 3: RUTAS CONFIRMADAS DEL DÍA (Solo lectura + Mapa Espagueti + Manifiesto) */}
+                {showAllDates ? (
+                    <div style={{
+                        marginTop: '1.25rem',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '12px',
+                        border: '1px dashed #CBD5E1',
+                        backgroundColor: '#F8FAFC',
+                        color: '#475569',
+                        fontSize: '0.76rem',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}>
+                        <Calendar size={14} color="#64748B" />
+                        <span>Selecciona una fecha específica para consultar las rutas ya confirmadas de ese día.</span>
+                    </div>
+                ) : sealedRoutes.length > 0 && (() => {
+                    const totalSealedStops = sealedRoutes.reduce((acc, r) => acc + (Number(r.stops_count) || r.stops?.length || 0), 0);
+                    const totalSealedKg = sealedRoutes.reduce((acc, r) => acc + (Number(r.total_kilos) || 0), 0);
+                    const totalSealedCrates = sealedRoutes.reduce((acc, r) => acc + (Number(r.total_crates) || 0), 0);
+
+                    const format12hLocal = (hhmm?: string | null): string => {
+                        if (!hhmm) return '4:30 AM';
+                        const m = String(hhmm).trim().match(/^(\d{1,2}):(\d{2})/);
+                        if (!m) return String(hhmm);
+                        const h24 = parseInt(m[1], 10);
+                        const period = h24 >= 12 ? 'PM' : 'AM';
+                        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+                        return `${h12}:${m[2]} ${period}`;
+                    };
+
+                    const sealedStatusBadge = (st: string) => {
+                        if (st === 'in_transit') return { label: 'EN TRÁNSITO', bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' };
+                        if (st === 'completed') return { label: 'COMPLETADA', bg: '#ECFDF5', color: '#047857', border: '#A7F3D0' };
+                        if (st === 'rectified') return { label: 'RECTIFICADA', bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' };
+                        return { label: 'CARGANDO', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' };
+                    };
+
+                    const openSealedSpaghetti = (focusRouteId: string | null = null) => {
+                        const sVehicles: any[] = [];
+                        const sOrders: any[] = [];
+                        const sAssignments: Record<string, string[]> = {};
+                        const sPolylines: Record<string, string> = {};
+                        const sMetrics: Record<string, any> = {};
+                        const sStopLegMetrics: Record<string, any> = {};
+                        const sStopEtas: Record<string, string> = {};
+                        let sTrafficMode: 'live_predictive' | 'weekday_projected' | null = null;
+
+                        sealedRoutes.forEach((r: any) => {
+                            const vid = String(r.id);
+                            sVehicles.push({
+                                id: vid,
+                                plate: r.vehicle_plate,
+                                driver_name: r.driver_name,
+                            });
+                            sAssignments[vid] = (r.stops || []).map((st: any) => String(st.id));
+                            if (r.route_polyline) sPolylines[vid] = r.route_polyline;
+                            if (r.route_metrics) sMetrics[vid] = r.route_metrics;
+                            if (r.traffic_mode === 'live_predictive' || r.traffic_mode === 'weekday_projected') {
+                                sTrafficMode = r.traffic_mode;
+                            }
+                            if (r.stop_leg_metrics && typeof r.stop_leg_metrics === 'object') {
+                                Object.assign(sStopLegMetrics, r.stop_leg_metrics);
+                            }
+                            (r.stops || []).forEach((st: any) => {
+                                sOrders.push(st);
+                                if (st.estimated_arrival) {
+                                    sStopEtas[String(st.id)] = st.estimated_arrival;
+                                }
+                            });
+                        });
+
+                        setSpaghettiOverride({
+                            vehicles: sVehicles,
+                            orders: sOrders,
+                            assignments: sAssignments,
+                            routePolylines: sPolylines,
+                            routeMetrics: sMetrics,
+                            stopLegMetrics: sStopLegMetrics,
+                            stopEtas: sStopEtas,
+                            trafficMode: sTrafficMode,
+                            isSealedView: true,
+                        });
+                        setSpaghettiVehicleId(focusRouteId);
+                        setSpaghettiOpen(true);
+                    };
+
+                    const sealedDateLabel = selectedDeliveryDate
+                        ? formatBogotaDate(parseBogotaDate(selectedDeliveryDate), { day: 'numeric', month: 'short', year: 'numeric' })
+                        : '';
+
+                    return (
+                        <div style={{
+                            marginTop: '1.5rem',
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '18px',
+                            padding: '1.15rem 1.25rem',
+                            boxShadow: '0 4px 14px rgba(15, 23, 42, 0.04)'
+                        }}>
+                            <div style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem',
+                                paddingBottom: '0.75rem', borderBottom: '1px solid #F1F5F9'
+                            }}>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            padding: '2px 8px', borderRadius: '999px',
+                                            backgroundColor: '#ECFDF5', color: '#047857',
+                                            fontSize: '0.65rem', fontWeight: '900', letterSpacing: '0.06em'
+                                        }}>
+                                            <CheckCircle2 size={11} /> RUTAS CONFIRMADAS
+                                        </span>
+                                        <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '900', color: '#0F172A' }}>
+                                            Despacho Sellado · {sealedDateLabel}
+                                        </h3>
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', fontWeight: '600', color: '#64748B', marginTop: '3px', fontVariantNumeric: 'tabular-nums' }}>
+                                        {sealedRoutes.length} camiones · {totalSealedStops} entregas · {(totalSealedKg / 1000).toFixed(2)} t · {totalSealedCrates} canastillas
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => openSealedSpaghetti(null)}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                            padding: '0.5rem 0.85rem', borderRadius: '10px',
+                                            border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF',
+                                            color: '#0F172A', fontSize: '0.76rem', fontWeight: '800', cursor: 'pointer'
+                                        }}
+                                    >
+                                        <MapPin size={14} color="#2563EB" /> Mapa Espagueti ({sealedRoutes.length})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setManifestDeliveryDate(selectedDeliveryDate);
+                                            setConfirmedManifest(sealedRoutes);
+                                        }}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                            padding: '0.5rem 0.9rem', borderRadius: '10px',
+                                            border: '1px solid #0EA5E9', backgroundColor: '#EFF6FF',
+                                            color: '#0369A1', fontSize: '0.76rem', fontWeight: '800', cursor: 'pointer'
+                                        }}
+                                    >
+                                        <Printer size={14} /> Ver Manifiesto / WhatsApp
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                                gap: '0.85rem',
+                                alignItems: 'start'
+                            }}>
+                                {sealedRoutes.map((r: any) => {
+                                    const badge = sealedStatusBadge(r.status);
+                                    return (
+                                        <div key={r.id} style={{
+                                            border: '1px solid #E2E8F0',
+                                            borderRadius: '14px',
+                                            backgroundColor: '#F8FAFC',
+                                            overflow: 'hidden',
+                                            display: 'flex',
+                                            flexDirection: 'column'
+                                        }}>
+                                            <div style={{
+                                                backgroundColor: '#FFFFFF',
+                                                padding: '0.65rem 0.85rem',
+                                                borderBottom: '1px solid #E2E8F0',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                gap: '0.5rem'
+                                            }}>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <Truck size={14} color="#0F172A" style={{ flexShrink: 0 }} />
+                                                        <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.88rem' }}>{r.vehicle_plate}</span>
+                                                        <span style={{
+                                                            fontSize: '0.6rem', fontWeight: '800', padding: '1px 6px', borderRadius: '5px',
+                                                            backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}`
+                                                        }}>{badge.label}</span>
+                                                    </div>
+                                                    <div
+                                                        title={r.driver_name}
+                                                        style={{
+                                                            fontSize: '0.72rem', color: '#64748B', fontWeight: '700',
+                                                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px'
+                                                        }}
+                                                    >
+                                                        {r.driver_name}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openSealedSpaghetti(String(r.id))}
+                                                    style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                        padding: '4px 8px', borderRadius: '8px',
+                                                        border: '1px solid #CBD5E1', backgroundColor: '#F8FAFC',
+                                                        color: '#1E293B', fontSize: '0.7rem', fontWeight: '800', cursor: 'pointer', flexShrink: 0
+                                                    }}
+                                                >
+                                                    <MapPin size={12} color="#2563EB" /> Mapa
+                                                </button>
+                                            </div>
+
+                                            <div style={{
+                                                padding: '0.45rem 0.85rem',
+                                                backgroundColor: '#F1F5F9',
+                                                fontSize: '0.71rem',
+                                                fontWeight: '700',
+                                                color: '#334155',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                fontVariantNumeric: 'tabular-nums'
+                                            }}>
+                                                <span>Salida {format12hLocal(r.departure_time)}</span>
+                                                <span>{r.stops_count} par. · {formatNumber(r.total_kilos || 0, 1)} kg · {r.total_crates} can.</span>
+                                            </div>
+
+                                            <div style={{ padding: '0.5rem 0.8rem', display: 'flex', flexDirection: 'column', gap: '0.28rem', maxHeight: '220px', overflowY: 'auto' }}>
+                                                {(r.stops || []).map((st: any, idx: number) => {
+                                                    const spaceLabel = getOrderSpaceDisplayLabel({
+                                                        warehouse_spaces: st.warehouse_spaces,
+                                                        logistics_data: st.logistics_data
+                                                    });
+                                                    return (
+                                                        <div key={st.id || idx} style={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '18px minmax(0, 1fr) auto auto',
+                                                            alignItems: 'center',
+                                                            gap: '0.45rem',
+                                                            fontSize: '0.73rem'
+                                                        }}>
+                                                            <span style={{
+                                                                width: '18px', height: '18px', borderRadius: '50%',
+                                                                backgroundColor: '#E2E8F0', color: '#475569',
+                                                                fontSize: '0.62rem', fontWeight: '800',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                            }}>{idx + 1}</span>
+                                                            <span
+                                                                title={st.customer_name}
+                                                                style={{
+                                                                    fontWeight: '700', color: '#1E293B',
+                                                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                                                }}
+                                                            >
+                                                                {st.customer_name}
+                                                            </span>
+                                                            <span style={{ color: '#64748B', fontSize: '0.69rem', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                                                {st.estimated_arrival ? `${st.estimated_arrival} · ` : ''}{formatNumber(st.total_weight_kg || 0, 1)} kg
+                                                            </span>
+                                                            <span style={{
+                                                                whiteSpace: 'nowrap', fontSize: '0.65rem', fontWeight: '800',
+                                                                backgroundColor: '#E0F2FE', color: '#0369A1',
+                                                                padding: '1px 6px', borderRadius: '4px', fontVariantNumeric: 'tabular-nums'
+                                                            }}>
+                                                                {spaceLabel ? `ESP ${spaceLabel}` : (st.warehouse_spaces?.length ? `ESP ${st.warehouse_spaces.join(', ')}` : 'Sin ESP')}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Settings Drawer */}
                 {showSettings && (
@@ -3356,7 +3671,11 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
                                 <button
                                     onClick={() => {
-                                        const dateStr = formatBogotaDate(new Date(), { day: 'numeric', month: 'short', year: 'numeric' });
+                                        const resolvedManifestDate =
+                                            manifestDeliveryDate ||
+                                            confirmedManifest?.[0]?.delivery_date ||
+                                            (!showAllDates && selectedDeliveryDate ? selectedDeliveryDate : getBogotaDateString());
+                                        const dateStr = formatBogotaDate(parseBogotaDate(resolvedManifestDate), { day: 'numeric', month: 'short', year: 'numeric' });
                                         let text = `*MANIFIESTO DE DESPACHO - FRUFRESCO*\n*Fecha:* ${dateStr}\n\n*Rutas Confirmadas:*\n`;
                                         confirmedManifest.forEach((r, i) => {
                                             text += `----------------------------------------\n*${i+1}. Placa:* ${r.vehicle_plate} | *Conductor:* ${r.driver_name}\n*Espacios Bodega:* ${r.warehouse_spaces && r.warehouse_spaces.length > 0 ? r.warehouse_spaces.join(', ') : 'N/A'}\n*Resumen:* ${r.stops_count} entregas • ${formatNumber(r.total_kilos || 0, 1)} kg • Salida: ${r.departure_time || '04:30'}\n\n*Secuencia de Entregas:*\n`;
@@ -3439,16 +3758,18 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                 onClose={() => {
                     setSpaghettiOpen(false);
                     setSpaghettiVehicleId(null);
+                    setSpaghettiOverride(null);
                 }}
-                vehicles={vehicles}
-                orders={orders}
-                assignments={assignments}
-                routePolylines={routePolylines}
-                routeMetrics={routeMetrics}
-                stopLegMetrics={stopLegMetrics}
-                stopEtas={stopEtas}
-                trafficMode={trafficMode}
+                vehicles={spaghettiOverride ? spaghettiOverride.vehicles : vehicles}
+                orders={spaghettiOverride ? spaghettiOverride.orders : orders}
+                assignments={spaghettiOverride ? spaghettiOverride.assignments : assignments}
+                routePolylines={spaghettiOverride ? spaghettiOverride.routePolylines : routePolylines}
+                routeMetrics={spaghettiOverride ? spaghettiOverride.routeMetrics : routeMetrics}
+                stopLegMetrics={spaghettiOverride ? spaghettiOverride.stopLegMetrics : stopLegMetrics}
+                stopEtas={spaghettiOverride ? spaghettiOverride.stopEtas : stopEtas}
+                trafficMode={spaghettiOverride ? spaghettiOverride.trafficMode : trafficMode}
                 initialVehicleId={spaghettiVehicleId}
+                isSealedView={spaghettiOverride ? spaghettiOverride.isSealedView : false}
             />
             </div>
             <style>{`
