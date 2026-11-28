@@ -12,7 +12,7 @@ import {
     resolveOrderDisplayWindow,
     buildGoogleMapsDirectionChunks
 } from '@/lib/transport/gpsHygiene';
-import { normalizeFleetOwnership } from '@/lib/transport/fleetOwnership';
+import { normalizeFleetOwnership, isThirdPartyVehicle } from '@/lib/transport/fleetOwnership';
 import { RouteSpaghettiMapModal } from '@/components/RouteSpaghettiMapModal';
 import { 
     Calendar, 
@@ -2989,180 +2989,218 @@ export default function RoutePlanner({ readOnly = false }: { readOnly?: boolean 
                     zIndex: 2000, padding: '2rem'
                 }} onClick={() => setShowPreConfirm(false)}>
                     <div style={{
-                        backgroundColor: '#FFFFFF', borderRadius: '30px',
-                        width: '95%', maxWidth: '700px', maxHeight: '90vh',
-                        padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
-                        display: 'flex', flexDirection: 'column', gap: '1.5rem',
+                        backgroundColor: '#FFFFFF', borderRadius: '22px',
+                        width: '96%', maxWidth: '1080px', maxHeight: '92vh',
+                        padding: '1.5rem 2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+                        display: 'flex', flexDirection: 'column', gap: '1rem',
                         position: 'relative', overflow: 'hidden'
                     }} onClick={e => e.stopPropagation()}>
-                        
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366F1' }}></div>
-                                    <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>TOMA DE DECISIONES / LOGÍSTICA</span>
-                                </div>
-                                <h2 style={{ margin: 0, fontSize: '1.75rem', fontWeight: '900', color: '#1E293B', letterSpacing: '-0.02em' }}>
-                                    Confirmar Lanzamiento de Despacho
-                                </h2>
-                            </div>
-                            <button
-                                onClick={() => setShowPreConfirm(false)}
-                                style={{
-                                    background: '#F1F5F9', border: 'none', width: '32px', height: '32px',
-                                    borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
-                                }}
-                            ><X size={16} /></button>
-                        </div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingRight: '0.5rem' }}>
-                            <div style={{
-                                backgroundColor: '#EEF2F6', borderRadius: '16px', padding: '1.25rem',
-                                borderLeft: '4px solid #6366F1', display: 'flex', flexDirection: 'column', gap: '0.5rem'
-                            }}>
-                                <span style={{ fontWeight: '800', fontSize: '0.85rem', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <AlertTriangle size={16} color="#D97706" /> ¿Qué sucederá al confirmar?
-                                </span>
-                                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: '#475569', lineHeight: '1.6' }}>
-                                    <li>Los pedidos asignados cambiarán su estado a <strong>Aprobado (approved)</strong>.</li>
-                                    <li>Se consolidarán las cantidades netas y se iniciará la planeación en el portal de <strong>Compras / Abastecimiento</strong>.</li>
-                                    <li>Se asignarán los espacios físicos y la secuencia de cargue de bodega para los camiones.</li>
-                                    <li>Las rutas se publicarán y enviarán inmediatamente al equipo de operarios en <strong>Picking / Alistamiento</strong>.</li>
-                                </ul>
-                            </div>
-
-                            {/* Indicadores en Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>RUTAS A CREAR</div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
-                                        {Object.keys(assignments).filter(k => assignments[k].length > 0).length}
+                        {(() => {
+                            const activeVehicleIds = Object.keys(assignments).filter(k => (assignments[k] || []).length > 0);
+                            const totalAssignedOrders = activeVehicleIds.reduce((sum, vid) => sum + (assignments[vid]?.length || 0), 0);
+                            const totalAssignedWeight = activeVehicleIds.reduce((sum, vid) => {
+                                const oIds = assignments[vid] || [];
+                                return sum + orders.filter(o => oIds.includes(o.id)).reduce((wSum, o) => wSum + o.total_weight_kg, 0);
+                            }, 0);
+                            const totalAssignedCrates = activeVehicleIds.reduce((sum, vid) => sum + getVehicleCrates(vid), 0);
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.85rem' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0D7A57' }}></div>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: '#64748B', letterSpacing: '0.1em' }}>TOMA DE DECISIONES / LOGÍSTICA</span>
+                                            </div>
+                                            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                                                Confirmar Lanzamiento de Despacho
+                                            </h2>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowPreConfirm(false)}
+                                            style={{
+                                                background: '#F1F5F9', border: 'none', width: '34px', height: '34px',
+                                                borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', fontWeight: 'bold', color: '#64748B'
+                                            }}
+                                            title="Cerrar"
+                                        ><X size={17} /></button>
                                     </div>
-                                </div>
-                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>PEDIDOS ASIGNADOS</div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
-                                        {Object.values(assignments).reduce((sum, list) => sum + list.length, 0)}
-                                    </div>
-                                </div>
-                                <div style={{ border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                                    <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748B', marginBottom: '4px' }}>PESO TOTAL</div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#0F172A' }}>
-                                        {formatNumber(Object.keys(assignments).reduce((sum, vid) => {
-                                            const oIds = assignments[vid] || [];
-                                            const weight = orders.filter(o => oIds.includes(o.id)).reduce((wSum, o) => wSum + o.total_weight_kg, 0);
-                                            return sum + weight;
-                                        }, 0), 1)} kg
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Resumen detallado por vehículo */}
-                            <div>
-                                <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '800', color: '#0F172A' }}>Resumen de Carga por Vehículo</h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    {Object.keys(assignments).filter(vid => assignments[vid].length > 0).map((vid) => {
-                                        const vehicle = vehicles.find(v => v.id === vid);
-                                        const orderIds = assignments[vid] || [];
-                                        const routeOrders = orders.filter(o => orderIds.includes(o.id));
-                                        const totalWeight = routeOrders.reduce((wSum, o) => wSum + o.total_weight_kg, 0);
-                                        const totalCrates = getVehicleCrates(vid);
-                                        
-                                        // Porcentaje de capacidad
-                                        const capPct = vehicle?.capacity_kg ? Math.round((totalWeight / vehicle.capacity_kg) * 100) : 0;
-                                        
-                                        return (
-                                            <div key={vid} style={{
-                                                border: '1px solid #E2E8F0', borderRadius: '16px', padding: '1rem',
-                                                backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: '0.5rem'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div>
-                                                        <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <Truck size={14} /> {vehicle?.plate || 'Desconocido'}
-                                                        </span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: '8px' }}>({vehicle?.driver_name || 'Sin Asignar'})</span>
-                                                    </div>
-                                                    <span style={{
-                                                        fontSize: '0.75rem', fontWeight: '800',
-                                                        color: capPct > 95 ? '#EF4444' : capPct > 75 ? '#F59E0B' : '#10B981'
+                                    {/* Strip Ejecutivo Fijo (4 KPIs + Aviso compacto) */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
+                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.65rem 0.85rem', backgroundColor: '#F8FAFC' }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748B', letterSpacing: '0.04em' }}>RUTAS ACTIVAS</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{activeVehicleIds.length}</div>
+                                        </div>
+                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.65rem 0.85rem', backgroundColor: '#F8FAFC' }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748B', letterSpacing: '0.04em' }}>PEDIDOS ASIGNADOS</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{totalAssignedOrders}</div>
+                                        </div>
+                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.65rem 0.85rem', backgroundColor: '#F8FAFC' }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748B', letterSpacing: '0.04em' }}>CARGA TOTAL</div>
+                                            <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>
+                                                {(totalAssignedWeight / 1000).toFixed(2)} t <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748B' }}>({formatNumber(totalAssignedWeight, 1)} kg)</span>
+                                            </div>
+                                        </div>
+                                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.65rem 0.85rem', backgroundColor: '#F8FAFC' }}>
+                                            <div style={{ fontSize: '0.62rem', fontWeight: '800', color: '#64748B', letterSpacing: '0.04em' }}>CANASTILLAS</div>
+                                            <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#0F172A', marginTop: '2px' }}>{totalAssignedCrates}</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        backgroundColor: '#F1F5F9', borderRadius: '10px', padding: '0.6rem 0.9rem',
+                                        borderLeft: '4px solid #0D7A57', display: 'flex', alignItems: 'center', gap: '8px',
+                                        fontSize: '0.75rem', color: '#334155', fontWeight: '600'
+                                    }}>
+                                        <AlertTriangle size={15} color="#D97706" style={{ flexShrink: 0 }} />
+                                        <span>Al confirmar se sellarán las rutas, bahías de cargue y manifiestos para <strong>Picking / Despacho</strong>.</span>
+                                    </div>
+
+                                    {/* Grid 2 Columnas de Vehículos */}
+                                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '0.35rem' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '0.85rem' }}>
+                                            {activeVehicleIds.map((vid) => {
+                                                const vehicle = vehicles.find(v => v.id === vid);
+                                                const orderIds = assignments[vid] || [];
+                                                const routeOrders = orders.filter(o => orderIds.includes(o.id));
+                                                const totalWeight = routeOrders.reduce((wSum, o) => wSum + o.total_weight_kg, 0);
+                                                const totalCrates = getVehicleCrates(vid);
+                                                const capPct = vehicle?.capacity_kg ? Math.round((totalWeight / vehicle.capacity_kg) * 100) : 0;
+                                                const capColor = capPct > 95 ? '#EF4444' : capPct > 75 ? '#D97706' : '#059669';
+                                                const isThirdParty = isThirdPartyVehicle(vehicle?.vehicle_type);
+                                                const vMetrics = routeMetrics[vid];
+                                                const { loadStart, departure, duration } = getEstimatedTimesForVehicle(vid, totalCrates);
+
+                                                const clientCounts = new Map<string, number>();
+                                                routeOrders.forEach(o => {
+                                                    const cname = (o.customer_name || 'Cliente').trim();
+                                                    clientCounts.set(cname, (clientCounts.get(cname) || 0) + 1);
+                                                });
+                                                const dedupClientsText = Array.from(clientCounts.entries())
+                                                    .map(([cname, cnt]) => cnt > 1 ? `${cname} (x${cnt})` : cname)
+                                                    .join(', ');
+
+                                                return (
+                                                    <div key={vid} style={{
+                                                        border: '1px solid #E2E8F0', borderRadius: '14px', padding: '0.9rem 1rem',
+                                                        backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: '0.5rem',
+                                                        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', fontVariantNumeric: 'tabular-nums'
                                                     }}>
-                                                        {capPct}% Capacidad ({formatNumber(totalWeight, 1)} kg / {formatNumber(vehicle?.capacity_kg || 0, 0)} kg)
-                                                    </span>
-                                                </div>
-                                                <div style={{ fontSize: '0.75rem', color: '#475569', display: 'flex', gap: '1rem' }}>
-                                                    <span><strong>Pedidos:</strong> {orderIds.length}</span>
-                                                    <span><strong>Canastillas:</strong> {totalCrates}</span>
-                                                </div>
-                                                {(() => {
-                                                    const { loadStart, departure, duration } = getEstimatedTimesForVehicle(vid, totalCrates);
-                                                    return (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                                                <span style={{ fontWeight: '900', color: '#0F172A', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                                                    <Truck size={14} color="#0F172A" /> {vehicle?.plate || 'Desconocido'}
+                                                                </span>
+                                                                <span style={{
+                                                                    fontSize: '0.60rem', fontWeight: '900', padding: '1px 6px', borderRadius: '5px',
+                                                                    backgroundColor: isThirdParty ? '#FEF3C7' : '#ECFDF5',
+                                                                    color: isThirdParty ? '#92400E' : '#065F46',
+                                                                    border: isThirdParty ? '1px solid #FDE68A' : '1px solid #A7F3D0'
+                                                                }}>
+                                                                    {isThirdParty ? 'TERCERO' : 'PROPIO'}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.72rem', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    {vehicle?.driver_name || 'Sin Asignar'}
+                                                                </span>
+                                                            </div>
+                                                            <span style={{ fontSize: '0.73rem', fontWeight: '900', color: capColor, flexShrink: 0 }}>
+                                                                {capPct}% · {formatNumber(totalWeight, 1)} / {formatNumber(vehicle?.capacity_kg || 0, 0)} kg
+                                                            </span>
+                                                        </div>
+
+                                                        <div style={{ width: '100%', height: '5px', backgroundColor: '#F1F5F9', borderRadius: '9999px', overflow: 'hidden' }}>
+                                                            <div style={{ width: `${Math.min(100, capPct)}%`, height: '100%', backgroundColor: capColor, borderRadius: '9999px' }} />
+                                                        </div>
+
+                                                        <div style={{ fontSize: '0.73rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                                                            <span><strong>Pedidos:</strong> {orderIds.length}</span>
+                                                            <span><strong>Canastillas:</strong> {totalCrates}</span>
+                                                            {vMetrics && (
+                                                                <span style={{ color: '#1E3A5F', fontWeight: '700' }}>
+                                                                    {formatNumber(vMetrics.distance_km, 1)} km · {Math.round(vMetrics.travel_min)}m manejo
+                                                                    {typeof vMetrics.service_min === 'number' ? ` · ${Math.round(vMetrics.service_min)}m servicio` : ''}
+                                                                    {vMetrics.return_eta ? ` · Retorno ~${vMetrics.return_eta}` : ''}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
                                                         <div style={{
                                                             fontSize: '0.72rem', color: '#0F172A', backgroundColor: '#F0FDF4',
-                                                            padding: '6px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between',
-                                                            border: '1px solid #DCFCE7', marginTop: '0.25rem', fontWeight: '500'
+                                                            padding: '5px 10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between',
+                                                            border: '1px solid #DCFCE7', fontWeight: '600'
                                                         }}>
-                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> <strong>Inicio Cargue:</strong> {loadStart} <span style={{color: '#64748B', fontWeight: 'normal'}}>({duration} min)</span></span>
-                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Truck size={12} /> <strong>Salida Ruta:</strong> {departure}</span>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Clock size={12} color="#0D7A57" /> <strong>Cargue:</strong> {loadStart} <span style={{ color: '#64748B', fontWeight: 'normal' }}>({duration}m)</span>
+                                                            </span>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Truck size={12} color="#0D7A57" /> <strong>Salida:</strong> {departure}
+                                                            </span>
                                                         </div>
-                                                    );
-                                                })()}
-                                                <div style={{
-                                                    fontSize: '0.7rem', color: '#64748B',
-                                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                                    backgroundColor: '#F8FAFC', padding: '4px 8px', borderRadius: '8px',
-                                                    border: '1px dashed #E2E8F0'
-                                                }}>
-                                                    <strong>Clientes:</strong> {routeOrders.map(o => o.customer_name).join(', ')}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Botones de acción */}
-                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', borderTop: '1px solid #F1F5F9', paddingTop: '1.25rem' }}>
-                            <button
-                                onClick={() => setShowPreConfirm(false)}
-                                style={{
-                                    padding: '0.6rem 1.25rem', borderRadius: '10px',
-                                    backgroundColor: 'transparent', border: '1px solid #CBD5E1',
-                                    color: '#475569', fontWeight: '800', fontSize: '0.8rem',
-                                    cursor: 'pointer', transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >
-                                Regresar al Planeador
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    setShowPreConfirm(false);
-                                    await handleConfirmRoutes();
-                                }}
-                                style={{
-                                    padding: '0.6rem 1.5rem', borderRadius: '10px',
-                                    backgroundColor: '#10B981', border: 'none',
-                                    color: 'white', fontWeight: '800', fontSize: '0.8rem',
-                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                                    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.25)',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#059669';
-                                    e.currentTarget.style.transform = 'translateY(-1px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#10B981';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                <Check size={14} strokeWidth={2} /> Confirmar y Lanzar
-                            </button>
-                        </div>
+                                                        <div style={{
+                                                            fontSize: '0.70rem', color: '#64748B',
+                                                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                            backgroundColor: '#F8FAFC', padding: '4px 8px', borderRadius: '7px',
+                                                            border: '1px dashed #E2E8F0'
+                                                        }} title={dedupClientsText}>
+                                                            <strong>Clientes:</strong> {dedupClientsText}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Footer Bar */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderTop: '1px solid #F1F5F9', paddingTop: '1rem', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.76rem', fontWeight: '700', color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                                            {activeVehicleIds.length} rutas · {totalAssignedOrders} pedidos listos para confirmar
+                                        </span>
+                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <button
+                                                onClick={() => setShowPreConfirm(false)}
+                                                style={{
+                                                    padding: '0.65rem 1.25rem', borderRadius: '10px',
+                                                    backgroundColor: 'transparent', border: '1px solid #CBD5E1',
+                                                    color: '#475569', fontWeight: '800', fontSize: '0.82rem',
+                                                    cursor: 'pointer', transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                                Regresar al Planeador
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setShowPreConfirm(false);
+                                                    await handleConfirmRoutes();
+                                                }}
+                                                style={{
+                                                    padding: '0.65rem 1.5rem', borderRadius: '10px',
+                                                    backgroundColor: '#10B981', border: 'none',
+                                                    color: 'white', fontWeight: '800', fontSize: '0.82rem',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                                                    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.25)',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#059669';
+                                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#10B981';
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                }}
+                                            >
+                                                <Check size={15} strokeWidth={2.5} />
+                                                <span>Confirmar y Lanzar</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
